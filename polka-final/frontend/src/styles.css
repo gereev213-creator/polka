@@ -1886,11 +1886,11 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
   height: 130px;
   padding: 13px;
   border-radius: 22px;
-  background: var(--tint, var(--surface-2));
-  border: 1px solid transparent;
+  /* Один цвет на все категории — без индивидуальных оттенков */
+  background: var(--surface-2);
   overflow: hidden;
   text-align: left;
-  transition: transform .18s ease, box-shadow .18s ease;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
 }
 .cat-tile:active { transform: scale(.97); }
 .cat-tile-label {
@@ -1934,7 +1934,8 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
   display: block;
 }
 /* Выбор: синий контур. Заливка синим конфликтовала бы с иллюстрацией */
+/* Выбор: без обводки — только мягкое серое свечение и чуть более тёмная плашка */
 .cat-tile.is-selected {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent), 0 10px 22px rgba(47,107,255,.22);
+  background: #E4E7EB;
+  box-shadow: 0 6px 20px rgba(17,24,39,.20), 0 0 14px rgba(17,24,39,.10);
 }

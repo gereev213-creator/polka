@@ -340,16 +340,16 @@ function AppProvider({ children }) {
  * если файла нет, показывается встроенная SVG из CATEGORY_ART.
  */
 const CATEGORIES = [
-  { label: 'Другое', image: 'other.png', art: 'other', tint: '#EDF1F6', aliases: ['Прочие вещи'] },
-  { label: 'Авто', image: 'auto.png', art: 'car', tint: '#E8F0FF', aliases: [] },
-  { label: 'Недвижимость', image: 'realty.png', art: 'home', tint: '#E8F0FF', aliases: ['Продажа жилья'] },
-  { label: 'Аренда', image: 'rent.png', art: 'rent', tint: '#E9F3FF', aliases: ['Аренда жилья'] },
-  { label: 'Для дома и дачи', image: 'home.png', art: 'home', tint: '#FFF2E0', aliases: [] },
-  { label: 'Запчасти', image: 'parts.png', art: 'parts', tint: '#EEF0F5', aliases: [] },
-  { label: 'Услуги', image: 'services.png', art: 'jobs', tint: '#F2EBFF', aliases: [] },
-  { label: 'Электроника', image: 'electronics.png', art: 'tech', tint: '#E8F1FF', aliases: ['Техника'] },
-  { label: 'Работа и подработка', image: 'jobs.png', art: 'parttime', tint: '#F3ECFF', aliases: ['Вакансии', 'Подработки'] },
-  { label: 'Одежда, обувь, аксессуары', image: 'fashion.png', art: 'clothes', tint: '#FFEFE7', aliases: ['Одежда', 'Обувь'] },
+  { label: 'Другое', image: 'other.png', art: 'other', aliases: ['Прочие вещи'] },
+  { label: 'Авто', image: 'auto.png', art: 'car', aliases: [] },
+  { label: 'Недвижимость', image: 'realty.png', art: 'home', aliases: ['Продажа жилья'] },
+  { label: 'Аренда', image: 'rent.png', art: 'rent', aliases: ['Аренда жилья'] },
+  { label: 'Для дома и дачи', image: 'home.png', art: 'home', aliases: [] },
+  { label: 'Запчасти', image: 'parts.png', art: 'parts', aliases: [] },
+  { label: 'Услуги', image: 'services.png', art: 'jobs', aliases: [] },
+  { label: 'Электроника', image: 'electronics.png', art: 'tech', aliases: ['Техника'] },
+  { label: 'Работа и подработка', image: 'jobs.png', art: 'parttime', aliases: ['Вакансии', 'Подработки'] },
+  { label: 'Одежда, обувь, аксессуары', image: 'fashion.png', art: 'clothes', aliases: ['Одежда', 'Обувь'] },
 ]
 
 const CATEGORY_LABELS = CATEGORIES.map((c) => c.label)
@@ -358,8 +358,6 @@ const CATEGORY_META = Object.fromEntries(CATEGORIES.map((c) => [c.label, c]))
 const CATEGORY_IMAGES = Object.fromEntries(
   CATEGORIES.map((c) => [c.label, `categories/${c.image}`])
 )
-/* Псевдокатегория для ленты и поиска — «показать всё» */
-CATEGORY_META['Все'] = { art: 'all', tint: '#E9F0FF' }
 
 /* Значение для параметра category в API: новое название + устаревшие,
  * чтобы фильтр нашёл и старые объявления (бэкенд понимает список через
@@ -781,8 +779,10 @@ function FeedPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasMore, loadingMore, loading, items.length, activeCategory])
 
+  // Плашки «Все» больше нет: повторное нажатие на активную категорию
+  // сбрасывает фильтр — так список категорий короче и нет лишней плашки.
   const changeCategory = (category) => {
-    setActiveCategory(category)
+    setActiveCategory((prev) => (prev === category ? 'Все' : category))
   }
 
   if (!mounted) {
@@ -833,7 +833,7 @@ function FeedPage() {
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
       <StoriesRow items={items} />
       <FeedBanner />
-      <CategoryCards categories={['Все', ...CATEGORY_LABELS]} activeCategory={activeCategory} onSelect={changeCategory} />
+      <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
       <SellerStats profile={profile} />
       <RecommendCard items={items} />
@@ -1356,14 +1356,13 @@ function CategoryArtwork({ label }) {
 }
 
 /* Плашка категории: подпись слева, иллюстрация справа с выходом за край.
- * Один компонент на ленту (горизонтальный рельс) и на форму (сетка) —
- * отличаются только контейнером. */
+ * Один компонент на ленту (горизонтальный рельс) и на форму (сетка).
+ * Цвет у всех плашек одинаковый — задаётся в CSS, без индивидуальных тем. */
 function CategoryTile({ value, label, selected, onSelect }) {
   return (
     <button
       type="button"
       className={`cat-tile ${selected ? 'is-selected' : ''}`}
-      style={{ '--tint': CATEGORY_META[label]?.tint || '#EDF1F6' }}
       onClick={() => onSelect(value)}
     >
       <span className="cat-tile-label">{label}</span>

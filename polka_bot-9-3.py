@@ -19842,65 +19842,143 @@ async def api_miniapp_banners(request: aiohttp_web.Request) -> aiohttp_web.Respo
     return _miniapp_json({'banners': out})
 
 
+def _default_feed_banner_svg() -> str:
+    """SVG дефолтного баннера ленты (с текстом — оверлея в Mini App нет)."""
+    return (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="320" viewBox="0 0 750 320">'
+        '<defs>'
+        '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#2F6BFF"/>'
+        '<stop offset="1" stop-color="#1E3FA8"/>'
+        '</linearGradient>'
+        '<radialGradient id="glow" cx=".5" cy=".5" r=".5">'
+        '<stop offset="0" stop-color="#8FB4FF" stop-opacity=".75"/>'
+        '<stop offset="1" stop-color="#8FB4FF" stop-opacity="0"/>'
+        '</radialGradient>'
+        '</defs>'
+        '<rect width="750" height="320" fill="url(#bg)"/>'
+        '<circle cx="650" cy="40" r="210" fill="url(#glow)"/>'
+        '<text x="44" y="132" font-family="sans-serif" font-size="42" font-weight="700" fill="#fff">ПОЛКА</text>'
+        '<text x="44" y="180" font-family="sans-serif" font-size="21" fill="rgba(255,255,255,.94)">Покупка и продажа товаров в Удмуртии</text>'
+        '<text x="44" y="216" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,.78)">Разместите объявление — покупатели уже рядом</text>'
+        '</svg>'
+    )
+
+
+def _default_feed_banner_data_url() -> str:
+    import base64
+    return 'data:image/svg+xml;base64,' + base64.b64encode(_default_feed_banner_svg().encode()).decode()
+
+
+_feed_banner_probe_cache: dict = {}
+_FEED_BANNER_PROBE_TTL = 300
+
+
+async def _feed_banner_resolves(ref: str) -> bool:
+    """Резолвится ли ссылка баннера текущим ботом.
+
+    Результат кешируем: get_file — это запрос к Telegram API, а
+    /api/feed-banners вызывается при каждой загрузке ленты. После смены
+    токена бота старые file_id перестают работать — такие баннеры
+    отбрасываем, иначе в ротации крутились бы одинаковые заглушки.
+    """
+    if ref.startswith('http') or ref.startswith('/'):
+        return True
+    if ref.startswith('{'):
+        return False
+    now = _time.time()
+    cached = _feed_banner_probe_cache.get(ref)
+    if cached and now - cached[1] < _FEED_BANNER_PROBE_TTL:
+        return cached[0]
+    ok = False
+    bot = _miniapp_bot()
+    if bot:
+        try:
+            await bot.get_file(ref)
+            ok = True
+        except Exception:
+            ok = False
+    _feed_banner_probe_cache[ref] = (ok, now)
+    return ok
+
+
 async def api_miniapp_feed_banners(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/feed-banners — карусель баннеров в ленте Mini App.
 
     Источники: settings feed_banner:* (админ кладёт до 5 фото из панели
     «Баннеры» → «Лента Mini App»), иначе дефолтный промо-баннер.
+
+    Картинку отдаём через /api/feed-banner-image/<i>: file_id в настройках
+    может устареть (например, после смены токена бота), и тогда эндпоинт
+    подставит дефолтный баннер вместо битой картинки.
     """
     items = []
     for i in range(5):
         ref = _miniapp_settings_get(f"feed_banner:{i}")
-        if not ref:
+        if not ref or ref.startswith('{'):
             continue
-        if ref.startswith('http'):
-            items.append({'image': ref, 'action': ''})
-        elif not ref.startswith('{'):
-            items.append({'image': f"/api/photo/{ref}", 'action': ''})
+        if not await _feed_banner_resolves(ref):
+            continue
+        # v= — чтобы после замены баннера браузер не показывал старую картинку
+        ver = hashlib.md5(ref.encode()).hexdigest()[:8]
+        items.append({'image': f"/api/feed-banner-image/{i}?v={ver}", 'action': ''})
     if not items:
-        # Дефолтный баннер рисуем с текстом: Mini App показывает картинку
-        # как есть, без собственного оверлея.
-        svg = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="320" viewBox="0 0 750 320">'
-            '<defs>'
-            '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
-            '<stop offset="0" stop-color="#2F6BFF"/>'
-            '<stop offset="1" stop-color="#1E3FA8"/>'
-            '</linearGradient>'
-            '<radialGradient id="glow" cx=".5" cy=".5" r=".5">'
-            '<stop offset="0" stop-color="#8FB4FF" stop-opacity=".75"/>'
-            '<stop offset="1" stop-color="#8FB4FF" stop-opacity="0"/>'
-            '</radialGradient>'
-            '</defs>'
-            '<rect width="750" height="320" fill="url(#bg)"/>'
-            '<circle cx="650" cy="40" r="210" fill="url(#glow)"/>'
-            '<text x="44" y="132" font-family="sans-serif" font-size="42" font-weight="700" fill="#fff">ПОЛКА</text>'
-            '<text x="44" y="180" font-family="sans-serif" font-size="21" fill="rgba(255,255,255,.94)">Покупка и продажа товаров в Удмуртии</text>'
-            '<text x="44" y="216" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,.78)">Разместите объявление — покупатели уже рядом</text>'
-            '</svg>'
-        )
-        import base64
-        data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
-        items.append({'image': data_url, 'action': '', 'default': True})
+        items.append({'image': _default_feed_banner_data_url(), 'action': '', 'default': True})
     return _miniapp_json({'items': items})
+
+
+async def api_miniapp_banner_image(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/feed-banner-image/{idx} — картинка баннера ленты.
+
+    Отдаём сохранённое фото, а если ссылка больше не резолвится — дефолтный
+    баннер. Благодаря этому в ленте никогда не появляется значок битой
+    картинки и сам баннер не исчезает.
+    """
+    try:
+        idx = int(request.match_info.get('idx', ''))
+    except (TypeError, ValueError):
+        return _miniapp_err('not_found', 404)
+    ref = _miniapp_settings_get(f"feed_banner:{idx}") or ""
+    headers = {**_miniapp_cors_headers(), 'Cache-Control': 'public, max-age=3600'}
+
+    if ref.startswith('http'):
+        raise aiohttp_web.HTTPFound(ref)
+
+    if ref.startswith('/'):
+        # Локальный путь вида /api/ads/photos/<файл>
+        upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+        path = os.path.join(upload_dir, os.path.basename(ref))
+        if os.path.isfile(path):
+            return aiohttp_web.FileResponse(path, headers=headers)
+
+    if ref and not ref.startswith('{'):
+        bot = _miniapp_bot()
+        if bot:
+            try:
+                tg_file = await bot.get_file(ref)
+                url = f"https://api.telegram.org/file/bot{TOKEN}/{tg_file.file_path}"
+                import aiohttp as _aiohttp
+                async with _aiohttp.ClientSession() as session:
+                    async with session.get(url) as resp:
+                        if resp.status == 200:
+                            data = await resp.read()
+                            ctype = resp.headers.get('Content-Type', 'image/jpeg')
+                            return aiohttp_web.Response(body=data, content_type=ctype, headers=headers)
+                        logger.warning(f"feed banner {idx}: Telegram вернул {resp.status}")
+            except Exception as e:
+                logger.warning(f"feed banner {idx}: не удалось получить фото ({e})")
+
+    # Фолбэк — дефолтный баннер, чтобы слот не пустовал
+    return aiohttp_web.Response(
+        body=_default_feed_banner_svg().encode(),
+        content_type='image/svg+xml',
+        headers=headers,
+    )
 
 
 async def api_miniapp_feed_banner_default(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/feed-banners/default — дефолтный баннер ленты (data URL)."""
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="220" viewBox="0 0 750 220">'
-        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
-        '<stop offset="0" stop-color="#3373fa"/><stop offset="1" stop-color="#5a8cf4"/>'
-        '</linearGradient></defs>'
-        '<rect width="750" height="220" fill="url(#g)"/>'
-        '<text x="40" y="100" font-family="sans-serif" font-size="36" font-weight="700" fill="#fff">ПОЛКА</text>'
-        '<text x="40" y="140" font-family="sans-serif" font-size="18" fill="rgba(255,255,255,.9)">Покупка и продажа товаров в Удмуртии</text>'
-        '<text x="40" y="170" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,.7)">Размещай объявления и находи нужные товары через удобную платформу, выбери действие ниже</text>'
-        '</svg>'
-    )
-    import base64
-    data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
-    return _miniapp_json({'image': data_url})
+    return _miniapp_json({'image': _default_feed_banner_data_url()})
 
 
 def _admin_banners_kb():
@@ -19976,8 +20054,23 @@ async def handle_banner_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
             db.log_action(update.effective_user.id, "admin_feed_banner_set", f"idx={idx}")
         except Exception:
             pass
+        # Проверяем, что file_id резолвится текущим ботом: после смены токена
+        # старые file_id становятся недействительными, и баннер в ленте
+        # подменялся бы дефолтным. Пусть админ узнает об этом сразу.
+        _resolves = True
+        _bot = _miniapp_bot()
+        if _bot:
+            try:
+                await _bot.get_file(file_id)
+            except Exception as _e:
+                _resolves = False
+                logger.warning(f"feed banner {idx}: file_id не резолвится ({_e})")
         await update.message.reply_text(
-            f"{EM_OK} Баннер ленты #{idx + 1} обновлён.",
+            f"{EM_OK} Баннер ленты #{idx + 1} обновлён."
+            + ("" if _resolves else
+               "\n\n" + EM_FAIL + " Внимание: Telegram не отдаёт это фото по текущему токену бота. "
+               "Скорее всего, токен меняли — пришлите фото заново, иначе в ленте будет "
+               "показываться стандартный баннер."),
             reply_markup=InlineKeyboardMarkup(_admin_banners_kb()),
         )
         return True
@@ -20257,7 +20350,11 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
                     # Раньше файл молча пропадал — теперь сохраняем как есть,
                     # чтобы фото пользователя не терялось.
                     logger.warning(f"miniapp photo: не удалось перекодировать ({_e}), сохраняю исходник")
-            name = f"u{viewer_id}_{int(time.time())}_{idx}.{ext}"
+            # ВНИМАНИЕ: имя time занято datetime.time (см. импорт в начале),
+            # модуль времени доступен как _time. Раньше здесь стояло
+            # time.time() — это падало с AttributeError на каждом фото,
+            # и загрузка не работала вообще.
+            name = f"u{viewer_id}_{int(_time.time())}_{idx}.{ext}"
             path = os.path.join(upload_dir, name)
             with open(path, 'wb') as fh:
                 fh.write(data)
@@ -20957,6 +21054,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/chats/start', api_miniapp_chat_start)
     app.router.add_get('/api/banners', api_miniapp_banners)
     app.router.add_get('/api/feed-banners', api_miniapp_feed_banners)
+    app.router.add_get('/api/feed-banner-image/{idx}', api_miniapp_banner_image)
     app.router.add_get('/api/ads/photos/{name}', api_miniapp_photo_file)
     app.router.add_post('/api/ai/generate-description', api_miniapp_ai_generate)
     app.router.add_post('/api/ads/photo-search', api_miniapp_photo_search)
