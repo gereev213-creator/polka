@@ -538,6 +538,43 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# БЕЗОПАСНОСТЬ: httpx логирует запросы целиком, а в URL Telegram-запроса
+# лежит токен бота: "POST https://api.telegram.org/bot<TOKEN>/getUpdates".
+# Из-за этого токен попадал в лог приложения и в панель Amvera. Не глушим
+# логи (они нужны для диагностики), а маскируем токен в тексте записи.
+class _TokenRedactingFilter(logging.Filter):
+    """Заменяет токен бота на bot<TOKEN> в любом сообщении лога.
+
+    Ловим и «bot6094779180:AAF…» из URL httpx, и голый токен, который
+    может прийти аргументом: logger.error('… %s', TOKEN).
+    """
+
+    _pattern = re.compile(r'(?:bot)?\d{6,}:[A-Za-z0-9_\-]{30,}')
+
+    def _clean(self, value):
+        return self._pattern.sub('bot<TOKEN>', value) if isinstance(value, str) else value
+
+    def filter(self, record):
+        try:
+            if isinstance(record.msg, str):
+                record.msg = self._clean(record.msg)
+            else:
+                # Сообщение не строка (например, словарь с токеном) —
+                # приводим к тексту, иначе маскировка не сработает.
+                record.msg = self._clean(str(record.msg))
+                record.args = None
+            if record.args:
+                if isinstance(record.args, dict):
+                    record.args = {k: self._clean(v) for k, v in record.args.items()}
+                else:
+                    record.args = tuple(self._clean(a) for a in record.args)
+        except Exception:
+            pass
+        return True
+
+
+for _handler in logging.getLogger().handlers:
+    _handler.addFilter(_TokenRedactingFilter())
 logger = logging.getLogger(__name__)
 
 # Функция для получения московского времени
@@ -19896,8 +19933,17 @@ async def _feed_banner_resolves(ref: str) -> bool:
         try:
             await bot.get_file(ref)
             ok = True
-        except Exception:
-            ok = False
+        except Exception as exc:
+            name = type(exc).__name__.lower()
+            msg = str(exc).lower()
+            # Отличаем «file_id мёртв» от «не смогли проверить». При сетевом
+            # сбое баннер оставляем — картинку отдаст эндпоинт с фолбэком,
+            # иначе временная недоступность Telegram прятала бы рабочие баннеры.
+            dead = ('invalidfileid' in name or 'wrong file identifier' in msg
+                    or 'file identifier' in msg or 'file not found' in msg)
+            ok = not dead
+            logger.info(f"feed banner probe: {type(exc).__name__}: {exc} -> "
+                        f"{'скрыт (file_id недействителен)' if dead else 'оставлен'}")
     _feed_banner_probe_cache[ref] = (ok, now)
     return ok
 
@@ -19956,15 +20002,14 @@ async def api_miniapp_banner_image(request: aiohttp_web.Request) -> aiohttp_web.
         if bot:
             try:
                 tg_file = await bot.get_file(ref)
-                url = f"https://api.telegram.org/file/bot{TOKEN}/{tg_file.file_path}"
-                import aiohttp as _aiohttp
-                async with _aiohttp.ClientSession() as session:
-                    async with session.get(url) as resp:
-                        if resp.status == 200:
-                            data = await resp.read()
-                            ctype = resp.headers.get('Content-Type', 'image/jpeg')
-                            return aiohttp_web.Response(body=data, content_type=ctype, headers=headers)
-                        logger.warning(f"feed banner {idx}: Telegram вернул {resp.status}")
+                # Скачиваем средствами бота: его HTTPXRequest учитывает
+                # BOT_PROXY. Прямой aiohttp-запрос шёл без прокси, и при
+                # закрытом api.telegram.org картинка не открывалась —
+                # вместо рекламного баннера показывался дефолтный.
+                data = bytes(await tg_file.download_as_bytearray())
+                if data:
+                    return aiohttp_web.Response(body=data, content_type='image/jpeg', headers=headers)
+                logger.warning(f"feed banner {idx}: Telegram вернул пустой файл")
             except Exception as e:
                 logger.warning(f"feed banner {idx}: не удалось получить фото ({e})")
 
@@ -20966,29 +21011,30 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
     bot = _miniapp_bot()
     if not bot:
         return _miniapp_err('bot_unavailable', 503)
-    file_path = None
+    last_err = None
     for attempt in range(3):
         try:
             tg_file = await bot.get_file(file_id)
-            file_path = tg_file.file_path
-            break
+            # ВАЖНО: скачиваем средствами бота, а не отдельным aiohttp-запросом.
+            # HTTPXRequest бота учитывает BOT_PROXY, а прямой запрос шёл без
+            # прокси — при закрытом api.telegram.org фото не открывались
+            # вообще (get_file проходил, а скачивание отдавало 404).
+            data = bytes(await tg_file.download_as_bytearray())
+            if data:
+                return aiohttp_web.Response(
+                    body=data,
+                    content_type='image/jpeg',
+                    headers={**_miniapp_cors_headers(),
+                             'Cache-Control': 'public, max-age=86400'},
+                )
+            last_err = 'пустой файл'
         except Exception as e:
-            logger.warning(f"miniapp photo get_file attempt {attempt+1}: {e}")
+            last_err = e
+            logger.warning(f"miniapp photo attempt {attempt+1}: {e}")
             if attempt < 2:
                 await asyncio.sleep(1 + attempt)
-    if not file_path:
-        return _miniapp_err('not_found', 404)
-    url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
+    logger.error(f"miniapp photo: не удалось отдать {file_id[:24]}… ({last_err})")
     try:
-        import aiohttp as _aiohttp
-        async with _aiohttp.ClientSession() as session:
-            async with session.get(url) as resp:
-                if resp.status != 200:
-                    return _miniapp_err('not_found', 404)
-                data = await resp.read()
-                ctype = resp.headers.get('Content-Type', 'image/jpeg')
-    except Exception as e:
-        logger.error(f"miniapp photo proxy: {e}")
         import io as _io
         from PIL import Image as _PILImage, ImageDraw as _ImageDraw
         img = _PILImage.new('RGB', (400, 300), color=(30, 32, 40))
@@ -20999,6 +21045,8 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
         return aiohttp_web.Response(body=buf.getvalue(), content_type='image/png',
                                     headers={**_miniapp_cors_headers(),
                                              'Cache-Control': 'public, max-age=300'})
+    except Exception:
+        return _miniapp_err('not_found', 404)
     return aiohttp_web.Response(body=data, content_type=ctype,
                                 headers={**_miniapp_cors_headers(),
                                          'Cache-Control': 'public, max-age=86400'})
