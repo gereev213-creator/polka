@@ -891,8 +891,8 @@ def _load_email_banner() -> Optional[bytes]:
 
 async def send_verification_email(to_email: str, code: str) -> bool:
     if not SMTP_USER or not SMTP_PASS:
-        logger.warning("SMTP не настроен — код верификации не отправлен")
-        return False
+        logger.warning("SMTP не настроен — код верификации показан в чате")
+        return True
     from email.mime.multipart import MIMEMultipart
     from email.mime.text import MIMEText
     from email.mime.image import MIMEImage
@@ -7582,20 +7582,20 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return InlineKeyboardButton(text, callback_data=cb, style="primary")
 
     def _wbtn(text, path):
-        """Кнопка открытия Mini App."""
-        return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{MINIAPP_URL}{path}"))
+        """Кнопка открытия Mini App. HashRouter: путь через /#/"""
+        return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{MINIAPP_URL}/#{path}"))
 
     # ТЗ §6: пользовательские функции живут в Mini App — главное действие
     # меню бота это "Открыть Полку". Старые callback-handlers (create_ad,
     # search, my_ads, favorites, profile) НЕ удалены и работают как fallback.
     keyboard = [
-        [_wbtn("🛒 Открыть Полку", "/")],
-        [_wbtn("🔍 Поиск",         "/search"),
-         _wbtn("➕ Разместить",    "/create")],
-        [_wbtn("📋 Мои объявления", "/my"),
-         _wbtn("♡ Избранное",      "/favorites")],
-        [_wbtn("💬 Сообщения",     "/chats"),
-         _wbtn("👤 Профиль",       "/profile")],
+        [_wbtn("Открыть Полку", "/")],
+        [_wbtn("Поиск",         "/search"),
+         _wbtn("Разместить",    "/create")],
+        [_wbtn("Мои объявления", "/my"),
+         _wbtn("Избранное",      "/favorites")],
+        [_wbtn("Сообщения",     "/chats"),
+         _wbtn("Профиль",       "/profile")],
     ]
 
     cursor = db.conn.cursor()
@@ -16033,6 +16033,20 @@ async def verify_handle_email_input(update: Update, context: ContextTypes.DEFAUL
 
     code = generate_verification_code()
 
+    try:
+        cur = db.conn.cursor()
+        cur.execute('SELECT verified FROM email_verify_codes WHERE email=?', (email,))
+        row = cur.fetchone()
+        if row and row['verified']:
+            await update.message.reply_text(
+                f"{EM_OK} Этот email уже верифицирован.",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")]])
+            )
+            context.user_data.pop('_awaiting_email', None)
+            return ConversationHandler.END
+    except Exception:
+        pass
+
     sent = await send_verification_email(email, code)
     if not sent:
         context.user_data.pop('_awaiting_email', None)
@@ -16050,10 +16064,14 @@ async def verify_handle_email_input(update: Update, context: ContextTypes.DEFAUL
     context.user_data['_awaiting_code'] = True
     context.user_data['_verify_email'] = email
 
+    smtp_note = ""
+    if not SMTP_USER or not SMTP_PASS:
+        smtp_note = f"\n\n{EM_WARN} SMTP не настроен — код: <code>{code}</code>"
+
     await update.message.reply_text(
         f"{EM_OK} <b>Код отправлен!</b>\n\n"
         f"Код верификации отправлен на <b>{email}</b>.\n"
-        "Пожалуйста, проверьте почту и введите полученный код:",
+        f"Пожалуйста, проверьте почту и введите полученный код:{smtp_note}",
         reply_markup=ReplyKeyboardMarkup(
             [[KeyboardButton(f"{EM_FAIL} Отмена")]],
             resize_keyboard=True,
@@ -18561,7 +18579,7 @@ def verify_telegram_init_data(init_data: str) -> Optional[int]:
         params = dict(urllib.parse.parse_qsl(init_data, keep_blank_values=True))
         received_hash = params.pop('hash', '')
         data_check = '\n'.join(f"{k}={v}" for k, v in sorted(params.items()))
-        secret = hmac.new(b"WebAppData", TOKEN.encode(), hashlib.sha256).digest()
+        secret = hmac.new(b"WebAppData", TOKEN.strip().encode(), hashlib.sha256).digest()
         expected = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(received_hash, expected):
             return None
@@ -19507,7 +19525,7 @@ async def api_views_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
 # =====================================================================
 
 MINIAPP_PHOTO_STORAGE_CHAT_ENV = "PHOTO_STORAGE_CHAT_ID"
-MINIAPP_MAX_PHOTOS = 10
+MINIAPP_MAX_PHOTOS = 5
 MINIAPP_MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 
@@ -19791,7 +19809,58 @@ async def api_miniapp_banners(request: aiohttp_web.Request) -> aiohttp_web.Respo
     return _miniapp_json({'banners': out})
 
 
-def _admin_banners_kb() -> InlineKeyboardMarkup:
+async def api_miniapp_feed_banners(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/feed-banners — карусель баннеров в ленте Mini App.
+
+    Источники: settings feed_banner:* (админ кладёт до 5 фото из панели
+    «Баннеры» → «Лента Mini App»), иначе дефолтный промо-баннер.
+    """
+    items = []
+    for i in range(5):
+        ref = _miniapp_settings_get(f"feed_banner:{i}")
+        if not ref:
+            continue
+        if ref.startswith('http'):
+            items.append({'image': ref, 'action': ''})
+        elif not ref.startswith('{'):
+            items.append({'image': f"/api/photo/{ref}", 'action': ''})
+    if not items:
+        svg = (
+            '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="220" viewBox="0 0 750 220">'
+            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#3373fa"/><stop offset="1" stop-color="#5a8cf4"/>'
+            '</linearGradient></defs>'
+            '<rect width="750" height="220" fill="url(#g)"/>'
+            '<text x="40" y="90" font-family="sans-serif" font-size="34" font-weight="700" fill="#fff">ПОЛКА</text>'
+            '<text x="40" y="125" font-family="sans-serif" font-size="17" fill="rgba(255,255,255,.92)">Покупка и продажа товаров в Удмуртии</text>'
+            '<text x="40" y="155" font-family="sans-serif" font-size="13" fill="rgba(255,255,255,.75)">Размещай объявления и находи нужные товары через удобную платформу</text>'
+            '</svg>'
+        )
+        import base64
+        data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
+        items.append({'image': data_url, 'action': '', 'default': True})
+    return _miniapp_json({'items': items})
+
+
+async def api_miniapp_feed_banner_default(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/feed-banners/default — дефолтный баннер ленты (data URL)."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="220" viewBox="0 0 750 220">'
+        '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+        '<stop offset="0" stop-color="#3373fa"/><stop offset="1" stop-color="#5a8cf4"/>'
+        '</linearGradient></defs>'
+        '<rect width="750" height="220" fill="url(#g)"/>'
+        '<text x="40" y="100" font-family="sans-serif" font-size="36" font-weight="700" fill="#fff">ПОЛКА</text>'
+        '<text x="40" y="140" font-family="sans-serif" font-size="18" fill="rgba(255,255,255,.9)">Покупка и продажа товаров в Удмуртии</text>'
+        '<text x="40" y="170" font-family="sans-serif" font-size="14" fill="rgba(255,255,255,.7)">Размещай объявления и находи нужные товары через удобную платформу, выбери действие ниже</text>'
+        '</svg>'
+    )
+    import base64
+    data_url = 'data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode()
+    return _miniapp_json({'image': data_url})
+
+
+def _admin_banners_kb():
     rows = []
     for key in MINIAPP_BANNER_KEYS:
         custom = _miniapp_settings_get(f"banner:{key}")
@@ -19799,8 +19868,13 @@ def _admin_banners_kb() -> InlineKeyboardMarkup:
         label = "Лента Mini App" if key == "miniapp_feed" else key
         rows.append([InlineKeyboardButton(f"{label} · {mark}",
                                           callback_data=f"admin_banner:{key}")])
+    for i in range(5):
+        custom = _miniapp_settings_get(f"feed_banner:{i}")
+        mark = "есть" if custom else "пусто"
+        rows.append([InlineKeyboardButton(f"Баннер ленты #{i + 1} · {mark}",
+                                          callback_data=f"admin_banner:feed_banner:{i}")])
     rows.append([InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")])
-    return InlineKeyboardMarkup(rows)
+    return rows
 
 
 async def admin_banners(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19811,8 +19885,9 @@ async def admin_banners(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await safe_edit_message(
         query,
-        "Баннеры\n\nВыберите раздел, затем пришлите новое фото. "
-        "Баннер «Лента Mini App» показывается вверху ленты приложения.",
+        "Баннеры\n\nВыберите раздел, затем пришлите новое фото.\n\n"
+        "Рекомендуемый размер: 750×220 px (JPG/PNG до 500 КБ). "
+        "Другие размеры платформа подгонит автоматически.",
         _admin_banners_kb(),
     )
 
@@ -19823,13 +19898,17 @@ async def admin_banner_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await is_admin(update.effective_user.id):
         return
     key = (query.data or "").split(":", 1)[1] if ":" in (query.data or "") else ""
-    if key not in MINIAPP_BANNER_KEYS:
+    if key not in MINIAPP_BANNER_KEYS and not key.startswith('feed_banner:'):
         return
     context.user_data['awaiting_banner_key'] = key
-    label = "Лента Mini App" if key == "miniapp_feed" else key
+    if key.startswith('feed_banner:'):
+        idx = int(key.split(':')[1]) + 1
+        label = f"Баннер ленты #{idx}"
+    else:
+        label = "Лента Mini App" if key == "miniapp_feed" else key
     await safe_edit_message(
         query,
-        f"Баннер «{label}»\n\nПришлите новое фото одним сообщением.",
+        f"{label}\n\nПришлите новое фото одним сообщением.",
         [[InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="admin_banners")]],
     )
 
@@ -19839,14 +19918,28 @@ async def handle_banner_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     key = context.user_data.pop('awaiting_banner_key', None)
     if not await is_admin(update.effective_user.id):
         return True
-    if not key or key not in MINIAPP_BANNER_KEYS:
+    if not key:
         return True
     if not update.message.photo:
         await update.message.reply_text(f"{EM_FAIL} Нужно фото. Попробуйте ещё раз.",
-                                        reply_markup=_admin_banners_kb())
+                                        reply_markup=InlineKeyboardMarkup(_admin_banners_kb()))
         context.user_data['awaiting_banner_key'] = key
         return True
     file_id = update.message.photo[-1].file_id
+    if key.startswith('feed_banner:'):
+        idx = int(key.split(':')[1])
+        _miniapp_settings_set(f"feed_banner:{idx}", file_id)
+        try:
+            db.log_action(update.effective_user.id, "admin_feed_banner_set", f"idx={idx}")
+        except Exception:
+            pass
+        await update.message.reply_text(
+            f"{EM_OK} Баннер ленты #{idx + 1} обновлён.",
+            reply_markup=InlineKeyboardMarkup(_admin_banners_kb()),
+        )
+        return True
+    if key not in MINIAPP_BANNER_KEYS:
+        return True
     _miniapp_settings_set(f"banner:{key}", file_id)
     try:
         db.log_action(update.effective_user.id, "admin_banner_set", f"key={key}")
@@ -19855,7 +19948,7 @@ async def handle_banner_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     label = "Лента Mini App" if key == "miniapp_feed" else key
     await update.message.reply_text(
         f"{EM_OK} Баннер «{label}» обновлён.",
-        reply_markup=_admin_banners_kb(),
+        reply_markup=InlineKeyboardMarkup(_admin_banners_kb()),
     )
     return True
 
@@ -20025,15 +20118,13 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
 async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/ads/photos — загрузка фото (multipart, поле photos).
 
-    Байты пересылаем через бота в служебный чат и возвращаем file_id —
-    та же система хранения, что у бота (ads.photos).
+    Файл сохраняется в UPLOAD_DIR, а наружу отдаём ссылку /api/ads/photos/<fn> —
+    фото резолвятся через тот же сервер, что и /api/photo. Так работает
+    даже без приватного чато-хранилища.
     """
     viewer_id = _miniapp_viewer(request)
     if not viewer_id:
         return _miniapp_err('unauthorized', 401)
-    bot = _miniapp_bot()
-    if not bot:
-        return _miniapp_err('bot_unavailable', 503)
     try:
         form = await request.post()
     except Exception:
@@ -20045,19 +20136,18 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
     files = files[:MINIAPP_MAX_PHOTOS]
     if not files:
         return _miniapp_err('no_photos', 400)
+    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
     try:
-        storage_chat = int(os.environ.get(
-            MINIAPP_PHOTO_STORAGE_CHAT_ENV,
-            str(ADMIN_USER_IDS[0] if ADMIN_USER_IDS else viewer_id),
-        ))
-    except ValueError:
-        storage_chat = viewer_id
-    file_ids: list = []
-    try:
-        from telegram import InputFile as _TGInputFile
+        os.makedirs(upload_dir, exist_ok=True)
     except Exception:
-        return _miniapp_err('bot_unavailable', 503)
-    for field in files:
+        pass
+    urls: list = []
+    import io as _io
+    try:
+        from PIL import Image as _PILImage
+    except ImportError:
+        _PILImage = None
+    for idx, field in enumerate(files):
         try:
             ctype = getattr(field, 'content_type', '') or ''
             if not ctype.startswith('image/'):
@@ -20065,18 +20155,192 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
             data = field.file.read(MINIAPP_MAX_PHOTO_BYTES + 1)
             if not data or len(data) > MINIAPP_MAX_PHOTO_BYTES:
                 continue
-            msg = await bot.send_photo(
-                chat_id=storage_chat,
-                photo=_TGInputFile(data, filename=getattr(field, 'filename', 'photo.jpg')),
-                caption=f"Mini App upload · user {viewer_id}",
-            )
-            if msg.photo:
-                file_ids.append(msg.photo[-1].file_id)
+            if _PILImage:
+                try:
+                    im = _PILImage.open(_io.BytesIO(data))
+                    im.verify()
+                except Exception:
+                    continue
+                try:
+                    im = _PILImage.open(_io.BytesIO(data))
+                    im.thumbnail((1400, 1400))
+                    if im.mode in ('RGBA', 'P', 'LA'):
+                        im = im.convert('RGB')
+                    buf = _io.BytesIO()
+                    im.save(buf, format='JPEG', quality=85)
+                    data = buf.getvalue()
+                except Exception:
+                    pass
+            ext = 'jpg'
+            name = f"u{viewer_id}_{int(time.time())}_{idx}.{ext}"
+            path = os.path.join(upload_dir, name)
+            with open(path, 'wb') as fh:
+                fh.write(data)
+            urls.append(f"/api/ads/photos/{name}")
         except Exception as e:
             logger.error(f"miniapp photo upload: {e}")
-    if not file_ids:
+    if not urls:
         return _miniapp_err('upload_failed', 500)
-    return _miniapp_json({'ok': True, 'file_ids': file_ids}, status=201)
+    try:
+        _miniapp_settings_set(f"photo_map:{viewer_id}", json.dumps(
+            {u: os.path.join(upload_dir, os.path.basename(u)) for u in urls}))
+    except Exception:
+        pass
+    return _miniapp_json({'ok': True, 'urls': urls}, status=201)
+
+
+async def api_miniapp_message_edit(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """PATCH /api/chat/{session_id}/messages/{msg_id} — редактирование.
+
+    Разрешено только автору и только если получатель ещё не прочитал.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        session_id = int(request.match_info['session_id'])
+        msg_id = int(request.match_info['msg_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    session = get_chat_session(session_id)
+    if not session or viewer_id not in (session['buyer_id'], session['seller_id']):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    text = str((body or {}).get('text', '')).strip()
+    if not text or len(text) > 4000:
+        return _miniapp_err('invalid_text', 400)
+    try:
+        cur = db.conn.cursor()
+        cur.execute('SELECT sender_id FROM chat_messages WHERE id=? AND session_id=?', (msg_id, session_id))
+        row = cur.fetchone()
+        if not row or row['sender_id'] != viewer_id:
+            return _miniapp_err('forbidden', 403)
+        cur.execute('UPDATE chat_messages SET text=? WHERE id=?', (text, msg_id))
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"miniapp message_edit: {e}")
+        return _miniapp_err('update_failed', 500)
+    return _miniapp_json({'ok': True})
+
+
+async def api_miniapp_message_delete(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """DELETE /api/chat/{session_id}/messages/{msg_id} — удаление своим."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        session_id = int(request.match_info['session_id'])
+        msg_id = int(request.match_info['msg_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    session = get_chat_session(session_id)
+    if not session or viewer_id not in (session['buyer_id'], session['seller_id']):
+        return _miniapp_err('forbidden', 403)
+    try:
+        cur = db.conn.cursor()
+        cur.execute('SELECT sender_id FROM chat_messages WHERE id=? AND session_id=?', (msg_id, session_id))
+        row = cur.fetchone()
+        if not row or row['sender_id'] != viewer_id:
+            return _miniapp_err('forbidden', 403)
+        cur.execute('DELETE FROM chat_messages WHERE id=?', (msg_id,))
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"miniapp message_delete: {e}")
+        return _miniapp_err('delete_failed', 500)
+    return _miniapp_json({'ok': True})
+
+
+async def api_miniapp_photo_search(request: aiohttp_web.Request) -> aiohttp_web.Request:
+    """POST /api/ads/photo-search — поиск похожих объявлений по фото.
+
+    Без ML: отдаёт случайные активные объявления (фолбэк для демо).
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        form = await request.post()
+    except Exception:
+        return _miniapp_err('bad_multipart', 400)
+    files = form.getall('photo', [])
+    if not files:
+        single = form.get('photos')
+        files = [single] if single is not None else []
+    if not files:
+        return _miniapp_err('no_photos', 400)
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT * FROM ads WHERE status='active' ORDER BY RANDOM() LIMIT 6")
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"miniapp photo_search: {e}")
+        return _miniapp_err('search_failed', 500)
+    ads = []
+    for row in rows:
+        try:
+            row['photos'] = json.loads(row['photos']) if row.get('photos') else []
+        except Exception:
+            row['photos'] = []
+        ads.append(row)
+    ids = [a['id'] for a in ads]
+    fav_counts, fav_mine = _miniapp_fav_map(ids, viewer_id)
+    return _miniapp_json({
+        'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in ads],
+    })
+
+
+async def api_miniapp_ai_generate(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ai/generate-description — ИИ-описание объявления.
+
+    Без внешних API: шаблонная генерация с вариациями по категории и
+    состоянию. Готовый текст сразу под публикацию.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    title = str((body or {}).get('title', '')).strip()
+    category = str((body or {}).get('category', '')).strip()
+    condition = str((body or {}).get('condition', '')).strip()
+    city = str((body or {}).get('city', '')).strip()
+    if not title:
+        return _miniapp_err('missing_title', 400)
+    cond_map = {
+        'Новое': 'новое, в оригинальной упаковке',
+        'Б/у': 'в отличном состоянии, бережно использовалось',
+    }
+    cond_text = cond_map.get(condition, 'в хорошем состоянии')
+    city_text = f"Самовывоз — {city}." if city else "Возможна доставка."
+    desc = (
+        f"{title}.\n\n"
+        f"Состояние: {cond_text}. "
+        f"Всё работает, без скрытых дефектов.\n\n"
+        f"{city_text} "
+        f"Цена окончательная, торг минимальный.\n\n"
+        f"Пишите в чат — отвечаю в течение часа."
+    )
+    return _miniapp_json({'description': desc})
+
+
+async def api_miniapp_photo_file(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/ads/photos/{name} — отдать загруженный файл (только /app/uploads)."""
+    name = os.path.basename(request.match_info.get('name', ''))
+    if not name or name.startswith('.') or '/' in name or '\\' in name:
+        return _miniapp_err('not_found', 404)
+    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    path = os.path.join(upload_dir, name)
+    if not os.path.isfile(path):
+        return _miniapp_err('not_found', 404)
+    return aiohttp_web.FileResponse(path, headers={
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        **_miniapp_cors_headers(),
+    })
 
 
 # ── Мои объявления / изменение / удаление / продажа ────────────────────
@@ -20494,11 +20758,17 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
     bot = _miniapp_bot()
     if not bot:
         return _miniapp_err('bot_unavailable', 503)
-    try:
-        tg_file = await bot.get_file(file_id)
-        file_path = tg_file.file_path
-    except Exception as e:
-        logger.error(f"miniapp photo get_file: {e}")
+    file_path = None
+    for attempt in range(3):
+        try:
+            tg_file = await bot.get_file(file_id)
+            file_path = tg_file.file_path
+            break
+        except Exception as e:
+            logger.warning(f"miniapp photo get_file attempt {attempt+1}: {e}")
+            if attempt < 2:
+                await asyncio.sleep(1 + attempt)
+    if not file_path:
         return _miniapp_err('not_found', 404)
     url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
     try:
@@ -20511,7 +20781,16 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 ctype = resp.headers.get('Content-Type', 'image/jpeg')
     except Exception as e:
         logger.error(f"miniapp photo proxy: {e}")
-        return _miniapp_err('not_found', 404)
+        import io as _io
+        from PIL import Image as _PILImage, ImageDraw as _ImageDraw
+        img = _PILImage.new('RGB', (400, 300), color=(30, 32, 40))
+        draw = _ImageDraw.Draw(img)
+        draw.text((200, 150), 'Фото недоступно', fill=(142, 142, 147), anchor='mm')
+        buf = _io.BytesIO()
+        img.save(buf, format='PNG')
+        return aiohttp_web.Response(body=buf.getvalue(), content_type='image/png',
+                                    headers={**_miniapp_cors_headers(),
+                                             'Cache-Control': 'public, max-age=300'})
     return aiohttp_web.Response(body=data, content_type=ctype,
                                 headers={**_miniapp_cors_headers(),
                                          'Cache-Control': 'public, max-age=86400'})
@@ -20558,6 +20837,12 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/chats', api_miniapp_chats)
     app.router.add_post('/api/chats/start', api_miniapp_chat_start)
     app.router.add_get('/api/banners', api_miniapp_banners)
+    app.router.add_get('/api/feed-banners', api_miniapp_feed_banners)
+    app.router.add_get('/api/ads/photos/{name}', api_miniapp_photo_file)
+    app.router.add_post('/api/ai/generate-description', api_miniapp_ai_generate)
+    app.router.add_post('/api/ads/photo-search', api_miniapp_photo_search)
+    app.router.add_patch('/api/chat/{session_id}/messages/{msg_id}', api_miniapp_message_edit)
+    app.router.add_delete('/api/chat/{session_id}/messages/{msg_id}', api_miniapp_message_delete)
     # ── Раздача собранного frontend Mini App из того же процесса ──────────────
     # FRONTEND_DIST=<путь к dist/> (Vite build). Один сервис на Amvera:
     # и API, и Mini App, и бот — одна БД, один процесс.

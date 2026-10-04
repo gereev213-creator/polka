@@ -1552,7 +1552,6 @@ function Layout() {
     location.pathname === '/create' ||
     location.pathname === '/chats' ||
     location.pathname === '/my' ||
-    location.pathname.startsWith('/checkout/') ||
     location.pathname.startsWith('/listing/') ||
     location.pathname.startsWith('/chat/') ||
     location.pathname.startsWith('/edit/')
@@ -1587,20 +1586,25 @@ function BottomNav() {
     { icon: 'search', to: '/search', label: 'Поиск' },
   ]
 
+  const renderItem = (item) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      end
+      className={({ isActive }) => `dock-item ${isActive ? 'active' : ''}`}
+    >
+      <span className="dock-icon"><Icon name={item.icon} /></span>
+      <span className="dock-label">{item.label}</span>
+    </NavLink>
+  )
+
   return (
     <nav className="dock">
-      {items.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end
-          className={({ isActive }) => `dock-item ${isActive ? 'active' : ''}`}
-        >
-          {item.isNew && <span className="dock-badge">NEW</span>}
-          <span className="dock-icon"><Icon name={item.icon} /></span>
-          <span className="dock-label">{item.label}</span>
-        </NavLink>
-      ))}
+      {items.slice(0, 2).map(renderItem)}
+      <NavLink to="/create" className="dock-create" aria-label="Разместить объявление">
+        <Icon name="plus" />
+      </NavLink>
+      {items.slice(2).map(renderItem)}
       <NavLink to="/profile" className="profile-bubble">
         <span>{(useApp().tgUser?.first_name || 'П')[0]?.toUpperCase()}</span>
       </NavLink>
@@ -1643,20 +1647,10 @@ export default function App() {
           <div className="app-frame">
             <Layout />
           </div>
-          <TelegramUserChip />
         </AppProvider>
       </ErrorBoundary>
     </HashRouter>
   )
 }
 
-function TelegramUserChip() {
-  const { tgUser, backendMode } = useApp()
-  if (!tgUser) return null
-  return (
-    <div className="telegram-user-chip">
-      <span>@{tgUser.username || tgUser.first_name}</span>
-      <span className="chip-status">{backendMode === 'online' ? 'online' : backendMode}</span>
-    </div>
-  )
-}
+
