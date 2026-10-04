@@ -9,7 +9,7 @@ import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
-import { getTelegramUser, initTelegramMiniApp } from './telegram'
+import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
 import { api, resolveAssetUrl } from './api'
 
 const AppContext = createContext(null)
@@ -243,35 +243,6 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
-function StoriesRow() {
-  const stories = [
-    { id: 1, name: 'Вы', avatar: null, isOwn: true },
-    { id: 2, name: 'Анна', avatar: null },
-    { id: 3, name: 'Максим', avatar: null },
-    { id: 4, name: 'Даша', avatar: null },
-    { id: 5, name: 'Иван', avatar: null },
-    { id: 6, name: 'Катя', avatar: null },
-  ]
-
-  return (
-    <div className="stories-row">
-      {stories.map((story) => (
-        <button key={story.id} className="story-item" type="button">
-          <div className={`story-avatar ${story.isOwn ? 'is-own' : ''}`}>
-            {story.avatar ? (
-              <img src={story.avatar} alt={story.name} />
-            ) : (
-              <span>{story.name[0]}</span>
-            )}
-            {story.isOwn && <span className="story-plus">+</span>}
-          </div>
-          <span className="story-name">{story.name}</span>
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function CategoryCards({ categories, activeCategory, onSelect }) {
   const categoryIcons = {
     'Одежда': 'home',
@@ -496,7 +467,6 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <StoriesRow />
       <BannerCarousel />
       <CategoryCards categories={['Все', ...categories]} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
@@ -1550,7 +1520,7 @@ function ProfilePage() {
         </div>
         <div className="telegram-note">{tgUser?.first_name || 'Гость'} · {backendMode === 'online' ? 'online' : backendMode}</div>
       </div>
-      {!profile ? <ErrorBlock text="Профиль недоступен. Откройте Mini App через Telegram-бота." /> : null}
+      {!profile ? <ErrorBlock text={`Профиль недоступен (initData: ${getInitData()?.length || 0} симв.). Откройте Mini App кнопкой бота, не прямой ссылкой.`} /> : null}
       <div className="list-stack mt-14">
         <Link to="/my" className="setting-row glass-card"><span>Мои объявления</span></Link>
         <Link to="/favorites" className="setting-row glass-card"><span>Избранное</span><Icon name="bookmark" /></Link>
@@ -1614,7 +1584,7 @@ function BottomNav() {
     { icon: 'home', to: '/', label: 'Главная' },
     { icon: 'chat', to: '/chats', label: 'Сообщения' },
     { icon: 'bookmark', to: '/favorites', label: 'Избранное' },
-    { icon: 'sparkles', to: '/promotions', label: 'Ивент', isNew: true },
+    { icon: 'search', to: '/search', label: 'Поиск' },
   ]
 
   return (
@@ -1632,7 +1602,7 @@ function BottomNav() {
         </NavLink>
       ))}
       <NavLink to="/profile" className="profile-bubble">
-        <span>{'П'}</span>
+        <span>{(useApp().tgUser?.first_name || 'П')[0]?.toUpperCase()}</span>
       </NavLink>
     </nav>
   )

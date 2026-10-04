@@ -158,6 +158,21 @@ input, textarea, select { font-family: inherit; }
   text-align: center;
 }
 
+.brand-logo {
+  height: 22px;
+  width: auto;
+  max-width: 140px;
+  display: block;
+  object-fit: contain;
+}
+.topbar-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+}
+
 /* TopBar */
 .topbar {
   display: flex;
