@@ -257,8 +257,13 @@ input, textarea, select { font-family: inherit; }
   position: relative;
   aspect-ratio: 1;
   background: var(--surface-2);
-  border-radius: var(--radius);
   overflow: hidden;
+}
+.product-media .media-image,
+.product-media .media-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
 }
 .media-image {
   width: 100%;
@@ -283,32 +288,166 @@ input, textarea, select { font-family: inherit; }
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: rgba(0,0,0,.4);
-  backdrop-filter: blur(8px);
+  background: rgba(255,255,255,.92);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--text-secondary);
+  z-index: 2;
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
   transition: all .2s ease;
 }
-.save-btn.is-on { color: #EF4444; }
-.product-card .product-price {
-  font-size: 16px;
-  font-weight: 700;
-  margin-top: 10px;
-}
+.save-btn.is-on { color: var(--danger); }
+.save-btn.is-on .icon-svg { fill: var(--danger); }
+.product-info { padding: 12px 14px 14px; }
 .product-card .product-title {
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--text);
-  margin-top: 2px;
-  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .product-card .product-city {
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 4px;
 }
+.product-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+.product-bottom .product-price {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: var(--text);
+  margin: 0;
+}
+.product-action {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.product-action:active { transform: scale(.9); }
+.product-action .icon-svg { width: 18px; height: 18px; }
+
+/* ── Страница товара ─────────────────────────────────────────────────── */
+.detail-hero {
+  position: relative;
+  border-radius: 28px;
+  overflow: hidden;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  min-height: 320px;
+}
+.detail-hero .media-image,
+.detail-hero .media-placeholder {
+  border-radius: 0;
+  min-height: 320px;
+}
+.detail-tag {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  z-index: 2;
+}
+.detail-tag--price { left: 14px; bottom: 44px; }
+.detail-tag-arrow {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+.detail-dots {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  z-index: 2;
+}
+.detail-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.45);
+  padding: 0;
+  transition: all .25s ease;
+}
+.detail-dot.is-active { width: 18px; border-radius: 3px; background: #fff; }
+.detail-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.detail-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+.cta-main {
+  flex: 1;
+  height: 52px;
+  border-radius: 26px;
+  background: var(--text);
+  color: var(--bg);
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  transition: transform .18s ease;
+}
+.cta-main:active { transform: scale(.97); }
+.cta-side {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform .18s ease;
+}
+.cta-side:active { transform: scale(.9); }
+.cta-side.is-on { background: var(--danger); }
+.cta-side .icon-svg { width: 20px; height: 20px; }
 
 /* Grid */
 .grid-two {

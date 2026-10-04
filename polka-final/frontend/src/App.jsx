@@ -141,16 +141,23 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
   }
 
   return (
-    <Link to={`/listing/${item.id}`} className="product-card glass-card">
+    <Link to={`/listing/${item.id}`} className="product-card">
       <div className="product-media">
+        <MediaPlaceholder imageUrl={firstPhoto(item)} />
         <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}>
           <Icon name="heart" />
         </button>
-        <MediaPlaceholder imageUrl={firstPhoto(item)} />
       </div>
-      <div className="product-price">{priceText(item)}</div>
-      <div className="product-title">{item.title}</div>
-      <div className="product-city">{item.city}</div>
+      <div className="product-info">
+        <div className="product-title">{item.title}</div>
+        <div className="product-city">{item.city}</div>
+        <div className="product-bottom">
+          <div className="product-price">{priceText(item)}</div>
+          <button className="product-action" type="button" onClick={handleFavorite}>
+            <Icon name="chat" />
+          </button>
+        </div>
+      </div>
     </Link>
   )
 }
@@ -754,51 +761,76 @@ function ListingPage() {
   return (
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" />} right={<div className="top-actions"><IconButton icon="heart" active={favoriteIds.includes(listingId)} onClick={() => toggleFavorite(listingId)} /><IconButton icon="share" /></div>} />
-      <div className="hero-media glass-card">
+      <div className="detail-hero">
         <MediaPlaceholder label="фотографии товара" tall imageUrl={photos[photoIndex] || ''} />
+        <button className="detail-tag detail-tag--price" type="button">
+          {priceText(item)}
+          <span className="detail-tag-arrow">›</span>
+        </button>
+        {photos.length > 1 ? (
+          <div className="detail-dots">
+            {photos.map((url, idx) => (
+              <button key={idx} type="button" aria-label={`Фото ${idx + 1}`}
+                className={`detail-dot ${photoIndex === idx ? 'is-active' : ''}`}
+                onClick={() => setPhotoIndex(idx)} />
+            ))}
+          </div>
+        ) : null}
       </div>
-      {photos.length > 1 ? (
-        <div className="chip-row">
-          {photos.map((url, idx) => (
-            <button key={idx} className={`chip ${photoIndex === idx ? 'is-active' : ''}`} onClick={() => setPhotoIndex(idx)}>
-              Фото {idx + 1}
-            </button>
-          ))}
-        </div>
-      ) : null}
+      <div className="eyebrow mt-12">{item.category || 'Объявление'}</div>
       <div className="listing-title">{item.title}</div>
-      <div className="listing-price">{priceText(item)}</div>
-      <div className="muted-line">{item.city}{item.condition ? ` · ${item.condition}` : ''}</div>
-      <div className="muted-line">{item.views || 0} просмотров · {item.favorites_count || 0} в избранном</div>
-      <div className="copy-block glass-card">
+      <div className="detail-meta">
+        <span>{item.condition || 'Состояние не указано'}</span>
+        <span>·</span>
+        <span>{item.city || 'Город не указан'}</span>
+        <span>·</span>
+        <span>{item.views || 0} просмотров</span>
+      </div>
+      <div className="copy-block glass-card mt-12">
         <strong>Описание</strong>
         <p>{item.description || 'Без описания.'}</p>
       </div>
-      <div className="seller-card glass-card">
+      <div className="detail-actions">
+        {isOwner ? (
+          <>
+            <Link to={`/edit/${item.id}`} className="cta-main">Редактировать</Link>
+            {item.status === 'active' ? (
+              <button className="cta-side" type="button" onClick={handleSold}>
+                {actionLoading === 'sold' ? '…' : 'Продано'}
+              </button>
+            ) : null}
+            <button className="cta-side" type="button" onClick={handleDelete}>
+              {actionLoading === 'delete' ? '…' : 'Удалить'}
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="cta-main" type="button" onClick={handleStartChat}>
+              {chatLoading ? 'Открываем…' : 'Написать'}
+            </button>
+            <button
+              className={`cta-side ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
+              type="button"
+              onClick={() => toggleFavorite(listingId)}
+              aria-label="В избранное"
+            >
+              <Icon name="heart" />
+            </button>
+          </>
+        )}
+      </div>
+      <div className="seller-card glass-card mt-12">
         <div className="avatar" />
         <div className="seller-meta">
           <strong>{item.seller?.name || 'Продавец'}</strong>
-          <span>{item.seller?.verified ? 'Проверен' : 'Профиль продавца'}</span>
+          <span>{item.seller?.verified ? 'Проверен' : 'Профиль продавца'} · {item.favorites_count || 0} в избранном</span>
         </div>
       </div>
       {isOwner ? (
-        <div className="list-stack mt-14">
-          <div className="setting-row glass-card"><span>Статус: {STATUS_LABELS[item.status] || item.status}</span></div>
-          <Link to={`/edit/${item.id}`} className="setting-row glass-card"><span>Редактировать</span></Link>
-          {item.status === 'active' ? <button className="setting-row glass-card button-like" onClick={handleSold}><span>{actionLoading === 'sold' ? 'Сохраняем…' : 'Пометить проданным'}</span></button> : null}
-          <button className="setting-row glass-card button-like" onClick={handleDelete}><span>{actionLoading === 'delete' ? 'Удаляем…' : 'Удалить'}</span></button>
+        <div className="setting-row glass-card mt-12">
+          <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>
         </div>
-      ) : (
-        <div className="cta-bar">
-          <div>
-            <small>Цена</small>
-            <strong>{priceText(item)}</strong>
-          </div>
-          <button className="cta-button" onClick={handleStartChat}>
-            {chatLoading ? 'Открываем…' : 'Написать'}
-          </button>
-        </div>
-      )}
+      ) : null}
     </Screen>
   )
 }
