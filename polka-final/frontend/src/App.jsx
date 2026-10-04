@@ -33,6 +33,12 @@ const iconPaths = {
   image: [<rect key="1" x="3" y="5" width="18" height="14" rx="2.5" />, <circle key="2" cx="8.5" cy="10" r="1.8" />, <path key="3" d="m21 15.5-4.5-4.5L7 20.5" />],
   sparkles: [<path key="1" d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3Z" />, <path key="2" d="M19 15l.9 2.1 2.1.9-2.1.9L19 21l-.9-2.1-2.1-.9 2.1-.9L19 15Z" />, <path key="3" d="M5 16l.7 1.8 1.8.7-1.8.7L5 21l-.7-1.8-1.8-.7 1.8-.7L5 16Z" />],
   logout: [<path key="1" d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />, <path key="2" d="m17 8 4 4-4 4" />, <path key="3" d="M21 12H10" />],
+  star: [<path key="1" d="m12 3.4 2.7 5.5 6 .87-4.35 4.24 1.03 5.99L12 17.2l-5.38 2.83 1.03-5.99L3.3 9.77l6-.87L12 3.4Z" />],
+  pin: [<path key="1" d="M12 21.5s7-6 7-11.4A7 7 0 1 0 5 10.1c0 5.4 7 11.4 7 11.4Z" />, <circle key="2" cx="12" cy="10" r="2.6" />],
+  truck: [<path key="1" d="M2.5 7h10.5v9.5H2.5z" />, <path key="2" d="M13 10.5h4.4l3.1 3.4v2.6H13z" />, <circle key="3" cx="6.8" cy="18.4" r="1.9" />, <circle key="4" cx="16.8" cy="18.4" r="1.9" />],
+  ruler: [<path key="1" d="M3.2 15.6 15.6 3.2 20.8 8.4 8.4 20.8z" />, <path key="2" d="m7.2 11.6 2 2M10.2 8.6l2 2M13.2 5.6l2 2" />],
+  clock: [<circle key="1" cx="12" cy="12" r="8.5" />, <path key="2" d="M12 7.5V12l3.2 2" />],
+  check: [<path key="1" d="m4.8 12.6 4.9 4.9L19.2 6.9" />],
 }
 
 const STATUS_LABELS = {
@@ -126,6 +132,10 @@ function Banner({ eyebrow, title, text, action, icon = 'sparkles' }) {
 
 function firstPhoto(item) {
   if (item?.photo_urls?.length) return item.photo_urls[0]
+  // Страховка: если бэкенд ещё не отдаёт photo_urls, берём сырое значение.
+  // Пути /api/ads/photos/... можно использовать напрямую, file_id — нет.
+  const raw = item?.photos?.[0]
+  if (typeof raw === 'string' && raw && !raw.startsWith('{')) return raw
   return ''
 }
 
@@ -243,39 +253,152 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
-function StoriesRow({ sellers = [], ownName = '' }) {
+/* Иллюстрации категорий — плоские SVG в стиле референса (без внешних файлов).
+ * Ключ берём из подписи категории; бэкенд отдаёт реальные названия из БД,
+ * поэтому для незнакомой категории есть аккуратный фолбэк. */
+const CATEGORY_META = {
+  'Все': { art: 'all', tint: '#E9F0FF' },
+  'Аренда жилья': { art: 'rent', tint: '#E8F0FF' },
+  'Продажа жилья': { art: 'sale', tint: '#E7F7EC' },
+  'Вакансии': { art: 'jobs', tint: '#FFF2E0' },
+  'Подработки': { art: 'parttime', tint: '#F2EBFF' },
+  'Техника': { art: 'tech', tint: '#E8F1FF' },
+  'Одежда': { art: 'clothes', tint: '#FFEFE7' },
+  'Обувь': { art: 'shoes', tint: '#EEF0F5' },
+  'Прочие вещи': { art: 'other', tint: '#EDF1F6' },
+}
+
+const CATEGORY_ART = {
+  all: (
+    <>
+      <rect x="9" y="9" width="13" height="13" rx="4" fill="#2F6BFF" />
+      <rect x="26" y="9" width="13" height="13" rx="4" fill="#9CBAFF" />
+      <rect x="9" y="26" width="13" height="13" rx="4" fill="#9CBAFF" />
+      <rect x="26" y="26" width="13" height="13" rx="4" fill="#2F6BFF" />
+    </>
+  ),
+  rent: (
+    <>
+      <path d="M9 14a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v25H9V14Z" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" />
+      <rect x="13" y="17" width="4.6" height="4.6" rx="1.2" fill="#2F6BFF" />
+      <rect x="20.4" y="17" width="4.6" height="4.6" rx="1.2" fill="#9CBAFF" />
+      <rect x="13" y="24.6" width="4.6" height="4.6" rx="1.2" fill="#9CBAFF" />
+      <rect x="20.4" y="24.6" width="4.6" height="4.6" rx="1.2" fill="#2F6BFF" />
+      <rect x="16" y="32.5" width="5.6" height="6.5" rx="1.2" fill="#1B3A6B" />
+      <circle cx="35" cy="19.5" r="5.5" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" />
+      <path d="M35 25v11M35 31.5h3.6M35 34.6h2.6" stroke="#1B3A6B" strokeWidth="1.7" strokeLinecap="round" />
+    </>
+  ),
+  sale: (
+    <>
+      <path d="M9 22.6 24 10.5l15 12.1" stroke="#14603A" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#14603A" strokeWidth="1.7" />
+      <path d="M20 38.7v-8.6h8v8.6" fill="#22C55E" fillOpacity=".8" />
+      <circle cx="35.5" cy="13.5" r="6" fill="#22C55E" />
+      <path d="M32.8 13.5h5.4" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
+    </>
+  ),
+  jobs: (
+    <>
+      <rect x="8" y="16" width="32" height="22" rx="5" fill="#fff" stroke="#8A5A12" strokeWidth="1.7" />
+      <path d="M18.5 16v-2.8a3 3 0 0 1 3-3h5a3 3 0 0 1 3 3V16" stroke="#8A5A12" strokeWidth="1.7" strokeLinecap="round" fill="none" />
+      <rect x="8" y="24" width="32" height="3.6" fill="#F59E0B" fillOpacity=".3" />
+      <rect x="21" y="22.8" width="6" height="6" rx="1.6" fill="#F59E0B" />
+    </>
+  ),
+  parttime: (
+    <>
+      <circle cx="21" cy="24" r="13" fill="#fff" stroke="#5B3FA8" strokeWidth="1.7" />
+      <path d="M21 16.6V24l5.4 3.4" stroke="#8B5CF6" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <circle cx="36" cy="34" r="7" fill="#8B5CF6" />
+      <path d="M36 30.6V34l2.4 1.7" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+    </>
+  ),
+  tech: (
+    <>
+      <rect x="13" y="8" width="17" height="26" rx="4" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" />
+      <rect x="16.6" y="12" width="9.8" height="17" rx="2" fill="#2F6BFF" fillOpacity=".26" />
+      <path d="M20 30.4h3" stroke="#1B3A6B" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M11 38.6V33h26v5.6" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M7.5 38.6h33" stroke="#1B3A6B" strokeWidth="1.9" strokeLinecap="round" />
+    </>
+  ),
+  clothes: (
+    <>
+      <path d="M24 9.2a3.1 3.1 0 0 1 1.6 5.8" stroke="#8A3A12" strokeWidth="1.7" strokeLinecap="round" fill="none" />
+      <path d="M24 14.8 10.2 22.7l3.5 6.4 2.9-1.7V39a1.6 1.6 0 0 0 1.6 1.6h11.6A1.6 1.6 0 0 0 31.4 39V27.4l2.9 1.7 3.5-6.4L24 14.8Z" fill="#fff" stroke="#8A3A12" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M20.6 17.8 24 21.2l3.4-3.4" stroke="#F97316" strokeWidth="1.7" strokeLinejoin="round" fill="none" />
+      <path d="M24 14.8V39" stroke="#8A3A12" strokeWidth="1.3" />
+    </>
+  ),
+  shoes: (
+    <>
+      <path d="M9 32.4V18.6c0-1.9 1.5-3.4 3.4-3.4h4c1.3 0 2.4.7 3 1.8l1.8 3.2 9.9 4.5c3.6 1.6 6.1 3.5 6.1 7H11a2 2 0 0 1-2-2Z" fill="#fff" stroke="#2A2F3A" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M9 32.4h30" stroke="#2A2F3A" strokeWidth="1.7" />
+      <path d="M17 21.4 24 25.8M21 25.2l6.6 4.4" stroke="#2F6BFF" strokeWidth="1.7" strokeLinecap="round" />
+      <circle cx="15" cy="29.2" r="1.4" fill="#2A2F3A" />
+    </>
+  ),
+  other: (
+    <>
+      <path d="M24 9 40 16.2v15.6L24 39 8 31.8V16.2L24 9Z" fill="#fff" stroke="#3A4453" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M8 16.2l16 7.2 16-7.2M24 23.4V39" stroke="#3A4453" strokeWidth="1.7" strokeLinejoin="round" />
+      <path d="M16 12.6 32 19.8" stroke="#94A3B8" strokeWidth="1.7" strokeLinecap="round" />
+    </>
+  ),
+}
+
+function CategoryArt({ label }) {
+  const art = CATEGORY_ART[CATEGORY_META[label]?.art] || CATEGORY_ART.other
+  return (
+    <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      {art}
+    </svg>
+  )
+}
+
+function StoriesRow({ items = [] }) {
   const seen = new Set()
   const people = []
-  if (ownName) people.push({ name: ownName, own: true })
-  for (const name of sellers) {
-    if (!name || seen.has(name) || people.length >= 8) continue
+  for (const it of items) {
+    const name = it?.seller?.name
+    if (!name || seen.has(name)) continue
     seen.add(name)
-    people.push({ name, own: false })
+    people.push({ name, photo: it?.photo_urls?.[0] || '' })
+    if (people.length >= 8) break
   }
-  if (people.length === 0) return null
+
   return (
-    <div className="stories-row">
-      {people.map((p) => (
-        <div key={p.name} className="story-item">
-          <div className={`story-avatar ${p.own ? 'is-own' : ''}`}>
-            <span>{(p.name || '?')[0]?.toUpperCase()}</span>
-            {p.own ? <span className="story-plus">+</span> : null}
+    <div className="stories-block">
+      <div className="stories-head">
+        <Icon name="sparkles" />
+        <span>Истории продавцов</span>
+      </div>
+      <div className="stories-row">
+        <button type="button" className="story-item">
+          <div className="story-ring is-own">
+            <div className="story-avatar"><Icon name="plus" /></div>
           </div>
-          <span className="story-name">{p.own ? 'Вы' : p.name}</span>
-        </div>
-      ))}
+          <span className="story-name">Вы</span>
+        </button>
+        {people.map((p) => (
+          <button type="button" key={p.name} className="story-item">
+            <div className="story-ring">
+              <div className="story-avatar">
+                {p.photo
+                  ? <img src={resolveAssetUrl(p.photo)} alt="" loading="lazy" />
+                  : (p.name || '?')[0]?.toUpperCase()}
+              </div>
+            </div>
+            <span className="story-name">@{p.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
 
 function CategoryCards({ categories, activeCategory, onSelect }) {
-  const categoryIcons = {
-    'Одежда': 'home',
-    'Техника': 'sparkles',
-    'Дом': 'bookmark',
-    'Все': 'home',
-  }
-
   return (
     <div className="category-cards">
       {categories.map((cat) => (
@@ -283,11 +406,10 @@ function CategoryCards({ categories, activeCategory, onSelect }) {
           key={cat}
           type="button"
           className={`category-card ${activeCategory === cat ? 'is-active' : ''}`}
+          style={{ '--tint': CATEGORY_META[cat]?.tint || '#EDF1F6' }}
           onClick={() => onSelect(cat)}
         >
-          <div className="category-card-icon">
-            <Icon name={categoryIcons[cat] || 'home'} />
-          </div>
+          <div className="category-art"><CategoryArt label={cat} /></div>
           <span>{cat}</span>
         </button>
       ))}
@@ -295,66 +417,161 @@ function CategoryCards({ categories, activeCategory, onSelect }) {
   )
 }
 
-function BannerCarousel() {
+/* Текст поверх баннера. Бэкенд отдаёт только картинку (админ может загрузить
+ * до 5 баннеров), поэтому подпись и CTA рисуем сами — как в референсе. */
+const FEED_BANNER_COPY = {
+  eyebrow: 'Полка · Удмуртия',
+  title: 'Покупай и продавай рядом',
+  sub: 'Свежие объявления каждый день',
+}
+
+function FeedBanner() {
   const [banners, setBanners] = useState([])
   const [index, setIndex] = useState(0)
-  const [dismissed, setDismissed] = useState([])
-  const [paused, setPaused] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    api.getFeedBanners().then((data) => {
-      if (!cancelled) {
-        const items = (data.items || []).filter((b) => b.image)
-        setBanners(items.length ? items : [{ image: '', action: '' }])
-      }
-    }).catch(() => {
-      if (!cancelled) setBanners([{ image: '', action: '' }])
-    })
+    api.getFeedBanners()
+      .then((data) => {
+        if (!cancelled) setBanners((data.items || []).filter((b) => b.image))
+      })
+      .catch(() => {})
     return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
-    if (banners.length < 2 || paused) return undefined
-    const timer = setInterval(() => {
-      setIndex((i) => (i + 1) % banners.length)
-    }, 5000)
+    if (banners.length < 2) return undefined
+    const timer = setInterval(() => setIndex((i) => (i + 1) % banners.length), 5000)
     return () => clearInterval(timer)
-  }, [banners.length, paused])
+  }, [banners.length])
 
-  const dismiss = () => {
-    const id = banners[index]?.image
-    if (!id) return
-    const next = [...dismissed, id]
-    setDismissed(next)
-    localStorage.setItem('polka_dismissed_banners', JSON.stringify(next))
-  }
-
-  const visible = banners.filter((b) => !dismissed.includes(b.image) && b.image)
-  if (visible.length === 0) return null
-
-  const current = visible[index % visible.length]
+  const slides = banners.length ? banners : [null]
+  const active = index % slides.length
+  const current = slides[active]
 
   return (
-    <div className="banner-carousel">
-      <div className="banner-track" style={{ transform: `translateX(-${(index % visible.length) * 100}%)` }}>
-        {visible.map((b, i) => (
-          <div className="banner-slide" key={i} onClick={() => b.action && window.open(b.action, '_blank')}>
-            <img src={resolveAssetUrl(b.image)} alt="Полка" />
+    <div className="feed-banner">
+      <div className="feed-banner-track" style={{ transform: `translateX(-${active * 100}%)` }}>
+        {slides.map((b, i) => (
+          <div
+            className={`feed-banner-slide ${b?.image ? '' : 'is-empty'}`}
+            key={i}
+            onClick={() => b?.action && window.open(b.action, '_blank')}
+          >
+            {b?.image ? <img src={resolveAssetUrl(b.image)} alt="" loading="lazy" /> : null}
           </div>
         ))}
       </div>
-      <div className="banner-dots">
-        {visible.map((_, i) => (
-          <span key={i} className={`banner-dot ${i === index % visible.length ? 'is-active' : ''}`} />
-        ))}
+      <div className="feed-banner-shade" aria-hidden="true" />
+      <div className="feed-banner-copy">
+        <span className="feed-banner-eyebrow">{FEED_BANNER_COPY.eyebrow}</span>
+        <strong className="feed-banner-title">{FEED_BANNER_COPY.title}</strong>
+        <span className="feed-banner-sub">{FEED_BANNER_COPY.sub}</span>
       </div>
+      <Link className="feed-banner-cta" to="/create">
+        <Icon name="plus" />
+        Разместить
+      </Link>
+      {slides.length > 1 ? (
+        <div className="feed-banner-dots">
+          {slides.map((_, i) => (
+            <span key={i} className={`feed-banner-dot ${i === active ? 'is-active' : ''}`} />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
 
+/* «Your stats» из референса → статистика продавца из /api/me.
+ * Показываем только авторизованному: без профиля цифры бессмысленны. */
+function SellerStats({ profile }) {
+  if (!profile) return null
+  const cards = [
+    { key: 'ads', label: 'Объявления', value: profile.active_ads || 0, icon: 'bookmark', tone: 'is-accent', to: '/my' },
+    { key: 'mod', label: 'На модерации', value: profile.moderation_ads || 0, icon: 'clock', tone: 'is-dark', to: '/my' },
+    { key: 'fav', label: 'В избранном', value: profile.favorites || 0, icon: 'heart', tone: '', to: '/favorites' },
+  ]
+  return (
+    <>
+      <div className="stats-head">
+        <strong>Моя статистика</strong>
+        <span>{profile.name || 'профиль'}</span>
+      </div>
+      <div className="stats-row">
+        {cards.map((c) => (
+          <Link key={c.key} to={c.to} className={`stat-card ${c.tone}`.trim()}>
+            <span className="stat-card-label">{c.label}</span>
+            <span className="stat-card-bottom">
+              <span className="stat-card-value">{c.value}</span>
+              <span className="stat-card-icon"><Icon name={c.icon} /></span>
+            </span>
+          </Link>
+        ))}
+      </div>
+    </>
+  )
+}
+
+/* «Personalized daily outfit» → «Рекомендуем сегодня».
+ * Берём самое просматриваемое из уже загруженной ленты — без лишнего запроса. */
+function RecommendCard({ items = [] }) {
+  const pick = useMemo(() => {
+    if (!items.length) return null
+    let best = items[0]
+    for (const it of items) {
+      if ((it.views || 0) > (best.views || 0)) best = it
+    }
+    return best
+  }, [items])
+
+  if (!pick) return null
+
+  return (
+    <Link to={`/listing/${pick.id}`} className="recommend-card">
+      <MediaPlaceholder label="" imageUrl={firstPhoto(pick)} />
+      <div className="recommend-shade" aria-hidden="true" />
+      <span className="recommend-chip">
+        <Icon name="sparkles" />
+        Рекомендуем сегодня
+      </span>
+      <div className="recommend-copy">
+        <div className="recommend-eyebrow">{pick.city || pick.category || 'Объявление'}</div>
+        <div className="recommend-title">{pick.title}</div>
+        <div className="recommend-price">{priceText(pick)}</div>
+      </div>
+      <span className="recommend-go" aria-hidden="true"><Icon name="chat" /></span>
+    </Link>
+  )
+}
+
+/* «Last news» из референса → свежие объявления компактной строкой */
+function LastNews({ items = [] }) {
+  if (!items.length) return null
+  const recent = items.slice(0, 4)
+  const names = recent.map((i) => i.seller?.name).filter(Boolean).slice(0, 2)
+  return (
+    <Link to="/search" className="lastnews">
+      <div className="lastnews-avatars">
+        {recent.map((it) => (
+          <span className="lastnews-thumb" key={it.id}>
+            {firstPhoto(it)
+              ? <img src={resolveAssetUrl(firstPhoto(it))} alt="" loading="lazy" />
+              : <Icon name="image" />}
+          </span>
+        ))}
+      </div>
+      <div className="lastnews-copy">
+        <strong>Последние объявления</strong>
+        <span>{names.length ? `${names.join(' и ')} только что добавили` : `${recent.length} новых объявлений`}</span>
+      </div>
+      <span className="lastnews-arrow" aria-hidden="true"><Icon name="back" /></span>
+    </Link>
+  )
+}
+
 function FeedPage() {
-  const { favoriteIds, toggleFavorite, tgUser } = useApp()
+  const { favoriteIds, toggleFavorite, profile } = useApp()
   const [categories, setCategories] = useState([])
   const [activeCategory, setActiveCategory] = useState('Все')
   const [items, setItems] = useState([])
@@ -492,13 +709,12 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <StoriesRow
-        ownName={tgUser?.first_name || ''}
-        sellers={(items || []).map((i) => i.seller?.name).filter(Boolean)}
-      />
-      <BannerCarousel />
+      <StoriesRow items={items} />
+      <FeedBanner />
       <CategoryCards categories={['Все', ...categories]} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
+      <SellerStats profile={profile} />
+      <RecommendCard items={items} />
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Объявлений пока нет." /> : null}
@@ -507,6 +723,7 @@ function FeedPage() {
           <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)} onToggleFavorite={toggleFavorite} />
         ))}
       </div>
+      <LastNews items={items} />
       <div className="grid-two mt-12">
         {items.slice(2).map((item) => (
           <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)} onToggleFavorite={toggleFavorite} />
@@ -546,13 +763,12 @@ function SearchPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [photoSearch, setPhotoSearch] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     api.getFilters().then((data) => {
       if (cancelled) return
-      setCategories((data.categories || []).map((c) => c.label))
+      setCategories(data.categories || [])
       setCities(data.cities || [])
     }).catch(() => {})
     return () => {
@@ -590,45 +806,122 @@ function SearchPage() {
     if (!file) return
     setLoading(true)
     try {
-      const formData = new FormData()
-      formData.append('photo', file)
-      const response = await fetch(`${API_BASE}/api/ads/photo-search`, {
-        method: 'POST',
-        body: formData,
-        headers: { 'X-Telegram-Init-Data': getInitData() },
-      })
-      const data = await response.json()
+      const data = await api.photoSearch(file)
       setResults(data.items || [])
       setError('')
     } catch {
       setError('Не удалось выполнить поиск по фото.')
     } finally {
       setLoading(false)
+      event.target.value = ''
     }
   }
 
+  const resetFilters = () => {
+    setCategory('Все')
+    setCity('')
+    setPriceMin('')
+    setPriceMax('')
+    setCondition('')
+    setDelivery('')
+    setSort('date_desc')
+    setQuery('')
+  }
+
+  const activeFilterCount = [category !== 'Все', city, priceMin, priceMax, condition, delivery]
+    .filter(Boolean).length
+
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} center={<Logo />} right={<IconButton icon="filter" onClick={() => setFiltersOpen(!filtersOpen)} />} />
+      <TopBar left={<IconButton icon="back" to="/" />} center={<Logo />} right={<IconButton icon="filter" active={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)} />} />
       <div className="page-title">Поиск</div>
       <div className="search-row">
-        <input className="text-input glass-card" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Искать вещи" />
+        <input className="text-input glass-card" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Что ищем?" />
         <label className="photo-search-btn">
           <Icon name="camera" />
           <input type="file" accept="image/*" onChange={handlePhotoSearch} hidden />
         </label>
       </div>
+      {/* Чипы-счётчики категорий — как «Outfits 10 / Lookbook 12» в референсе */}
+      {categories.length ? (
+        <>
+          <div className="chip-rail-label">Категории</div>
+          <div className="chip-rail">
+            <button
+              type="button"
+              className={`count-chip ${category === 'Все' ? 'is-active' : ''}`}
+              onClick={() => setCategory('Все')}
+            >
+              Все
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                className={`count-chip ${category === c.label ? 'is-active' : ''}`}
+                onClick={() => setCategory(category === c.label ? 'Все' : c.label)}
+              >
+                {c.label}
+                {c.count ? <span className="count-chip-n">{c.count}</span> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {cities.length ? (
+        <>
+          <div className="chip-rail-label">Города</div>
+          <div className="chip-rail">
+            <button
+              type="button"
+              className={`count-chip ${city === '' ? 'is-active' : ''}`}
+              onClick={() => setCity('')}
+            >
+              Любой
+            </button>
+            {cities.slice(0, 14).map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                className={`count-chip ${city === c.value ? 'is-active' : ''}`}
+                onClick={() => setCity(city === c.value ? '' : c.value)}
+              >
+                {c.label}
+                {c.count ? <span className="count-chip-n">{c.count}</span> : null}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
+
+      {/* Активные фильтры — как чипы Weather / Temp / Event в референсе */}
+      {activeFilterCount > 0 ? (
+        <div className="active-filters">
+          {priceMin || priceMax ? (
+            <span className="filter-chip">
+              <span className="filter-chip-label">Цена</span>
+              {priceMin || '0'}–{priceMax || '∞'} ₽
+            </span>
+          ) : null}
+          {condition ? (
+            <span className="filter-chip">
+              <span className="filter-chip-label">Состояние</span>
+              {condition === 'new' ? 'Новое' : 'Б/у'}
+            </span>
+          ) : null}
+          {delivery ? (
+            <span className="filter-chip">
+              <span className="filter-chip-label">Доставка</span>есть
+            </span>
+          ) : null}
+          <button className="filter-chip" type="button" onClick={resetFilters}>Сбросить всё</button>
+        </div>
+      ) : null}
+
       {filtersOpen ? (
         <div className="filters-panel">
           <div className="form-stack">
-            <select className="text-input glass-card" value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="Все">Все категории</option>
-              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            <input className="text-input glass-card" value={city} onChange={(e) => setCity(e.target.value)} placeholder="Город" list="city-options" />
-            <datalist id="city-options">
-              {cities.map((c) => <option key={c} value={c} />)}
-            </datalist>
             <div className="grid-two">
               <input className="text-input glass-card" value={priceMin} inputMode="numeric" onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Цена от" />
               <input className="text-input glass-card" value={priceMax} inputMode="numeric" onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Цена до" />
@@ -739,6 +1032,28 @@ function ListingPage() {
     }
   }
 
+  // Кнопка «Поделиться» раньше не имела обработчика вообще. В Telegram
+  // открываем нативный шер, в браузере — navigator.share или t.me.
+  const handleShare = async () => {
+    const url = `${window.location.origin}${window.location.pathname}#/listing/${listingId}`
+    const text = item?.title || 'Объявление на Полке'
+    try {
+      if (window.Telegram?.WebApp?.openTelegramLink) {
+        window.Telegram.WebApp.openTelegramLink(
+          `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`
+        )
+        return
+      }
+      if (navigator.share) {
+        await navigator.share({ title: text, url })
+        return
+      }
+      await navigator.clipboard?.writeText(url)
+    } catch {
+      // пользователь отменил шер — ничего не делаем
+    }
+  }
+
   if (loading) {
     return (
       <Screen>
@@ -759,13 +1074,43 @@ function ListingPage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} right={<div className="top-actions"><IconButton icon="heart" active={favoriteIds.includes(listingId)} onClick={() => toggleFavorite(listingId)} /><IconButton icon="share" /></div>} />
+      <TopBar left={<IconButton icon="back" to="/" />} right={<div className="top-actions"><IconButton icon="heart" active={favoriteIds.includes(listingId)} onClick={() => toggleFavorite(listingId)} /><IconButton icon="share" onClick={handleShare} /></div>} />
       <div className="detail-hero">
         <MediaPlaceholder label="фотографии товара" tall imageUrl={photos[photoIndex] || ''} />
-        <button className="detail-tag detail-tag--price" type="button">
-          {priceText(item)}
-          <span className="detail-tag-arrow">›</span>
-        </button>
+
+        {/* Плавающие плашки-«якоря» поверх фото — ключевая деталь референса.
+            Они информационные, кликов не подразумевают, поэтому не <button>. */}
+        <div className="hero-pins" aria-hidden="true">
+          <div className="hero-pin" style={{ top: '11%' }}>
+            <span className="hero-pin-anchor" />
+            <span className="hero-pin-pill">
+              <span className="hero-pin-label">Цена</span>
+              <span className="hero-pin-value">{priceText(item)}</span>
+            </span>
+            <span className="hero-pin-arrow"><Icon name="back" /></span>
+          </div>
+          {item.city ? (
+            <div className="hero-pin" style={{ top: '42%' }}>
+              <span className="hero-pin-anchor" />
+              <span className="hero-pin-pill">
+                <span className="hero-pin-label">Город</span>
+                <span className="hero-pin-value">{item.city}</span>
+              </span>
+              <span className="hero-pin-arrow"><Icon name="back" /></span>
+            </div>
+          ) : null}
+          {item.condition ? (
+            <div className="hero-pin" style={{ top: '73%' }}>
+              <span className="hero-pin-anchor" />
+              <span className="hero-pin-pill">
+                <span className="hero-pin-label">Состояние</span>
+                <span className="hero-pin-value">{item.condition}</span>
+              </span>
+              <span className="hero-pin-arrow"><Icon name="back" /></span>
+            </div>
+          ) : null}
+        </div>
+
         {photos.length > 1 ? (
           <div className="detail-dots">
             {photos.map((url, idx) => (
@@ -776,44 +1121,84 @@ function ListingPage() {
           </div>
         ) : null}
       </div>
-      <div className="eyebrow mt-12">{item.category || 'Объявление'}</div>
-      <div className="listing-title">{item.title}</div>
-      <div className="detail-meta">
-        <span>{item.condition || 'Состояние не указано'}</span>
-        <span>·</span>
-        <span>{item.city || 'Город не указан'}</span>
-        <span>·</span>
-        <span>{item.views || 0} просмотров</span>
+
+      <div className="detail-head">
+        <div className="eyebrow">{item.category || 'Объявление'}</div>
+        <div className="listing-title">{item.title}</div>
+        {item.seller?.rating ? (
+          <div className="rating-row">
+            <Icon name="star" />
+            {item.seller.rating}
+            <span>· {item.seller.reviews_count} отзывов</span>
+          </div>
+        ) : null}
       </div>
+
+      {/* Чипы-характеристики — как Weather / Temp / Event в референсе */}
+      <div className="spec-chips">
+        {item.condition ? (
+          <span className="spec-chip">
+            <Icon name="shield" /><span className="spec-chip-label">Состояние</span><span className="spec-chip-value">{item.condition}</span>
+          </span>
+        ) : null}
+        {item.city ? (
+          <span className="spec-chip">
+            <Icon name="pin" /><span className="spec-chip-label">Город</span><span className="spec-chip-value">{item.city}</span>
+          </span>
+        ) : null}
+        {item.delivery ? (
+          <span className="spec-chip">
+            <Icon name="truck" /><span className="spec-chip-label">Доставка</span><span className="spec-chip-value">{item.delivery}</span>
+          </span>
+        ) : null}
+        {item.size ? (
+          <span className="spec-chip">
+            <Icon name="ruler" /><span className="spec-chip-label">Размер</span><span className="spec-chip-value">{item.size}</span>
+          </span>
+        ) : null}
+        <span className="spec-chip">
+          <Icon name="clock" /><span className="spec-chip-label">Просмотры</span><span className="spec-chip-value">{item.views || 0}</span>
+        </span>
+      </div>
+
       <div className="copy-block glass-card mt-12">
         <strong>Описание</strong>
         <p>{item.description || 'Без описания.'}</p>
       </div>
+
+      {/* Нижний ряд — как «AR View» + «Schedule for Event» в референсе */}
       <div className="detail-actions">
         {isOwner ? (
           <>
-            <Link to={`/edit/${item.id}`} className="cta-main">Редактировать</Link>
-            {item.status === 'active' ? (
-              <button className="cta-side" type="button" onClick={handleSold}>
-                {actionLoading === 'sold' ? '…' : 'Продано'}
-              </button>
-            ) : null}
-            <button className="cta-side" type="button" onClick={handleDelete}>
+            <Link to={`/edit/${item.id}`} className="cta-lime">
+              <Icon name="menu" />
+              Редактировать
+            </Link>
+            <button className="cta-dark" type="button" onClick={handleDelete}>
               {actionLoading === 'delete' ? '…' : 'Удалить'}
             </button>
+            {item.status === 'active' ? (
+              <button className="cta-round" type="button" onClick={handleSold} aria-label="Отметить проданным">
+                {actionLoading === 'sold' ? '…' : <Icon name="check" />}
+              </button>
+            ) : null}
           </>
         ) : (
           <>
-            <button className="cta-main" type="button" onClick={handleStartChat}>
+            <button className="cta-lime" type="button" onClick={handleStartChat}>
+              <Icon name="chat" />
               {chatLoading ? 'Открываем…' : 'Написать'}
             </button>
             <button
-              className={`cta-side ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
+              className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
               type="button"
               onClick={() => toggleFavorite(listingId)}
               aria-label="В избранное"
             >
               <Icon name="heart" />
+            </button>
+            <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
+              <Icon name="share" />
             </button>
           </>
         )}

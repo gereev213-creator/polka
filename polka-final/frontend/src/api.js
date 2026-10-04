@@ -103,6 +103,35 @@ export const api = {
     }
     return response.json()
   },
+  // Поиск по фото: multipart, поэтому отдельный запрос (как uploadPhotos).
+  // Раньше это делалось прямо в компоненте через fetch(`${API_BASE}...`),
+  // но API_BASE не экспортируется из модуля — была ReferenceError, и поиск
+  // по фото не работал вообще.
+  photoSearch: async (file) => {
+    const formData = new FormData()
+    formData.append('photo', file)
+    const headers = {}
+    if (getInitData()) headers['X-Telegram-Init-Data'] = getInitData()
+    const response = await fetch(`${API_BASE}/api/ads/photo-search`, {
+      method: 'POST',
+      body: formData,
+      headers,
+    })
+    if (!response.ok) {
+      let code = `http_${response.status}`
+      try {
+        const data = await response.json()
+        code = data.error || code
+      } catch {
+        // ignore
+      }
+      const error = new Error(code)
+      error.code = code
+      error.status = response.status
+      throw error
+    }
+    return response.json()
+  },
   generateDescription: (title, category, condition, city) => request('/api/ai/generate-description', {
     method: 'POST',
     body: JSON.stringify({ title, category, condition, city }),

@@ -19617,10 +19617,26 @@ def _miniapp_parse_price(value) -> int:
 
 
 def _miniapp_photo_urls(photos) -> list:
-    """Прокси-URL для обычных TG file_id (MAX JSON-блоки пропускаем)."""
+    """Прокси-URL для фото объявления.
+
+    В photos лежит одно из двух: либо Telegram file_id (объявления,
+    созданные ботом), либо уже готовый путь /api/ads/photos/<name>
+    (объявления, созданные в Mini App — она сама грузит файлы).
+    Готовые пути и абсолютные URL отдаём как есть, file_id оборачиваем
+    в /api/photo/.
+
+    Раньше оборачивалось всё подряд, и для Mini App получался
+    /api/photo//api/ads/photos/x.jpg — aiohttp-паттерн {file_id} не
+    матчит слэши, запрос уходил в SPA-фолбэк и в <img> приезжал
+    index.html. Фото объявлений из Mini App не отображались вообще.
+    """
     urls = []
     for p in photos or []:
-        if isinstance(p, str) and p and not p.startswith('{'):
+        if not isinstance(p, str) or not p or p.startswith('{'):
+            continue
+        if p.startswith('/') or p.startswith('http://') or p.startswith('https://'):
+            urls.append(p)
+        else:
             urls.append(f"/api/photo/{p}")
     return urls
 
@@ -19653,7 +19669,8 @@ def _miniapp_fav_map(ad_ids: list, viewer_id: Optional[int]) -> dict:
 
 def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
                           fav_counts: Optional[dict] = None,
-                          fav_mine: Optional[set] = None) -> dict:
+                          fav_mine: Optional[set] = None,
+                          with_rating: bool = False) -> dict:
     photos = ad.get('photos') or []
     if isinstance(photos, str):
         try:
@@ -19666,6 +19683,14 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
         verify = db.get_verification(ad.get('user_id'))
     except Exception:
         verify = None
+    # Рейтинг считаем только по запросу (карточка товара): в ленте это лишний
+    # SELECT на каждое объявление — 20 позиций дали бы 20 дополнительных запросов.
+    rating = None
+    if with_rating:
+        try:
+            rating = db.get_seller_rating(ad.get('user_id'))
+        except Exception:
+            rating = None
     ad_id = ad.get('id')
     fav_count = (fav_counts or {}).get(ad_id, 0)
     if not fav_counts:
@@ -19708,6 +19733,8 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
             'name': (seller.get('first_name') or 'Продавец') if seller else 'Продавец',
             'username': (seller.get('username') or '') if seller else '',
             'verified': bool(verify and verify.get('status') == 'verified'),
+            'rating': (rating or {}).get('avg') or None,
+            'reviews_count': (rating or {}).get('count') or 0,
         },
         'is_favorite': bool(is_fav),
         'is_owner': bool(viewer_id and ad.get('user_id') == viewer_id),
@@ -19825,15 +19852,29 @@ async def api_miniapp_feed_banners(request: aiohttp_web.Request) -> aiohttp_web.
         elif not ref.startswith('{'):
             items.append({'image': f"/api/photo/{ref}", 'action': ''})
     if not items:
+        # Дефолтный баннер — только фоновая графика БЕЗ текста: подпись и
+        # кнопку рисует Mini App поверх (иначе текст на картинке и текст
+        # оверлея накладывались бы друг на друга).
         svg = (
-            '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="220" viewBox="0 0 750 220">'
-            '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
-            '<stop offset="0" stop-color="#3373fa"/><stop offset="1" stop-color="#5a8cf4"/>'
-            '</linearGradient></defs>'
-            '<rect width="750" height="220" fill="url(#g)"/>'
-            '<text x="40" y="90" font-family="sans-serif" font-size="34" font-weight="700" fill="#fff">ПОЛКА</text>'
-            '<text x="40" y="125" font-family="sans-serif" font-size="17" fill="rgba(255,255,255,.92)">Покупка и продажа товаров в Удмуртии</text>'
-            '<text x="40" y="155" font-family="sans-serif" font-size="13" fill="rgba(255,255,255,.75)">Размещай объявления и находи нужные товары через удобную платформу</text>'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="320" viewBox="0 0 750 320">'
+            '<defs>'
+            '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
+            '<stop offset="0" stop-color="#1B1D24"/>'
+            '<stop offset=".55" stop-color="#2C3140"/>'
+            '<stop offset="1" stop-color="#191B21"/>'
+            '</linearGradient>'
+            '<radialGradient id="orbLime" cx=".5" cy=".5" r=".5">'
+            '<stop offset="0" stop-color="#C6F24E" stop-opacity=".85"/>'
+            '<stop offset="1" stop-color="#C6F24E" stop-opacity="0"/>'
+            '</radialGradient>'
+            '<radialGradient id="orbBlue" cx=".5" cy=".5" r=".5">'
+            '<stop offset="0" stop-color="#2F6BFF" stop-opacity=".8"/>'
+            '<stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/>'
+            '</radialGradient>'
+            '</defs>'
+            '<rect width="750" height="320" fill="url(#bg)"/>'
+            '<circle cx="628" cy="52" r="196" fill="url(#orbLime)"/>'
+            '<circle cx="84" cy="306" r="204" fill="url(#orbBlue)"/>'
             '</svg>'
         )
         import base64
@@ -20031,7 +20072,7 @@ async def api_miniapp_ad_get(request: aiohttp_web.Request) -> aiohttp_web.Respon
         ad = db.get_ad(ad_id) or ad
     except Exception as e:
         logger.error(f"miniapp ad views {ad_id}: {e}")
-    return _miniapp_json({'ad': _miniapp_serialize_ad(ad, viewer_id)})
+    return _miniapp_json({'ad': _miniapp_serialize_ad(ad, viewer_id, with_rating=True)})
 
 
 # ── Создание ──────────────────────────────────────────────────────────
@@ -20696,10 +20737,13 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='active'",
                     (viewer_id,))
         active_count = (cur.fetchone() or {}).get('c', 0)
+        cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='moderation'",
+                    (viewer_id,))
+        moderation_count = (cur.fetchone() or {}).get('c', 0)
         cur.execute("SELECT COUNT(*) AS c FROM favorites WHERE user_id=?", (viewer_id,))
         fav_count = (cur.fetchone() or {}).get('c', 0)
     except Exception:
-        active_count, fav_count = 0, 0
+        active_count, moderation_count, fav_count = 0, 0, 0
     verify = None
     try:
         verify = db.get_verification(viewer_id)
@@ -20712,23 +20756,39 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'username': (user.get('username') or '') if user else '',
         'verified': bool(verify and verify.get('status') == 'verified'),
         'active_ads': active_count,
+        'moderation_ads': moderation_count,
         'favorites': fav_count,
         'since': (user.get('registration_date') or '')[:10] if user else '',
     }})
 
 
 async def api_miniapp_filters(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/filters — города и категории из активных объявлений."""
+    """GET /api/filters — города и категории из активных объявлений + счётчики.
+
+    Счётчики нужны Mini App, чтобы рисовать чипы быстрого выбора вида
+    «Одежда 12» / «Ижевск 30». Сортировка по популярности, чтобы в начало
+    попадало то, чего реально много.
+    """
     try:
         cur = db.conn.cursor()
-        cur.execute("SELECT DISTINCT city FROM ads WHERE status='active' AND city<>'' ORDER BY city")
-        cities = [r['city'] for r in cur.fetchall()]
-        cur.execute("SELECT DISTINCT category FROM ads WHERE status='active' AND category<>'' ORDER BY category")
-        raw_cats = [r['category'] for r in cur.fetchall()]
+        cur.execute("""
+            SELECT city, COUNT(*) AS n FROM ads
+            WHERE status='active' AND city<>''
+            GROUP BY city ORDER BY n DESC, city
+        """)
+        cities = [{'value': r['city'], 'label': r['city'], 'count': r['n']} for r in cur.fetchall()]
+        cur.execute("""
+            SELECT category, COUNT(*) AS n FROM ads
+            WHERE status='active' AND category<>''
+            GROUP BY category ORDER BY n DESC, category
+        """)
+        raw_cats = cur.fetchall()
     except Exception as e:
         logger.error(f"miniapp filters: {e}")
         return _miniapp_err('load_failed', 500)
-    categories = [{'value': c, 'label': _miniapp_display_category(c)} for c in raw_cats]
+    categories = [{'value': r['category'],
+                   'label': _miniapp_display_category(r['category']),
+                   'count': r['n']} for r in raw_cats]
     return _miniapp_json({'cities': cities, 'categories': categories})
 
 
