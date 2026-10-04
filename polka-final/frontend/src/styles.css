@@ -467,6 +467,18 @@ input, textarea, select { font-family: inherit; }
 .cta-side.is-on { background: var(--danger); }
 .cta-side .icon-svg { width: 20px; height: 20px; }
 
+.field-wrap { position: relative; }
+.field-hint {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(59,130,246,.12);
+  border: 1px solid rgba(59,130,246,.2);
+  font-size: 12px;
+  color: var(--secondary, #3b82f6);
+  animation: fadeIn .2s ease both;
+}
+
 /* Grid */
 .grid-two {
   display: grid;
