@@ -338,22 +338,25 @@ input, textarea, select { font-family: inherit; }
   margin-top: 10px;
 }
 .product-bottom .product-price {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: -.02em;
-  color: var(--text);
+  letter-spacing: -.01em;
+  color: #fff;
   margin: 0;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 9px 16px;
 }
 .product-action {
   width: 40px;
   height: 40px;
-  border-radius: 50%;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--text);
+  border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
+  color: var(--bg);
 }
 .product-action:active { transform: scale(.9); }
 .product-action .icon-svg { width: 18px; height: 18px; }

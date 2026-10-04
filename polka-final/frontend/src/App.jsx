@@ -243,6 +243,31 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
+function StoriesRow({ sellers = [], ownName = '' }) {
+  const seen = new Set()
+  const people = []
+  if (ownName) people.push({ name: ownName, own: true })
+  for (const name of sellers) {
+    if (!name || seen.has(name) || people.length >= 8) continue
+    seen.add(name)
+    people.push({ name, own: false })
+  }
+  if (people.length === 0) return null
+  return (
+    <div className="stories-row">
+      {people.map((p) => (
+        <div key={p.name} className="story-item">
+          <div className={`story-avatar ${p.own ? 'is-own' : ''}`}>
+            <span>{(p.name || '?')[0]?.toUpperCase()}</span>
+            {p.own ? <span className="story-plus">+</span> : null}
+          </div>
+          <span className="story-name">{p.own ? 'Вы' : p.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function CategoryCards({ categories, activeCategory, onSelect }) {
   const categoryIcons = {
     'Одежда': 'home',
@@ -329,7 +354,7 @@ function BannerCarousel() {
 }
 
 function FeedPage() {
-  const { favoriteIds, toggleFavorite } = useApp()
+  const { favoriteIds, toggleFavorite, tgUser } = useApp()
   const [categories, setCategories] = useState([])
   const [activeCategory, setActiveCategory] = useState('Все')
   const [items, setItems] = useState([])
@@ -467,6 +492,10 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+      <StoriesRow
+        ownName={tgUser?.first_name || ''}
+        sellers={(items || []).map((i) => i.seller?.name).filter(Boolean)}
+      />
       <BannerCarousel />
       <CategoryCards categories={['Все', ...categories]} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
