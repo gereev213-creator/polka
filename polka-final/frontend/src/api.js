@@ -85,7 +85,7 @@ export const api = {
   getFeedBanners: () => request('/api/feed-banners'),
   getListing: (id) => request(`/api/ads/${id}`),
 
-  // Создание: сначала фото (multipart) → file_id, затем объявление
+  // Создание: сначала фото (multipart) → путь, затем объявление
   uploadPhotos: async (files) => {
     const formData = new FormData()
     for (const file of files) formData.append('photos', file)
@@ -97,8 +97,18 @@ export const api = {
       headers,
     })
     if (!response.ok) {
-      const error = new Error('upload_failed')
+      // Показываем причину от сервера, а не безликое «не удалось»:
+      // иначе непонятно, что именно не так (размер, формат, авторизация).
+      let detail = ''
+      try {
+        const data = await response.json()
+        detail = data.detail || data.error || ''
+      } catch {
+        // ignore
+      }
+      const error = new Error(detail || 'upload_failed')
       error.status = response.status
+      error.detail = detail
       throw error
     }
     return response.json()

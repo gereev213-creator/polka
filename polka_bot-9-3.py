@@ -19858,29 +19858,25 @@ async def api_miniapp_feed_banners(request: aiohttp_web.Request) -> aiohttp_web.
         elif not ref.startswith('{'):
             items.append({'image': f"/api/photo/{ref}", 'action': ''})
     if not items:
-        # Дефолтный баннер — только фоновая графика БЕЗ текста: подпись и
-        # кнопку рисует Mini App поверх (иначе текст на картинке и текст
-        # оверлея накладывались бы друг на друга).
+        # Дефолтный баннер рисуем с текстом: Mini App показывает картинку
+        # как есть, без собственного оверлея.
         svg = (
             '<svg xmlns="http://www.w3.org/2000/svg" width="750" height="320" viewBox="0 0 750 320">'
             '<defs>'
             '<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">'
-            '<stop offset="0" stop-color="#1B1D24"/>'
-            '<stop offset=".55" stop-color="#2C3140"/>'
-            '<stop offset="1" stop-color="#191B21"/>'
+            '<stop offset="0" stop-color="#2F6BFF"/>'
+            '<stop offset="1" stop-color="#1E3FA8"/>'
             '</linearGradient>'
-            '<radialGradient id="orbLime" cx=".5" cy=".5" r=".5">'
-            '<stop offset="0" stop-color="#C6F24E" stop-opacity=".85"/>'
-            '<stop offset="1" stop-color="#C6F24E" stop-opacity="0"/>'
-            '</radialGradient>'
-            '<radialGradient id="orbBlue" cx=".5" cy=".5" r=".5">'
-            '<stop offset="0" stop-color="#2F6BFF" stop-opacity=".8"/>'
-            '<stop offset="1" stop-color="#2F6BFF" stop-opacity="0"/>'
+            '<radialGradient id="glow" cx=".5" cy=".5" r=".5">'
+            '<stop offset="0" stop-color="#8FB4FF" stop-opacity=".75"/>'
+            '<stop offset="1" stop-color="#8FB4FF" stop-opacity="0"/>'
             '</radialGradient>'
             '</defs>'
             '<rect width="750" height="320" fill="url(#bg)"/>'
-            '<circle cx="628" cy="52" r="196" fill="url(#orbLime)"/>'
-            '<circle cx="84" cy="306" r="204" fill="url(#orbBlue)"/>'
+            '<circle cx="650" cy="40" r="210" fill="url(#glow)"/>'
+            '<text x="44" y="132" font-family="sans-serif" font-size="42" font-weight="700" fill="#fff">ПОЛКА</text>'
+            '<text x="44" y="180" font-family="sans-serif" font-size="21" fill="rgba(255,255,255,.94)">Покупка и продажа товаров в Удмуртии</text>'
+            '<text x="44" y="216" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,.78)">Разместите объявление — покупатели уже рядом</text>'
             '</svg>'
         )
         import base64
@@ -20162,6 +20158,31 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     return _miniapp_json({'ok': True, 'ad': _miniapp_serialize_ad(ad, viewer_id)}, status=201)
 
 
+def _guess_photo_ext(ctype: str, data: bytes) -> str:
+    """Расширение для сохранённого файла.
+
+    Определяем по «магическим» байтам, а не по content-type: браузеры и
+    Telegram часто присылают пустой тип или application/octet-stream.
+    """
+    if data[:3] == b'\xff\xd8\xff':
+        return 'jpg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'png'
+    if data[:6] in (b'GIF87a', b'GIF89a'):
+        return 'gif'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'webp'
+    if data[4:12] in (b'ftypheic', b'ftypheix', b'ftyphevc', b'ftypmif1', b'ftypmsf1'):
+        return 'heic'
+    if ctype == 'image/png':
+        return 'png'
+    if ctype == 'image/webp':
+        return 'webp'
+    if ctype == 'image/gif':
+        return 'gif'
+    return 'jpg'
+
+
 async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/ads/photos — загрузка фото (multipart, поле photos).
 
@@ -20189,6 +20210,7 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
     except Exception:
         pass
     urls: list = []
+    skipped: list = []
     import io as _io
     try:
         from PIL import Image as _PILImage
@@ -20197,28 +20219,44 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
     for idx, field in enumerate(files):
         try:
             ctype = getattr(field, 'content_type', '') or ''
-            if not ctype.startswith('image/'):
+            # content-type может быть пустым или application/octet-stream
+            # (так бывает при съёмке на iPhone) — тип не отбраковываем,
+            # решает попытка декодирования ниже. Отбрасываем только явно
+            # не-картиночные типы (pdf, видео и т.п.).
+            if ctype and not (ctype.startswith('image/') or ctype == 'application/octet-stream'):
+                skipped.append(f'{ctype}: не изображение')
                 continue
             data = field.file.read(MINIAPP_MAX_PHOTO_BYTES + 1)
-            if not data or len(data) > MINIAPP_MAX_PHOTO_BYTES:
+            if not data:
+                skipped.append('пустой файл')
                 continue
+            if len(data) > MINIAPP_MAX_PHOTO_BYTES:
+                skipped.append(f'больше {MINIAPP_MAX_PHOTO_BYTES // (1024 * 1024)} МБ')
+                continue
+            ext = _guess_photo_ext(ctype, data)
             if _PILImage:
                 try:
                     im = _PILImage.open(_io.BytesIO(data))
-                    im.verify()
-                except Exception:
-                    continue
-                try:
-                    im = _PILImage.open(_io.BytesIO(data))
+                    im.load()
+                    # Учитываем поворот из EXIF: без этого фото с телефона
+                    # висело боком (камера пишет поворот в метаданные).
+                    try:
+                        from PIL import ImageOps as _ImageOps
+                        im = _ImageOps.exif_transpose(im)
+                    except Exception:
+                        pass
                     im.thumbnail((1400, 1400))
-                    if im.mode in ('RGBA', 'P', 'LA'):
+                    if im.mode in ('RGBA', 'P', 'LA', 'CMYK'):
                         im = im.convert('RGB')
                     buf = _io.BytesIO()
                     im.save(buf, format='JPEG', quality=85)
                     data = buf.getvalue()
-                except Exception:
-                    pass
-            ext = 'jpg'
+                    ext = 'jpg'
+                except Exception as _e:
+                    # Не смогли декодировать (например HEIC без pillow-heif).
+                    # Раньше файл молча пропадал — теперь сохраняем как есть,
+                    # чтобы фото пользователя не терялось.
+                    logger.warning(f"miniapp photo: не удалось перекодировать ({_e}), сохраняю исходник")
             name = f"u{viewer_id}_{int(time.time())}_{idx}.{ext}"
             path = os.path.join(upload_dir, name)
             with open(path, 'wb') as fh:
@@ -20226,8 +20264,15 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
             urls.append(f"/api/ads/photos/{name}")
         except Exception as e:
             logger.error(f"miniapp photo upload: {e}")
+            skipped.append('ошибка обработки')
     if not urls:
-        return _miniapp_err('upload_failed', 500)
+        # Отдаём причину, а не безликое upload_failed: иначе в интерфейсе
+        # всегда «Не удалось загрузить фото» и непонятно, что чинить.
+        logger.warning(f"miniapp photo upload: ничего не сохранено, причины: {skipped}")
+        return _miniapp_json(
+            {'error': 'upload_failed', 'detail': '; '.join(skipped) or 'файлы не получены'},
+            status=422,
+        )
     try:
         _miniapp_settings_set(f"photo_map:{viewer_id}", json.dumps(
             {u: os.path.join(upload_dir, os.path.basename(u)) for u in urls}))
@@ -20863,7 +20908,15 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
 
 
 def create_api_app() -> aiohttp_web.Application:
-    app = aiohttp_web.Application(middlewares=[_request_logging_middleware, _miniapp_cors_middleware])
+    # client_max_size: у aiohttp по умолчанию 1 МБ на ТЕЛО запроса, и это
+    # молча ломало загрузку фото — любой снимок с телефона больше мегабайта
+    # отбивался HTTPRequestEntityTooLarge, а обработчик отвечал bad_multipart.
+    # Ставим лимит с запасом на 5 фото по 10 МБ плюс накладные расходы multipart.
+    _max_body = MINIAPP_MAX_PHOTOS * MINIAPP_MAX_PHOTO_BYTES + 2 * 1024 * 1024
+    app = aiohttp_web.Application(
+        client_max_size=_max_body,
+        middlewares=[_request_logging_middleware, _miniapp_cors_middleware],
+    )
     app.router.add_get('/', api_root)
     app.router.add_get('/health', api_health)
     app.router.add_get('/api/views_diag', api_views_diag)

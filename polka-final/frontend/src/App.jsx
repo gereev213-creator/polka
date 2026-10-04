@@ -187,6 +187,31 @@ function photoDisplayUrl(ref) {
   return `/api/photo/${s}`
 }
 
+/* Сжимаем фото до отправки: снимок с телефона весит 3–10 МБ, а после
+ * перекодирования через canvas остаётся 200–400 КБ. Это и быстрее на
+ * мобильной сети, и сильно снижает шанс упереться в лимит размера.
+ * Если браузер не смог (например, HEIC в Chrome) — отдаём исходный файл:
+ * сервер принимает и его, просто сохраняет как есть. */
+async function compressImage(file, maxSide = 1600, quality = 0.85) {
+  if (!file || !String(file.type || '').startsWith('image/')) return file
+  try {
+    const bitmap = await createImageBitmap(file)
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
+    const w = Math.max(1, Math.round(bitmap.width * scale))
+    const h = Math.max(1, Math.round(bitmap.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h)
+    if (bitmap.close) bitmap.close()
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
+    if (!blob) return file
+    return new File([blob], 'photo.jpg', { type: 'image/jpeg' })
+  } catch {
+    return file
+  }
+}
+
 function isMediaMessage(message) {
   const kind = message?.media_type || message?.msg_type || ''
   return Boolean(kind) && kind !== 'text'
@@ -317,7 +342,7 @@ function AppProvider({ children }) {
 const CATEGORIES = [
   { label: 'Другое', image: 'other.png', art: 'other', tint: '#EDF1F6', aliases: ['Прочие вещи'] },
   { label: 'Авто', image: 'auto.png', art: 'car', tint: '#E8F0FF', aliases: [] },
-  { label: 'Недвижимость', image: 'realty.png', art: 'home', tint: '#E7F7EC', aliases: ['Продажа жилья'] },
+  { label: 'Недвижимость', image: 'realty.png', art: 'home', tint: '#E8F0FF', aliases: ['Продажа жилья'] },
   { label: 'Аренда', image: 'rent.png', art: 'rent', tint: '#E9F3FF', aliases: ['Аренда жилья'] },
   { label: 'Для дома и дачи', image: 'home.png', art: 'home', tint: '#FFF2E0', aliases: [] },
   { label: 'Запчасти', image: 'parts.png', art: 'parts', tint: '#EEF0F5', aliases: [] },
@@ -381,10 +406,10 @@ const CATEGORY_ART = {
   ),
   sale: (
     <>
-      <path d="M9 22.6 24 10.5l15 12.1" stroke="#14603A" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#14603A" strokeWidth="1.7" />
-      <path d="M20 38.7v-8.6h8v8.6" fill="#22C55E" fillOpacity=".8" />
-      <circle cx="35.5" cy="13.5" r="6" fill="#22C55E" />
+      <path d="M9 22.6 24 10.5l15 12.1" stroke="#1B3A6B" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" />
+      <path d="M20 38.7v-8.6h8v8.6" fill="#2F6BFF" fillOpacity=".8" />
+      <circle cx="35.5" cy="13.5" r="6" fill="#2F6BFF" />
       <path d="M32.8 13.5h5.4" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
     </>
   ),
@@ -447,9 +472,9 @@ const CATEGORY_ART = {
   ),
   home: (
     <>
-      <path d="M9 22.6 24 10.5l15 12.1" stroke="#14603A" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#14603A" strokeWidth="1.7" />
-      <rect x="20" y="28" width="8" height="10.7" rx="1.4" fill="#22C55E" fillOpacity=".8" />
+      <path d="M9 22.6 24 10.5l15 12.1" stroke="#1B3A6B" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" />
+      <rect x="20" y="28" width="8" height="10.7" rx="1.4" fill="#2F6BFF" fillOpacity=".8" />
     </>
   ),
   parts: (
@@ -530,17 +555,15 @@ function CategoryCards({ categories, activeCategory, onSelect }) {
   )
 }
 
-/* Текст поверх баннера. Бэкенд отдаёт только картинку (админ может загрузить
- * до 5 баннеров), поэтому подпись и CTA рисуем сами — как в референсе. */
-const FEED_BANNER_COPY = {
-  eyebrow: 'Полка · Удмуртия',
-  title: 'Покупай и продавай рядом',
-  sub: 'Свежие объявления каждый день',
-}
-
+/* Баннер ленты — просто картинка, которую загрузил админ.
+ * Никакого текста и кнопок поверх: раньше мы рисовали свой оверлей
+ * («Разместить»), и он конфликтовал с графикой баннера. Если баннеров нет
+ * или картинка не загрузилась — блок не показываем совсем, чтобы вместо
+ * него не висел значок битой картинки. */
 function FeedBanner() {
   const [banners, setBanners] = useState([])
   const [index, setIndex] = useState(0)
+  const [broken, setBroken] = useState([])
 
   useEffect(() => {
     let cancelled = false
@@ -552,43 +575,40 @@ function FeedBanner() {
     return () => { cancelled = true }
   }, [])
 
-  useEffect(() => {
-    if (banners.length < 2) return undefined
-    const timer = setInterval(() => setIndex((i) => (i + 1) % banners.length), 5000)
-    return () => clearInterval(timer)
-  }, [banners.length])
+  const slides = banners.filter((b) => b.image && !broken.includes(b.image))
 
-  const slides = banners.length ? banners : [null]
+  useEffect(() => {
+    if (slides.length < 2) return undefined
+    const timer = setInterval(() => setIndex((i) => (i + 1) % slides.length), 5000)
+    return () => clearInterval(timer)
+  }, [slides.length])
+
+  if (!slides.length) return null
+
   const active = index % slides.length
-  const current = slides[active]
 
   return (
     <div className="feed-banner">
       <div className="feed-banner-track" style={{ transform: `translateX(-${active * 100}%)` }}>
-        {slides.map((b, i) => (
+        {slides.map((b) => (
           <div
-            className={`feed-banner-slide ${b?.image ? '' : 'is-empty'}`}
-            key={i}
-            onClick={() => b?.action && window.open(b.action, '_blank')}
+            className="feed-banner-slide"
+            key={b.image}
+            onClick={() => b.action && window.open(b.action, '_blank')}
           >
-            {b?.image ? <img src={resolveAssetUrl(b.image)} alt="" loading="lazy" /> : null}
+            <img
+              src={resolveAssetUrl(b.image)}
+              alt=""
+              loading="lazy"
+              onError={() => setBroken((prev) => [...prev, b.image])}
+            />
           </div>
         ))}
       </div>
-      <div className="feed-banner-shade" aria-hidden="true" />
-      <div className="feed-banner-copy">
-        <span className="feed-banner-eyebrow">{FEED_BANNER_COPY.eyebrow}</span>
-        <strong className="feed-banner-title">{FEED_BANNER_COPY.title}</strong>
-        <span className="feed-banner-sub">{FEED_BANNER_COPY.sub}</span>
-      </div>
-      <Link className="feed-banner-cta" to="/create">
-        <Icon name="plus" />
-        Разместить
-      </Link>
       {slides.length > 1 ? (
         <div className="feed-banner-dots">
-          {slides.map((_, i) => (
-            <span key={i} className={`feed-banner-dot ${i === active ? 'is-active' : ''}`} />
+          {slides.map((b, i) => (
+            <span key={b.image} className={`feed-banner-dot ${i === active ? 'is-active' : ''}`} />
           ))}
         </div>
       ) : null}
@@ -1272,7 +1292,7 @@ function ListingPage() {
       <div className="detail-actions">
         {isOwner ? (
           <>
-            <Link to={`/edit/${item.id}`} className="cta-lime">
+            <Link to={`/edit/${item.id}`} className="cta-primary">
               <Icon name="menu" />
               Редактировать
             </Link>
@@ -1287,7 +1307,7 @@ function ListingPage() {
           </>
         ) : (
           <>
-            <button className="cta-lime" type="button" onClick={handleStartChat}>
+            <button className="cta-primary" type="button" onClick={handleStartChat}>
               <Icon name="chat" />
               {chatLoading ? 'Открываем…' : 'Написать'}
             </button>
@@ -1408,10 +1428,11 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
     setUploading(true)
     setUploadError('')
     try {
-      const response = await api.uploadPhotos(files)
+      const prepared = await Promise.all(files.map((f) => compressImage(f)))
+      const response = await api.uploadPhotos(prepared)
       update('photos', [...form.photos, ...(response.urls || [])])
-    } catch {
-      setUploadError('Не удалось загрузить фото')
+    } catch (err) {
+      setUploadError(err?.detail ? `Не удалось загрузить фото: ${err.detail}` : 'Не удалось загрузить фото')
     } finally {
       setUploading(false)
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -1471,9 +1492,14 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
                 </div>
               ))}
               {form.photos.length < 5 ? (
-                <div className="upload-card upload-empty">
-                  <label className="tool-btn tool-label">+ Загрузить<input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} hidden /></label>
-                </div>
+                <label className="upload-drop">
+                  <span className="upload-drop-icon"><Icon name="camera" /></span>
+                  <span className="upload-drop-title">Добавить фото</span>
+                  <span className="upload-drop-hint">
+                    {form.photos.length ? `ещё ${5 - form.photos.length}` : 'до 5 фото'} · JPG, PNG
+                  </span>
+                  <input ref={fileInputRef} type="file" accept="image/*" multiple onChange={handleFiles} hidden />
+                </label>
               ) : null}
             </div>
             {uploading ? <div className="muted-line">Загрузка…</div> : null}
