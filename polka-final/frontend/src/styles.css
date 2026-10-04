@@ -52,6 +52,112 @@ input, textarea, select { font-family: inherit; }
 .screen { padding: 16px 0; }
 .screen.padded { padding: 16px; }
 
+/* ── Истории ─────────────────────────────────────────────────────────── */
+.stories-row {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 8px 0 12px;
+  scrollbar-width: none;
+}
+.stories-row::-webkit-scrollbar { display: none; }
+.story-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+.story-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), #8B5CF6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 700;
+  position: relative;
+  border: 2px solid var(--accent);
+}
+.story-avatar.is-own {
+  background: var(--surface-2);
+  border-color: var(--border);
+}
+.story-plus {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--bg);
+}
+.story-name {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* ── Категории-карточки ──────────────────────────────────────────────── */
+.category-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+.category-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.category-card:active { transform: scale(.96); }
+.category-card.is-active {
+  background: var(--surface-2);
+  border-color: var(--accent);
+}
+.category-card-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+}
+.category-card.is-active .category-card-icon {
+  background: var(--accent);
+  color: #fff;
+}
+.category-card-icon .icon-svg { width: 20px; height: 20px; }
+.category-card span {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+}
+
 /* TopBar */
 .topbar {
   display: flex;

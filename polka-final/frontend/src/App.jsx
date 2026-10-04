@@ -236,6 +236,62 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
+function StoriesRow() {
+  const stories = [
+    { id: 1, name: 'Вы', avatar: null, isOwn: true },
+    { id: 2, name: 'Анна', avatar: null },
+    { id: 3, name: 'Максим', avatar: null },
+    { id: 4, name: 'Даша', avatar: null },
+    { id: 5, name: 'Иван', avatar: null },
+    { id: 6, name: 'Катя', avatar: null },
+  ]
+
+  return (
+    <div className="stories-row">
+      {stories.map((story) => (
+        <button key={story.id} className="story-item" type="button">
+          <div className={`story-avatar ${story.isOwn ? 'is-own' : ''}`}>
+            {story.avatar ? (
+              <img src={story.avatar} alt={story.name} />
+            ) : (
+              <span>{story.name[0]}</span>
+            )}
+            {story.isOwn && <span className="story-plus">+</span>}
+          </div>
+          <span className="story-name">{story.name}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function CategoryCards({ categories, activeCategory, onSelect }) {
+  const categoryIcons = {
+    'Одежда': 'home',
+    'Техника': 'sparkles',
+    'Дом': 'bookmark',
+    'Все': 'home',
+  }
+
+  return (
+    <div className="category-cards">
+      {categories.map((cat) => (
+        <button
+          key={cat}
+          type="button"
+          className={`category-card ${activeCategory === cat ? 'is-active' : ''}`}
+          onClick={() => onSelect(cat)}
+        >
+          <div className="category-card-icon">
+            <Icon name={categoryIcons[cat] || 'home'} />
+          </div>
+          <span>{cat}</span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function BannerCarousel() {
   const [banners, setBanners] = useState([])
   const [index, setIndex] = useState(0)
@@ -433,15 +489,10 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
-      <div className="chip-row">
-        {['Все', ...categories].map((category) => (
-          <button key={category} className={`chip ${activeCategory === category ? 'is-active' : ''}`} onClick={() => changeCategory(category)}>
-            {category}
-          </button>
-        ))}
-      </div>
+      <StoriesRow />
       <BannerCarousel />
+      <CategoryCards categories={['Все', ...categories]} activeCategory={activeCategory} onSelect={changeCategory} />
+      <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Объявлений пока нет." /> : null}
