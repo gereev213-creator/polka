@@ -19,6 +19,7 @@ export function resolveAssetUrl(path) {
   if (!path) return ''
   if (/^https?:\/\//.test(path)) return path
   if (/^blob:/.test(path)) return path
+  if (/^data:/.test(path)) return path
   if (API_BASE.startsWith('http')) {
     return new URL(path, API_BASE).toString()
   }
@@ -81,6 +82,7 @@ export const api = {
   },
   getFilters: () => request('/api/filters'),
   getBanners: () => request('/api/banners'),
+  getFeedBanners: () => request('/api/feed-banners'),
   getListing: (id) => request(`/api/ads/${id}`),
 
   // Создание: сначала фото (multipart) → file_id, затем объявление
@@ -101,6 +103,10 @@ export const api = {
     }
     return response.json()
   },
+  generateDescription: (title, category, condition, city) => request('/api/ai/generate-description', {
+    method: 'POST',
+    body: JSON.stringify({ title, category, condition, city }),
+  }),
   createListing: (payload) => request('/api/ads', { method: 'POST', body: JSON.stringify(payload) }),
   updateListing: (id, payload) => request(`/api/ads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteListing: (id) => request(`/api/ads/${id}`, { method: 'DELETE' }),
@@ -123,5 +129,7 @@ export const api = {
   startChat: (adId) => request('/api/chats/start', { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
   getChat: (id) => request(`/api/chat/${id}`),
   pollChat: (id, after = 0) => request(`/api/chat/${id}/poll?after=${after}`),
-  sendMessage: (chatId, text) => request(`/api/chat/${chatId}/send`, { method: 'POST', body: JSON.stringify({ text }) }),
+  sendMessage: (chatId, text, extra = {}) => request(`/api/chat/${chatId}/send`, { method: 'POST', body: JSON.stringify({ text, ...extra }) }),
+  editMessage: (chatId, messageId, text) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) }),
+  deleteMessage: (chatId, messageId) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
 }

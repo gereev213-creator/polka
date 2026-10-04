@@ -11,8 +11,11 @@ export function initTelegramMiniApp() {
 
 export function getInitData() {
   try {
-    return window.Telegram?.WebApp?.initData || ''
-  } catch {
+    const data = window.Telegram?.WebApp?.initData || ''
+    if (!data) console.warn('[polka] initData пустой. Telegram WebApp скрипт загружен?', !!window.Telegram?.WebApp)
+    return data
+  } catch (e) {
+    console.warn('[polka] ошибка чтения initData', e)
     return ''
   }
 }
