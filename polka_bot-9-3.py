@@ -3241,10 +3241,16 @@ class Database:
             params.extend(text_params)
             conditions.append("(" + " OR ".join(text_conds) + ")")
 
-        # Фильтр категории
+        # Фильтр категории. Значение может быть списком через запятую:
+        # Mini App шлёт новое название категории плюс устаревшие, чтобы
+        # находились объявления, созданные до смены справочника.
         if category and category != 'all':
-            conditions.append("category LIKE ?")
-            params.append(f"%{category}%")
+            cat_parts = [p.strip() for p in str(category).split(',') if p.strip()]
+            if cat_parts:
+                conditions.append(
+                    "(" + " OR ".join("category LIKE ?" for _ in cat_parts) + ")"
+                )
+                params.extend(f"%{p}%" for p in cat_parts)
 
         # Диапазон цены
         if price_min > 0:

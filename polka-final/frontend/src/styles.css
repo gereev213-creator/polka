@@ -140,7 +140,9 @@ input, textarea, select { font-family: inherit; }
   text-align: center;
 }
 
-/* ── Категории-плашки (референс: белые скруглённые плитки с иллюстрацией) ─ */
+/* ── Рельс категорий в ленте ─────────────────────────────────────────
+ * Те же плашки .cat-tile, что и в форме (см. ниже), только в
+ * горизонтальной прокрутке и фиксированной ширины. */
 .category-cards {
   display: flex;
   gap: 10px;
@@ -150,54 +152,10 @@ input, textarea, select { font-family: inherit; }
   -webkit-overflow-scrolling: touch;
 }
 .category-cards::-webkit-scrollbar { display: none; }
-.category-card {
-  flex: 0 0 auto;
-  width: 104px;
-  height: 150px;
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  border-radius: 22px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  overflow: hidden;
-  box-shadow: var(--soft);
-  transition: transform .2s ease, box-shadow .2s ease, background .2s ease;
+.category-cards .cat-tile {
+  flex: 0 0 152px;
+  height: 116px;
 }
-.category-card:active { transform: scale(.96); }
-.category-art {
-  flex: 0 0 88px;
-  height: 88px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--tint, var(--surface-2));
-  transition: background .2s ease;
-}
-.category-art svg {
-  width: 54px;
-  height: 54px;
-  display: block;
-}
-.category-card span {
-  flex: 1;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--text);
-  text-align: center;
-  line-height: 1.2;
-  padding: 6px 8px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.category-card.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  box-shadow: 0 8px 20px rgba(47,107,255,.28);
-}
-.category-card.is-active span { color: #fff; }
-.category-card.is-active .category-art { background: rgba(255,255,255,.18); }
 
 .brand-logo {
   height: 22px;
@@ -216,9 +174,12 @@ input, textarea, select { font-family: inherit; }
 
 /* TopBar */
 .topbar {
-  display: flex;
+  /* Сетка 1fr / auto / 1fr — иначе при пустой правой ячейке space-between
+     сдвигает центральный элемент (логотип) от настоящего центра. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
   padding: 12px 0;
   position: sticky;
   top: 0;
@@ -226,11 +187,24 @@ input, textarea, select { font-family: inherit; }
   z-index: 10;
 }
 .topbar-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -.02em;
 }
-.topbar-side { display: flex; align-items: center; gap: 8px; }
+.topbar-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.topbar-side:last-child,
+.topbar-side--right { justify-content: flex-end; }
+/* Ряд иконок в шапке: без этого кнопки встают столбиком */
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
 
 /* Icon Button */
 .icon-btn {
@@ -1547,4 +1521,453 @@ input, textarea, select { font-family: inherit; }
   font-size: 13.5px;
   line-height: 1.55;
   color: var(--text-secondary);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   ДОСТИЛИЗАЦИЯ ЭКРАНОВ: чаты, онбординг, профиль, форма объявления
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Общие примитивы ─────────────────────────────────────────────────── */
+.list-stack { display: flex; flex-direction: column; gap: 10px; }
+.padded-inline { padding-left: 16px; padding-right: 16px; }
+.mt-10 { margin-top: 10px; }
+.small { font-size: 12px; }
+.wide { width: 100%; }
+.compact { padding: 12px 14px; font-size: 14px; }
+.muted-line { font-size: 12px; color: var(--text-secondary); line-height: 1.4; }
+.status-line { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.sub-copy { font-size: 12.5px; color: var(--text-secondary); line-height: 1.45; }
+.error { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+.section-head--tight { margin-bottom: 6px; }
+.tool-label { font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+.tab-row,
+.dots { display: flex; align-items: center; gap: 6px; }
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .03em;
+}
+.trash-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239,68,68,.1);
+  color: var(--danger);
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* Карточки-состояния (загрузка / успех / ошибка) */
+.checkout-box,
+.success-box {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.success-box {
+  border-color: rgba(34,197,94,.35);
+  background: rgba(34,197,94,.08);
+}
+.success-actions { display: flex; gap: 8px; margin-top: 12px; }
+.telegram-note {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border-radius: 14px;
+  padding: 11px 13px;
+}
+
+/* ── Список диалогов ─────────────────────────────────────────────────── */
+.chat-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+}
+.chat-row:active { transform: scale(.99); }
+.chat-row .avatar { width: 48px; height: 48px; }
+.chat-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.chat-meta strong { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
+.chat-meta span {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-row .product-city {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin: 0;
+  padding-top: 3px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ── Экран диалога ───────────────────────────────────────────────────── */
+.chat-screen {
+  /* Фиксированная полноэкранная панель в границах «телефонной» колонки:
+     иначе .app-frame с padding 100px снизу делал страницу выше окна, и
+     scrollIntoView() уводил первое сообщение за верхний край. */
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100%;
+  max-width: 430px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  overflow: hidden;
+}
+/* В диалоге нижней навигации нет — запас под док не нужен */
+body:has(.chat-screen) .app-frame { padding-bottom: 0; }
+.chat-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: calc(10px + env(safe-area-inset-top));
+  padding-bottom: 10px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.chat-top .icon-btn { flex-shrink: 0; }
+.chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chat-header-left .avatar { width: 40px; height: 40px; flex-shrink: 0; }
+.chat-header-left strong {
+  display: block;
+  font-size: 14.5px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+.chat-header-left .product-city {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bubble-wrap { display: flex; flex-direction: column; }
+.bubble-wrap.in { align-items: flex-start; }
+.bubble-wrap.out { align-items: flex-end; }
+.bubble { position: relative; margin-bottom: 2px; }
+.bubble-media { padding: 4px; overflow: hidden; }
+.bubble-media-img {
+  display: block;
+  width: 100%;
+  max-width: 220px;
+  border-radius: 14px;
+}
+.bubble-time {
+  display: block;
+  margin-top: 3px;
+  font-size: 10px;
+  opacity: .65;
+  text-align: right;
+}
+.bubble-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.bubble-menu button {
+  padding: 8px 10px;
+  border-radius: 9px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+}
+.bubble-menu button:active { background: var(--surface-2); }
+.chat-input-wrap {
+  padding: 8px 0 calc(10px + env(safe-area-inset-bottom));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.chat-input-wrap .chat-input {
+  margin: 0 16px;
+  padding: 8px 10px 8px 14px;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+}
+.attach-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.attach-btn .icon-svg { width: 20px; height: 20px; }
+
+/* ── Онбординг ───────────────────────────────────────────────────────── */
+.onboarding {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 76vh;
+  gap: 6px;
+}
+.onboarding .brand-logo { height: 34px; margin-bottom: 6px; }
+.onboarding p {
+  max-width: 280px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.blob {
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 330px;
+  height: 330px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(47,107,255,.42), transparent 62%),
+    radial-gradient(circle at 70% 70%, rgba(198,242,78,.5), transparent 60%);
+  filter: blur(30px);
+  z-index: -1;
+  pointer-events: none;
+}
+.dark-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 15px 30px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(23,23,26,.28);
+  transition: transform .18s ease;
+}
+.dark-btn:active { transform: scale(.97); }
+.dark-btn.big { padding: 16px 46px; font-size: 16px; }
+.onboarding .dots { margin-top: 22px; gap: 6px; }
+.onboarding .dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: all .25s ease;
+}
+.onboarding .dots span.is-active {
+  width: 20px;
+  border-radius: 4px;
+  background: var(--accent);
+}
+
+/* ── Профиль ─────────────────────────────────────────────────────────── */
+.profile-avatar-img,
+.profile-avatar-fallback {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  margin: 12px auto 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-avatar-img { object-fit: cover; }
+.profile-avatar-fallback {
+  background: linear-gradient(135deg, var(--accent), #8B5CF6);
+  color: #fff;
+  font-size: 30px;
+  font-weight: 800;
+}
+.profile-top .product-city { font-size: 12.5px; }
+.profile-top .telegram-note { display: inline-block; margin-top: 12px; }
+.profile-top .badge {
+  display: flex;
+  width: fit-content;
+  margin: 10px auto 0;
+}
+
+/* ── Форма объявления ────────────────────────────────────────────────── */
+.ad-form { display: flex; flex-direction: column; }
+.photo-step { display: flex; flex-direction: column; gap: 10px; }
+/* Карточка загруженного фото: превью + кнопка «Убрать» */
+.upload-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+}
+.upload-card .product-media {
+  border-radius: 13px;
+  overflow: hidden;
+}
+.upload-card .tool-row { margin-top: 0; }
+.upload-card .tool-btn { width: 100%; text-align: center; }
+/* Пустая ячейка: пунктирная зона «+ Загрузить» */
+.upload-card.upload-empty {
+  align-items: center;
+  justify-content: center;
+  min-height: 116px;
+  border-style: dashed;
+  border-width: 1.5px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.upload-card.upload-empty .tool-btn {
+  width: auto;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 10px 18px;
+}
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.preview-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+}
+.preview-media {
+  width: 62px;
+  height: 62px;
+  border-radius: 16px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--surface-2);
+}
+.preview-media .media-image,
+.preview-media .media-placeholder { width: 100%; height: 100%; border-radius: 0; }
+.preview-info { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+
+/* ── Плашки категорий в форме объявления ──────────────────────────────
+   Референс: широкая карточка на светлом фоне, подпись слева сверху,
+   PNG-иллюстрация справа снизу, намеренно выходящая за край (обрезается
+   через overflow: hidden). */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin-top: 14px;
+}
+.cat-tile {
+  position: relative;
+  display: block;
+  height: 130px;
+  padding: 13px;
+  border-radius: 22px;
+  background: var(--tint, var(--surface-2));
+  border: 1px solid transparent;
+  overflow: hidden;
+  text-align: left;
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.cat-tile:active { transform: scale(.97); }
+.cat-tile-label {
+  position: relative;
+  z-index: 2;
+  display: block;
+  max-width: 62%;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.14;
+  color: var(--text);
+}
+/* PNG прижат к правому нижнему углу и намеренно выходит за край плашки.
+ * У «правильной» картинки объект в правом нижнем углу, а верх прозрачный —
+ * поэтому длинная подпись слева не конфликтует с иллюстрацией. */
+.cat-tile-art {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 124px;
+  height: 100px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.cat-tile-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: right bottom;
+  display: block;
+}
+/* Заглушка-SVG компактнее: у неё нет прозрачных полей, как у PNG,
+ * поэтому в полный размер она наезжала бы на подпись. */
+.cat-tile-art svg {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 auto;
+  display: block;
+}
+/* Выбор: синий контур. Заливка синим конфликтовала бы с иллюстрацией */
+.cat-tile.is-selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent), 0 10px 22px rgba(47,107,255,.22);
 }

@@ -143,6 +143,55 @@ function priceText(item) {
   return item?.price_display || (item?.price != null ? `${item.price} ₽` : '')
 }
 
+/* Компактное время: «14:20» для сегодня, иначе «2 окт». Бэкенд отдаёт ISO
+ * («2026-10-02T11:20»), и без форматирования в списке чатов была сырая строка. */
+const MONTHS_SHORT = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+function shortTime(raw) {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return String(raw).slice(0, 16).replace('T', ' ')
+  const now = new Date()
+  if (d.toDateString() === now.toDateString()) {
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
+  }
+  return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+}
+
+/* Ссылка на вложение в сообщении. Бэкенд отдаёт file_id + msg_type,
+ * а не media_url/media_type — из-за этого фото в чате не показывались.
+ * Путь /api/ads/photos/... отдаём как есть, Telegram file_id — через прокси. */
+function chatMediaUrl(message) {
+  const kind = message?.media_type || message?.msg_type || ''
+  if (!kind || kind === 'text') return ''
+  const ref = message?.media_url || message?.file_id || ''
+  if (!ref) return ''
+  const s = String(ref)
+  if (s.startsWith('{')) return ''
+  if (s.startsWith('/') || s.startsWith('http')) return s
+  return `/api/photo/${s}`
+}
+
+/* Ссылка для показа фото в форме. В form.photos лежат СЫРЫЕ значения,
+ * которые уйдут на бэкенд (Telegram file_id или путь /api/ads/photos/…).
+ * file_id нельзя подставить в <img> напрямую — проксируем через /api/photo/.
+ * Менять сами значения нельзя: бот воспринимает строку-путь как file_id
+ * и не сможет опубликовать объявление в канал. */
+function photoDisplayUrl(ref) {
+  if (!ref) return ''
+  const s = String(ref)
+  if (s.startsWith('{')) return ''
+  if (s.startsWith('/') || s.startsWith('http')) return s
+  return `/api/photo/${s}`
+}
+
+function isMediaMessage(message) {
+  const kind = message?.media_type || message?.msg_type || ''
+  return Boolean(kind) && kind !== 'text'
+}
+
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
   const handleFavorite = (event) => {
     event.preventDefault()
@@ -253,19 +302,60 @@ function AppProvider({ children }) {
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
-/* Иллюстрации категорий — плоские SVG в стиле референса (без внешних файлов).
- * Ключ берём из подписи категории; бэкенд отдаёт реальные названия из БД,
- * поэтому для незнакомой категории есть аккуратный фолбэк. */
-const CATEGORY_META = {
-  'Все': { art: 'all', tint: '#E9F0FF' },
-  'Аренда жилья': { art: 'rent', tint: '#E8F0FF' },
-  'Продажа жилья': { art: 'sale', tint: '#E7F7EC' },
-  'Вакансии': { art: 'jobs', tint: '#FFF2E0' },
-  'Подработки': { art: 'parttime', tint: '#F2EBFF' },
-  'Техника': { art: 'tech', tint: '#E8F1FF' },
-  'Одежда': { art: 'clothes', tint: '#FFEFE7' },
-  'Обувь': { art: 'shoes', tint: '#EEF0F5' },
-  'Прочие вещи': { art: 'other', tint: '#EDF1F6' },
+/* ── Единый справочник категорий ───────────────────────────────────────
+ * Один список на всё приложение: плашки ленты, чипы поиска и форма
+ * создания объявления. Раньше их было три разных (лента брала категории
+ * из БД, форма — свой список), и они не совпадали.
+ *
+ * aliases — устаревшие значения, которые уже лежат в базе у объявлений,
+ * созданных до смены справочника (в основном ботом). По ним тоже ищем,
+ * чтобы старые объявления не пропадали из фильтра.
+ *
+ * image — PNG-иллюстрация из public/categories/ (см. README там же);
+ * если файла нет, показывается встроенная SVG из CATEGORY_ART.
+ */
+const CATEGORIES = [
+  { label: 'Другое', image: 'other.png', art: 'other', tint: '#EDF1F6', aliases: ['Прочие вещи'] },
+  { label: 'Авто', image: 'auto.png', art: 'car', tint: '#E8F0FF', aliases: [] },
+  { label: 'Недвижимость', image: 'realty.png', art: 'home', tint: '#E7F7EC', aliases: ['Продажа жилья'] },
+  { label: 'Аренда', image: 'rent.png', art: 'rent', tint: '#E9F3FF', aliases: ['Аренда жилья'] },
+  { label: 'Для дома и дачи', image: 'home.png', art: 'home', tint: '#FFF2E0', aliases: [] },
+  { label: 'Запчасти', image: 'parts.png', art: 'parts', tint: '#EEF0F5', aliases: [] },
+  { label: 'Услуги', image: 'services.png', art: 'jobs', tint: '#F2EBFF', aliases: [] },
+  { label: 'Электроника', image: 'electronics.png', art: 'tech', tint: '#E8F1FF', aliases: ['Техника'] },
+  { label: 'Работа и подработка', image: 'jobs.png', art: 'parttime', tint: '#F3ECFF', aliases: ['Вакансии', 'Подработки'] },
+  { label: 'Одежда, обувь, аксессуары', image: 'fashion.png', art: 'clothes', tint: '#FFEFE7', aliases: ['Одежда', 'Обувь'] },
+]
+
+const CATEGORY_LABELS = CATEGORIES.map((c) => c.label)
+const CATEGORY_BY_LABEL = Object.fromEntries(CATEGORIES.map((c) => [c.label, c]))
+const CATEGORY_META = Object.fromEntries(CATEGORIES.map((c) => [c.label, c]))
+const CATEGORY_IMAGES = Object.fromEntries(
+  CATEGORIES.map((c) => [c.label, `categories/${c.image}`])
+)
+/* Псевдокатегория для ленты и поиска — «показать всё» */
+CATEGORY_META['Все'] = { art: 'all', tint: '#E9F0FF' }
+
+/* Значение для параметра category в API: новое название + устаревшие,
+ * чтобы фильтр нашёл и старые объявления (бэкенд понимает список через
+ * запятую и строит из него OR по LIKE). */
+function categoryQuery(label) {
+  const c = CATEGORY_BY_LABEL[label]
+  return c ? [c.label, ...c.aliases].join(',') : label
+}
+
+/* Счётчик категории для чипов поиска: суммируем все значения в базе,
+ * которые к ней относятся — и новое название, и устаревшие алиасы.
+ * Бэкенд отдаёт счётчики по «сырым» значениям, поэтому без агрегации
+ * одна категория распадалась бы на несколько чисел. */
+function categoryCount(label, rawCategories) {
+  const c = CATEGORY_BY_LABEL[label]
+  if (!c || !rawCategories?.length) return 0
+  const needles = [c.label, ...c.aliases]
+  return rawCategories.reduce((sum, rc) => {
+    const hay = `${rc.label || ''} ${rc.value || ''}`
+    return needles.some((n) => hay.includes(n)) ? sum + (rc.count || 0) : sum
+  }, 0)
 }
 
 const CATEGORY_ART = {
@@ -346,6 +436,30 @@ const CATEGORY_ART = {
       <path d="M16 12.6 32 19.8" stroke="#94A3B8" strokeWidth="1.7" strokeLinecap="round" />
     </>
   ),
+  car: (
+    <>
+      <path d="M13 18.6 16.4 12h15.2l3.4 6.6" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" strokeLinejoin="round" />
+      <rect x="6.6" y="26.6" width="34.8" height="9.6" rx="3.6" fill="#2F6BFF" fillOpacity=".2" stroke="#1B3A6B" strokeWidth="1.7" />
+      <path d="M13 18.6h22l2.4 8H10.6l2.4-8Z" fill="#fff" stroke="#1B3A6B" strokeWidth="1.7" strokeLinejoin="round" />
+      <circle cx="14.6" cy="38.4" r="3.2" fill="#1B3A6B" />
+      <circle cx="33.4" cy="38.4" r="3.2" fill="#1B3A6B" />
+    </>
+  ),
+  home: (
+    <>
+      <path d="M9 22.6 24 10.5l15 12.1" stroke="#14603A" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+      <path d="M12.6 21.4v15.3a2 2 0 0 0 2 2h18.8a2 2 0 0 0 2-2V21.4" fill="#fff" stroke="#14603A" strokeWidth="1.7" />
+      <rect x="20" y="28" width="8" height="10.7" rx="1.4" fill="#22C55E" fillOpacity=".8" />
+    </>
+  ),
+  parts: (
+    <>
+      <circle cx="24" cy="24" r="7.4" fill="#fff" stroke="#3A4453" strokeWidth="1.7" />
+      <circle cx="24" cy="24" r="2.7" fill="#3A4453" />
+      <path d="M24 7.6v4.4M24 36v4.4M7.6 24H12M36 24h4.4M12.4 12.4l3.1 3.1M32.5 32.5l3.1 3.1M35.6 12.4l-3.1 3.1M15.5 32.5l-3.1 3.1"
+        stroke="#94A3B8" strokeWidth="2.1" strokeLinecap="round" />
+    </>
+  ),
 }
 
 function CategoryArt({ label }) {
@@ -398,20 +512,19 @@ function StoriesRow({ items = [] }) {
   )
 }
 
+/* Рельс категорий в ленте — те же плашки, что и в форме, только
+ * в горизонтальной прокрутке (в форме они в сетке 2 в ряд). */
 function CategoryCards({ categories, activeCategory, onSelect }) {
   return (
     <div className="category-cards">
       {categories.map((cat) => (
-        <button
+        <CategoryTile
           key={cat}
-          type="button"
-          className={`category-card ${activeCategory === cat ? 'is-active' : ''}`}
-          style={{ '--tint': CATEGORY_META[cat]?.tint || '#EDF1F6' }}
-          onClick={() => onSelect(cat)}
-        >
-          <div className="category-art"><CategoryArt label={cat} /></div>
-          <span>{cat}</span>
-        </button>
+          value={cat}
+          label={cat}
+          selected={activeCategory === cat}
+          onSelect={onSelect}
+        />
       ))}
     </div>
   )
@@ -572,7 +685,6 @@ function LastNews({ items = [] }) {
 
 function FeedPage() {
   const { favoriteIds, toggleFavorite, profile } = useApp()
-  const [categories, setCategories] = useState([])
   const [activeCategory, setActiveCategory] = useState('Все')
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
@@ -603,16 +715,6 @@ function FeedPage() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  useEffect(() => {
-    let cancelled = false
-    api.getFilters().then((data) => {
-      if (!cancelled) setCategories((data.categories || []).map((c) => c.label))
-    }).catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
   const load = async (category, offset, append) => {
     if (append) {
       setLoadingMore(true)
@@ -622,7 +724,7 @@ function FeedPage() {
     }
     try {
       const data = await Promise.race([
-        api.getFeed({ category, limit: PAGE, offset }),
+        api.getFeed({ category: categoryQuery(category), limit: PAGE, offset }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
       ])
       setItems((prev) => (append ? [...prev, ...(data.items || [])] : (data.items || [])))
@@ -711,7 +813,7 @@ function FeedPage() {
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
       <StoriesRow items={items} />
       <FeedBanner />
-      <CategoryCards categories={['Все', ...categories]} activeCategory={activeCategory} onSelect={changeCategory} />
+      <CategoryCards categories={['Все', ...CATEGORY_LABELS]} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
       <SellerStats profile={profile} />
       <RecommendCard items={items} />
@@ -757,7 +859,8 @@ function SearchPage() {
   const [condition, setCondition] = useState('')
   const [delivery, setDelivery] = useState('')
   const [sort, setSort] = useState('date_desc')
-  const [categories, setCategories] = useState([])
+  // «Сырые» категории из базы — нужны только для счётчиков на чипах
+  const [rawCategories, setRawCategories] = useState([])
   const [cities, setCities] = useState([])
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -768,7 +871,7 @@ function SearchPage() {
     let cancelled = false
     api.getFilters().then((data) => {
       if (cancelled) return
-      setCategories(data.categories || [])
+      setRawCategories(data.categories || [])
       setCities(data.cities || [])
     }).catch(() => {})
     return () => {
@@ -781,7 +884,7 @@ function SearchPage() {
     setLoading(true)
     const timer = setTimeout(async () => {
       try {
-        const data = await api.search({ q: query, category, city, priceMin, priceMax, condition, delivery, sort, limit: 30 })
+        const data = await api.search({ q: query, category: categoryQuery(category), city, priceMin, priceMax, condition, delivery, sort, limit: 30 })
         if (!cancelled) {
           setResults(data.items || [])
           setError('')
@@ -843,31 +946,30 @@ function SearchPage() {
         </label>
       </div>
       {/* Чипы-счётчики категорий — как «Outfits 10 / Lookbook 12» в референсе */}
-      {categories.length ? (
-        <>
-          <div className="chip-rail-label">Категории</div>
-          <div className="chip-rail">
+      <div className="chip-rail-label">Категории</div>
+      <div className="chip-rail">
+        <button
+          type="button"
+          className={`count-chip ${category === 'Все' ? 'is-active' : ''}`}
+          onClick={() => setCategory('Все')}
+        >
+          Все
+        </button>
+        {CATEGORIES.map((c) => {
+          const n = categoryCount(c.label, rawCategories)
+          return (
             <button
+              key={c.label}
               type="button"
-              className={`count-chip ${category === 'Все' ? 'is-active' : ''}`}
-              onClick={() => setCategory('Все')}
+              className={`count-chip ${category === c.label ? 'is-active' : ''}`}
+              onClick={() => setCategory(category === c.label ? 'Все' : c.label)}
             >
-              Все
+              {c.label}
+              {n ? <span className="count-chip-n">{n}</span> : null}
             </button>
-            {categories.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                className={`count-chip ${category === c.label ? 'is-active' : ''}`}
-                onClick={() => setCategory(category === c.label ? 'Все' : c.label)}
-              >
-                {c.label}
-                {c.count ? <span className="count-chip-n">{c.count}</span> : null}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
+          )
+        })}
+      </div>
 
       {cities.length ? (
         <>
@@ -1128,7 +1230,7 @@ function ListingPage() {
         {item.seller?.rating ? (
           <div className="rating-row">
             <Icon name="star" />
-            {item.seller.rating}
+            {Number(item.seller.rating).toFixed(1)}
             <span>· {item.seller.reviews_count} отзывов</span>
           </div>
         ) : null}
@@ -1222,32 +1324,45 @@ function ListingPage() {
 const CONDITION_OPTIONS = ['Новое', 'Отличное', 'Хорошее', 'Б/у', 'На запчасти']
 const DELIVERY_OPTIONS = ['Нет', 'Да']
 
-const CATEGORY_ITEMS = [
-  { value: 'Авто', label: 'Авто' },
-  { value: 'Недвижимость', label: 'Недвижимость' },
-  { value: 'Жильё для путешествия', label: 'Жильё для путешествия' },
-  { value: 'Для дома и дачи', label: 'Для дома и дачи' },
-  { value: 'Запчасти', label: 'Запчасти' },
-  { value: 'Услуги', label: 'Услуги' },
-  { value: 'Электроника', label: 'Электроника' },
-  { value: 'Работа и подработка', label: 'Работа и подработка' },
-  { value: 'Бизнес 360', label: 'Бизнес 360' },
-  { value: 'Одежда, обувь, аксессуары', label: 'Одежда, обувь, аксессуары' },
-]
+/* Иллюстрация категории: PNG из public/categories/, а если файла ещё нет
+ * или он не загрузился — встроенная SVG. Общая для ленты и формы. */
+function CategoryArtwork({ label }) {
+  const [imgFailed, setImgFailed] = useState(false)
+  const src = CATEGORY_IMAGES[label]
+  if (src && !imgFailed) {
+    return <img src={`/${src}`} alt="" loading="lazy" onError={() => setImgFailed(true)} />
+  }
+  return <CategoryArt label={label} />
+}
+
+/* Плашка категории: подпись слева, иллюстрация справа с выходом за край.
+ * Один компонент на ленту (горизонтальный рельс) и на форму (сетка) —
+ * отличаются только контейнером. */
+function CategoryTile({ value, label, selected, onSelect }) {
+  return (
+    <button
+      type="button"
+      className={`cat-tile ${selected ? 'is-selected' : ''}`}
+      style={{ '--tint': CATEGORY_META[label]?.tint || '#EDF1F6' }}
+      onClick={() => onSelect(value)}
+    >
+      <span className="cat-tile-label">{label}</span>
+      <span className="cat-tile-art"><CategoryArtwork label={label} /></span>
+    </button>
+  )
+}
 
 function CategoryGrid({ selected, onSelect }) {
   return (
     <div className="category-grid">
-      {CATEGORY_ITEMS.map((cat) => (
-        <button
-          key={cat.value}
-          type="button"
-          className={`category-card ${selected === cat.value ? 'is-selected' : ''}`}
-          onClick={() => onSelect(cat.value)}
-        >
-          <div className="category-img" data-cat={cat.value} />
-          <span>{cat.label}</span>
-        </button>
+      {CATEGORIES.map((cat) => (
+        <CategoryTile
+          key={cat.label}
+          value={cat.label}
+          label={cat.label}
+          selected={selected === cat.label}
+          onSelect={onSelect}
+        />
       ))}
     </div>
   )
@@ -1351,7 +1466,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
             <div className="grid-two">
               {form.photos.map((url) => (
                 <div className="upload-card" key={url}>
-                  <div className="product-media small"><MediaPlaceholder imageUrl={url} /></div>
+                  <div className="product-media small"><MediaPlaceholder imageUrl={photoDisplayUrl(url)} /></div>
                   <div className="tool-row"><button className="tool-btn" type="button" onClick={() => removePhoto(url)}>Убрать</button></div>
                 </div>
               ))}
@@ -1414,7 +1529,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
       {form.step === 5 && (
         <div className="form-stack">
           <div className="preview-card glass-card">
-            <div className="preview-media"><MediaPlaceholder imageUrl={form.photos[0] || ''} /></div>
+            <div className="preview-media"><MediaPlaceholder imageUrl={photoDisplayUrl(form.photos[0])} /></div>
             <div className="preview-info">
               <div className="product-price">{form.price} ₽</div>
               <div className="row-title">{form.title}</div>
@@ -1661,7 +1776,7 @@ function ChatsPage() {
               <strong>{chat.user}</strong>
               <span>{chat.last_text || chat.ad_title}</span>
             </div>
-            <div className="product-city">{chat.time}</div>
+            <div className="product-city">{shortTime(chat.time)}</div>
           </Link>
         ))}
       </div>
@@ -1813,14 +1928,14 @@ function ChatPage() {
             return (
               <div key={message.id} className={`bubble-wrap ${side(message)}`}>
                 <div
-                  className={`bubble ${side(message)} ${message.media_type && message.media_type !== 'text' ? 'bubble-media' : ''}`}
+                  className={`bubble ${side(message)} ${isMediaMessage(message) ? 'bubble-media' : ''}`}
                   onContextMenu={(e) => { e.preventDefault(); openMenu(message.id) }}
                 >
-                  {message.media_type === 'photo' || message.media_type === 'video' ? (
-                    <img className="bubble-media-img" src={resolveAssetUrl(message.media_url)} alt="" />
+                  {chatMediaUrl(message) ? (
+                    <img className="bubble-media-img" src={resolveAssetUrl(chatMediaUrl(message))} alt="" />
                   ) : null}
                   {message.text ? <span>{message.text}</span> : null}
-                  <span className="bubble-time">{message.created_at?.slice(11, 16) || ''}</span>
+                  <span className="bubble-time">{shortTime(message.created_at)}</span>
                 </div>
                 {menuFor === message.id ? (
                   <div className="bubble-menu">
@@ -1961,11 +2076,12 @@ function OnboardingPage() {
 
 function Layout() {
   const location = useLocation()
+  // /my и /chats — это разделы из нижнего док-бара, поэтому навигацию там
+  // не скрываем: иначе, тапнув «Сообщения» в доке, пользователь остаётся
+  // без дока и может выйти только стрелкой назад.
   const hideNav =
     location.pathname === '/onboarding' ||
     location.pathname === '/create' ||
-    location.pathname === '/chats' ||
-    location.pathname === '/my' ||
     location.pathname.startsWith('/listing/') ||
     location.pathname.startsWith('/chat/') ||
     location.pathname.startsWith('/edit/')
