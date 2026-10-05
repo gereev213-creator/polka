@@ -2354,6 +2354,38 @@ class Database:
                 created_at TEXT
             )
         ''')
+        # Истории продавцов: фото/видео на 24 часа с пре-модерацией
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS stories (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                media TEXT NOT NULL,
+                media_type TEXT DEFAULT 'photo',
+                thumb TEXT,
+                caption TEXT,
+                ad_id INTEGER,
+                status TEXT DEFAULT 'pending',
+                reject_reason TEXT,
+                created_at TEXT,
+                expires_at TEXT,
+                moderated_at TEXT,
+                moderated_by INTEGER
+            )
+        ''')
+        # Кто какую историю уже посмотрел — для колец «новое/просмотрено»
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS story_views (
+                story_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                viewed_at TEXT,
+                PRIMARY KEY (story_id, user_id)
+            )
+        ''')
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_stories_status ON stories(status, expires_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_stories_user ON stories(user_id, created_at)")
+        except Exception:
+            pass
         # Миграция: платформа пользователя (telegram/max)
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN platform TEXT DEFAULT 'telegram'")
@@ -12409,6 +12441,7 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
          InlineKeyboardButton("📈 Аналитика", callback_data="admin_advanced_analytics")],
         [InlineKeyboardButton("💰 Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
+        [InlineKeyboardButton("🗂 Истории", callback_data="admin_stories")],
         [InlineKeyboardButton("🖼 Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
@@ -12994,6 +13027,7 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton("📈 Аналитика", callback_data="admin_advanced_analytics")],
         [InlineKeyboardButton("💰 Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
+        [InlineKeyboardButton("🗂 Истории", callback_data="admin_stories")],
         [InlineKeyboardButton("🖼 Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
@@ -16974,6 +17008,211 @@ def save_chat_message(session_id: int, sender_id: int, text: str = '', file_id: 
     return cursor.lastrowid
 
 
+# ── Истории продавцов: 24 часа, пре-модерация для всех ───────────────────────
+STORY_TTL_HOURS = 24          # срок жизни после одобрения
+STORY_MAX_ACTIVE = 5          # одновременно опубликованных у одного автора
+STORY_MAX_PENDING = 3         # в очереди на проверку — чтобы не заваливать модерацию
+STORY_CAPTION_MAX = 200
+STORY_PENDING_TTL_HOURS = 48  # неодобренная история сгорает, чтобы не копилась очередь
+
+
+def create_story(user_id: int, media: str, media_type: str = 'photo',
+                 caption: str = '', ad_id: Optional[int] = None) -> int:
+    """Создаёт историю в статусе pending.
+
+    expires_at НЕ ставим здесь: отсчёт 24 часов пойдёт с момента одобрения,
+    иначе история, пролежавшая ночь в модерации, публиковалась бы «на часок».
+    """
+    cursor = db.conn.cursor()
+    now = get_moscow_time().isoformat()
+    cursor.execute('''
+        INSERT INTO stories (user_id, media, media_type, caption, ad_id, status, created_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?)
+    ''', (user_id, media, media_type, (caption or '')[:STORY_CAPTION_MAX], ad_id, now))
+    db.conn.commit()
+    return cursor.lastrowid
+
+
+def get_story(story_id: int) -> Optional[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute('SELECT * FROM stories WHERE id=?', (story_id,))
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def count_user_stories(user_id: int, statuses: tuple) -> int:
+    cursor = db.conn.cursor()
+    marks = ','.join('?' * len(statuses))
+    cursor.execute(f'SELECT COUNT(*) AS n FROM stories WHERE user_id=? AND status IN ({marks})',
+                   (user_id, *statuses))
+    row = cursor.fetchone()
+    return int(row['n']) if row else 0
+
+
+def get_user_stories(user_id: int, include_inactive: bool = True) -> List[Dict]:
+    """Свои истории: автор видит и то, что на проверке, и отклонённые."""
+    cursor = db.conn.cursor()
+    where = '' if include_inactive else " AND status='active' AND (expires_at IS NULL OR expires_at > ?)"
+    params: tuple = (user_id,) if include_inactive else (user_id, get_moscow_time().isoformat())
+    cursor.execute(f'SELECT * FROM stories WHERE user_id=?{where} ORDER BY id DESC', params)
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def get_story_rail(viewer_id: int, limit: int = 60) -> List[Dict]:
+    """Активные истории, сгруппированные по авторам, для рельса в ленте.
+
+    Авторы сортируются по свежести последней истории; внутри автора —
+    от старой к новой, как во вьюере. Вместе с историями отдаём, сколько
+    из них зритель уже видел, чтобы нарисовать кольцо.
+    """
+    cursor = db.conn.cursor()
+    now = get_moscow_time().isoformat()
+    cursor.execute('''
+        SELECT s.*, u.username, u.first_name,
+               (SELECT COUNT(*) FROM story_views v
+                 WHERE v.story_id=s.id AND v.user_id=?) AS seen
+        FROM stories s
+        LEFT JOIN users u ON u.user_id = s.user_id
+        WHERE s.status='active' AND (s.expires_at IS NULL OR s.expires_at > ?)
+        ORDER BY s.created_at DESC
+        LIMIT ?
+    ''', (viewer_id or 0, now, limit))
+    rows = [dict(r) for r in cursor.fetchall()]
+
+    authors: Dict[int, Dict] = {}
+    order: List[int] = []
+    for r in rows:
+        uid = r['user_id']
+        if uid not in authors:
+            authors[uid] = {
+                'user_id': uid,
+                'name': r['username'] or r['first_name'] or f'id{uid}',
+                'is_me': (uid == viewer_id),
+                'stories': [],
+                'unseen': 0,
+            }
+            order.append(uid)
+        story = {
+            'id': r['id'],
+            'media': r['media'],
+            'media_type': r['media_type'],
+            'caption': r['caption'] or '',
+            'ad_id': r['ad_id'],
+            'created_at': r['created_at'],
+            'expires_at': r['expires_at'],
+            'seen': bool(r['seen']),
+        }
+        authors[uid]['stories'].append(story)
+        if not r['seen']:
+            authors[uid]['unseen'] += 1
+    for uid in order:
+        # внутри автора показываем от старых к новым, как во вьюере
+        authors[uid]['stories'].reverse()
+    return [authors[uid] for uid in order]
+
+
+def mark_story_viewed(story_id: int, user_id: int):
+    if not user_id:
+        return
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute('''
+            INSERT OR REPLACE INTO story_views (story_id, user_id, viewed_at)
+            VALUES (?, ?, ?)
+        ''', (story_id, user_id, get_moscow_time().isoformat()))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"mark_story_viewed: {e}")
+
+
+def get_story_viewers(story_id: int) -> int:
+    cursor = db.conn.cursor()
+    cursor.execute('SELECT COUNT(*) AS n FROM story_views WHERE story_id=?', (story_id,))
+    row = cursor.fetchone()
+    return int(row['n']) if row else 0
+
+
+def get_pending_stories(limit: int = 20) -> List[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute('''
+        SELECT s.*, u.username, u.first_name
+        FROM stories s LEFT JOIN users u ON u.user_id = s.user_id
+        WHERE s.status='pending' ORDER BY s.id ASC LIMIT ?
+    ''', (limit,))
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def moderate_story(story_id: int, status: str, admin_id: int, reason: str = '') -> Optional[Dict]:
+    """Одобряет или отклоняет историю.
+
+    При одобрении срок жизни отсчитывается от ЭТОГО момента — автор
+    получает полные 24 часа, а не остаток от ожидания в очереди.
+    """
+    cursor = db.conn.cursor()
+    now = get_moscow_time()
+    expires = (now + timedelta(hours=STORY_TTL_HOURS)).isoformat() if status == 'active' else None
+    cursor.execute('''
+        UPDATE stories SET status=?, reject_reason=?, moderated_at=?, moderated_by=?, expires_at=?
+        WHERE id=?
+    ''', (status, (reason or '')[:200], now.isoformat(), admin_id, expires, story_id))
+    db.conn.commit()
+    return get_story(story_id)
+
+
+def expire_stories() -> Dict[str, int]:
+    """Чистка: гасим просроченные, снимаем зависшие в модерации, чистим архив.
+
+    Файлы удаляем здесь же, иначе папка загрузок растёт бесконечно.
+    """
+    cursor = db.conn.cursor()
+    now = get_moscow_time()
+    result = {'expired': 0, 'stale_pending': 0, 'purged': 0}
+
+    cursor.execute("SELECT id, media FROM stories WHERE status='active' AND expires_at IS NOT NULL AND expires_at <= ?",
+                   (now.isoformat(),))
+    for row in cursor.fetchall():
+        _remove_story_file(row['media'])
+        result['expired'] += 1
+    cursor.execute("UPDATE stories SET status='expired' WHERE status='active' AND expires_at IS NOT NULL AND expires_at <= ?",
+                   (now.isoformat(),))
+
+    stale_before = (now - timedelta(hours=STORY_PENDING_TTL_HOURS)).isoformat()
+    cursor.execute("SELECT id, media FROM stories WHERE status='pending' AND created_at <= ?", (stale_before,))
+    for row in cursor.fetchall():
+        _remove_story_file(row['media'])
+        result['stale_pending'] += 1
+    cursor.execute("UPDATE stories SET status='rejected', reject_reason='истекла на модерации' "
+                   "WHERE status='pending' AND created_at <= ?", (stale_before,))
+
+    # Архив: реджекты и просроченные старше 30 дней — удаляем вместе с файлами
+    old_before = (now - timedelta(days=30)).isoformat()
+    cursor.execute("SELECT id, media FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?",
+                   (old_before,))
+    for row in cursor.fetchall():
+        _remove_story_file(row['media'])
+        result['purged'] += 1
+    cursor.execute("DELETE FROM story_views WHERE story_id IN "
+                   "(SELECT id FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?)",
+                   (old_before,))
+    cursor.execute("DELETE FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?", (old_before,))
+    db.conn.commit()
+    return result
+
+
+def _remove_story_file(media: str):
+    """Удаляет файл истории с диска (медиа лежит в UPLOAD_DIR)."""
+    if not media:
+        return
+    try:
+        name = os.path.basename(str(media))
+        upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+        path = os.path.join(upload_dir, name)
+        if name and os.path.isfile(path):
+            os.remove(path)
+    except Exception as e:
+        logger.warning(f"story file remove: {e}")
+
+
 def get_user_chats(user_id: int, limit: int = 20) -> List[Dict]:
     cursor = db.conn.cursor()
     cursor.execute('''
@@ -18911,6 +19150,181 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
     return _miniapp_json({'ok': True, 'message': message}, status=201)
 
 
+# ── API историй продавцов ────────────────────────────────────────────────────
+def _story_public(story: Dict, with_views: bool = False) -> Dict:
+    """История для клиента. reject_reason и просмотры — только автору."""
+    data = {
+        'id': story['id'],
+        'user_id': story['user_id'],
+        'media': story['media'],
+        'media_type': story['media_type'],
+        'caption': story.get('caption') or '',
+        'ad_id': story.get('ad_id'),
+        'status': story.get('status'),
+        'created_at': story.get('created_at'),
+        'expires_at': story.get('expires_at'),
+    }
+    if with_views:
+        data['reject_reason'] = story.get('reject_reason') or ''
+        data['views'] = get_story_viewers(story['id'])
+    return data
+
+
+async def api_miniapp_stories(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/stories — рельс историй и состояние своих.
+
+    Свои истории отдаём с просмотрами и причиной отклонения: автор должен
+    понимать, почему история не появилась в ленте.
+    """
+    viewer_id = _miniapp_viewer(request) or 0
+    try:
+        authors = get_story_rail(viewer_id)
+    except Exception as e:
+        logger.error(f"stories rail: {e}")
+        return _miniapp_err('load_failed', 500)
+
+    mine = {'stories': [], 'can_post': False, 'active': 0, 'pending': 0,
+            'max_active': STORY_MAX_ACTIVE, 'max_pending': STORY_MAX_PENDING}
+    if viewer_id:
+        active = count_user_stories(viewer_id, ('active',))
+        pending = count_user_stories(viewer_id, ('pending',))
+        mine.update({
+            'stories': [_story_public(s, with_views=True) for s in get_user_stories(viewer_id)],
+            'active': active,
+            'pending': pending,
+            'can_post': active < STORY_MAX_ACTIVE and pending < STORY_MAX_PENDING,
+        })
+    return _miniapp_json({'authors': authors, 'mine': mine})
+
+
+async def api_miniapp_story_create(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/stories — добавить историю (multipart: file, caption, ad_id).
+
+    Создаётся в статусе pending: у нас пре-модерация для всех, в ленту
+    история попадает только после одобрения администратором.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+
+    active = count_user_stories(viewer_id, ('active',))
+    pending = count_user_stories(viewer_id, ('pending',))
+    if active >= STORY_MAX_ACTIVE:
+        return _miniapp_json({'error': 'limit_active',
+                              'detail': f'у вас уже {STORY_MAX_ACTIVE} историй'}, status=429)
+    if pending >= STORY_MAX_PENDING:
+        return _miniapp_json({'error': 'limit_pending',
+                              'detail': 'предыдущие ещё на проверке, подождите'}, status=429)
+
+    try:
+        form = await request.post()
+    except Exception:
+        return _miniapp_err('bad_multipart', 400)
+    field = form.get('file') or form.get('media') or form.get('photo')
+    if field is None:
+        extra = form.getall('file', [])
+        field = extra[0] if extra else None
+    if field is None:
+        return _miniapp_err('no_file', 400)
+
+    data = field.file.read(CHAT_MEDIA_LIMITS['video'] + 1)
+    if not data:
+        return _miniapp_err('empty_file', 400)
+    ctype = getattr(field, 'content_type', '') or ''
+    kind = _classify_chat_media(ctype, data)
+    if kind == 'voice':
+        return _miniapp_json({'error': 'unsupported_media',
+                              'detail': 'для истории подойдут фото или видео'}, status=415)
+    if not kind:
+        return _miniapp_json({'error': 'unsupported_media',
+                              'detail': 'поддерживаются фото и видео'}, status=415)
+    limit = CHAT_MEDIA_LIMITS[kind]
+    if len(data) > limit:
+        return _miniapp_json({'error': 'too_large',
+                              'detail': f'{kind}: до {limit // (1024 * 1024)} МБ'}, status=413)
+
+    caption = (form.get('caption') or '')[:STORY_CAPTION_MAX]
+    ad_id = None
+    raw_ad = form.get('ad_id')
+    if raw_ad:
+        try:
+            ad_id = int(raw_ad)
+            ad = db.get_ad(ad_id)
+            # привязывать можно только к своему объявлению
+            if not ad or int(ad.get('user_id') or 0) != int(viewer_id):
+                ad_id = None
+        except (TypeError, ValueError):
+            ad_id = None
+
+    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except Exception:
+        pass
+    ext = _chat_media_ext(ctype, data, kind)
+    name = f"s{viewer_id}_{int(_time.time())}.{ext}"
+    path = os.path.join(upload_dir, name)
+    try:
+        with open(path, 'wb') as fh:
+            fh.write(data)
+    except Exception as e:
+        logger.error(f"story save: {e}")
+        return _miniapp_err('save_failed', 500)
+
+    try:
+        story_id = create_story(viewer_id, f"/api/ads/photos/{name}", kind, caption, ad_id)
+    except Exception as e:
+        logger.error(f"story create: {e}")
+        return _miniapp_err('save_failed', 500)
+
+    story = get_story(story_id)
+    try:
+        await _notify_story_moderation(story)
+    except Exception as e:
+        logger.warning(f"story moderation notify: {e}")
+
+    return _miniapp_json({'ok': True, 'story': _story_public(story, with_views=True)}, status=201)
+
+
+async def api_miniapp_story_view(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/stories/{story_id}/view — отметить историю просмотренной."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        story_id = int(request.match_info['story_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    mark_story_viewed(story_id, viewer_id)
+    return _miniapp_json({'ok': True, 'views': get_story_viewers(story_id)})
+
+
+async def api_miniapp_story_delete(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """DELETE /api/stories/{story_id} — автор удаляет свою историю."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        story_id = int(request.match_info['story_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    story = get_story(story_id)
+    if not story:
+        return _miniapp_err('not_found', 404)
+    if int(story['user_id']) != int(viewer_id):
+        return _miniapp_err('forbidden', 403)
+    try:
+        _remove_story_file(story['media'])
+        cursor = db.conn.cursor()
+        cursor.execute('DELETE FROM story_views WHERE story_id=?', (story_id,))
+        cursor.execute('DELETE FROM stories WHERE id=?', (story_id,))
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"story delete: {e}")
+        return _miniapp_err('delete_failed', 500)
+    return _miniapp_json({'ok': True})
+
+
 async def api_serve_html(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /chat — отдаёт мини-апп HTML"""
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_miniapp.html')
@@ -20218,6 +20632,201 @@ async def admin_banners(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
+# ── Модерация историй (отдельный раздел, не мешается с объявлениями) ─────────
+_STORY_REJECT_REASONS = {
+    'spam': 'Реклама или спам',
+    'quality': 'Плохое качество',
+    'offtopic': 'Не по теме площадки',
+    'other': 'Без объяснения',
+}
+
+
+def _story_card_caption(story: Dict, header: str = 'История на проверке') -> str:
+    """Подпись карточки истории для админа."""
+    user = db.get_user(story['user_id'])
+    who = get_anon_id(user) if user else f"id{story['user_id']}"
+    parts = [f"<b>{header}</b>", f"Автор: <b>{who}</b>"]
+    if story.get('ad_id'):
+        ad = db.get_ad(story['ad_id'])
+        if ad:
+            parts.append(f"Объявление: «{str(ad.get('title'))[:40]}»")
+    parts.append(f"Тип: {'видео' if story.get('media_type') == 'video' else 'фото'}")
+    if story.get('caption'):
+        parts.append(f"\n<i>{story['caption'][:180]}</i>")
+    return "\n".join(parts)
+
+
+def _story_media_path(story: Dict) -> str:
+    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    return os.path.join(upload_dir, os.path.basename(str(story.get('media') or '')))
+
+
+async def _send_story_card(bot, chat_id: int, story: Dict, header: str) -> bool:
+    """Отправляет карточку истории с кнопками решения."""
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(EM_OK + " Одобрить", callback_data=f"story_ok:{story['id']}"),
+        InlineKeyboardButton(EM_FAIL + " Отклонить", callback_data=f"story_no:{story['id']}"),
+    ]])
+    caption = _story_card_caption(story, header)
+    path = _story_media_path(story)
+    try:
+        if os.path.isfile(path):
+            with open(path, 'rb') as fh:
+                if story.get('media_type') == 'video':
+                    await bot.send_video(chat_id=chat_id, video=fh, caption=caption,
+                                         reply_markup=kb, parse_mode=ParseMode.HTML)
+                else:
+                    await bot.send_photo(chat_id=chat_id, photo=fh, caption=caption,
+                                         reply_markup=kb, parse_mode=ParseMode.HTML)
+        else:
+            await bot.send_message(chat_id=chat_id, text=caption, reply_markup=kb,
+                                   parse_mode=ParseMode.HTML)
+        return True
+    except Exception as e:
+        logger.warning(f"story card -> {chat_id}: {e}")
+        return False
+
+
+async def _stories_cleanup_loop():
+    """Раз в час гасит просроченные истории и удаляет их файлы.
+
+    APScheduler в проекте импортирован, но нигде не запускается, поэтому
+    используем обычный фоновый цикл — как сделано для других задач.
+    """
+    while True:
+        try:
+            await asyncio.sleep(3600)
+            result = expire_stories()
+            if any(result.values()):
+                logger.info(f"stories cleanup: {result}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"stories cleanup: {e}")
+            await asyncio.sleep(300)
+
+
+async def _notify_story_moderation(story: Dict):
+    """Пре-модерация для всех: зовём админов сразу, не дожидаясь открытия панели."""
+    app = _get_bot_app()
+    if not app or not story:
+        return
+    for admin_id in ADMIN_USER_IDS:
+        await _send_story_card(app.bot, admin_id, story, "Новая история на проверке")
+
+
+async def _notify_story_author(story: Dict, approved: bool, reason: str = ''):
+    app = _get_bot_app()
+    if not app or not story:
+        return
+    try:
+        if approved:
+            text = (f"{EM_OK} Ваша история опубликована!\n"
+                    f"Она будет в ленте 24 часа в разделе «Истории продавцов».")
+        else:
+            text = f"{EM_FAIL} История отклонена."
+            if reason:
+                text += f"\nПричина: {reason}"
+        await app.bot.send_message(chat_id=story['user_id'], text=text)
+    except Exception as e:
+        logger.warning(f"story author notify: {e}")
+
+
+async def admin_stories(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Раздел «Истории» в админ-панели — очередь на модерацию."""
+    query = update.callback_query
+    await safe_answer(query, )
+    if not await is_admin(update.effective_user.id):
+        return
+    pending = get_pending_stories(20)
+    back = InlineKeyboardMarkup([[InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]])
+    if not pending:
+        await safe_edit_message(query, "Истории\n\nОчередь пуста.", back)
+        return
+    await safe_edit_message(
+        query,
+        f"Истории на проверке: {len(pending)}\n\n"
+        "Карточки ниже — одобрите или отклоните.",
+        back,
+    )
+    for story in pending[:5]:
+        await _send_story_card(context.bot, update.effective_user.id, story, "История на проверке")
+
+
+async def story_moderation_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Одобрение истории или переход к выбору причины отклонения."""
+    query = update.callback_query
+    if not await is_admin(update.effective_user.id):
+        await safe_answer(query, "Недостаточно прав", show_alert=True)
+        return
+    action, _, raw_id = (query.data or "").partition(':')
+    try:
+        story_id = int(raw_id)
+    except (TypeError, ValueError):
+        await safe_answer(query, )
+        return
+    story = get_story(story_id)
+    if not story:
+        await safe_answer(query, "История не найдена", show_alert=True)
+        return
+    if story.get('status') != 'pending':
+        await safe_answer(query, "Уже обработана", show_alert=True)
+        return
+
+    if action == 'story_ok':
+        updated = moderate_story(story_id, 'active', update.effective_user.id)
+        await safe_answer(query, "Одобрено")
+        try:
+            await query.edit_message_reply_markup(reply_markup=None)
+            await query.edit_message_caption(caption=_story_card_caption(updated, "Одобрено"))
+        except Exception:
+            pass
+        await _notify_story_author(updated, approved=True)
+        return
+
+    # Отклонение: сначала спрашиваем причину — быстрыми кнопками, без ввода текста
+    rows = [[InlineKeyboardButton(label, callback_data=f"story_rej:{story_id}:{code}")]
+            for code, label in _STORY_REJECT_REASONS.items()]
+    try:
+        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(rows))
+    except Exception:
+        pass
+    await safe_answer(query, "Выберите причину")
+
+
+async def story_moderation_reason(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Применяет отклонение истории с выбранной причиной."""
+    query = update.callback_query
+    if not await is_admin(update.effective_user.id):
+        await safe_answer(query, "Недостаточно прав", show_alert=True)
+        return
+    parts = (query.data or "").split(':')
+    if len(parts) < 3:
+        await safe_answer(query, )
+        return
+    try:
+        story_id = int(parts[1])
+    except (TypeError, ValueError):
+        await safe_answer(query, )
+        return
+    reason = _STORY_REJECT_REASONS.get(parts[2], parts[2])
+    story = get_story(story_id)
+    if not story:
+        await safe_answer(query, "История не найдена", show_alert=True)
+        return
+    if story.get('status') != 'pending':
+        await safe_answer(query, "Уже обработана", show_alert=True)
+        return
+    updated = moderate_story(story_id, 'rejected', update.effective_user.id, reason)
+    await safe_answer(query, "Отклонено")
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+        await query.edit_message_caption(caption=_story_card_caption(updated, f"Отклонено: {reason}"))
+    except Exception:
+        pass
+    await _notify_story_author(updated, approved=False, reason=reason)
+
+
 async def admin_banner_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await safe_answer(query, )
@@ -21232,6 +21841,11 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/chat/{session_id}/poll', api_poll_messages)
     app.router.add_post('/api/chat/{session_id}/send', api_send_message)
     app.router.add_post('/api/chat/{session_id}/media', api_chat_media_upload)
+    # ── Истории ──────────────────────────────────────────────────────────────
+    app.router.add_get('/api/stories', api_miniapp_stories)
+    app.router.add_post('/api/stories', api_miniapp_story_create)
+    app.router.add_post('/api/stories/{story_id}/view', api_miniapp_story_view)
+    app.router.add_delete('/api/stories/{story_id}', api_miniapp_story_delete)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
     # Заглушка для paid_btn_url (пользователи после оплаты попадают сюда)
@@ -21630,6 +22244,10 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_moderation,           pattern="^admin_moderation$"))
     application.add_handler(CallbackQueryHandler(admin_view_moderation_ad,   pattern="^admin_view_ad:"))
     application.add_handler(CallbackQueryHandler(moderate_ad_action,         pattern="^moderate_approve:|^moderate_reject:"))
+    # Истории: своя очередь модерации, отдельно от объявлений
+    application.add_handler(CallbackQueryHandler(admin_stories,              pattern="^admin_stories$"))
+    application.add_handler(CallbackQueryHandler(story_moderation_action,    pattern="^story_(ok|no):"))
+    application.add_handler(CallbackQueryHandler(story_moderation_reason,    pattern="^story_rej:"))
     application.add_handler(CallbackQueryHandler(show_moderation_ads,        pattern="^show_moderation_ads$"))
     application.add_handler(CallbackQueryHandler(admin_moderation_next,      pattern="^admin_moderation_next$"))
     application.add_handler(CallbackQueryHandler(admin_payments,             pattern="^admin_payments$"))
@@ -21746,6 +22364,7 @@ def main():
         print(f"{EM_OK} Бот запущен")
         # Запускаем фоновые задачи
         asyncio.create_task(precache_banners())
+        asyncio.create_task(_stories_cleanup_loop())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:

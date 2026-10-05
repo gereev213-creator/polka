@@ -501,44 +501,403 @@ function CategoryArt({ label }) {
   )
 }
 
-function StoriesRow({ items = [] }) {
-  const seen = new Set()
-  const people = []
-  for (const it of items) {
-    const name = it?.seller?.name
-    if (!name || seen.has(name)) continue
-    seen.add(name)
-    people.push({ name, photo: it?.photo_urls?.[0] || '' })
-    if (people.length >= 8) break
+/* ══════════════════════════════════════════════════════════════════════════
+   ИСТОРИИ ПРОДАВЦОВ
+   Пре-модерация для всех: в рельс попадает только одобренное, поэтому у «Вы»
+   показываем ещё и счётчик историй, ждущих проверки.
+   ══════════════════════════════════════════════════════════════════════════ */
+const STORY_PHOTO_MS = 5000
+
+function storyAgo(iso) {
+  const t = Date.parse(iso || '')
+  if (!t) return ''
+  const mins = Math.max(0, Math.floor((Date.now() - t) / 60000))
+  if (mins < 1) return 'только что'
+  if (mins < 60) return `${mins} мин`
+  const hours = Math.floor(mins / 60)
+  if (hours < 24) return `${hours} ч`
+  return `${Math.floor(hours / 24)} дн`
+}
+
+function storyLabel(author) {
+  if (!author) return ''
+  if (author.is_me) return 'Вы'
+  const name = author.name || ''
+  return name.startsWith('polka_anon') ? `id${name.replace('polka_anon_', '')}` : name
+}
+
+function storyAvatarUrl(author) {
+  const first = author?.stories?.[0]
+  return first ? resolveAssetUrl(first.media) : ''
+}
+
+/* Кольцо: цветное — есть непросмотренные, серое — всё просмотрено */
+function StoryRing({ author, own = false, pending = 0, children }) {
+  const cls = ['story-ring']
+  if (own) cls.push('is-own')
+  const hasStories = Number(author?.stories?.length || 0) > 0
+  if (hasStories && Number(author?.unseen || 0) === 0) cls.push('is-seen')
+  if (pending > 0 && !hasStories) cls.push('is-pending')
+  return <div className={cls.join(' ')}>{children}</div>
+}
+
+function StoriesRow() {
+  const navigate = useNavigate()
+  const [authors, setAuthors] = useState([])
+  const [mine, setMine] = useState(null)
+  const [viewerIndex, setViewerIndex] = useState(null)
+  const [loaded, setLoaded] = useState(false)
+
+  const load = async () => {
+    try {
+      const data = await api.getStories()
+      setAuthors(data.authors || [])
+      setMine(data.mine || null)
+    } catch {
+      setAuthors([])   // истории не критичны для ленты — просто не показываем рельс
+    } finally {
+      setLoaded(true)
+    }
+  }
+
+  useEffect(() => {
+    load()
+  }, [])
+
+  if (!loaded) return null
+  const myAuthor = authors.find((a) => a.is_me) || null
+  const others = authors.filter((a) => !a.is_me)
+  const pending = Number(mine?.pending || 0)
+  if (!myAuthor && !others.length && !pending) return null
+
+  const openMine = () => {
+    if (myAuthor) setViewerIndex(authors.indexOf(myAuthor))
+    else navigate('/story/new')
   }
 
   return (
-    <div className="stories-block">
-      <div className="stories-head">
-        <Icon name="sparkles" />
-        <span>Истории продавцов</span>
-      </div>
-      <div className="stories-row">
-        <button type="button" className="story-item">
-          <div className="story-ring is-own">
-            <div className="story-avatar"><Icon name="plus" /></div>
-          </div>
-          <span className="story-name">Вы</span>
-        </button>
-        {people.map((p) => (
-          <button type="button" key={p.name} className="story-item">
-            <div className="story-ring">
+    <>
+      <div className="stories-block">
+        <div className="stories-head">
+          <Icon name="sparkles" />
+          <span>Истории продавцов</span>
+        </div>
+        <div className="stories-row">
+          <button type="button" className="story-item" onClick={openMine}>
+            <StoryRing author={myAuthor} own pending={pending}>
               <div className="story-avatar">
-                {p.photo
-                  ? <img src={resolveAssetUrl(p.photo)} alt="" loading="lazy" />
-                  : (p.name || '?')[0]?.toUpperCase()}
+                {myAuthor ? <img src={storyAvatarUrl(myAuthor)} alt="" /> : <Icon name="plus" />}
               </div>
-            </div>
-            <span className="story-name">@{p.name}</span>
+              {pending ? <span className="story-badge">{pending}</span> : null}
+            </StoryRing>
+            <span className="story-name">Вы</span>
           </button>
+          {others.map((a) => (
+            <button type="button" key={a.user_id} className="story-item"
+              onClick={() => setViewerIndex(authors.indexOf(a))}>
+              <StoryRing author={a}>
+                <div className="story-avatar">
+                  <img src={storyAvatarUrl(a)} alt="" loading="lazy" />
+                </div>
+              </StoryRing>
+              <span className="story-name">{storyLabel(a)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {viewerIndex != null && authors[viewerIndex] ? (
+        <StoryViewer authors={authors} startIndex={viewerIndex}
+          onClose={() => setViewerIndex(null)} onSeen={load} />
+      ) : null}
+    </>
+  )
+}
+
+/* Полноэкранный просмотр: полоски прогресса, автоперелистывание,
+ * тап слева/справа, удержание — пауза, свайп вниз — закрыть. */
+function StoryViewer({ authors, startIndex, onClose, onSeen }) {
+  const navigate = useNavigate()
+  const [authorIdx, setAuthorIdx] = useState(startIndex)
+  const [slide, setSlide] = useState(0)
+  const [progress, setProgress] = useState(0)
+  const holdRef = useRef(false)
+  const touchStartY = useRef(null)
+  const videoRef = useRef(null)
+
+  const author = authors[authorIdx]
+  const stories = author?.stories || []
+  const story = stories[slide]
+
+  const goNext = () => {
+    if (slide + 1 < stories.length) { setSlide(slide + 1); return }
+    if (authorIdx + 1 < authors.length) { setAuthorIdx(authorIdx + 1); setSlide(0); return }
+    onClose()
+  }
+
+  const goPrev = () => {
+    if (slide > 0) { setSlide(slide - 1); return }
+    if (authorIdx > 0) {
+      const prev = authorIdx - 1
+      setAuthorIdx(prev)
+      setSlide(Math.max(0, (authors[prev].stories || []).length - 1))
+    }
+  }
+
+  // Отмечаем просмотр — от этого зависят кольца в рельсе
+  useEffect(() => {
+    if (!story) return
+    api.viewStory(story.id).then(() => onSeen?.()).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [story?.id])
+
+  // Автоперелистывание фото. Удержание ставит на паузу и НЕ двигает отсчёт.
+  useEffect(() => {
+    if (!story || story.media_type === 'video') return undefined
+    setProgress(0)
+    const started = Date.now()
+    let pausedFor = 0
+    let pausedAt = 0
+    const timer = setInterval(() => {
+      if (holdRef.current) {
+        if (!pausedAt) pausedAt = Date.now()
+      } else if (pausedAt) {
+        pausedFor += Date.now() - pausedAt
+        pausedAt = 0
+      }
+      const ratio = (Date.now() - started - pausedFor) / STORY_PHOTO_MS
+      if (ratio >= 1) {
+        clearInterval(timer)
+        goNext()
+      } else {
+        setProgress(ratio)
+      }
+    }, 50)
+    return () => clearInterval(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [story?.id])
+
+  // Видео запускаем вручную: автовоспроизведение со звуком браузеры режут
+  useEffect(() => {
+    if (story?.media_type !== 'video') return
+    const el = videoRef.current
+    if (el) el.play().catch(() => {})
+  }, [story?.id, story?.media_type])
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape') onClose()
+      if (e.key === 'ArrowRight') goNext()
+      if (e.key === 'ArrowLeft') goPrev()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorIdx, slide, authors])
+
+  if (!story) return null
+
+  const mediaUrl = resolveAssetUrl(story.media)
+
+  return (
+    <div
+      className="story-viewer"
+      onTouchStart={(e) => { touchStartY.current = e.touches[0].clientY }}
+      onTouchEnd={(e) => {
+        const start = touchStartY.current
+        touchStartY.current = null
+        if (start != null && e.changedTouches[0].clientY - start > 110) onClose()
+      }}
+    >
+      <div className="story-progress">
+        {stories.map((s, i) => (
+          <span key={s.id} className="story-bar">
+            <span className="story-bar-fill"
+              style={{ width: `${i < slide ? 100 : i === slide ? Math.min(100, progress * 100) : 0}%` }} />
+          </span>
         ))}
       </div>
+
+      <div className="story-topbar">
+        <div className="story-author">
+          <div className="story-author-avatar">
+            <img src={mediaUrl} alt="" />
+          </div>
+          <div className="story-author-text">
+            <strong>{storyLabel(author)}</strong>
+            <span>{storyAgo(story.created_at)}</span>
+          </div>
+        </div>
+        <button type="button" className="story-close" onClick={onClose} aria-label="Закрыть">
+          <Icon name="plus" />
+        </button>
+      </div>
+
+      <div className="story-stage"
+        onPointerDown={() => { holdRef.current = true }}
+        onPointerUp={() => { holdRef.current = false }}
+        onPointerLeave={() => { holdRef.current = false }}>
+        {story.media_type === 'video' ? (
+          <video
+            ref={videoRef}
+            className="story-media"
+            src={mediaUrl}
+            playsInline
+            preload="metadata"
+            onTimeUpdate={(e) => {
+              const v = e.currentTarget
+              if (v.duration) setProgress(v.currentTime / v.duration)
+            }}
+            onEnded={goNext}
+          />
+        ) : (
+          <img className="story-media" src={mediaUrl} alt="" />
+        )}
+      </div>
+
+      <button type="button" className="story-tap story-tap-prev" onClick={goPrev} aria-label="Назад" />
+      <button type="button" className="story-tap story-tap-next" onClick={goNext} aria-label="Вперёд" />
+
+      <div className="story-footer">
+        {story.caption ? <div className="story-caption">{story.caption}</div> : null}
+        <div className="story-actions">
+          {story.ad_id ? (
+            <button type="button" className="story-action"
+              onClick={() => { onClose(); navigate(`/listing/${story.ad_id}`) }}>
+              <Icon name="back" /> К объявлению
+            </button>
+          ) : null}
+          {author?.is_me ? (
+            <button type="button" className="story-action"
+              onClick={() => { onClose(); navigate('/story/new') }}>
+              <Icon name="plus" /> Добавить
+            </button>
+          ) : null}
+        </div>
+      </div>
     </div>
+  )
+}
+
+/* Экран создания истории: фото или видео на 24 часа, с пре-модерацией */
+function StoryCreatePage() {
+  const navigate = useNavigate()
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState('')
+  const [isVideo, setIsVideo] = useState(false)
+  const [caption, setCaption] = useState('')
+  const [ads, setAds] = useState([])
+  const [adId, setAdId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    api.getMyListings()
+      .then((data) => {
+        const list = (data.items || data.ads || []).filter((a) => a.status === 'active')
+        setAds(list.slice(0, 20))
+      })
+      .catch(() => setAds([]))
+  }, [])
+
+  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
+
+  const pick = (event) => {
+    const chosen = event.target.files?.[0]
+    if (!chosen) return
+    const video = chosen.type.startsWith('video/')
+    if (video && chosen.size > 25 * 1024 * 1024) { setError('Видео больше 25 МБ.'); return }
+    if (!video && chosen.size > 10 * 1024 * 1024) { setError('Фото больше 10 МБ.'); return }
+    if (preview) URL.revokeObjectURL(preview)
+    setPreview(URL.createObjectURL(chosen))
+    setIsVideo(video)
+    setFile(chosen)
+    setError('')
+  }
+
+  const submit = async () => {
+    if (!file) { setError('Сначала выберите фото или видео.'); return }
+    setBusy(true)
+    setError('')
+    try {
+      await api.createStory(file, { caption: caption.trim(), adId: adId || null })
+      setSent(true)
+    } catch (err) {
+      setError(err?.detail ? `Не удалось: ${err.detail}` : 'Не удалось отправить историю.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (sent) {
+    return (
+      <Screen>
+        <TopBar left={<IconButton icon="back" to="/" />} />
+        <div className="story-sent glass-card">
+          <div className="story-sent-icon"><Icon name="clock" /></div>
+          <strong>История отправлена на проверку</strong>
+          <p>Она появится в ленте на 24 часа после одобрения. Мы сообщим в чате с ботом.</p>
+          <button type="button" className="cta-primary" onClick={() => navigate('/')}>Вернуться в ленту</button>
+        </div>
+      </Screen>
+    )
+  }
+
+  return (
+    <Screen>
+      <TopBar left={<IconButton icon="back" to="/" />} />
+      <div className="page-title">Новая история</div>
+
+      <label className={`story-drop ${preview ? 'has-preview' : ''}`}>
+        {preview ? (
+          isVideo
+            ? <video className="story-drop-media" src={preview} muted playsInline />
+            : <img className="story-drop-media" src={preview} alt="" />
+        ) : (
+          <div className="story-drop-empty">
+            <div className="story-drop-icon"><Icon name="image" /></div>
+            <strong>Выберите фото или видео</strong>
+            <span>Фото до 10 МБ, видео до 25 МБ и 30 секунд</span>
+          </div>
+        )}
+        <input type="file" accept="image/*,video/*" onChange={pick} hidden />
+      </label>
+
+      {preview ? (
+        <label className="story-replace">
+          Заменить
+          <input type="file" accept="image/*,video/*" onChange={pick} hidden />
+        </label>
+      ) : null}
+
+      <div className="form-stack">
+        <div className="field-wrap">
+          <input
+            className="text-input glass-card"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value.slice(0, 200))}
+            placeholder="Подпись (необязательно)"
+          />
+          <FieldHint text="Например: сегодня скидка" visible={!!caption} />
+        </div>
+
+        {ads.length ? (
+          <select className="text-input glass-card" value={adId} onChange={(e) => setAdId(e.target.value)}>
+            <option value="">Привязать к объявлению (необязательно)</option>
+            {ads.map((a) => (
+              <option key={a.id} value={a.id}>{a.title}</option>
+            ))}
+          </select>
+        ) : null}
+      </div>
+
+      {error ? <ErrorBlock text={error} /> : null}
+
+      <button type="button" className="cta-primary" disabled={busy || !file} onClick={submit}>
+        {busy ? 'Отправляем…' : 'Отправить на проверку'}
+      </button>
+      <p className="story-hint">История живёт 24 часа и видна всем в разделе «Истории продавцов».</p>
+    </Screen>
   )
 }
 
@@ -839,7 +1198,7 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <StoriesRow items={items} />
+      <StoriesRow />
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
@@ -2274,6 +2633,7 @@ function Layout() {
         <Route path="/search" element={<SearchPage />} />
         <Route path="/listing/:id" element={<ListingPage />} />
         <Route path="/create" element={<CreatePage />} />
+        <Route path="/story/new" element={<StoryCreatePage />} />
         <Route path="/edit/:id" element={<EditAdPage />} />
         <Route path="/my" element={<MyAdsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
