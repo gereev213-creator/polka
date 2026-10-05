@@ -18751,6 +18751,166 @@ async def api_send_message(request: aiohttp_web.Request) -> aiohttp_web.Response
 
     return aiohttp_web.json_response({'ok': True})
 
+
+# ── Вложения в диалоге Mini App: фото / видео / голосовые ────────────────────
+# file_id таких сообщений — локальный путь /api/ads/photos/<файл>: Mini App
+# грузит файл сам, в отличие от бота, который хранит Telegram file_id.
+CHAT_MEDIA_LIMITS = {
+    'photo': 10 * 1024 * 1024,
+    'voice': 10 * 1024 * 1024,
+    'video': 25 * 1024 * 1024,
+}
+
+
+def _classify_chat_media(ctype: str, data: bytes) -> str:
+    """Тип вложения для чата: photo | video | voice (пустая строка — не поддержано).
+
+    Смотрим и content-type, и «магические» байты: браузеры и Telegram
+    регулярно присылают пустой тип или application/octet-stream.
+    """
+    ctype = (ctype or '').lower()
+    if ctype.startswith('video/') or data[4:12] in (b'ftypisom', b'ftypmp42', b'ftypqt  ', b'ftypM4V '):
+        return 'video'
+    if (ctype.startswith('audio/') or data[:4] == b'OggS' or data[:3] == b'ID3'
+            or data[:2] in (b'\xff\xfb', b'\xff\xf3', b'\xff\xf2')):
+        return 'voice'
+    if ctype.startswith('image/'):
+        return 'photo'
+    if data[:3] == b'\xff\xd8\xff' or data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'photo'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'photo'
+    if data[:4] == b'\x1a\x45\xdf\xa3':   # webm/mkv — в чате это обычно видео
+        return 'video'
+    return ''
+
+
+def _chat_media_ext(ctype: str, data: bytes, kind: str) -> str:
+    """Расширение файла вложения."""
+    if kind == 'photo':
+        return _guess_photo_ext(ctype, data)
+    if data[4:12] in (b'ftypqt  ',):
+        return 'mov'
+    if data[4:12] in (b'ftypisom', b'ftypmp42', b'ftypM4V '):
+        return 'mp4'
+    if data[:4] == b'\x1a\x45\xdf\xa3':
+        return 'webm'
+    if data[:4] == b'OggS':
+        return 'ogg'
+    if data[:3] == b'ID3' or data[:2] in (b'\xff\xfb', b'\xff\xf3'):
+        return 'mp3'
+    if kind == 'video':
+        return 'mp4'
+    return 'ogg'
+
+
+async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/chat/{session_id}/media — вложение в диалог (multipart, поле file).
+
+    Сохраняет файл локально и создаёт сообщение с msg_type photo/video/voice.
+    Получателю пересылаем НАСТОЯЩЕЕ вложение через бота, а не текстовую
+    заглушку — иначе он видит только «пришло сообщение» без картинки.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        session_id = int(request.match_info['session_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    session = get_chat_session(session_id)
+    if not session or viewer_id not in (session['buyer_id'], session['seller_id']):
+        return _miniapp_err('forbidden', 403)
+
+    try:
+        form = await request.post()
+    except Exception:
+        return _miniapp_err('bad_multipart', 400)
+    field = form.get('file') or form.get('media') or form.get('photo')
+    if field is None:
+        extra = form.getall('file', [])
+        field = extra[0] if extra else None
+    if field is None:
+        return _miniapp_err('no_file', 400)
+
+    data = field.file.read(CHAT_MEDIA_LIMITS['video'] + 1)
+    if not data:
+        return _miniapp_err('empty_file', 400)
+    ctype = getattr(field, 'content_type', '') or ''
+    kind = _classify_chat_media(ctype, data)
+    if not kind:
+        return _miniapp_json(
+            {'error': 'unsupported_media', 'detail': 'поддерживаются фото, видео и голосовые'},
+            status=415,
+        )
+    limit = CHAT_MEDIA_LIMITS[kind]
+    if len(data) > limit:
+        return _miniapp_json(
+            {'error': 'too_large', 'detail': f'{kind}: до {limit // (1024 * 1024)} МБ'},
+            status=413,
+        )
+
+    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except Exception:
+        pass
+    ext = _chat_media_ext(ctype, data, kind)
+    name = f"c{viewer_id}_{int(_time.time())}_{kind[0]}.{ext}"
+    path = os.path.join(upload_dir, name)
+    try:
+        with open(path, 'wb') as fh:
+            fh.write(data)
+    except Exception as e:
+        logger.error(f"chat media save: {e}")
+        return _miniapp_err('save_failed', 500)
+
+    url = f"/api/ads/photos/{name}"
+    try:
+        msg_id = save_chat_message(session_id, viewer_id, text='', file_id=url, msg_type=kind)
+    except Exception as e:
+        logger.error(f"chat media save message: {e}")
+        return _miniapp_err('save_failed', 500)
+
+    # Уведомляем получателя настоящим вложением
+    recipient_id = session['seller_id'] if viewer_id == session['buyer_id'] else session['buyer_id']
+    ad = db.get_ad(session['ad_id'])
+    sender_user = db.get_user(viewer_id)
+    sender_anon = get_anon_id(sender_user) if sender_user else str(viewer_id)
+    caption = (f"{EM_DOT} <b>{sender_anon}</b>\n"
+               f"По объявлению «{ad['title'][:35] if ad else '?'}»")
+    reply_kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(EM_ARROW_R + " Ответить", callback_data=f"open_chat:{session_id}")
+    ]])
+    try:
+        _app = _get_bot_app()
+        if _app:
+            with open(path, 'rb') as fh:
+                if kind == 'photo':
+                    await _app.bot.send_photo(chat_id=recipient_id, photo=fh, caption=caption,
+                                              reply_markup=reply_kb, parse_mode=ParseMode.HTML)
+                elif kind == 'video':
+                    await _app.bot.send_video(chat_id=recipient_id, video=fh, caption=caption,
+                                              reply_markup=reply_kb, parse_mode=ParseMode.HTML)
+                else:
+                    # У send_voice в Bot API нет caption — подпись отдельным сообщением
+                    await _app.bot.send_voice(chat_id=recipient_id, voice=fh, reply_markup=reply_kb)
+                    await _app.bot.send_message(chat_id=recipient_id, text=caption,
+                                                parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"api chat media notify: {e}")
+
+    try:
+        cur = db.conn.cursor()
+        cur.execute('SELECT id, sender_id, text, file_id, msg_type, created_at '
+                    'FROM chat_messages WHERE id=?', (msg_id,))
+        row = cur.fetchone()
+        message = dict(row) if row else None
+    except Exception:
+        message = None
+    return _miniapp_json({'ok': True, 'message': message}, status=201)
+
+
 async def api_serve_html(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /chat — отдаёт мини-апп HTML"""
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_miniapp.html')
@@ -21071,6 +21231,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/chat/{session_id}', api_get_chat)
     app.router.add_get('/api/chat/{session_id}/poll', api_poll_messages)
     app.router.add_post('/api/chat/{session_id}/send', api_send_message)
+    app.router.add_post('/api/chat/{session_id}/media', api_chat_media_upload)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
     # Заглушка для paid_btn_url (пользователи после оплаты попадают сюда)

@@ -169,6 +169,33 @@ export const api = {
   getChat: (id) => request(`/api/chat/${id}`),
   pollChat: (id, after = 0) => request(`/api/chat/${id}/poll?after=${after}`),
   sendMessage: (chatId, text, extra = {}) => request(`/api/chat/${chatId}/send`, { method: 'POST', body: JSON.stringify({ text, ...extra }) }),
+  // Вложение в чат: фото, видео или голосовое. Отдельный эндпоинт, потому что
+  // /send принимает только текст и отклоняет пустой (было 400 invalid text).
+  sendChatMedia: async (chatId, file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const headers = {}
+    if (getInitData()) headers['X-Telegram-Init-Data'] = getInitData()
+    const response = await fetch(`${API_BASE}/api/chat/${chatId}/media`, {
+      method: 'POST',
+      body: formData,
+      headers,
+    })
+    if (!response.ok) {
+      let detail = ''
+      try {
+        const data = await response.json()
+        detail = data.detail || data.error || ''
+      } catch {
+        // ignore
+      }
+      const error = new Error(detail || `http_${response.status}`)
+      error.status = response.status
+      error.detail = detail
+      throw error
+    }
+    return response.json()
+  },
   editMessage: (chatId, messageId, text) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) }),
   deleteMessage: (chatId, messageId) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
 }

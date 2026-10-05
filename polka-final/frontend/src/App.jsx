@@ -39,6 +39,7 @@ const iconPaths = {
   ruler: [<path key="1" d="M3.2 15.6 15.6 3.2 20.8 8.4 8.4 20.8z" />, <path key="2" d="m7.2 11.6 2 2M10.2 8.6l2 2M13.2 5.6l2 2" />],
   clock: [<circle key="1" cx="12" cy="12" r="8.5" />, <path key="2" d="M12 7.5V12l3.2 2" />],
   check: [<path key="1" d="m4.8 12.6 4.9 4.9L19.2 6.9" />],
+  mic: [<rect key="1" x="9" y="3" width="6" height="11" rx="3" />, <path key="2" d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />, <path key="3" d="M12 18v3" />],
 }
 
 const STATUS_LABELS = {
@@ -215,6 +216,12 @@ async function compressImage(file, maxSide = 1600, quality = 0.85) {
 function isMediaMessage(message) {
   const kind = message?.media_type || message?.msg_type || ''
   return Boolean(kind) && kind !== 'text'
+}
+
+/* Тип вложения для отрисовки: photo | video | voice.
+ * Бот пишет msg_type, старые сообщения могли иметь media_type. */
+function mediaKind(message) {
+  return message?.media_type || message?.msg_type || 'photo'
 }
 
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
@@ -615,8 +622,9 @@ function FeedBanner() {
 }
 
 /* «Your stats» из референса → статистика продавца из /api/me.
- * Показываем только авторизованному: без профиля цифры бессмысленны. */
-function SellerStats({ profile }) {
+ * Показываем только авторизованному: без профиля цифры бессмысленны.
+ * Живёт в профиле; caption нужен, только если рядом нет имени пользователя. */
+function SellerStats({ profile, caption = '' }) {
   if (!profile) return null
   const cards = [
     { key: 'ads', label: 'Объявления', value: profile.active_ads || 0, icon: 'bookmark', tone: 'is-accent', to: '/my' },
@@ -627,7 +635,7 @@ function SellerStats({ profile }) {
     <>
       <div className="stats-head">
         <strong>Моя статистика</strong>
-        <span>{profile.name || 'профиль'}</span>
+        {caption ? <span>{caption}</span> : null}
       </div>
       <div className="stats-row">
         {cards.map((c) => (
@@ -702,7 +710,7 @@ function LastNews({ items = [] }) {
 }
 
 function FeedPage() {
-  const { favoriteIds, toggleFavorite, profile } = useApp()
+  const { favoriteIds, toggleFavorite } = useApp()
   const [activeCategory, setActiveCategory] = useState('Все')
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
@@ -835,7 +843,6 @@ function FeedPage() {
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
-      <SellerStats profile={profile} />
       <RecommendCard items={items} />
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
@@ -1098,6 +1105,7 @@ function ListingPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState('')
   const [photoIndex, setPhotoIndex] = useState(0)
+  const galleryRef = useRef(null)
 
   const load = async () => {
     setLoading(true)
@@ -1105,6 +1113,7 @@ function ListingPage() {
     try {
       const data = await api.getListing(listingId)
       setItem(data.ad)
+      setPhotoIndex(0) // иначе при переходе на другое объявление оставался старый кадр
     } catch (err) {
       setError(err.status === 404 ? 'Объявление не найдено.' : 'Не удалось загрузить объявление.')
       setItem(null)
@@ -1113,13 +1122,37 @@ function ListingPage() {
     }
   }
 
+  /* Галерея — горизонтальная лента со scroll-snap: свайп работает штатно,
+   * точки лишь отражают текущий кадр и умеют прокрутить к нужному. */
+  const goToPhoto = (idx) => {
+    const el = galleryRef.current
+    if (!el) return
+    el.scrollTo({ left: idx * el.clientWidth, behavior: 'smooth' })
+  }
+
+  const handleGalleryScroll = (event) => {
+    const el = event.currentTarget
+    if (!el.clientWidth) return
+    const idx = Math.round(el.scrollLeft / el.clientWidth)
+    if (idx !== photoIndex) setPhotoIndex(Math.max(0, idx))
+  }
+
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listingId])
 
   const isOwner = Boolean(item?.is_owner)
-  const photos = item?.photo_urls || []
+
+  /* Фото для галереи. Основной источник — photo_urls, но если бэкенд его не
+   * заполнил, берём сырые photos и приводим к URL через photoDisplayUrl
+   * (file_id → /api/photo/…). Раньше брался только photo_urls, и при пустом
+   * поле на странице товара не было ни одной картинки. */
+  const photos = useMemo(() => {
+    if (!item) return []
+    const raw = item.photo_urls?.length ? item.photo_urls : (item.photos || [])
+    return raw.map(photoDisplayUrl).filter(Boolean)
+  }, [item])
 
   const handleStartChat = async () => {
     setChatLoading(true)
@@ -1198,7 +1231,20 @@ function ListingPage() {
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" />} right={<div className="top-actions"><IconButton icon="heart" active={favoriteIds.includes(listingId)} onClick={() => toggleFavorite(listingId)} /><IconButton icon="share" onClick={handleShare} /></div>} />
       <div className="detail-hero">
-        <MediaPlaceholder label="фотографии товара" tall imageUrl={photos[photoIndex] || ''} />
+        {/* Свайпаемая лента фото: нативный горизонтальный скролл + scroll-snap */}
+        <div className="detail-gallery" ref={galleryRef} onScroll={handleGalleryScroll}>
+          {photos.length ? (
+            photos.map((url, idx) => (
+              <div className="detail-slide" key={`${url}-${idx}`}>
+                <MediaPlaceholder label="фотографии товара" tall imageUrl={url} />
+              </div>
+            ))
+          ) : (
+            <div className="detail-slide">
+              <MediaPlaceholder label="фотографии товара" tall />
+            </div>
+          )}
+        </div>
 
         {/* Плавающие плашки-«якоря» поверх фото — ключевая деталь референса.
             Они информационные, кликов не подразумевают, поэтому не <button>. */}
@@ -1234,13 +1280,16 @@ function ListingPage() {
         </div>
 
         {photos.length > 1 ? (
-          <div className="detail-dots">
-            {photos.map((url, idx) => (
-              <button key={idx} type="button" aria-label={`Фото ${idx + 1}`}
-                className={`detail-dot ${photoIndex === idx ? 'is-active' : ''}`}
-                onClick={() => setPhotoIndex(idx)} />
-            ))}
-          </div>
+          <>
+            <div className="detail-dots">
+              {photos.map((url, idx) => (
+                <button key={idx} type="button" aria-label={`Фото ${idx + 1}`}
+                  className={`detail-dot ${photoIndex === idx ? 'is-active' : ''}`}
+                  onClick={() => goToPhoto(idx)} />
+              ))}
+            </div>
+            <div className="detail-counter">{photoIndex + 1} / {photos.length}</div>
+          </>
         ) : null}
       </div>
 
@@ -1818,7 +1867,28 @@ function ChatPage() {
   const [text, setText] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [mediaBusy, setMediaBusy] = useState(false)
+  const [recording, setRecording] = useState(false)
+  const recorderRef = useRef(null)
+  const chunksRef = useRef([])
   const bottomRef = useRef(null)
+
+  // Полная перезагрузка диалога. Функция была потеряна, а handleEdit и
+  // handleDelete её вызывали (.then(load)) — падало с ReferenceError.
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await api.getChat(chatId)
+      setViewerId(data.viewer_id)
+      setChatInfo({ user: data.other_name || data.other_anon || '', ad_title: data.ad_title || '' })
+      setMessages(data.messages || [])
+      setError('')
+    } catch {
+      setError('Не удалось открыть диалог.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -1903,29 +1973,78 @@ function ChatPage() {
     closeMenu()
   }
 
-  const handleAttach = async (event) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    setLoading(true)
+  /* Общий отправщик вложения: и файл из галереи, и записанное голосовое
+   * идут на /api/chat/{id}/media и возвращают готовое сообщение. */
+  const sendMedia = async (file) => {
+    setMediaBusy(true)
     setError('')
     try {
-      const isVideo = file.type.startsWith('video/')
-      const response = await api.uploadPhotos([file])
-      const url = response.urls?.[0]
-      if (url) {
-        await api.sendMessage(chatId, '', { media_url: url, media_type: isVideo ? 'video' : 'photo' })
-        const data = await api.pollChat(chatId, messages.length ? messages[messages.length - 1].id : 0)
-        if (data.messages?.length) setMessages((prev) => [...prev, ...data.messages])
-      } else {
-        setError('Не удалось загрузить файл.')
-      }
-    } catch {
-      setError('Не удалось прикрепить файл.')
+      const data = await api.sendChatMedia(chatId, file)
+      if (data.message) setMessages((prev) => [...prev, data.message])
+    } catch (err) {
+      setError(err?.detail ? `Не удалось прикрепить: ${err.detail}` : 'Не удалось прикрепить файл.')
     } finally {
-      setLoading(false)
-      event.target.value = ''
+      setMediaBusy(false)
     }
   }
+
+  const handleAttach = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    // Видео с телефона легко перевалить за лимит — предупредим до отправки
+    if (file.size > 25 * 1024 * 1024) {
+      setError('Файл больше 25 МБ.')
+      return
+    }
+    await sendMedia(file)
+  }
+
+  /* Голосовые: MediaRecorder. Кнопка работает как переключатель —
+   * нажал «запись», нажал ещё раз «отправить». */
+  const startRecording = async () => {
+    setError('')
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setError('Запись голосовых не поддерживается этим устройством.')
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const preferred = ['audio/webm', 'audio/ogg', 'audio/mp4']
+      const mime = preferred.find((m) => MediaRecorder.isTypeSupported?.(m)) || ''
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined)
+      chunksRef.current = []
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data) }
+      rec.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop())
+        setRecording(false)
+        const blob = new Blob(chunksRef.current, { type: rec.mimeType || 'audio/webm' })
+        // Отсекаем случайные нажатия: меньше ~1 КБ — это тишина
+        if (blob.size < 1024) {
+          setError('Запись слишком короткая.')
+          return
+        }
+        const ext = (blob.type.includes('ogg') && 'ogg') || (blob.type.includes('mp4') && 'm4a') || 'webm'
+        await sendMedia(new File([blob], `voice.${ext}`, { type: blob.type || 'audio/webm' }))
+      }
+      rec.start()
+      recorderRef.current = rec
+      setRecording(true)
+    } catch {
+      setError('Нет доступа к микрофону.')
+    }
+  }
+
+  const stopRecording = () => {
+    const rec = recorderRef.current
+    if (rec && rec.state !== 'inactive') rec.stop()
+  }
+
+  // Не бросаем запись, если пользователь ушёл с экрана
+  useEffect(() => () => {
+    const rec = recorderRef.current
+    if (rec && rec.state !== 'inactive') rec.stop()
+  }, [])
 
   return (
     <Screen padded={false}>
@@ -1957,7 +2076,29 @@ function ChatPage() {
                   onContextMenu={(e) => { e.preventDefault(); openMenu(message.id) }}
                 >
                   {chatMediaUrl(message) ? (
-                    <img className="bubble-media-img" src={resolveAssetUrl(chatMediaUrl(message))} alt="" />
+                    mediaKind(message) === 'video' ? (
+                      <video
+                        className="bubble-media-img"
+                        src={resolveAssetUrl(chatMediaUrl(message))}
+                        controls
+                        playsInline
+                        preload="metadata"
+                      />
+                    ) : mediaKind(message) === 'voice' ? (
+                      <audio
+                        className="bubble-audio"
+                        src={resolveAssetUrl(chatMediaUrl(message))}
+                        controls
+                        preload="metadata"
+                      />
+                    ) : (
+                      <img
+                        className="bubble-media-img"
+                        src={resolveAssetUrl(chatMediaUrl(message))}
+                        alt=""
+                        loading="lazy"
+                      />
+                    )
                   ) : null}
                   {message.text ? <span>{message.text}</span> : null}
                   <span className="bubble-time">{shortTime(message.created_at)}</span>
@@ -1980,21 +2121,33 @@ function ChatPage() {
         </div>
         <div className="chat-input-wrap">
           <div className="chat-input glass-card">
-            <label className="attach-btn">
+            <label className="attach-btn" title="Фото или видео">
               <Icon name="image" />
               <input type="file" accept="image/*,video/*" onChange={handleAttach} hidden />
             </label>
+            <button
+              className={`mic-btn ${recording ? 'is-recording' : ''}`}
+              type="button"
+              onClick={recording ? stopRecording : startRecording}
+              disabled={mediaBusy}
+              aria-label={recording ? 'Остановить запись' : 'Записать голосовое'}
+              title={recording ? 'Остановить и отправить' : 'Голосовое сообщение'}
+            >
+              <Icon name={recording ? 'check' : 'mic'} />
+            </button>
             <input
               className="chat-field"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSend() }}
-              placeholder="Сообщение…"
+              placeholder={recording ? 'Идёт запись…' : 'Сообщение…'}
+              disabled={recording}
             />
             <button className="send-btn" type="button" onClick={handleSend} aria-label="Отправить">
               <Icon name="send" />
             </button>
           </div>
+          {mediaBusy ? <div className="chat-media-busy">Отправляем вложение…</div> : null}
         </div>
       </div>
     </Screen>
@@ -2069,11 +2222,12 @@ function ProfilePage() {
         )}
         <strong className="profile-id">{profile?.id || tgUser?.username || 'Профиль'}</strong>
         {profile?.verified ? <div className="badge mt-8">Проверен</div> : null}
-        <div className="product-city mt-8">
-          {profile ? `${profile.active_ads || 0} объявлений · ${profile.favorites || 0} в избранном` : 'Откройте приложение через Telegram'}
-        </div>
+        {!profile ? <div className="product-city mt-8">Откройте приложение через Telegram</div> : null}
         <div className="telegram-note">{tgUser?.first_name || 'Гость'} · {backendMode === 'online' ? 'online' : backendMode}</div>
       </div>
+      {/* Статистика продавца переехала сюда с главной: в профиле она уместнее,
+          и здесь больше нет дублирующей строки с теми же цифрами. */}
+      <SellerStats profile={profile} />
       {!profile ? <ErrorBlock text={`Профиль недоступен (initData: ${getInitData()?.length || 0} симв.). Откройте Mini App кнопкой бота, не прямой ссылкой.`} /> : null}
       <div className="list-stack mt-14">
         <Link to="/my" className="setting-row glass-card"><span>Мои объявления</span></Link>

@@ -389,6 +389,48 @@ input, textarea, select { font-family: inherit; }
   min-height: 380px;
 }
 
+/* Свайпаемая лента фото: горизонтальный скролл со снапом по кадру.
+   Нативный скролл даёт нормальный свайп на телефоне (и трекпад/мышь на ПК). */
+.detail-gallery {
+  display: flex;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  touch-action: pan-x;
+}
+.detail-gallery::-webkit-scrollbar { display: none; }
+.detail-slide {
+  flex: 0 0 100%;
+  width: 100%;
+  height: 380px;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+/* Кадр фиксированной высоты: разные по пропорциям фото выглядят одинаково */
+.detail-slide .media-image,
+.detail-slide .media-placeholder {
+  height: 100%;
+  min-height: 0;
+  border-radius: 0;
+}
+/* Счётчик кадров — виден, даже когда точки перекрыты плашками */
+.detail-counter {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 3;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(23,23,26,.62);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: .02em;
+  backdrop-filter: blur(6px);
+}
+
 /* Плавающие плашки-«якоря» поверх фото — как в референсе */
 .hero-pins {
   position: absolute;
@@ -1565,14 +1607,16 @@ input, textarea, select { font-family: inherit; }
 
 /* ── Экран диалога ───────────────────────────────────────────────────── */
 .chat-screen {
-  /* Фиксированная полноэкранная панель в границах «телефонной» колонки:
-     иначе .app-frame с padding 100px снизу делал страницу выше окна, и
-     scrollIntoView() уводил первое сообщение за верхний край. */
+  /* Фиксированная полноэкранная панель в границах «телефонной» колонки.
+     Центрируем через left/right + margin:auto, а НЕ через transform:
+     анимация .screen > * (slideUp) приоритетнее обычных объявлений и
+     затирала translateX(-50%) — чат уезжал вправо и обрезался по краю. */
   position: fixed;
   top: 0;
   bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin: 0 auto;
   width: 100%;
   max-width: 430px;
   z-index: 30;
@@ -1580,6 +1624,7 @@ input, textarea, select { font-family: inherit; }
   flex-direction: column;
   background: var(--bg);
   overflow: hidden;
+  animation: none; /* полноэкранной панели анимация появления не нужна */
 }
 /* В диалоге нижней навигации нет — запас под док не нужен */
 body:has(.chat-screen) .app-frame { padding-bottom: 0; }
@@ -1684,6 +1729,46 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
   cursor: pointer;
 }
 .attach-btn .icon-svg { width: 20px; height: 20px; }
+
+/* Кнопка записи голосового: тап — начать, повторный — отправить */
+.mic-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  transition: all .18s ease;
+}
+.mic-btn .icon-svg { width: 19px; height: 19px; }
+.mic-btn:disabled { opacity: .5; }
+.mic-btn.is-recording {
+  background: var(--danger);
+  color: #fff;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
+  50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+}
+
+/* Аудио в пузыре: не растягиваем шире, чем нужно */
+.bubble-audio {
+  display: block;
+  width: 210px;
+  max-width: 100%;
+  height: 36px;
+  margin: 2px 0 4px;
+}
+.chat-media-busy {
+  margin: 0 16px;
+  padding: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
 
 /* ── Онбординг ───────────────────────────────────────────────────────── */
 .onboarding {
@@ -1909,10 +1994,12 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
  * поэтому длинная подпись слева не конфликтует с иллюстрацией. */
 .cat-tile-art {
   position: absolute;
-  right: -6px;
-  bottom: -6px;
-  width: 124px;
-  height: 100px;
+  right: -4px;
+  bottom: -4px;
+  /* Уменьшено с 124x100: с готовыми PNG иллюстрация наезжала на подпись,
+     которая у длинных категорий занимает три строки. */
+  width: 104px;
+  height: 88px;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
