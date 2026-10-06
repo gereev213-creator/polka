@@ -231,4 +231,14 @@ export const api = {
   },
   viewStory: (storyId) => request(`/api/stories/${storyId}/view`, { method: 'POST' }),
   deleteStory: (storyId) => request(`/api/stories/${storyId}`, { method: 'DELETE' }),
+
+  // ── Аукционы ─────────────────────────────────────────────────────────────
+  getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
+  getBids: (adId) => request(`/api/ads/${adId}/bids`),
+  placeBid: (adId, amount) => request(`/api/ads/${adId}/bid`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  }),
+  buyNow: (adId) => request(`/api/ads/${adId}/buy-now`, { method: 'POST' }),
+  getMyBids: () => request('/api/my-bids'),
 }

@@ -39,6 +39,15 @@ const iconPaths = {
   ruler: [<path key="1" d="M3.2 15.6 15.6 3.2 20.8 8.4 8.4 20.8z" />, <path key="2" d="m7.2 11.6 2 2M10.2 8.6l2 2M13.2 5.6l2 2" />],
   clock: [<circle key="1" cx="12" cy="12" r="8.5" />, <path key="2" d="M12 7.5V12l3.2 2" />],
   check: [<path key="1" d="m4.8 12.6 4.9 4.9L19.2 6.9" />],
+  /* Молоток аукциона: головка ромбом, рукоять и подставка */
+  gavel: [
+    <path key="1" d="M12.8 2.8 21.2 11.2" />,
+    <path key="2" d="M9.8 5.8 18.2 14.2" />,
+    <path key="3" d="M12.8 2.8 9.8 5.8" />,
+    <path key="4" d="M21.2 11.2 18.2 14.2" />,
+    <path key="5" d="M11.5 13.5 4.2 20.6" />,
+    <path key="6" d="M2.6 21.4h8.2" />,
+  ],
   mic: [<rect key="1" x="9" y="3" width="6" height="11" rx="3" />, <path key="2" d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />, <path key="3" d="M12 18v3" />],
 }
 
@@ -48,6 +57,9 @@ const STATUS_LABELS = {
   sold: 'Проданные',
   rejected: 'Отклонённые',
   inactive: 'Снятые',
+  // Итоги аукциона
+  ended: 'Лот продан',
+  ended_unsold: 'Торги без ставок',
 }
 
 function useApp() {
@@ -216,6 +228,40 @@ async function compressImage(file, maxSide = 1600, quality = 0.85) {
 function isMediaMessage(message) {
   const kind = message?.media_type || message?.msg_type || ''
   return Boolean(kind) && kind !== 'text'
+}
+
+/* Платформа режет тело запроса примерно на 10 МБ и отвечает
+ * 413 {"error":"payload too large"} — замерено на живом сервисе.
+ * Поэтому фото сжимаем на клиенте перед отправкой, как это уже сделано
+ * для объявлений. Видео перекодировать в браузере нельзя, поэтому для него
+ * только проверяем размер и честно говорим об ограничении. */
+const UPLOAD_LIMIT_MB = 9
+const UPLOAD_LIMIT_BYTES = UPLOAD_LIMIT_MB * 1024 * 1024
+
+async function prepareUpload(file) {
+  if (!file) return file
+  let out = file
+  if (String(file.type || '').startsWith('image/')) {
+    out = await compressImage(file, 1600, 0.85)
+    // Если и после сжатия тяжело — жмём сильнее (панорамы, скриншоты)
+    if (out.size > UPLOAD_LIMIT_BYTES) out = await compressImage(file, 1280, 0.7)
+  }
+  if (out.size > UPLOAD_LIMIT_BYTES) {
+    const error = new Error('too_large')
+    error.status = 413
+    error.detail = `файл больше ${UPLOAD_LIMIT_MB} МБ`
+    throw error
+  }
+  return out
+}
+
+/* Человеческий текст вместо «payload too large» */
+function uploadErrorText(err) {
+  const detail = String(err?.detail || err?.message || '')
+  if (err?.status === 413 || /payload too large/i.test(detail)) {
+    return `Файл слишком большой для загрузки. Выберите фото меньшего размера или короткое видео (до ${UPLOAD_LIMIT_MB} МБ).`
+  }
+  return detail ? `Не удалось: ${detail}` : 'Не удалось отправить.'
 }
 
 /* Тип вложения для отрисовки: photo | video | voice.
@@ -793,6 +839,248 @@ function StoryViewer({ authors, startIndex, onClose, onSeen }) {
   )
 }
 
+/* ══════════════════════════════════════════════════════════════════════════
+   АУКЦИОНЫ
+   Сервер отдаёт остаток времени в секундах — дальше считаем сами, чтобы
+   таймер не зависел от расхождения часов на устройстве.
+   ══════════════════════════════════════════════════════════════════════════ */
+const AUCTION_URGENT_SEC = 300
+
+function formatLeft(seconds) {
+  const total = Math.max(0, Math.floor(seconds || 0))
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const mins = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  if (days > 0) return `${days} д ${hours} ч`
+  if (hours > 0) return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+  return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+function Countdown({ seconds, className = '', doneText = 'Завершён' }) {
+  const [left, setLeft] = useState(() => Math.max(0, Number(seconds) || 0))
+  useEffect(() => {
+    setLeft(Math.max(0, Number(seconds) || 0))
+    const timer = setInterval(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000)
+    return () => clearInterval(timer)
+  }, [seconds])
+  if (left <= 0) return <span className={className}>{doneText}</span>
+  const urgent = left <= AUCTION_URGENT_SEC
+  return (
+    <span className={`${className} ${urgent ? 'is-urgent' : ''}`.trim()}>
+      <Icon name="clock" />{formatLeft(left)}
+    </span>
+  )
+}
+
+function auctionPriceText(item) {
+  const hasBids = Number(item?.bids_count || 0) > 0
+  const value = hasBids ? Number(item.current_bid || 0) : Number(item.start_price || 0)
+  const label = hasBids ? 'Текущая ставка' : 'Старт'
+  return { label, value: `${value.toLocaleString('ru-RU')} ₽`, raw: value }
+}
+
+/* Шторка ставки — общая для ленты лотов и карточки товара */
+function BidSheet({ item, onClose, onDone }) {
+  const min = Number(item?.min_next_bid || 0)
+  const [amount, setAmount] = useState(String(min))
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async () => {
+    const value = Number(String(amount).replace(/[^0-9]/g, ''))
+    if (!value) { setError('Введите сумму.'); return }
+    if (value < min) { setError(`Минимум ${min.toLocaleString('ru-RU')} ₽`); return }
+    setBusy(true)
+    setError('')
+    try {
+      const data = await api.placeBid(item.id, value)
+      onDone?.(data)
+      onClose()
+    } catch (err) {
+      const code = err?.detail || err?.message || ''
+      if (code === 'too_low') setError(`Ставка уже выросла. Минимум ${Number(err.minimum || min).toLocaleString('ru-RU')} ₽`)
+      else if (code === 'own_lot') setError('Нельзя ставить на свой лот.')
+      else if (code === 'ended') setError('Торги уже завершены.')
+      else if (code === 'use_buy_now') setError('Сумма дошла до цены выкупа — используйте «Купить сразу».')
+      else setError('Не удалось сделать ставку.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="sheet-backdrop" onClick={onClose}>
+      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="sheet-grip" />
+        <strong className="sheet-title">Ставка за лот</strong>
+        <div className="sheet-lot">{item?.title}</div>
+        <div className="sheet-row">
+          <span>Минимум</span>
+          <b>{min.toLocaleString('ru-RU')} ₽</b>
+        </div>
+        {item?.buy_now_price ? (
+          <div className="sheet-row">
+            <span>Купить сразу</span>
+            <b>{Number(item.buy_now_price).toLocaleString('ru-RU')} ₽</b>
+          </div>
+        ) : null}
+        <div className="bid-input-row">
+          <button type="button" className="bid-step" onClick={() => setAmount(String(Math.max(min, Number(amount || 0) - Number(item?.bid_step || 0))))}>−</button>
+          <input
+            className="text-input glass-card bid-input"
+            value={amount}
+            inputMode="numeric"
+            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
+          />
+          <button type="button" className="bid-step" onClick={() => setAmount(String(Number(amount || 0) + Number(item?.bid_step || 0)))}>+</button>
+        </div>
+        {error ? <div className="status-line error">{error}</div> : null}
+        <button type="button" className="cta-primary" disabled={busy} onClick={submit}>
+          {busy ? 'Отправляем…' : 'Сделать ставку'}
+        </button>
+        <p className="story-hint">Ставка обязывает: отменить её нельзя.</p>
+      </div>
+    </div>
+  )
+}
+
+/* Карточка лота в списке */
+function AuctionCard({ item, onBid }) {
+  const price = auctionPriceText(item)
+  const bids = Number(item.bids_count || 0)
+  return (
+    <div className="auction-card glass-card">
+      <Link to={`/listing/${item.id}`} className="auction-thumb">
+        <MediaPlaceholder imageUrl={firstPhoto(item)} />
+      </Link>
+      <div className="auction-body">
+        <Link to={`/listing/${item.id}`} className="auction-title">{item.title}</Link>
+        <div className="auction-meta">
+          <strong>{price.value}</strong>
+          <span>{bids ? `${bids} ${bids === 1 ? 'ставка' : bids < 5 ? 'ставки' : 'ставок'}` : 'ставок нет'}</span>
+        </div>
+        <div className="auction-foot">
+          <Countdown seconds={item.time_left} className="auction-timer" />
+          {item.is_owner ? (
+            <span className="auction-own">Ваш лот</span>
+          ) : (
+            <button type="button" className="auction-bid-btn" onClick={() => onBid(item)}>
+              Ставка
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const BID_STATE_LABELS = {
+  leading: { text: 'Вы лидируете', tone: 'is-ok' },
+  outbid: { text: 'Ставку перебили', tone: 'is-warn' },
+  won: { text: 'Вы выиграли', tone: 'is-ok' },
+  lost: { text: 'Проиграна', tone: 'is-muted' },
+}
+
+function AuctionsPage() {
+  const [tab, setTab] = useState('lots')
+  const [items, setItems] = useState([])
+  const [myBids, setMyBids] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [sort, setSort] = useState('ending')
+  const [bidItem, setBidItem] = useState(null)
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const [lots, bids] = await Promise.all([
+        api.getAuctions(sort),
+        api.getMyBids().catch(() => ({ items: [] })),
+      ])
+      setItems(lots.items || [])
+      setMyBids(bids.items || [])
+    } catch {
+      setError('Не удалось загрузить аукционы.')
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sort])
+
+  const onBidDone = (data) => {
+    if (!data?.ad) { load(); return }
+    setItems((prev) => prev.map((x) => (x.id === data.ad.id ? data.ad : x)))
+    if (data.ad.time_left <= 0) load()
+  }
+
+  return (
+    <Screen>
+      <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+      <div className="page-title">Аукционы</div>
+      <div className="segmented">
+        <button type="button" className={tab === 'lots' ? 'is-active' : ''} onClick={() => setTab('lots')}>
+          Лоты
+        </button>
+        <button type="button" className={tab === 'bids' ? 'is-active' : ''} onClick={() => setTab('bids')}>
+          Мои ставки{myBids.length ? ` · ${myBids.length}` : ''}
+        </button>
+      </div>
+
+      {tab === 'lots' ? (
+        <>
+          <div className="auction-sort">
+            <button type="button" className={sort === 'ending' ? 'is-active' : ''} onClick={() => setSort('ending')}>
+              Скоро закончатся
+            </button>
+            <button type="button" className={sort === 'new' ? 'is-active' : ''} onClick={() => setSort('new')}>
+              Новые
+            </button>
+          </div>
+          {error ? <ErrorBlock text={error} onRetry={load} /> : null}
+          {loading ? <div className="muted-line">Загружаем лоты…</div> : null}
+          {!loading && !error && !items.length ? (
+            <EmptyBlock text="Активных лотов пока нет. Выставьте первый — переключатель «Аукцион» в форме объявления." />
+          ) : null}
+          <div className="list-stack">
+            {items.map((item) => <AuctionCard key={item.id} item={item} onBid={setBidItem} />)}
+          </div>
+        </>
+      ) : (
+        <>
+          {!myBids.length ? <EmptyBlock text="Вы ещё не делали ставок." /> : null}
+          <div className="list-stack">
+            {myBids.map((b) => {
+              const state = BID_STATE_LABELS[b.state] || BID_STATE_LABELS.lost
+              return (
+                <Link to={`/listing/${b.ad_id}`} key={`${b.ad_id}-${b.created_at}`} className="mybid-row glass-card">
+                  <div className="mybid-thumb"><MediaPlaceholder imageUrl={b.photo} /></div>
+                  <div className="mybid-body">
+                    <strong>{b.title}</strong>
+                    <span className="mybid-amount">Моя ставка {Number(b.amount).toLocaleString('ru-RU')} ₽</span>
+                    <span className={`mybid-state ${state.tone}`}>{state.text}</span>
+                  </div>
+                  {b.ends_at ? <Countdown seconds={b.time_left} className="auction-timer" /> : null}
+                </Link>
+              )
+            })}
+          </div>
+        </>
+      )}
+
+      {bidItem ? (
+        <BidSheet item={bidItem} onClose={() => setBidItem(null)} onDone={onBidDone} />
+      ) : null}
+    </Screen>
+  )
+}
+
 /* Экран создания истории: фото или видео на 24 часа, с пре-модерацией */
 function StoryCreatePage() {
   const navigate = useNavigate()
@@ -800,6 +1088,7 @@ function StoryCreatePage() {
   const [preview, setPreview] = useState('')
   const [isVideo, setIsVideo] = useState(false)
   const [caption, setCaption] = useState('')
+  const [captionFocused, setCaptionFocused] = useState(false)
   const [ads, setAds] = useState([])
   const [adId, setAdId] = useState('')
   const [busy, setBusy] = useState(false)
@@ -821,8 +1110,10 @@ function StoryCreatePage() {
     const chosen = event.target.files?.[0]
     if (!chosen) return
     const video = chosen.type.startsWith('video/')
-    if (video && chosen.size > 25 * 1024 * 1024) { setError('Видео больше 25 МБ.'); return }
-    if (!video && chosen.size > 10 * 1024 * 1024) { setError('Фото больше 10 МБ.'); return }
+    if (video && chosen.size > UPLOAD_LIMIT_BYTES) {
+      setError(`Видео больше ${UPLOAD_LIMIT_MB} МБ — выберите короче.`)
+      return
+    }
     if (preview) URL.revokeObjectURL(preview)
     setPreview(URL.createObjectURL(chosen))
     setIsVideo(video)
@@ -835,10 +1126,12 @@ function StoryCreatePage() {
     setBusy(true)
     setError('')
     try {
-      await api.createStory(file, { caption: caption.trim(), adId: adId || null })
+      // Фото сжимаем перед отправкой: сырое с телефона не проходит по лимиту
+      const payload = await prepareUpload(file)
+      await api.createStory(payload, { caption: caption.trim(), adId: adId || null })
       setSent(true)
     } catch (err) {
-      setError(err?.detail ? `Не удалось: ${err.detail}` : 'Не удалось отправить историю.')
+      setError(uploadErrorText(err))
     } finally {
       setBusy(false)
     }
@@ -872,7 +1165,7 @@ function StoryCreatePage() {
           <div className="story-drop-empty">
             <div className="story-drop-icon"><Icon name="image" /></div>
             <strong>Выберите фото или видео</strong>
-            <span>Фото до 10 МБ, видео до 25 МБ и 30 секунд</span>
+            <span>Фото сожмём автоматически, видео — до {UPLOAD_LIMIT_MB} МБ</span>
           </div>
         )}
         <input type="file" accept="image/*,video/*" onChange={pick} hidden />
@@ -891,9 +1184,11 @@ function StoryCreatePage() {
             className="text-input glass-card"
             value={caption}
             onChange={(e) => setCaption(e.target.value.slice(0, 200))}
+            onFocus={() => setCaptionFocused(true)}
+            onBlur={() => setCaptionFocused(false)}
             placeholder="Подпись (необязательно)"
           />
-          <FieldHint text="Например: сегодня скидка" visible={!!caption} />
+          <FieldHint text="Например: сегодня скидка" visible={captionFocused} />
         </div>
 
         {ads.length ? (
@@ -1479,6 +1774,9 @@ function ListingPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState('')
   const [photoIndex, setPhotoIndex] = useState(0)
+  const [bidOpen, setBidOpen] = useState(false)
+  const [bidsOpen, setBidsOpen] = useState(false)
+  const [bidList, setBidList] = useState([])
   const galleryRef = useRef(null)
 
   const load = async () => {
@@ -1517,6 +1815,32 @@ function ListingPage() {
   }, [listingId])
 
   const isOwner = Boolean(item?.is_owner)
+  const isAuction = item?.sale_type === 'auction'
+
+  const loadBids = async () => {
+    try {
+      const data = await api.getBids(listingId)
+      setBidList(data.items || [])
+    } catch {
+      setBidList([])
+    }
+  }
+
+  const handleBuyNow = async () => {
+    const price = Number(item?.buy_now_price || 0)
+    if (!window.confirm(`Выкупить лот сразу за ${price.toLocaleString('ru-RU')} ₽?`)) return
+    setActionLoading('buy')
+    try {
+      const data = await api.buyNow(listingId)
+      setItem(data.ad)
+      setError('')
+    } catch (err) {
+      const code = err?.detail || err?.message
+      setError(code === 'own_lot' ? 'Это ваш собственный лот.' : 'Не удалось выкупить лот.')
+    } finally {
+      setActionLoading('')
+    }
+  }
 
   /* Фото для галереи. Основной источник — photo_urls, но если бэкенд его не
    * заполнил, берём сырые photos и приводим к URL через photoDisplayUrl
@@ -1626,7 +1950,7 @@ function ListingPage() {
           <div className="hero-pin" style={{ top: '11%' }}>
             <span className="hero-pin-anchor" />
             <span className="hero-pin-pill">
-              <span className="hero-pin-label">Цена</span>
+              <span className="hero-pin-label">{isAuction ? 'Ставка' : 'Цена'}</span>
               <span className="hero-pin-value">{priceText(item)}</span>
             </span>
             <span className="hero-pin-arrow"><Icon name="back" /></span>
@@ -1679,6 +2003,61 @@ function ListingPage() {
         ) : null}
       </div>
 
+      {/* Аукционный блок — сразу под заголовком: здесь важнее всего
+          текущая ставка и сколько осталось времени */}
+      {isAuction ? (
+        <div className="auction-panel glass-card">
+          <div className="auction-panel-top">
+            <div className="auction-panel-main">
+              <span className="auction-panel-label">
+                {item.bids_count ? 'Текущая ставка' : 'Стартовая цена'}
+              </span>
+              <strong className="auction-panel-price">
+                {Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽
+              </strong>
+              <span className="auction-panel-sub">
+                {item.bids_count
+                  ? `${item.bids_count} ${item.bids_count === 1 ? 'ставка' : item.bids_count < 5 ? 'ставки' : 'ставок'} · шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`
+                  : `шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`}
+              </span>
+            </div>
+            <div className="auction-panel-timer">
+              <span className="auction-panel-label">{item.time_left > 0 ? 'До конца' : 'Статус'}</span>
+              <Countdown seconds={item.time_left} className="auction-timer big"
+                doneText={item.winner_id ? 'Завершён' : 'Без ставок'} />
+            </div>
+          </div>
+
+          {item.buy_now_price && item.time_left > 0 ? (
+            <div className="auction-buynow">
+              <Icon name="sparkles" />
+              Можно забрать сразу за {Number(item.buy_now_price).toLocaleString('ru-RU')} ₽
+            </div>
+          ) : null}
+          {item.status === 'ended' && item.is_winner ? (
+            <div className="auction-result is-ok">
+              <Icon name="check" /> Вы выиграли этот лот. Напишите продавцу, чтобы договориться.
+            </div>
+          ) : null}
+          {isOwner && item.bids_count ? (
+            <button type="button" className="auction-history-toggle"
+              onClick={() => { setBidsOpen((v) => !v); if (!bidsOpen) loadBids() }}>
+              {bidsOpen ? 'Скрыть ставки' : `Показать ставки (${item.bids_count})`}
+            </button>
+          ) : null}
+          {bidsOpen ? (
+            <div className="auction-history">
+              {bidList.length ? bidList.map((b, i) => (
+                <div className="auction-history-row" key={`${b.created_at}-${i}`}>
+                  <span>{b.is_me ? 'Ваша ставка' : b.name}</span>
+                  <b>{Number(b.amount).toLocaleString('ru-RU')} ₽</b>
+                </div>
+              )) : <div className="muted-line">Ставок пока нет.</div>}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Чипы-характеристики — как Weather / Temp / Event в референсе */}
       <div className="spec-chips">
         {item.condition ? (
@@ -1730,10 +2109,23 @@ function ListingPage() {
           </>
         ) : (
           <>
-            <button className="cta-primary" type="button" onClick={handleStartChat}>
-              <Icon name="chat" />
-              {chatLoading ? 'Открываем…' : 'Написать'}
-            </button>
+            {isAuction && item.time_left > 0 ? (
+              <button className="cta-primary" type="button" onClick={() => setBidOpen(true)}>
+                <Icon name="gavel" />
+                Сделать ставку
+              </button>
+            ) : (
+              <button className="cta-primary" type="button" onClick={handleStartChat}>
+                <Icon name="chat" />
+                {chatLoading ? 'Открываем…' : 'Написать'}
+              </button>
+            )}
+            {isAuction && item.time_left > 0 && item.buy_now_price ? (
+              <button className="cta-dark" type="button" onClick={handleBuyNow}
+                disabled={actionLoading === 'buy'}>
+                {actionLoading === 'buy' ? '…' : 'Купить'}
+              </button>
+            ) : null}
             <button
               className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
               type="button"
@@ -1745,6 +2137,12 @@ function ListingPage() {
             <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
               <Icon name="share" />
             </button>
+            {isAuction && item.time_left > 0 ? (
+              <button className="cta-round" type="button" onClick={handleStartChat}
+                aria-label="Написать продавцу">
+                <Icon name="chat" />
+              </button>
+            ) : null}
           </>
         )}
       </div>
@@ -1759,6 +2157,13 @@ function ListingPage() {
         <div className="setting-row glass-card mt-12">
           <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>
         </div>
+      ) : null}
+      {bidOpen && isAuction ? (
+        <BidSheet
+          item={item}
+          onClose={() => setBidOpen(false)}
+          onDone={(data) => { if (data?.ad) setItem(data.ad) }}
+        />
       ) : null}
     </Screen>
   )
@@ -1826,6 +2231,12 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
     delivery: initial?.delivery || '',
     contact_info: initial?.contact_info || '',
     photos: initial?.photos || [],
+    // Аукцион: по умолчанию обычная продажа
+    saleType: initial?.sale_type === 'auction' ? 'auction' : 'sale',
+    startPrice: initial?.start_price != null ? String(initial.start_price) : '',
+    bidStep: initial?.bid_step != null ? String(initial.bid_step) : '',
+    buyNowPrice: initial?.buy_now_price != null ? String(initial.buy_now_price) : '',
+    auctionDays: initial?.auction_days || 3,
     step: 1,
   }))
   const [cities, setCities] = useState([])
@@ -1881,7 +2292,9 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
     form.step === 1 ? !!form.category :
     form.step === 2 ? form.photos.length > 0 :
     form.step === 3 ? form.title.trim().length >= 3 && form.description.trim() :
-    form.step === 4 ? form.price && form.city.trim() :
+    form.step === 4 ? (form.saleType === 'auction'
+      ? form.startPrice && form.city.trim()
+      : form.price && form.city.trim()) :
     true
 
   const nextStep = () => { if (form.step < totalSteps && canNext) update('step', form.step + 1) }
@@ -1958,10 +2371,55 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
 
       {form.step === 4 && (
         <div className="form-stack">
-          <div className="field-wrap">
-            <input className="text-input glass-card" value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => setFocusedField('')} placeholder="Цена, ₽" />
-            <FieldHint text="Укажите цену в рублях" visible={focusedField === 'price'} />
+          {/* Режим продажи: обычная цена или аукцион. Аукцион — то же
+              объявление, просто с торгами, поэтому переключатель здесь. */}
+          <div className="segmented">
+            <button type="button" className={form.saleType !== 'auction' ? 'is-active' : ''}
+              onClick={() => update('saleType', 'sale')}>Продажа</button>
+            <button type="button" className={form.saleType === 'auction' ? 'is-active' : ''}
+              onClick={() => update('saleType', 'auction')}>Аукцион</button>
           </div>
+
+          {form.saleType === 'auction' ? (
+            <>
+              <div className="field-wrap">
+                <input className="text-input glass-card" value={form.startPrice} inputMode="numeric"
+                  onChange={(e) => update('startPrice', e.target.value.replace(/[^0-9]/g, ''))}
+                  onFocus={() => setFocusedField('start')} onBlur={() => setFocusedField('')}
+                  placeholder="Стартовая цена, ₽" />
+                <FieldHint text="Первая ставка не может быть ниже" visible={focusedField === 'start'} />
+              </div>
+              <div className="field-wrap">
+                <input className="text-input glass-card" value={form.bidStep} inputMode="numeric"
+                  onChange={(e) => update('bidStep', e.target.value.replace(/[^0-9]/g, ''))}
+                  onFocus={() => setFocusedField('step')} onBlur={() => setFocusedField('')}
+                  placeholder="Шаг ставки, ₽ (необязательно)" />
+                <FieldHint text="Если пусто — 5% от стартовой" visible={focusedField === 'step'} />
+              </div>
+              <div className="field-wrap">
+                <input className="text-input glass-card" value={form.buyNowPrice} inputMode="numeric"
+                  onChange={(e) => update('buyNowPrice', e.target.value.replace(/[^0-9]/g, ''))}
+                  onFocus={() => setFocusedField('buynow')} onBlur={() => setFocusedField('')}
+                  placeholder="Купить сразу, ₽ (необязательно)" />
+                <FieldHint text="Цена, по которой лот заберут немедленно" visible={focusedField === 'buynow'} />
+              </div>
+              <div className="field-label-row">Срок торгов</div>
+              <div className="auction-sort">
+                {[1, 3, 7].map((d) => (
+                  <button key={d} type="button" className={form.auctionDays === d ? 'is-active' : ''}
+                    onClick={() => update('auctionDays', d)}>
+                    {d === 1 ? '1 день' : `${d} дня`.replace('7 дня', '7 дней')}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="field-wrap">
+              <input className="text-input glass-card" value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => setFocusedField('')} placeholder="Цена, ₽" />
+              <FieldHint text="Укажите цену в рублях" visible={focusedField === 'price'} />
+            </div>
+          )}
+
           <div className="field-wrap">
             <input className="text-input glass-card" value={form.city} onChange={(e) => update('city', e.target.value)} onFocus={() => setFocusedField('city')} onBlur={() => setFocusedField('')} placeholder="Город" list="ad-city-options" />
             <FieldHint text="Начните вводить — появятся подсказки" visible={focusedField === 'city'} />
@@ -1979,7 +2437,11 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
           <div className="preview-card glass-card">
             <div className="preview-media"><MediaPlaceholder imageUrl={photoDisplayUrl(form.photos[0])} /></div>
             <div className="preview-info">
-              <div className="product-price">{form.price} ₽</div>
+              <div className="product-price">
+                {form.saleType === 'auction'
+                  ? `от ${form.startPrice || 0} ₽ · аукцион`
+                  : `${form.price} ₽`}
+              </div>
               <div className="row-title">{form.title}</div>
               <div className="product-city">{form.city}{form.condition ? ` · ${form.condition}` : ''}</div>
             </div>
@@ -2018,7 +2480,16 @@ function CreatePage() {
     setStatus('saving')
     setError('')
     try {
-      const response = await api.createListing(form)
+      // Аукционные поля уходят в snake_case: бэкенд ждёт именно такие имена
+      const payload = {
+        ...form,
+        sale_type: form.saleType === 'auction' ? 'auction' : 'sale',
+        start_price: form.startPrice,
+        bid_step: form.bidStep,
+        buy_now_price: form.buyNowPrice,
+        auction_days: form.auctionDays,
+      }
+      const response = await api.createListing(payload)
       setCreated(response.ad)
       setStatus('success')
     } catch (err) {
@@ -2353,10 +2824,13 @@ function ChatPage() {
     setMediaBusy(true)
     setError('')
     try {
-      const data = await api.sendChatMedia(chatId, file)
+      // Та же причина, что и в историях: сырое фото с телефона не проходит
+      // по лимиту тела запроса, поэтому сжимаем перед отправкой
+      const payload = await prepareUpload(file)
+      const data = await api.sendChatMedia(chatId, payload)
       if (data.message) setMessages((prev) => [...prev, data.message])
     } catch (err) {
-      setError(err?.detail ? `Не удалось прикрепить: ${err.detail}` : 'Не удалось прикрепить файл.')
+      setError(uploadErrorText(err))
     } finally {
       setMediaBusy(false)
     }
@@ -2366,9 +2840,8 @@ function ChatPage() {
     const file = event.target.files?.[0]
     event.target.value = ''
     if (!file) return
-    // Видео с телефона легко перевалить за лимит — предупредим до отправки
-    if (file.size > 25 * 1024 * 1024) {
-      setError('Файл больше 25 МБ.')
+    if (file.size > UPLOAD_LIMIT_BYTES && !String(file.type || '').startsWith('image/')) {
+      setError(`Файл больше ${UPLOAD_LIMIT_MB} МБ — видео можно только короткое.`)
       return
     }
     await sendMedia(file)
@@ -2646,6 +3119,7 @@ function Layout() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/" element={<FeedPage />} />
         <Route path="/search" element={<SearchPage />} />
+        <Route path="/auctions" element={<AuctionsPage />} />
         <Route path="/listing/:id" element={<ListingPage />} />
         <Route path="/create" element={<CreatePage />} />
         <Route path="/story/new" element={<StoryCreatePage />} />
@@ -2666,6 +3140,7 @@ function BottomNav() {
   const items = [
     { icon: 'home', to: '/', label: 'Главная' },
     { icon: 'chat', to: '/chats', label: 'Сообщения' },
+    { icon: 'gavel', to: '/auctions', label: 'Аукционы' },
     { icon: 'bookmark', to: '/favorites', label: 'Избранное' },
     { icon: 'search', to: '/search', label: 'Поиск' },
   ]
@@ -2689,9 +3164,8 @@ function BottomNav() {
         <Icon name="plus" />
       </NavLink>
       {items.slice(2).map(renderItem)}
-      <NavLink to="/profile" className="profile-bubble">
-        <span>{(useApp().tgUser?.first_name || 'П')[0]?.toUpperCase()}</span>
-      </NavLink>
+      {/* Аватар профиля убран из дока: он и так доступен по иконке в шапке,
+          а освободившееся место заняла вкладка «Аукционы». */}
     </nav>
   )
 }

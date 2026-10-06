@@ -2518,6 +2518,43 @@ class Database:
             cursor.execute("ALTER TABLE ads ADD COLUMN search_index TEXT")
         except Exception:
             pass
+        # ── Аукционы ────────────────────────────────────────────────────────
+        # Аукцион — это объявление с особым режимом продажи: переиспользуем
+        # фото, категорию, город, модерацию, избранное и чат. price у аукциона
+        # хранит ТЕКУЩУЮ цену (стартовую, затем лучшую ставку), поэтому
+        # существующая отрисовка карточек работает без изменений.
+        for _auction_sql in [
+            "ALTER TABLE ads ADD COLUMN sale_type TEXT DEFAULT 'sale'",
+            "ALTER TABLE ads ADD COLUMN start_price INTEGER",
+            "ALTER TABLE ads ADD COLUMN bid_step INTEGER",
+            "ALTER TABLE ads ADD COLUMN buy_now_price INTEGER",
+            "ALTER TABLE ads ADD COLUMN ends_at TEXT",
+            "ALTER TABLE ads ADD COLUMN auction_days INTEGER",
+            "ALTER TABLE ads ADD COLUMN current_bid INTEGER",
+            "ALTER TABLE ads ADD COLUMN bids_count INTEGER DEFAULT 0",
+            "ALTER TABLE ads ADD COLUMN winner_id INTEGER",
+            "ALTER TABLE ads ADD COLUMN finished_at TEXT",
+        ]:
+            try:
+                cursor.execute(_auction_sql)
+            except Exception:
+                pass
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bids (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                amount INTEGER NOT NULL,
+                status TEXT DEFAULT 'active',
+                created_at TEXT
+            )
+        ''')
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_ad ON bids(ad_id, amount DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_user ON bids(user_id, created_at)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_auction ON ads(sale_type, status, ends_at)")
+        except Exception:
+            pass
         # Создаем индексы для поиска
         for _idx_sql in [
             "CREATE INDEX IF NOT EXISTS idx_ads_search   ON ads(search_index)",
@@ -3445,6 +3482,21 @@ class Database:
                 WHERE id = ?
             ''', (status, moderator_id, reason, ad_id))
         
+        # Аукцион: срок торгов считаем от ОДОБРЕНИЯ, а не от создания —
+        # иначе время, проведённое в модерации, съедало бы лот.
+        if status == 'active':
+            try:
+                cursor.execute("SELECT sale_type, auction_days, ends_at FROM ads WHERE id=?", (ad_id,))
+                _row = cursor.fetchone()
+                if _row and _row['sale_type'] == 'auction' and not _row['ends_at']:
+                    _days = int(_row['auction_days'] or 3)
+                    _ends = (get_moscow_time() + timedelta(days=_days)).isoformat()
+                    cursor.execute(
+                        "UPDATE ads SET ends_at=?, price=COALESCE(current_bid, start_price, price) WHERE id=?",
+                        (_ends, ad_id))
+            except Exception as _e:
+                logger.warning(f"auction ends_at on approve: {_e}")
+
         # ВАЖНО: Явно фиксируем изменения
         self.conn.commit()
         
@@ -17213,6 +17265,297 @@ def _remove_story_file(media: str):
         logger.warning(f"story file remove: {e}")
 
 
+# ── Аукционы: ставки, антиснайпинг, выкуп, завершение ───────────────────────
+AUCTION_MIN_STEP = 10            # минимальный шаг ставки, ₽
+AUCTION_ANTISNIPE_WINDOW = 300   # ставка в последние 5 минут…
+AUCTION_ANTISNIPE_EXTEND = 300   # …продлевает лот на 5 минут
+AUCTION_DURATIONS = (1, 3, 7)    # срок в днях, на выбор продавца
+AUCTION_MAX_STEP_MULT = 10       # шаг не больше 10× стартовой цены
+
+
+def _auction(ad_id: int) -> Optional[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT * FROM ads WHERE id=? AND sale_type='auction'", (ad_id,))
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def min_next_bid(ad: Dict) -> int:
+    """Минимальная допустимая ставка: стартовая для первой, текущая+шаг далее."""
+    step = max(AUCTION_MIN_STEP, int(ad.get('bid_step') or 0))
+    current = int(ad.get('current_bid') or 0)
+    if current:
+        return current + step
+    return int(ad.get('start_price') or 0)
+
+
+def auction_time_left(ad: Dict) -> int:
+    """Секунд до конца лота (0 — время вышло)."""
+    if not ad.get('ends_at'):
+        return 0
+    ends = _safe_isoparse(ad['ends_at'])
+    return max(0, int((ends - get_moscow_time()).total_seconds()))
+
+
+def get_bids(ad_id: int, limit: int = 30) -> List[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute('''
+        SELECT b.*, u.username, u.first_name
+        FROM bids b LEFT JOIN users u ON u.user_id = b.user_id
+        WHERE b.ad_id=? ORDER BY b.amount DESC, b.id ASC LIMIT ?
+    ''', (ad_id, limit))
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def _current_leader_bid(ad_id: int) -> Optional[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT * FROM bids WHERE ad_id=? AND status='active' "
+                   "ORDER BY amount DESC, id ASC LIMIT 1", (ad_id,))
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def place_bid(ad_id: int, user_id: int, amount) -> Dict:
+    """Ставит ставку. Возвращает {'ok': True, 'ad', 'outbid'} либо ошибку."""
+    ad = _auction(ad_id)
+    if not ad:
+        return {'ok': False, 'error': 'not_auction'}
+    if ad.get('status') != 'active':
+        return {'ok': False, 'error': 'not_active'}
+    if auction_time_left(ad) <= 0:
+        return {'ok': False, 'error': 'ended'}
+    if int(ad.get('user_id') or 0) == int(user_id):
+        return {'ok': False, 'error': 'own_lot'}
+    try:
+        amount = int(amount)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'bad_amount'}
+
+    minimum = min_next_bid(ad)
+    if amount < minimum:
+        return {'ok': False, 'error': 'too_low', 'minimum': minimum}
+    buy_now = int(ad.get('buy_now_price') or 0)
+    if buy_now and amount >= buy_now:
+        return {'ok': False, 'error': 'use_buy_now', 'buy_now': buy_now}
+
+    prev = _current_leader_bid(ad_id)
+    now = get_moscow_time()
+    cursor = db.conn.cursor()
+    cursor.execute("UPDATE bids SET status='outbid' WHERE ad_id=? AND status='active'", (ad_id,))
+    cursor.execute("INSERT INTO bids (ad_id, user_id, amount, status, created_at) "
+                   "VALUES (?, ?, ?, 'active', ?)", (ad_id, user_id, amount, now.isoformat()))
+
+    # Антиснайпинг: ставка в концовке продлевает лот, иначе все ждут
+    # последней секунды и честной борьбы не выходит.
+    extended = False
+    ends_at = ad.get('ends_at')
+    if ends_at:
+        ends = _safe_isoparse(ends_at)
+        left = int((ends - now).total_seconds())
+        if left <= AUCTION_ANTISNIPE_WINDOW:
+            ends = ends + timedelta(seconds=AUCTION_ANTISNIPE_EXTEND)
+            ends_at = ends.isoformat()
+            extended = True
+
+    cursor.execute('''
+        UPDATE ads SET current_bid=?, price=?, bids_count=COALESCE(bids_count,0)+1, ends_at=?
+        WHERE id=?
+    ''', (amount, amount, ends_at, ad_id))
+    db.conn.commit()
+
+    ad = _auction(ad_id)
+    return {'ok': True, 'ad': ad, 'outbid': prev, 'extended': extended, 'amount': amount}
+
+
+def buy_now(ad_id: int, user_id: int) -> Dict:
+    """Мгновенный выкуп: закрывает лот сразу по цене выкупа."""
+    ad = _auction(ad_id)
+    if not ad:
+        return {'ok': False, 'error': 'not_auction'}
+    if ad.get('status') != 'active':
+        return {'ok': False, 'error': 'not_active'}
+    if auction_time_left(ad) <= 0:
+        return {'ok': False, 'error': 'ended'}
+    if int(ad.get('user_id') or 0) == int(user_id):
+        return {'ok': False, 'error': 'own_lot'}
+    price = int(ad.get('buy_now_price') or 0)
+    if not price:
+        return {'ok': False, 'error': 'no_buy_now'}
+
+    now = get_moscow_time()
+    cursor = db.conn.cursor()
+    cursor.execute("UPDATE bids SET status='outbid' WHERE ad_id=? AND status='active'", (ad_id,))
+    cursor.execute("INSERT INTO bids (ad_id, user_id, amount, status, created_at) "
+                   "VALUES (?, ?, ?, 'won', ?)", (ad_id, user_id, price, now.isoformat()))
+    cursor.execute('''
+        UPDATE ads SET status='ended', winner_id=?, finished_at=?, price=?, current_bid=?,
+                       bids_count=COALESCE(bids_count,0)+1
+        WHERE id=?
+    ''', (user_id, now.isoformat(), price, price, ad_id))
+    db.conn.commit()
+    return {'ok': True, 'ad': _auction(ad_id), 'amount': price, 'buy_now': True}
+
+
+def validate_auction_params(body: Dict) -> Dict:
+    """Проверяет параметры лота ДО создания объявления.
+
+    Шаг по умолчанию — 5% от стартовой цены, но не меньше 10 ₽ и не больше
+    10× стартовой: иначе либо ставки по рублю, либо шаг больше самого лота.
+    """
+    start = _miniapp_parse_price(body.get('start_price', 0))
+    if start <= 0:
+        return {'ok': False, 'error': 'bad_start_price'}
+    raw_step = _miniapp_parse_price(body.get('bid_step', 0))
+    step = int(raw_step) if raw_step else max(AUCTION_MIN_STEP, int(start * 0.05))
+    step = max(AUCTION_MIN_STEP, min(int(step), int(start) * AUCTION_MAX_STEP_MULT))
+    try:
+        days = int(body.get('auction_days') or 3)
+    except (TypeError, ValueError):
+        days = 3
+    if days not in AUCTION_DURATIONS:
+        days = 3
+    buy_now = _miniapp_parse_price(body.get('buy_now_price', 0)) or None
+    if buy_now is not None and buy_now < start + step:
+        return {'ok': False, 'error': 'bad_buy_now'}
+    return {'ok': True, 'start_price': start, 'bid_step': step,
+            'buy_now_price': buy_now, 'auction_days': days}
+
+
+def set_auction_params(ad_id: int, start_price: int, bid_step: int,
+                       buy_now_price: Optional[int], days: int):
+    """Включает у объявления режим аукциона.
+
+    price = стартовая цена, чтобы карточка в ленте показывала «от N ₽»
+    до первых ставок. ends_at НЕ ставим — срок пойдёт от одобрения.
+    """
+    cursor = db.conn.cursor()
+    cursor.execute('''
+        UPDATE ads SET sale_type='auction', start_price=?, bid_step=?, buy_now_price=?,
+                       auction_days=?, current_bid=0, bids_count=0, price=?
+        WHERE id=?
+    ''', (start_price, bid_step, buy_now_price, days, start_price, ad_id))
+    db.conn.commit()
+
+
+def get_my_bids(user_id: int, limit: int = 50) -> List[Dict]:
+    """Мои ставки с состоянием лота — для раздела «Мои ставки»."""
+    cursor = db.conn.cursor()
+    cursor.execute('''
+        SELECT b.id AS bid_id, b.amount, b.status AS bid_status, b.created_at AS bid_at,
+               a.id AS ad_id, a.title, a.photos, a.status AS ad_status, a.sale_type,
+               a.ends_at, a.current_bid, a.winner_id, a.user_id AS seller_id
+        FROM bids b JOIN ads a ON a.id = b.ad_id
+        WHERE b.user_id=?
+        ORDER BY b.created_at DESC LIMIT ?
+    ''', (user_id, limit))
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def finish_auctions() -> List[Dict]:
+    """Завершает лоты, у которых вышло время. Возвращает их для уведомлений.
+
+    Победитель — лучшая ставка; чат победителя с продавцом создаём сразу,
+    чтобы им не пришлось искать друг друга.
+    """
+    cursor = db.conn.cursor()
+    now = get_moscow_time()
+    cursor.execute('''
+        SELECT * FROM ads
+        WHERE sale_type='auction' AND status='active'
+          AND ends_at IS NOT NULL AND ends_at <= ?
+    ''', (now.isoformat(),))
+    finished = []
+    for row in [dict(r) for r in cursor.fetchall()]:
+        cursor.execute("SELECT * FROM bids WHERE ad_id=? ORDER BY amount DESC, id ASC LIMIT 1",
+                       (row['id'],))
+        top = cursor.fetchone()
+        if top:
+            top = dict(top)
+            cursor.execute("UPDATE bids SET status='won' WHERE id=?", (top['id'],))
+            cursor.execute("UPDATE bids SET status='lost' WHERE ad_id=? AND id<>? "
+                           "AND status IN ('active','outbid')", (row['id'], top['id']))
+            cursor.execute('''
+                UPDATE ads SET status='ended', winner_id=?, finished_at=?, price=?, current_bid=?
+                WHERE id=?
+            ''', (top['user_id'], now.isoformat(), top['amount'], top['amount'], row['id']))
+            row['winner_id'] = top['user_id']
+            row['top_bid'] = top['amount']
+        else:
+            cursor.execute("UPDATE ads SET status='ended_unsold', finished_at=? WHERE id=?",
+                           (now.isoformat(), row['id']))
+            row['top_bid'] = 0
+        finished.append(row)
+    if finished:
+        db.conn.commit()
+    return finished
+
+
+async def _notify_auction(user_id: int, text: str, ad_id: Optional[int] = None):
+    """Сообщение участнику аукциона через бота."""
+    app = _get_bot_app()
+    if not app or not user_id:
+        return
+    kb = None
+    if ad_id:
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(EM_ARROW_R + " Открыть лот", callback_data=f"view_ad:{ad_id}")
+        ]])
+    try:
+        await app.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.HTML,
+                                   reply_markup=kb)
+    except Exception as e:
+        logger.warning(f"auction notify -> {user_id}: {e}")
+
+
+async def _notify_auction_finished(ad: Dict):
+    """Уведомления по завершённому лоту: победителю, продавцу, наблюдавшим."""
+    title = str(ad.get('title') or '')[:40]
+    winner_id = ad.get('winner_id')
+    seller_id = ad.get('user_id')
+    top_bid = ad.get('top_bid') or ad.get('current_bid') or 0
+    if winner_id:
+        chat_id = None
+        try:
+            chat_id = get_or_create_chat(ad['id'], winner_id, seller_id)
+        except Exception as e:
+            logger.warning(f"auction chat: {e}")
+        await _notify_auction(
+            winner_id,
+            f"{EM_OK} <b>Вы выиграли аукцион!</b>\n"
+            f"«{title}» за {top_bid:,} ₽\n\n"
+            f"Напишите продавцу, чтобы договориться о передаче.".replace(',', ' '),
+            ad['id'],
+        )
+        await _notify_auction(
+            seller_id,
+            f"{EM_OK} <b>Ваш лот продан!</b>\n"
+            f"«{title}» за {top_bid:,} ₽\n\n"
+            f"Победитель уже получил уведомление.".replace(',', ' '),
+            ad['id'],
+        )
+    else:
+        await _notify_auction(
+            seller_id,
+            f"{EM_WARN} <b>Аукцион завершён без ставок</b>\n"
+            f"«{title}»\n\nМожно выставить лот снова.".replace(',', ' '),
+            ad['id'],
+        )
+
+
+async def _auctions_loop():
+    """Раз в 30 секунд закрывает лоты с истёкшим временем."""
+    while True:
+        try:
+            await asyncio.sleep(30)
+            for ad in finish_auctions():
+                await _notify_auction_finished(ad)
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"auctions loop: {e}")
+            await asyncio.sleep(60)
+
+
 def get_user_chats(user_id: int, limit: int = 20) -> List[Dict]:
     cursor = db.conn.cursor()
     cursor.execute('''
@@ -19325,6 +19668,162 @@ async def api_miniapp_story_delete(request: aiohttp_web.Request) -> aiohttp_web.
     return _miniapp_json({'ok': True})
 
 
+# ── API аукционов ────────────────────────────────────────────────────────────
+async def api_miniapp_auctions(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/auctions — активные лоты.
+
+    По умолчанию сначала те, что заканчиваются раньше: там таймер важнее
+    всего, а «свежие» лоты и так видны в общей ленте.
+    """
+    viewer_id = _miniapp_viewer(request)
+    order = "ends_at ASC" if (request.query.get('sort') or 'ending') == 'ending' \
+        else "created_at DESC"
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(f'''
+            SELECT * FROM ads
+            WHERE sale_type='auction' AND status='active'
+              AND ends_at IS NOT NULL AND ends_at > ?
+            ORDER BY {order} LIMIT 60
+        ''', (get_moscow_time().isoformat(),))
+        ads = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"auctions list: {e}")
+        return _miniapp_err('load_failed', 500)
+    fav_counts, fav_mine = _miniapp_fav_map([a['id'] for a in ads], viewer_id)
+    return _miniapp_json({
+        'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in ads],
+    })
+
+
+async def api_miniapp_place_bid(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ads/{ad_id}/bid — сделать ставку."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        ad_id = int(request.match_info['ad_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+
+    res = place_bid(ad_id, viewer_id, (body or {}).get('amount'))
+    if not res.get('ok'):
+        code = res.get('error')
+        status = 400
+        if code in ('not_auction', 'not_active', 'ended'):
+            status = 409
+        elif code == 'own_lot':
+            status = 403
+        payload = {'error': code}
+        if res.get('minimum'):
+            payload['minimum'] = res['minimum']
+        if res.get('buy_now'):
+            payload['buy_now'] = res['buy_now']
+        return _miniapp_json(payload, status=status)
+
+    ad = res['ad']
+    title = str(ad.get('title') or '')[:40]
+    amount = f"{res['amount']:,}".replace(',', ' ')
+    await _notify_auction(ad['user_id'],
+                          f"{EM_DOT} <b>Новая ставка</b>\n«{title}» — {amount} ₽", ad_id)
+    prev = res.get('outbid')
+    if prev and int(prev['user_id']) != int(viewer_id):
+        await _notify_auction(
+            prev['user_id'],
+            f"{EM_WARN} <b>Вашу ставку перебили</b>\n"
+            f"«{title}» — теперь {amount} ₽\n\nУспейте поднять, пока идут торги.", ad_id)
+    return _miniapp_json({
+        'ok': True,
+        'ad': _miniapp_serialize_ad(ad, viewer_id),
+        'amount': res['amount'],
+        'extended': bool(res.get('extended')),
+    })
+
+
+async def api_miniapp_buy_now(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ads/{ad_id}/buy-now — выкупить лот сразу."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        ad_id = int(request.match_info['ad_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    res = buy_now(ad_id, viewer_id)
+    if not res.get('ok'):
+        code = res.get('error')
+        status = 409 if code in ('not_auction', 'not_active', 'ended') else 400
+        if code == 'own_lot':
+            status = 403
+        return _miniapp_json({'error': code}, status=status)
+    await _notify_auction_finished({**res['ad'], 'top_bid': res['amount']})
+    return _miniapp_json({
+        'ok': True,
+        'ad': _miniapp_serialize_ad(res['ad'], viewer_id),
+        'amount': res['amount'],
+    })
+
+
+async def api_miniapp_ad_bids(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/ads/{ad_id}/bids — история ставок (имена анонимны)."""
+    viewer_id = _miniapp_viewer(request)
+    try:
+        ad_id = int(request.match_info['ad_id'])
+    except (KeyError, ValueError):
+        return _miniapp_err('not_found', 404)
+    items = []
+    for b in get_bids(ad_id, limit=30):
+        user = db.get_user(b['user_id'])
+        items.append({
+            'amount': b['amount'],
+            'created_at': b['created_at'],
+            'status': b['status'],
+            'is_me': bool(viewer_id and int(b['user_id']) == int(viewer_id)),
+            'name': get_anon_id(user) if user else f"id{b['user_id']}",
+        })
+    return _miniapp_json({'items': items})
+
+
+async def api_miniapp_my_bids(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/my-bids — мои ставки с понятным состоянием."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    items = []
+    for row in get_my_bids(viewer_id):
+        if row.get('ad_status') == 'ended':
+            state = 'won' if int(row.get('winner_id') or 0) == int(viewer_id) else 'lost'
+        elif row.get('ad_status') == 'ended_unsold':
+            state = 'lost'
+        elif row.get('bid_status') == 'active':
+            state = 'leading'
+        else:
+            state = 'outbid'
+        photos = row.get('photos') or []
+        if isinstance(photos, str):
+            try:
+                photos = json.loads(photos)
+            except Exception:
+                photos = []
+        items.append({
+            'ad_id': row['ad_id'],
+            'title': row.get('title') or '',
+            'photo': (_miniapp_photo_urls(photos) or [''])[0],
+            'amount': row['amount'],
+            'current_bid': row.get('current_bid') or 0,
+            'created_at': row.get('bid_at') or '',
+            'ends_at': row.get('ends_at') or '',
+            # остаток считает сервер: часы на устройстве могут расходиться
+            'time_left': auction_time_left(row),
+            'state': state,
+        })
+    return _miniapp_json({'items': items})
+
+
 async def api_serve_html(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /chat — отдаёт мини-апп HTML"""
     html_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'chat_miniapp.html')
@@ -20355,6 +20854,30 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
         },
         'is_favorite': bool(is_fav),
         'is_owner': bool(viewer_id and ad.get('user_id') == viewer_id),
+        **_miniapp_auction_fields(ad, viewer_id),
+    }
+
+
+def _miniapp_auction_fields(ad: dict, viewer_id: Optional[int] = None) -> dict:
+    """Поля аукциона для клиента. Для обычных объявлений — пустой словарь.
+
+    Отдаём минимальную следующую ставку и остаток времени: без них
+    интерфейс не сможет показать кнопку «Сделать ставку» и таймер.
+    """
+    if (ad.get('sale_type') or 'sale') != 'auction':
+        return {'sale_type': 'sale'}
+    return {
+        'sale_type': 'auction',
+        'start_price': ad.get('start_price') or 0,
+        'bid_step': ad.get('bid_step') or AUCTION_MIN_STEP,
+        'buy_now_price': ad.get('buy_now_price') or 0,
+        'current_bid': ad.get('current_bid') or 0,
+        'bids_count': ad.get('bids_count') or 0,
+        'ends_at': ad.get('ends_at') or '',
+        'time_left': auction_time_left(ad),
+        'min_next_bid': min_next_bid(ad),
+        'winner_id': ad.get('winner_id'),
+        'is_winner': bool(viewer_id and ad.get('winner_id') == viewer_id),
     }
 
 
@@ -21014,6 +21537,13 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     if not isinstance(photos, list) or len(photos) > MINIAPP_MAX_PHOTOS:
         return _miniapp_err('bad_photos', 400)
     photos = [str(p) for p in photos if isinstance(p, str) and p][:MINIAPP_MAX_PHOTOS]
+    # Аукцион: параметры проверяем ДО создания объявления, чтобы при ошибке
+    # не оставалось битой записи
+    auction = None
+    if str(body.get('sale_type') or '') == 'auction':
+        auction = validate_auction_params(body)
+        if not auction.get('ok'):
+            return _miniapp_err(auction.get('error') or 'bad_auction', 400)
     description = str(body.get('description') or '')[:4000]
     init_data = request.headers.get('X-Telegram-Init-Data', '')
     _miniapp_ensure_user(viewer_id, init_data)
@@ -21036,6 +21566,12 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     except Exception as e:
         logger.error(f"miniapp ads_create: {e}")
         return _miniapp_err('create_failed', 500)
+    if auction:
+        try:
+            set_auction_params(ad_id, auction['start_price'], auction['bid_step'],
+                               auction['buy_now_price'], auction['auction_days'])
+        except Exception as e:
+            logger.error(f"miniapp auction params: {e}")
     try:
         db.update_user(viewer_id,
                        daily_ads_count=(db.get_user(viewer_id) or {}).get('daily_ads_count', 0) + 1)
@@ -21846,6 +22382,12 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/stories', api_miniapp_story_create)
     app.router.add_post('/api/stories/{story_id}/view', api_miniapp_story_view)
     app.router.add_delete('/api/stories/{story_id}', api_miniapp_story_delete)
+    # ── Аукционы ─────────────────────────────────────────────────────────────
+    app.router.add_get('/api/auctions', api_miniapp_auctions)
+    app.router.add_get('/api/my-bids', api_miniapp_my_bids)
+    app.router.add_get('/api/ads/{ad_id}/bids', api_miniapp_ad_bids)
+    app.router.add_post('/api/ads/{ad_id}/bid', api_miniapp_place_bid)
+    app.router.add_post('/api/ads/{ad_id}/buy-now', api_miniapp_buy_now)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
     # Заглушка для paid_btn_url (пользователи после оплаты попадают сюда)
@@ -22365,6 +22907,7 @@ def main():
         # Запускаем фоновые задачи
         asyncio.create_task(precache_banners())
         asyncio.create_task(_stories_cleanup_loop())
+        asyncio.create_task(_auctions_loop())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:
