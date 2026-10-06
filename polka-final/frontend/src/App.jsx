@@ -1131,6 +1131,7 @@ function AuctionsView() {
 /* Экран создания истории: фото или видео на 24 часа, с пре-модерацией */
 function StoryCreatePage() {
   const navigate = useNavigate()
+  const { profile } = useApp()
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState('')
   const [isVideo, setIsVideo] = useState(false)
@@ -1175,12 +1176,23 @@ function StoryCreatePage() {
       setPrepared(ready)
       setPreparedSize(ready.size)
     } catch (err) {
-      // Показываем реальный вес исходника, чтобы было видно, что дело в размере
+      // Показываем реальный вес исходника. Если дело только в размере,
+      // отдельную ошибку не выводим — строка размера уже всё объясняет.
       setPreparedSize(chosen.size)
-      setError(uploadErrorText(err))
+      if (err?.status !== 413) setError(uploadErrorText(err))
     } finally {
       setPreparing(false)
     }
+  }
+
+  /* Уводим в бота за видео: Mini App не может открыть чат сама, только
+   * по ссылке t.me. Бот по ?start=story сразу попросит прислать видео. */
+  const openBotForVideo = () => {
+    const name = profile?.bot_username || ''
+    const url = name ? `https://t.me/${name}?start=story` : 'https://t.me'
+    const tg = window.Telegram?.WebApp
+    if (tg?.openTelegramLink) tg.openTelegramLink(url)
+    else window.open(url, '_blank')
   }
 
   const submit = async () => {
@@ -1267,10 +1279,31 @@ function StoryCreatePage() {
           {preparing
             ? 'Готовим файл…'
             : preparedSize > UPLOAD_LIMIT_BYTES
-              ? `Не проходит: ${formatSize(preparedSize)} при лимите ${UPLOAD_LIMIT_MB} МБ`
+              ? `Не проходит: ${formatSize(preparedSize)} при лимите ${UPLOAD_LIMIT_MB} МБ — нужен файл меньше`
               : preparedSize
                 ? `К отправке ${formatSize(preparedSize)}${isVideo ? '' : ' после сжатия'}`
                 : ''}
+        </div>
+      ) : null}
+
+      {/* Видео через бота: в Mini App пролезает только ~9 МБ, а ролик
+          с телефона весит в разы больше. Ведём в бота сами, чтобы
+          человеку не пришлось искать кнопку в меню. */}
+      {isVideo ? (
+        <div className="story-bot-card">
+          <div className="story-bot-head">
+            <span className="story-bot-icon"><Icon name="send" /></span>
+            <div>
+              <strong>Видео лучше отправить боту</strong>
+              <span>
+                Сюда проходит только видео до {UPLOAD_LIMIT_MB} МБ — это несколько секунд.
+                Через бота можно любое: он откроется и сразу попросит ролик.
+              </span>
+            </div>
+          </div>
+          <button type="button" className="cta-primary" onClick={openBotForVideo}>
+            Отправить видео боту
+          </button>
         </div>
       ) : null}
 

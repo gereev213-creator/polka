@@ -7256,6 +7256,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 deep_link_ad_id = int(arg.replace('contact_', ''))
             except Exception as _e:
                 logger.debug(f"Ignored error: {_e}")
+        elif arg == 'story':
+            # Переход из Mini App: «видео удобнее прислать боту»
+            await story_start(update, context)
+            return
         elif arg.startswith('favorite_'):
             try:
                 deep_link_action = 'favorite'
@@ -17252,13 +17256,45 @@ def expire_stories() -> Dict[str, int]:
     return result
 
 
+def _prepare_upload_dir() -> str:
+    """Готовит папку загрузок на ПОСТОЯННОМ томе.
+
+    Было /app/uploads — эфемерная папка контейнера: при каждом деплое все фото
+    объявлений и историй пропадали, и у всех, кроме автора (у него файлы
+    оставались в кеше браузера), картинки превращались в «?».
+    Постоянный том Amvera смонтирован в /data — там же лежит база.
+    """
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
+    try:
+        os.makedirs(upload_dir, exist_ok=True)
+    except Exception as e:
+        logger.error(f"upload dir create {upload_dir}: {e}")
+    # Если контейнер всё же сохранил старое — переносим файлы, чтобы не терять
+    legacy = '/app/uploads'
+    try:
+        if os.path.isdir(legacy) and os.path.abspath(legacy) != os.path.abspath(upload_dir):
+            moved = 0
+            for name in os.listdir(legacy):
+                src = os.path.join(legacy, name)
+                dst = os.path.join(upload_dir, name)
+                if os.path.isfile(src) and not os.path.exists(dst):
+                    import shutil
+                    shutil.copy2(src, dst)
+                    moved += 1
+            if moved:
+                logger.info(f"upload dir: перенесено {moved} файлов из {legacy}")
+    except Exception as e:
+        logger.warning(f"upload dir migrate: {e}")
+    return upload_dir
+
+
 def _remove_story_file(media: str):
     """Удаляет файл истории с диска (медиа лежит в UPLOAD_DIR)."""
     if not media:
         return
     try:
         name = os.path.basename(str(media))
-        upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+        upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
         path = os.path.join(upload_dir, name)
         if name and os.path.isfile(path):
             os.remove(path)
@@ -19475,7 +19511,7 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
             status=413,
         )
 
-    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
     try:
         os.makedirs(upload_dir, exist_ok=True)
     except Exception:
@@ -19646,7 +19682,7 @@ async def api_miniapp_story_create(request: aiohttp_web.Request) -> aiohttp_web.
         except (TypeError, ValueError):
             ad_id = None
 
-    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
     try:
         os.makedirs(upload_dir, exist_ok=True)
     except Exception:
@@ -21136,7 +21172,7 @@ async def api_miniapp_banner_image(request: aiohttp_web.Request) -> aiohttp_web.
 
     if ref.startswith('/'):
         # Локальный путь вида /api/ads/photos/<файл>
-        upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+        upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
         path = os.path.join(upload_dir, os.path.basename(ref))
         if os.path.isfile(path):
             return aiohttp_web.FileResponse(path, headers=headers)
@@ -21227,7 +21263,7 @@ def _story_card_caption(story: Dict, header: str = 'История на пров
 
 
 def _story_media_path(story: Dict) -> str:
-    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
     return os.path.join(upload_dir, os.path.basename(str(story.get('media') or '')))
 
 
@@ -21836,7 +21872,7 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
     files = files[:MINIAPP_MAX_PHOTOS]
     if not files:
         return _miniapp_err('no_photos', 400)
-    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
     try:
         os.makedirs(upload_dir, exist_ok=True)
     except Exception:
@@ -22061,7 +22097,7 @@ async def api_miniapp_photo_file(request: aiohttp_web.Request) -> aiohttp_web.Re
     name = os.path.basename(request.match_info.get('name', ''))
     if not name or name.startswith('.') or '/' in name or '\\' in name:
         return _miniapp_err('not_found', 404)
-    upload_dir = os.environ.get('UPLOAD_DIR', '/app/uploads')
+    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
     path = os.path.join(upload_dir, name)
     if not os.path.isfile(path):
         return _miniapp_err('not_found', 404)
@@ -22446,6 +22482,9 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'moderation_ads': moderation_count,
         'favorites': fav_count,
         'since': (user.get('registration_date') or '')[:10] if user else '',
+        # Нужен фронту, чтобы увести пользователя в бота за видео:
+        # Mini App не может открыть чат сама, только по ссылке t.me
+        'bot_username': BOT_USERNAME,
     }})
 
 
@@ -23072,6 +23111,7 @@ def main():
 
     # API-сервер запускается всегда
     async def run_all():
+        _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
         await runner.setup()

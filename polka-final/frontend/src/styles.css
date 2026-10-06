@@ -466,10 +466,9 @@ input, textarea, select { font-family: inherit; }
   backdrop-filter: blur(8px);
 }
 .hero-pin-label {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: rgba(255,255,255,.6);
 }
 .hero-pin-value {
@@ -679,10 +678,9 @@ input, textarea, select { font-family: inherit; }
   margin: 12px 0;
 }
 .banner-card .eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: .05em;
+  letter-spacing: 0;
   color: var(--accent);
   margin-bottom: 6px;
 }
@@ -830,7 +828,6 @@ input, textarea, select { font-family: inherit; }
   font-size: 13px;
   font-weight: 600;
   color: var(--text-secondary);
-  text-transform: uppercase;
   letter-spacing: .04em;
 }
 .step-bar {
@@ -1082,10 +1079,9 @@ input, textarea, select { font-family: inherit; }
 }
 .stat-card:active { transform: scale(.96); }
 .stat-card-label {
-  font-size: 9.5px;
+  font-size: 11px;
   font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
   line-height: 1.25;
 }
@@ -1163,8 +1159,7 @@ input, textarea, select { font-family: inherit; }
 .recommend-eyebrow {
   font-size: 10px;
   font-weight: 700;
-  letter-spacing: .09em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: rgba(255,255,255,.78);
 }
 .recommend-title {
@@ -1316,8 +1311,7 @@ input, textarea, select { font-family: inherit; }
 .chip-rail-label {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
   margin: 12px 0 6px;
 }
@@ -1491,8 +1485,7 @@ input, textarea, select { font-family: inherit; }
 .eyebrow {
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: .08em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
 }
 .copy-block { padding: 16px; }
@@ -2396,7 +2389,6 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 .auction-timer .icon-svg { width: 13px; height: 13px; }
 /* Меньше 5 минут — таймер кричит */
@@ -2514,10 +2506,9 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 }
 .auction-panel-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .auction-panel-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
 }
 .auction-panel-price { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
@@ -2574,10 +2565,9 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 }
 .auction-history-row b { color: var(--ink); }
 .field-label-row {
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 700;
-  letter-spacing: .03em;
-  text-transform: uppercase;
+  letter-spacing: 0;
   color: var(--text-secondary);
   margin-bottom: -4px;
 }
@@ -2609,6 +2599,10 @@ select.text-input {
   opacity: .45;
   box-shadow: none;
   cursor: default;
+  /* ВАЖНО: анимация .screen > * (slideUp) анимирует opacity и с fill-mode
+     both удерживает её на 1 — она перебивала это правило, и заблокированная
+     кнопка выглядела активной. */
+  animation: none;
 }
 
 /* На узких экранах шесть пунктов дока требуют чуть меньшего шрифта,
@@ -2666,3 +2660,35 @@ select.text-input {
 .story-ad-text span { color: rgba(255,255,255,.72); font-size: 11.5px; }
 .story-ad-arrow { color: #fff; display: flex; }
 .story-ad-arrow .icon-svg { width: 15px; height: 15px; transform: rotate(180deg); }
+
+/* Подсказка «видео лучше отправить боту» на экране истории */
+.story-bot-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  margin-top: 12px;
+  border-radius: var(--radius-lg);
+  background: #E8F0FF;
+}
+.story-bot-head { display: flex; gap: 11px; align-items: flex-start; }
+.story-bot-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.story-bot-icon .icon-svg { width: 17px; height: 17px; }
+.story-bot-head strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+.story-bot-head span { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
+.story-bot-card .cta-primary { width: 100%; }
