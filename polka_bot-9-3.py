@@ -7723,6 +7723,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
          _wbtn("Избранное",      "/favorites")],
         [_wbtn("Сообщения",     "/chats"),
          _wbtn("Профиль",       "/profile")],
+        [_mbtn("Добавить историю", "story_start")],
     ]
 
     cursor = db.conn.cursor()
@@ -19386,6 +19387,48 @@ def _chat_media_ext(ctype: str, data: bytes, kind: str) -> str:
     return 'ogg'
 
 
+def _media_content_type(ctype: str, data: bytes) -> str:
+    """MIME по «магическим» байтам.
+
+    Прокси отдавал всё как image/jpeg, из-за чего видео не проигрывалось:
+    браузеру нужен video/mp4, а не картинка.
+    """
+    c = (ctype or '').lower()
+    if c and c != 'application/octet-stream':
+        return c
+    if data[:4] == b'\x1a\x45\xdf\xa3':
+        return 'video/webm'
+    if data[4:12] in (b'ftypisom', b'ftypmp42', b'ftypmp41', b'ftypM4V '):
+        return 'video/mp4'
+    if data[4:12] == b'ftypqt  ':
+        return 'video/quicktime'
+    if data[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if data[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if data[:4] == b'RIFF' and data[8:12] == b'WEBP':
+        return 'image/webp'
+    if data[:3] == b'GIF':
+        return 'image/gif'
+    if data[:4] == b'OggS':
+        return 'video/ogg' if data[28:32] == b'theo' else 'audio/ogg'
+    return 'application/octet-stream'
+
+
+def _story_media_url(media) -> str:
+    """Ссылка на медиа истории.
+
+    Истории из Mini App хранят локальный путь, а созданные через бота —
+    Telegram file_id: его заворачиваем в прокси, чтобы токен не утекал.
+    """
+    s = str(media or '')
+    if not s or s.startswith('{'):
+        return ''
+    if s.startswith('/') or s.startswith('http'):
+        return s
+    return f"/api/photo/{s}"
+
+
 async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/chat/{session_id}/media — вложение в диалог (multipart, поле file).
 
@@ -19499,7 +19542,7 @@ def _story_public(story: Dict, with_views: bool = False) -> Dict:
     data = {
         'id': story['id'],
         'user_id': story['user_id'],
-        'media': story['media'],
+        'media': _story_media_url(story['media']),
         'media_type': story['media_type'],
         'caption': story.get('caption') or '',
         'ad_id': story.get('ad_id'),
@@ -19522,6 +19565,10 @@ async def api_miniapp_stories(request: aiohttp_web.Request) -> aiohttp_web.Respo
     viewer_id = _miniapp_viewer(request) or 0
     try:
         authors = get_story_rail(viewer_id)
+        # Истории из бота хранят file_id — отдаём их через прокси
+        for author in authors:
+            for story in author.get('stories', []):
+                story['media'] = _story_media_url(story.get('media'))
     except Exception as e:
         logger.error(f"stories rail: {e}")
         return _miniapp_err('load_failed', 500)
@@ -21192,15 +21239,27 @@ async def _send_story_card(bot, chat_id: int, story: Dict, header: str) -> bool:
     ]])
     caption = _story_card_caption(story, header)
     path = _story_media_path(story)
+    # Медиа бывает двух видов: локальный файл (загрузка из Mini App) или
+    # Telegram file_id (история прислана боту). Для файла открываем его,
+    # для file_id передаём строку, иначе — просто текст.
+    raw_media = str(story.get('media') or '')
+    is_video = story.get('media_type') == 'video'
     try:
         if os.path.isfile(path):
             with open(path, 'rb') as fh:
-                if story.get('media_type') == 'video':
+                if is_video:
                     await bot.send_video(chat_id=chat_id, video=fh, caption=caption,
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
                 else:
                     await bot.send_photo(chat_id=chat_id, photo=fh, caption=caption,
                                          reply_markup=kb, parse_mode=ParseMode.HTML)
+        elif raw_media and not raw_media.startswith('/'):
+            if is_video:
+                await bot.send_video(chat_id=chat_id, video=raw_media, caption=caption,
+                                     reply_markup=kb, parse_mode=ParseMode.HTML)
+            else:
+                await bot.send_photo(chat_id=chat_id, photo=raw_media, caption=caption,
+                                     reply_markup=kb, parse_mode=ParseMode.HTML)
         else:
             await bot.send_message(chat_id=chat_id, text=caption, reply_markup=kb,
                                    parse_mode=ParseMode.HTML)
@@ -21253,6 +21312,136 @@ async def _notify_story_author(story: Dict, approved: bool, reason: str = ''):
         await app.bot.send_message(chat_id=story['user_id'], text=text)
     except Exception as e:
         logger.warning(f"story author notify: {e}")
+
+
+# ── История через бота ───────────────────────────────────────────────────────
+# Платформа режет тело запроса на ~10 МБ, поэтому видео с телефона в Mini App
+# не пролезает. Telegram принимает файлы любого размера — берём file_id и
+# отдаём его в ленту через прокси /api/photo/<file_id>.
+async def story_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Просит прислать фото или видео для истории."""
+    query = update.callback_query
+    if query:
+        await safe_answer(query, )
+    context.user_data['story_adding'] = True
+    text = ("📸 <b>Новая история</b>\n\n"
+            "Пришлите фото или видео одним сообщением — подпись к нему станет "
+            "текстом истории.\n\n"
+            "Через бота можно и большое видео: ограничения платформы здесь не мешают.")
+    kb = InlineKeyboardMarkup([[
+        InlineKeyboardButton(EM_ARROW_L + " Отмена", callback_data="back_to_menu")
+    ]])
+    if query:
+        await safe_edit_message(query, text, kb)
+    else:
+        await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
+    return States.MAIN_MENU
+
+
+async def story_media_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Создаёт историю из присланного фото или видео (статус «на проверке»)."""
+    if not context.user_data.get('story_adding'):
+        return
+    msg = update.message
+    user = update.effective_user
+    if msg.photo:
+        file_id, kind = msg.photo[-1].file_id, 'photo'
+    elif msg.video:
+        file_id, kind = msg.video.file_id, 'video'
+    else:
+        return
+    context.user_data.pop('story_adding', None)
+
+    try:
+        story_id = create_story(user.id, file_id, kind, msg.caption or '')
+    except Exception as e:
+        logger.error(f"bot story create: {e}")
+        await msg.reply_text("Не удалось создать историю. Попробуйте позже.")
+        return
+
+    story = get_story(story_id)
+    try:
+        await _notify_story_moderation(story)
+    except Exception as e:
+        logger.warning(f"bot story notify: {e}")
+
+    kb_rows = []
+    try:
+        active = [a for a in db.get_user_ads(user.id, limit=20) if a.get('status') == 'active']
+    except Exception:
+        active = []
+    if active:
+        kb_rows.append([InlineKeyboardButton("🔗 Привязать объявление",
+                                             callback_data=f"story_attach_ad:{story_id}")])
+    kb_rows.append([InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")])
+    await msg.reply_text(
+        f"{EM_OK} История отправлена на проверку.\n\n"
+        f"Она появится в ленте на 24 часа после одобрения."
+        + ("\n\nМожно привязать объявление — тогда в истории будет кнопка "
+           "«Посмотреть объявление»." if active else ""),
+        reply_markup=InlineKeyboardMarkup(kb_rows),
+    )
+
+
+async def story_attach_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает активные объявления автора для привязки к истории."""
+    query = update.callback_query
+    await safe_answer(query, )
+    try:
+        story_id = int((query.data or '').split(':')[1])
+    except (IndexError, ValueError):
+        return
+    story = get_story(story_id)
+    if not story or int(story['user_id']) != int(update.effective_user.id):
+        await safe_edit_message(query, "История не найдена.")
+        return
+    try:
+        active = [a for a in db.get_user_ads(update.effective_user.id, limit=20)
+                  if a.get('status') == 'active']
+    except Exception:
+        active = []
+    rows = [[InlineKeyboardButton(f"{str(a.get('title'))[:34]}",
+                                  callback_data=f"story_setad:{story_id}:{a['id']}")]
+            for a in active[:8]]
+    rows.append([InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")])
+    await safe_edit_message(query, "Выберите объявление для этой истории:", InlineKeyboardMarkup(rows))
+
+
+async def story_set_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Привязывает объявление к истории."""
+    query = update.callback_query
+    await safe_answer(query, )
+    parts = (query.data or '').split(':')
+    if len(parts) < 3:
+        return
+    try:
+        story_id, ad_id = int(parts[1]), int(parts[2])
+    except ValueError:
+        return
+    story = get_story(story_id)
+    if not story or int(story['user_id']) != int(update.effective_user.id):
+        await safe_edit_message(query, "История не найдена.")
+        return
+    try:
+        ad = db.get_ad(ad_id)
+        if not ad or int(ad.get('user_id') or 0) != int(update.effective_user.id):
+            await safe_edit_message(query, "Это не ваше объявление.")
+            return
+        cursor = db.conn.cursor()
+        cursor.execute("UPDATE stories SET ad_id=? WHERE id=?", (ad_id, story_id))
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"story set ad: {e}")
+        await safe_edit_message(query, "Не удалось привязать объявление.")
+        return
+    await safe_edit_message(
+        query,
+        f"{EM_OK} Объявление привязано.\n\nВ истории появится кнопка "
+        f"«Посмотреть объявление».",
+        InlineKeyboardMarkup([[
+            InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")
+        ]]),
+    )
 
 
 async def admin_stories(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -22310,7 +22499,7 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
         data = resolved.getvalue() if hasattr(resolved, 'getvalue') else resolved
         if not data:
             return _miniapp_err('not_found', 404)
-        return aiohttp_web.Response(body=data, content_type='image/jpeg',
+        return aiohttp_web.Response(body=data, content_type=_media_content_type('', data),
                                     headers={**_miniapp_cors_headers(),
                                              'Cache-Control': 'public, max-age=86400'})
     bot = _miniapp_bot()
@@ -22328,7 +22517,7 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
             if data:
                 return aiohttp_web.Response(
                     body=data,
-                    content_type='image/jpeg',
+                    content_type=_media_content_type('', data),
                     headers={**_miniapp_cors_headers(),
                              'Cache-Control': 'public, max-age=86400'},
                 )
@@ -22507,6 +22696,10 @@ def main():
     # ─── Диспетчер входящих фото ─────────────────────────────────────────────────
     async def dispatch_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud = context.user_data
+        # История из бота: сюда попадают и фото, и видео (большое видео
+        # в Mini App не проходит по лимиту платформы)
+        if ud.get('story_adding'):
+            return await story_media_received(update, context)
         if ud.get('republish_step'):
             return await handle_admin_republish_forward(update, context)
         if ud.get('del_ad_step') == 'id_input':
@@ -22636,6 +22829,8 @@ def main():
         return await handle_search(update, context)
 
     application.add_handler(MessageHandler(filters.PHOTO   & ~filters.COMMAND, dispatch_photo))
+    # Видео раньше не обрабатывалось вовсе — нужно для историй
+    application.add_handler(MessageHandler(filters.VIDEO   & ~filters.COMMAND, dispatch_photo))
     application.add_handler(MessageHandler(filters.TEXT    & ~filters.COMMAND, dispatch_text))
     # Обработчик контакта для верификации (Поделиться номером)
     # Верификация теперь через email+код (см. dispatch_text), а не через
@@ -22790,6 +22985,10 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_stories,              pattern="^admin_stories$"))
     application.add_handler(CallbackQueryHandler(story_moderation_action,    pattern="^story_(ok|no):"))
     application.add_handler(CallbackQueryHandler(story_moderation_reason,    pattern="^story_rej:"))
+    # История через бота: старт, привязка объявления
+    application.add_handler(CallbackQueryHandler(story_start,               pattern="^story_start$"))
+    application.add_handler(CallbackQueryHandler(story_attach_ad,           pattern="^story_attach_ad:"))
+    application.add_handler(CallbackQueryHandler(story_set_ad,              pattern="^story_setad:"))
     application.add_handler(CallbackQueryHandler(show_moderation_ads,        pattern="^show_moderation_ads$"))
     application.add_handler(CallbackQueryHandler(admin_moderation_next,      pattern="^admin_moderation_next$"))
     application.add_handler(CallbackQueryHandler(admin_payments,             pattern="^admin_payments$"))

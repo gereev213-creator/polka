@@ -890,7 +890,12 @@ input, textarea, select { font-family: inherit; }
   color: var(--text-secondary);
   font-size: 10px;
   font-weight: 500;
-  padding: 6px 8px;
+  /* С шестью пунктами фиксированная ширина не помещалась: последний
+     («Поиск») вылезал за плашку дока на узких экранах. Делим поровну
+     и разрешаем сжиматься. */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 2px;
   border-radius: 12px;
   transition: all .2s ease;
   position: relative;
@@ -898,7 +903,13 @@ input, textarea, select { font-family: inherit; }
 .dock-item.active { color: var(--accent); }
 .dock-icon { width: 22px; height: 22px; }
 .dock-icon .icon-svg { width: 100%; height: 100%; }
-.dock-label { font-size: 10px; }
+.dock-label {
+  font-size: 10px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dock-badge {
   position: absolute;
   top: 0;
@@ -927,20 +938,6 @@ input, textarea, select { font-family: inherit; }
 }
 .dock-create:active { transform: scale(.9); }
 .dock-create .icon-svg { width: 22px; height: 22px; }
-.profile-bubble {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #8B5CF6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  font-weight: 700;
-  color: #fff;
-  border: 2px solid var(--bg);
-  box-shadow: var(--shadow);
-}
 
 /* Back to Top */
 .back-to-top {
@@ -2584,3 +2581,88 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   color: var(--text-secondary);
   margin-bottom: -4px;
 }
+
+/* Размер файла к отправке — чтобы лимит был виден ДО отправки */
+.story-size {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  text-align: center;
+  min-height: 16px;
+}
+.story-size.is-bad { color: #DC2626; font-weight: 700; }
+
+/* Системная двойная стрелка у select выглядела чужеродно — рисуем свою */
+select.text-input {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%238A8F98' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  padding-right: 42px;
+}
+
+/* Заблокированная кнопка должна выглядеть заблокированной:
+   раньше она оставалась ярко-синей, и по ней бессмысленно жали */
+.cta-primary:disabled,
+.cta-dark:disabled,
+.primary-btn:disabled {
+  opacity: .45;
+  box-shadow: none;
+  cursor: default;
+}
+
+/* На узких экранах шесть пунктов дока требуют чуть меньшего шрифта,
+   иначе подписи «Сообщения» и «Избранное» обрезаются */
+@media (max-width: 400px) {
+  .dock { padding: 0 4px; }
+  .dock-label { font-size: 9.5px; }
+  .dock-icon { width: 20px; height: 20px; }
+  .dock-create { width: 48px; height: 48px; }
+}
+
+/* Совсем узкие экраны (iPhone SE и подобные) */
+@media (max-width: 370px) {
+  .dock-label { font-size: 9px; }
+  .dock-icon { width: 19px; height: 19px; }
+  .dock-create { width: 46px; height: 46px; }
+}
+
+@media (max-width: 370px) {
+  .dock { width: calc(100% - 16px); }
+}
+
+/* Переключатель «Объявления | Аукционы» в ленте */
+.feed-switch { margin-top: 2px; }
+
+/* Плашка «товар из истории» — ведёт в объявление */
+.story-ad-plate {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,.16);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.22);
+  text-align: left;
+  transition: transform .16s ease;
+}
+.story-ad-plate:active { transform: scale(.98); }
+.story-ad-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.story-ad-icon .icon-svg { width: 17px; height: 17px; }
+.story-ad-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.story-ad-text strong { color: #fff; font-size: 13.5px; font-weight: 700; }
+.story-ad-text span { color: rgba(255,255,255,.72); font-size: 11.5px; }
+.story-ad-arrow { color: #fff; display: flex; }
+.story-ad-arrow .icon-svg { width: 15px; height: 15px; transform: rotate(180deg); }

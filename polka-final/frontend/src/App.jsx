@@ -205,20 +205,48 @@ function photoDisplayUrl(ref) {
  * мобильной сети, и сильно снижает шанс упереться в лимит размера.
  * Если браузер не смог (например, HEIC в Chrome) — отдаём исходный файл:
  * сервер принимает и его, просто сохраняет как есть. */
+/* Декодирование через <img>: Safari умеет HEIC, который createImageBitmap
+ * не берёт. Без этого фото с iPhone уходило СЫРЫМ и рвало соединение. */
+function loadImageElement(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file)
+    const img = new Image()
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img) }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('decode_failed')) }
+    img.src = url
+  })
+}
+
 async function compressImage(file, maxSide = 1600, quality = 0.85) {
   if (!file || !String(file.type || '').startsWith('image/')) return file
+  let source = null
+  let srcW = 0
+  let srcH = 0
   try {
-    const bitmap = await createImageBitmap(file)
-    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height))
-    const w = Math.max(1, Math.round(bitmap.width * scale))
-    const h = Math.max(1, Math.round(bitmap.height * scale))
+    source = await createImageBitmap(file)
+    srcW = source.width
+    srcH = source.height
+  } catch {
+    try {
+      source = await loadImageElement(file)
+      srcW = source.naturalWidth || source.width || 0
+      srcH = source.naturalHeight || source.height || 0
+    } catch {
+      return file // не смогли декодировать — размер проверит prepareUpload
+    }
+  }
+  try {
+    const scale = Math.min(1, maxSide / Math.max(srcW || 1, srcH || 1))
+    const w = Math.max(1, Math.round((srcW || 1) * scale))
+    const h = Math.max(1, Math.round((srcH || 1) * scale))
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
-    canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h)
-    if (bitmap.close) bitmap.close()
+    canvas.getContext('2d').drawImage(source, 0, 0, w, h)
+    if (source.close) source.close()
     const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality))
-    if (!blob) return file
+    // Если сжатие не помогло — смысла подменять файл нет
+    if (!blob || blob.size >= file.size) return file
     return new File([blob], 'photo.jpg', { type: 'image/jpeg' })
   } catch {
     return file
@@ -255,13 +283,23 @@ async function prepareUpload(file) {
   return out
 }
 
-/* Человеческий текст вместо «payload too large» */
+/* Человеческий текст вместо «payload too large» и сетевого «Load failed» */
 function uploadErrorText(err) {
   const detail = String(err?.detail || err?.message || '')
   if (err?.status === 413 || /payload too large/i.test(detail)) {
     return `Файл слишком большой для загрузки. Выберите фото меньшего размера или короткое видео (до ${UPLOAD_LIMIT_MB} МБ).`
   }
+  // Safari/WebKit так сообщает об обрыве соединения при отправке
+  if (/load failed|failed to fetch|networkerror|network request failed|обрыв/i.test(detail)) {
+    return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова — если повторяется, выберите фото меньшего размера.'
+  }
   return detail ? `Не удалось: ${detail}` : 'Не удалось отправить.'
+}
+
+function formatSize(bytes) {
+  const b = Number(bytes) || 0
+  if (b < 1024 * 1024) return `${Math.max(1, Math.round(b / 1024))} КБ`
+  return `${(b / (1024 * 1024)).toFixed(1)} МБ`
 }
 
 /* Тип вложения для отрисовки: photo | video | voice.
@@ -611,8 +649,10 @@ function StoriesRow() {
   }, [])
 
   if (!loaded) return null
-  const myAuthor = authors.find((a) => a.is_me) || null
-  const others = authors.filter((a) => !a.is_me)
+  const myAuthor = authors.find((a) => a.is_me && a.stories?.length) || null
+  // Автор без активных историй в рельсе не нужен: тап по нему не открывал бы
+  // ничего. Бэкенд таких не отдаёт, но подстрахуемся.
+  const others = authors.filter((a) => !a.is_me && a.stories?.length)
   const pending = Number(mine?.pending || 0)
   // Авторизованному рельс показываем ВСЕГДА: иначе на пустой площадке
   // (ни одной истории) он пропадал бы и выложить первую было бы негде.
@@ -819,14 +859,21 @@ function StoryViewer({ authors, startIndex, onClose, onSeen }) {
       <button type="button" className="story-tap story-tap-next" onClick={goNext} aria-label="Вперёд" />
 
       <div className="story-footer">
+        {/* Заметная плашка на объявление: видно, что за товар,
+            и одним тапом открывается карточка */}
+        {story.ad_id ? (
+          <button type="button" className="story-ad-plate"
+            onClick={() => { onClose(); navigate(`/listing/${story.ad_id}`) }}>
+            <span className="story-ad-icon"><Icon name="sparkles" /></span>
+            <span className="story-ad-text">
+              <strong>Товар из истории</strong>
+              <span>Посмотреть объявление</span>
+            </span>
+            <span className="story-ad-arrow"><Icon name="back" /></span>
+          </button>
+        ) : null}
         {story.caption ? <div className="story-caption">{story.caption}</div> : null}
         <div className="story-actions">
-          {story.ad_id ? (
-            <button type="button" className="story-action"
-              onClick={() => { onClose(); navigate(`/listing/${story.ad_id}`) }}>
-              <Icon name="back" /> К объявлению
-            </button>
-          ) : null}
           {author?.is_me ? (
             <button type="button" className="story-action"
               onClick={() => { onClose(); navigate('/story/new') }}>
@@ -982,7 +1029,9 @@ const BID_STATE_LABELS = {
   lost: { text: 'Проиграна', tone: 'is-muted' },
 }
 
-function AuctionsPage() {
+/* Содержимое аукционов без обёртки экрана: показывается переключателем
+ * в ленте, поэтому Screen и TopBar здесь не нужны. */
+function AuctionsView() {
   const [tab, setTab] = useState('lots')
   const [items, setItems] = useState([])
   const [myBids, setMyBids] = useState([])
@@ -1021,9 +1070,7 @@ function AuctionsPage() {
   }
 
   return (
-    <Screen>
-      <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <div className="page-title">Аукционы</div>
+    <>
       <div className="segmented">
         <button type="button" className={tab === 'lots' ? 'is-active' : ''} onClick={() => setTab('lots')}>
           Лоты
@@ -1077,7 +1124,7 @@ function AuctionsPage() {
       {bidItem ? (
         <BidSheet item={bidItem} onClose={() => setBidItem(null)} onDone={onBidDone} />
       ) : null}
-    </Screen>
+    </>
   )
 }
 
@@ -1092,6 +1139,9 @@ function StoryCreatePage() {
   const [ads, setAds] = useState([])
   const [adId, setAdId] = useState('')
   const [busy, setBusy] = useState(false)
+  const [preparing, setPreparing] = useState(false)
+  const [prepared, setPrepared] = useState(null)
+  const [preparedSize, setPreparedSize] = useState(0)
   const [error, setError] = useState('')
   const [sent, setSent] = useState(false)
 
@@ -1106,19 +1156,31 @@ function StoryCreatePage() {
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview) }, [preview])
 
-  const pick = (event) => {
+  /* Готовим файл сразу при выборе: сжимаем фото и показываем РЕАЛЬНЫЙ размер.
+   * Раньше про лимит узнавали только после неудачной отправки. */
+  const pick = async (event) => {
     const chosen = event.target.files?.[0]
     if (!chosen) return
     const video = chosen.type.startsWith('video/')
-    if (video && chosen.size > UPLOAD_LIMIT_BYTES) {
-      setError(`Видео больше ${UPLOAD_LIMIT_MB} МБ — выберите короче.`)
-      return
-    }
     if (preview) URL.revokeObjectURL(preview)
     setPreview(URL.createObjectURL(chosen))
     setIsVideo(video)
     setFile(chosen)
+    setPrepared(null)
+    setPreparedSize(0)
     setError('')
+    setPreparing(true)
+    try {
+      const ready = await prepareUpload(chosen)
+      setPrepared(ready)
+      setPreparedSize(ready.size)
+    } catch (err) {
+      // Показываем реальный вес исходника, чтобы было видно, что дело в размере
+      setPreparedSize(chosen.size)
+      setError(uploadErrorText(err))
+    } finally {
+      setPreparing(false)
+    }
   }
 
   const submit = async () => {
@@ -1126,8 +1188,7 @@ function StoryCreatePage() {
     setBusy(true)
     setError('')
     try {
-      // Фото сжимаем перед отправкой: сырое с телефона не проходит по лимиту
-      const payload = await prepareUpload(file)
+      const payload = prepared || await prepareUpload(file)
       await api.createStory(payload, { caption: caption.trim(), adId: adId || null })
       setSent(true)
     } catch (err) {
@@ -1201,10 +1262,23 @@ function StoryCreatePage() {
         ) : null}
       </div>
 
-      {error ? <ErrorBlock text={error} /> : null}
+      {file ? (
+        <div className={`story-size ${preparedSize > UPLOAD_LIMIT_BYTES ? 'is-bad' : ''}`}>
+          {preparing
+            ? 'Готовим файл…'
+            : preparedSize > UPLOAD_LIMIT_BYTES
+              ? `Не проходит: ${formatSize(preparedSize)} при лимите ${UPLOAD_LIMIT_MB} МБ`
+              : preparedSize
+                ? `К отправке ${formatSize(preparedSize)}${isVideo ? '' : ' после сжатия'}`
+                : ''}
+        </div>
+      ) : null}
 
-      <button type="button" className="cta-primary" disabled={busy || !file} onClick={submit}>
-        {busy ? 'Отправляем…' : 'Отправить на проверку'}
+      {error ? <div className="status-line error">{error}</div> : null}
+
+      <button type="button" className="cta-primary"
+        disabled={busy || preparing || !file || preparedSize > UPLOAD_LIMIT_BYTES} onClick={submit}>
+        {busy ? 'Отправляем…' : preparing ? 'Готовим…' : 'Отправить на проверку'}
       </button>
       <p className="story-hint">История живёт 24 часа и видна всем в разделе «Истории продавцов».</p>
     </Screen>
@@ -1381,6 +1455,9 @@ function LastNews({ items = [] }) {
 function FeedPage() {
   const { favoriteIds, toggleFavorite } = useApp()
   const [activeCategory, setActiveCategory] = useState('Все')
+  // Объявления или аукционы. Раньше аукционы жили отдельной вкладкой в доке,
+  // но с шестью пунктами док переставал помещаться — перенесли сюда.
+  const [feedTab, setFeedTab] = useState('ads')
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
   const [showTop, setShowTop] = useState(false)
@@ -1508,6 +1585,14 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+      <div className="segmented feed-switch">
+        <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
+          onClick={() => setFeedTab('ads')}>Объявления</button>
+        <button type="button" className={feedTab === 'auctions' ? 'is-active' : ''}
+          onClick={() => setFeedTab('auctions')}>Аукционы</button>
+      </div>
+      {feedTab === 'auctions' ? <AuctionsView /> : (
+        <>
       <StoriesRow />
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
@@ -1535,6 +1620,8 @@ function FeedPage() {
           <Icon name="back" />
         </button>
       ) : null}
+        </>
+      )}
     </Screen>
   )
 }
@@ -3119,7 +3206,6 @@ function Layout() {
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/" element={<FeedPage />} />
         <Route path="/search" element={<SearchPage />} />
-        <Route path="/auctions" element={<AuctionsPage />} />
         <Route path="/listing/:id" element={<ListingPage />} />
         <Route path="/create" element={<CreatePage />} />
         <Route path="/story/new" element={<StoryCreatePage />} />
@@ -3137,12 +3223,15 @@ function Layout() {
 
 function BottomNav() {
   const location = useLocation()
+  // Пять ОДНОРОДНЫХ пунктов, как в Avito: раньше было четыре подписанных
+  // плюс кнопка и отдельный градиентный аватар — вместе шесть элементов,
+  // и док выглядел перегруженным. Поиск убран: он и так крупным полем
+  // в ленте. Профиль стал обычным пунктом вместо «пузыря».
   const items = [
     { icon: 'home', to: '/', label: 'Главная' },
-    { icon: 'chat', to: '/chats', label: 'Сообщения' },
-    { icon: 'gavel', to: '/auctions', label: 'Аукционы' },
     { icon: 'bookmark', to: '/favorites', label: 'Избранное' },
-    { icon: 'search', to: '/search', label: 'Поиск' },
+    { icon: 'chat', to: '/chats', label: 'Сообщения' },
+    { icon: 'user', to: '/profile', label: 'Профиль' },
   ]
 
   const renderItem = (item) => (
@@ -3164,8 +3253,6 @@ function BottomNav() {
         <Icon name="plus" />
       </NavLink>
       {items.slice(2).map(renderItem)}
-      {/* Аватар профиля убран из дока: он и так доступен по иконке в шапке,
-          а освободившееся место заняла вкладка «Аукционы». */}
     </nav>
   )
 }
