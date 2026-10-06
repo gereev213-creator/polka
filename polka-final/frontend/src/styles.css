@@ -2040,7 +2040,7 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
 .story-badge {
   position: absolute;
   right: -1px;
-  bottom: -1px;
+  top: -1px; /* сверху, чтобы не спорить с кнопкой «+» в правом нижнем углу */
   min-width: 21px;
   height: 21px;
   padding: 0 5px;
@@ -2257,3 +2257,39 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
    Тот же приём, что для экрана чата: скрываем через :has(). */
 body:has(.story-viewer) .dock { display: none; }
 body:has(.story-viewer) .app-frame { padding-bottom: 0; }
+
+/* ── «Вы» в рельсе: кольцо + постоянная кнопка «+» ──────────────────────── */
+.story-item.is-mine { cursor: default; }
+.story-item.is-mine:active { transform: none; }
+.story-mine-ring {
+  position: relative;
+  display: inline-flex;
+}
+.story-ring-hit {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  transition: transform .18s ease;
+}
+.story-ring-hit:active { transform: scale(.94); }
+/* Кнопка добавления — всегда на виду, даже когда своя история уже есть */
+.story-add {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: 2.5px solid #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  box-shadow: 0 2px 8px rgba(47,107,255,.4);
+  transition: transform .16s ease;
+}
+.story-add:active { transform: scale(.9); }
+.story-add .icon-svg { width: 14px; height: 14px; }

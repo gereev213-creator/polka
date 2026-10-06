@@ -568,7 +568,9 @@ function StoriesRow() {
   const myAuthor = authors.find((a) => a.is_me) || null
   const others = authors.filter((a) => !a.is_me)
   const pending = Number(mine?.pending || 0)
-  if (!myAuthor && !others.length && !pending) return null
+  // Авторизованному рельс показываем ВСЕГДА: иначе на пустой площадке
+  // (ни одной истории) он пропадал бы и выложить первую было бы негде.
+  if (!myAuthor && !others.length && !pending && !mine?.can_post) return null
 
   const openMine = () => {
     if (myAuthor) setViewerIndex(authors.indexOf(myAuthor))
@@ -583,15 +585,28 @@ function StoriesRow() {
           <span>Истории продавцов</span>
         </div>
         <div className="stories-row">
-          <button type="button" className="story-item" onClick={openMine}>
-            <StoryRing author={myAuthor} own pending={pending}>
-              <div className="story-avatar">
-                {myAuthor ? <img src={storyAvatarUrl(myAuthor)} alt="" /> : <Icon name="plus" />}
-              </div>
+          {/* «Вы» — два действия: кольцо открывает мою историю (или создание,
+              если её нет), а «плюс» рядом всегда ведёт на создание. Раньше
+              плюс пропадал, как только появлялась активная история, и было
+              непонятно, как выложить новую. */}
+          <div className="story-item is-mine">
+            <div className="story-mine-ring">
+              <button type="button" className="story-ring-hit" onClick={openMine}
+                aria-label={myAuthor ? 'Моя история' : 'Добавить историю'}>
+                <StoryRing author={myAuthor} own pending={pending}>
+                  <div className="story-avatar">
+                    {myAuthor ? <img src={storyAvatarUrl(myAuthor)} alt="" /> : <Icon name="plus" />}
+                  </div>
+                </StoryRing>
+              </button>
+              <button type="button" className="story-add" aria-label="Добавить историю"
+                onClick={() => navigate('/story/new')}>
+                <Icon name="plus" />
+              </button>
               {pending ? <span className="story-badge">{pending}</span> : null}
-            </StoryRing>
+            </div>
             <span className="story-name">Вы</span>
-          </button>
+          </div>
           {others.map((a) => (
             <button type="button" key={a.user_id} className="story-item"
               onClick={() => setViewerIndex(authors.indexOf(a))}>
