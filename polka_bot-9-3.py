@@ -18272,6 +18272,65 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
     return _miniapp_err('method_not_allowed', 405)
 
 
+# Сколько дней держать находку. Дальше она либо продана, либо неактуальна.
+HUNT_KEEP_DAYS = int(os.environ.get('HUNT_KEEP_DAYS', '7'))
+
+
+def cleanup_findings() -> Dict:
+    """Убирает старые находки из базы.
+
+    Зачем: объявление, которому неделя, скорее всего уже продано — скидка по
+    нему неактуальна, а в базе оно занимает место и замедляет запросы.
+    Заодно медиана превращается в скользящее окно за последние дни: это
+    точнее описывает рынок, чем среднее по древним объявлениям.
+
+    Доску (source='polka') НЕ трогаем: это объявления живых людей.
+    Отметки об отправке тоже оставляем — они крошечные и защищают
+    от повторной присылки, если объявление появится снова.
+    """
+    cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
+    cursor = db.conn.cursor()
+    removed = 0
+    try:
+        cursor.execute("DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
+                       "AND COALESCE(parsed_at, created_at) < ?", (cutoff,))
+        removed = cursor.rowcount or 0
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"cleanup findings: {e}")
+    if removed:
+        logger.info(f"Чистка базы: удалено старых находок {removed} (старше {HUNT_KEEP_DAYS} дн.)")
+        recompute_market_medians()
+        recompute_criterion_medians()
+    return {'removed': removed, 'keep_days': HUNT_KEEP_DAYS}
+
+
+async def _findings_cleanup_loop():
+    """Чистит базу раз в сутки."""
+    while True:
+        try:
+            await asyncio.sleep(6 * 3600)
+            cleanup_findings()
+        except Exception as e:
+            logger.warning(f"findings cleanup loop: {e}")
+
+
+async def _cleanup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ручная чистка — на случай, если база распухла."""
+    res = cleanup_findings()
+    cur = db.conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
+        left = _row_get(cur.fetchone(), 'n', 0)
+    except Exception:
+        left = 0
+    await update.message.reply_text(
+        f"🧹 Убрано старых находок: <b>{res['removed']}</b>\n"
+        f"Храню объявления {res['keep_days']} дней.\n"
+        f"Осталось в базе: {left}",
+        parse_mode=ParseMode.HTML)
+
+
 async def tell_criterion_created(user_id: int, crit: Dict):
     """Сразу отвечаем человеку, что критерий принят и что будет дальше.
 
@@ -24046,6 +24105,7 @@ def main():
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
+    application.add_handler(CommandHandler("cleanup", _cleanup_command))
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
     application.add_handler(CommandHandler("city",    city_command))
@@ -24449,6 +24509,7 @@ def main():
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
+            asyncio.ensure_future(_findings_cleanup_loop())
             print(f"   Health check:      {SERVER_URL}/health")
         except Exception as _srv_err:
             print(f"{EM_FAIL} ОШИБКА запуска API-сервера на порту {WEBAPP_PORT}: {_srv_err}")
