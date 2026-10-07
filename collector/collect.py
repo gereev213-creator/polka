@@ -181,6 +181,40 @@ def items_from_initial_data(html: str) -> list:
     return out
 
 
+def hours_ago(text: str):
+    """«7 дней назад» → 168 часов. «сегодня» → 0.
+
+    Нужно, чтобы не присылать как «находку» объявление недельной давности:
+    на Авито сверху выдачи висят как раз такие, и порядок там не по свежести.
+    """
+    t = str(text or '').lower().replace('\xa0', ' ').strip()
+    if not t:
+        return None
+    if 'сегодня' in t or 'минут' in t or 'только что' in t or 'сейчас' in t:
+        return 0
+    if 'вчера' in t:
+        return 24
+    m = re.search(r'(\d+)?\s*(минут|час|день|дня|дней|сут|недел|месяц|год)', t)
+    if not m:
+        return None
+    # «месяц назад» и «год назад» — без числа, поэтому n может быть пустым
+    n = int(m.group(1)) if m.group(1) else 1
+    unit = m.group(2)
+    if unit.startswith('минут'):
+        return 0
+    if unit.startswith('час'):
+        return n
+    if unit.startswith(('день', 'дня', 'дней', 'сут')):
+        return n * 24
+    if unit.startswith('недел'):
+        return n * 168
+    if unit.startswith('месяц'):
+        return n * 720
+    if unit.startswith('год'):
+        return n * 8760
+    return None
+
+
 def items_from_microdata(html: str) -> list:
     """Разбор микроразметки schema.org — ОСНОВНОЙ путь для Авито.
 
@@ -227,6 +261,10 @@ def items_from_microdata(html: str) -> list:
         if m:
             city = unescape(m.group(1)).strip()
 
+        # Дата публикации: без неё мы бы слали недельные объявления как находки
+        m = re.search(r'data-marker="item-date"[^>]*>([^<]+)<', chunk)
+        ago = hours_ago(m.group(1)) if m else None
+
         if title and price and url.startswith('http'):
             out.append({
                 'title': title[:200],
@@ -235,6 +273,7 @@ def items_from_microdata(html: str) -> list:
                 'photos': photos[:5],
                 'external_id': ext,
                 'city': city,
+                'hours_ago': ago,
             })
     return out
 

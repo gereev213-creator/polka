@@ -574,8 +574,23 @@ class _TokenRedactingFilter(logging.Filter):
         return True
 
 
-for _handler in logging.getLogger().handlers:
-    _handler.addFilter(_TokenRedactingFilter())
+def install_token_filter():
+    """Маскировка токена на ВСЕХ обработчиках логов.
+
+    Вызывается и при импорте, и при старте. Причина: фильтр, навешенный
+    только один раз в момент импорта, не попадает на обработчики, которые
+    библиотеки (httpx, telegram) добавляют позже — и токен утекал в логи
+    открытым текстом: "POST https://api.telegram.org/bot<TOKEN>/getUpdates".
+    """
+    targets = list(logging.getLogger().handlers) + list(logging.root.handlers)
+    for _h in targets:
+        if not any(isinstance(f, _TokenRedactingFilter) for f in _h.filters):
+            _h.addFilter(_TokenRedactingFilter())
+    # На случай, если обработчиков ещё нет: навесим при следующем вызове
+    return len(targets)
+
+
+install_token_filter()
 logger = logging.getLogger(__name__)
 
 # Функция для получения московского времени
@@ -2567,6 +2582,10 @@ class Database:
             "ALTER TABLE ads ADD COLUMN market_median INTEGER",
             "ALTER TABLE ads ADD COLUMN discount_percent INTEGER",
             "ALTER TABLE ads ADD COLUMN parsed_at TEXT",
+            # Сколько часов назад объявление опубликовано на источнике.
+            # Сверху выдачи Авито висят объявления недельной давности,
+            # поэтому «новое для нас» и «свежее» — разные вещи.
+            "ALTER TABLE ads ADD COLUMN published_hours_ago INTEGER",
             # Судьба лота: жив, пропал или продан. Из этого считается,
             # сколько он провисел — главный ориентир цены для перекупа.
             "ALTER TABLE ads ADD COLUMN listing_state TEXT DEFAULT 'active'",
@@ -17444,13 +17463,17 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             if cursor.fetchone():
                 stats['duplicate'] += 1
                 continue
+            try:
+                ago = int(raw.get('hours_ago')) if raw.get('hours_ago') is not None else None
+            except (TypeError, ValueError):
+                ago = None
             cursor.execute('''
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
-                                 external_id, parsed_at, sale_type, views)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0)
+                                 external_id, parsed_at, sale_type, views, published_hours_ago)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0, ?)
             ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
-                  now, now, source, url, ext, now))
+                  now, now, source, url, ext, now, ago))
             stats['accepted'] += 1
             stats['ids'].append(cursor.lastrowid)
         except Exception as e:
@@ -17528,6 +17551,9 @@ async def api_findings_stats(request: aiohttp_web.Request) -> aiohttp_web.Respon
 
 # ── Критерии перекупа: «ловлю дешёвое под свой запрос» ──────────────────────
 HUNT_MIN_SAMPLE = 5   # меньше пяти наблюдений — медиана недостоверна, молчим
+# Старше этого срока объявление уже не «находка», а архив: сверху выдачи
+# Авито висят объявления недельной давности, и слать их как свежие нельзя.
+HUNT_FRESH_HOURS = int(os.environ.get('HUNT_FRESH_HOURS', '24'))
 
 
 def _hours_since(iso_value) -> Optional[int]:
@@ -17718,6 +17744,58 @@ def _minutes_since(iso_value) -> Optional[int]:
         return None
 
 
+# ── Синонимы для поиска ─────────────────────────────────────────────────────
+# Люди пишут «айфон», а продавцы — «iPhone». Из-за раскладки находка не
+# приходила, хотя объявление было. Раскладка не должна решать этот вопрос.
+QUERY_SYNONYMS = {
+    'айфон': ('iphone', 'айфон'), 'iphone': ('iphone', 'айфон'),
+    'айпад': ('ipad', 'айпад'), 'ipad': ('ipad', 'айпад'),
+    'макбук': ('macbook', 'макбук'), 'macbook': ('macbook', 'макбук'),
+    'эпл': ('apple', 'эпл'), 'apple': ('apple', 'эпл'),
+    'аирподс': ('airpods', 'аирподс'), 'airpods': ('airpods', 'аирподс'),
+    'самсунг': ('samsung', 'самсунг'), 'samsung': ('samsung', 'самсунг'),
+    'сяоми': ('xiaomi', 'сяоми', 'ксяоми', 'ксиоми'),
+    'xiaomi': ('xiaomi', 'сяоми', 'ксяоми', 'ксиоми'),
+    'редми': ('redmi', 'редми'), 'redmi': ('redmi', 'редми'),
+    'хонор': ('honor', 'хонор'), 'honor': ('honor', 'хонор'),
+    'хуавей': ('huawei', 'хуавей'), 'huawei': ('huawei', 'хуавей'),
+    'сони': ('sony', 'сони'), 'sony': ('sony', 'сони'),
+    'плейстейшн': ('playstation', 'плейстейшн', 'ps4', 'ps5'),
+    'playstation': ('playstation', 'плейстейшн', 'ps4', 'ps5'),
+    'ps5': ('ps5', 'playstation', 'плейстейшн'),
+    'иксбокс': ('xbox', 'иксбокс'), 'xbox': ('xbox', 'иксбокс'),
+    'найк': ('nike', 'найк'), 'nike': ('nike', 'найк'),
+    'адидас': ('adidas', 'адидас'), 'adidas': ('adidas', 'адидас'),
+    'дайсон': ('dyson', 'дайсон'), 'dyson': ('dyson', 'дайсон'),
+    'бош': ('bosch', 'бош'), 'bosch': ('bosch', 'бош'),
+    'делонги': ('delonghi', 'делонги'), 'delonghi': ('delonghi', 'делонги'),
+    'филипс': ('philips', 'филипс'), 'philips': ('philips', 'филипс'),
+    'лджи': ('lg', 'лджи'), 'lg': ('lg', 'лджи'),
+    'макдональдс': ('airfryer', 'аэрогриль'),
+    'велосипед': ('велосипед', 'вело', 'bike'),
+    'телевизор': ('телевизор', 'тв', 'tv'),
+    'ноутбук': ('ноутбук', 'ноут', 'laptop'),
+    'наушники': ('наушники', 'наушник', 'headphones'),
+    'холодильник': ('холодильник', 'холодильники'),
+    'стиральная': ('стиральная', 'стиралка', 'стиральные'),
+}
+
+
+def query_word_variants(word: str) -> tuple:
+    """Все написания слова: и латиницей, и кириллицей.
+
+    Возвращает кортеж, чтобы порядок был предсказуемым в тестах.
+    """
+    key = str(word or '').strip().lower()
+    if not key or len(key) < 2:
+        return ()
+    variants = QUERY_SYNONYMS.get(key)
+    if not variants:
+        return (key,)
+    # Само слово тоже оставляем: «айфон 13» должно находить и «айфон 13»
+    return tuple(dict.fromkeys((key,) + tuple(variants)))
+
+
 def _criterion_where(crit: Dict, active_only: bool = True):
     """SQL-условие отбора под критерий.
 
@@ -17742,9 +17820,13 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     if max_price > 0:
         where.append("price <= ?")
         params.append(max_price)
-    for word in [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if len(w) > 1]:
-        where.append("LOWER(title) LIKE ?")
-        params.append(f"%{word}%")
+    for word in re.split(r'\s+', str(crit.get('query') or '').lower()):
+        variants = query_word_variants(word)
+        if not variants:
+            continue
+        # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
+        where.append("(" + " OR ".join("LOWER(title) LIKE ?" for _ in variants) + ")")
+        params.extend(f"%{v}%" for v in variants)
     return ' AND '.join(where), params
 
 
@@ -17801,8 +17883,11 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     if max_price and price > max_price:
         return None
     title = str(ad.get('title') or '').lower()
-    for word in [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if len(w) > 1]:
-        if word not in title:
+    for word in re.split(r'\s+', str(crit.get('query') or '').lower()):
+        variants = query_word_variants(word)
+        if not variants:
+            continue
+        if not any(v in title for v in variants):
             return None
     if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
         return None
@@ -17856,8 +17941,13 @@ async def notify_hunt_matches(ad_ids: List[int]):
                     continue
             except Exception:
                 pass
-            hours = _hours_since(ad.get('parsed_at') or ad.get('created_at'))
-            fresh = f"{hours} ч назад" if hours else "только что"
+            # Несвежее не присылаем: недельное объявление — не находка.
+            # Если даты нет вовсе — пропускаем, чтобы не устроить залп старьём.
+            ago = ad.get('published_hours_ago')
+            if ago is None or int(ago) > HUNT_FRESH_HOURS:
+                continue
+            hours = int(ago)
+            fresh = "только что" if hours == 0 else f"{hours} ч назад"
             prof = hunt_profit(ad['price'], crit['median_price'])
             if not prof.get('ok'):
                 continue
@@ -24105,6 +24195,9 @@ def main():
 
     # API-сервер запускается всегда
     async def run_all():
+        # Ещё раз: к этому моменту httpx и telegram уже могли добавить свои
+        # обработчики, и на них фильтра не было
+        install_token_filter()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

@@ -1127,7 +1127,11 @@ function CriteriaPage() {
         а когда наберётся статистика — покажет, сколько на них заработать.
       </p>
 
-      {collector && !collector.alive ? (
+      {/* Жёлтое предупреждение — только когда это ДЕЙСТВИТЕЛЬНО проблема.
+          Сразу после запуска сборщик ещё не успел отметиться, и пугать
+          человека жёлтым баннером «всё сломано» неправильно. */}
+      {collector && !collector.alive
+        && (!collector.server_mode || (collector.minutes ?? 0) > 45) ? (
         <div className="collector-warn">
           <strong>
             {collector.server_mode ? 'Собираем первые объявления' : 'Объявления пока не приходят'}
@@ -1141,6 +1145,11 @@ function CriteriaPage() {
                   ? `Сбор идёт, но последний выход был ${Math.round(collector.minutes / 60)} ч назад. Похоже, Авито ограничил сбор — попробую позже сам.`
                   : `Сборщик последний раз выходил ${Math.round(collector.minutes / 60)} ч назад. Проверьте, запущен ли он.`)}
           </span>
+        </div>
+      ) : collector && !collector.alive ? (
+        <div className="collector-ok">
+          <Icon name="clock" />
+          <span>Собираем первые объявления — это займёт несколько минут</span>
         </div>
       ) : collector && collector.alive ? (
         <div className="collector-ok">
