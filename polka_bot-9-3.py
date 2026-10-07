@@ -17597,6 +17597,11 @@ HUNT_ACCESSORY_WORDS = (
 # Если цена меньше этой доли от медианы — это почти наверняка аксессуар
 # или мусор, а не находка. Настоящая вещь редко дешевле 15% рынка.
 HUNT_MIN_PRICE_SHARE = 0.15
+
+# Минимальная выгода, ради которой стоит беспокоить человека. Даже в режиме
+# «любые» не шлём то, что дешевле рынка на 2%: перекупу это не заработок,
+# а шум. Меняется через HUNT_MIN_DISCOUNT в переменных Amvera.
+HUNT_MIN_DISCOUNT = int(os.environ.get('HUNT_MIN_DISCOUNT', '10'))
 # Старше этого срока объявление уже не «находка», а архив: сверху выдачи
 # Авито висят объявления недельной давности, и слать их как свежие нельзя.
 HUNT_FRESH_HOURS = int(os.environ.get('HUNT_FRESH_HOURS', '24'))
@@ -17957,46 +17962,70 @@ def _criterion_words(crit: Dict) -> set:
     return out
 
 
-def ad_key_word(title: str, crit: Dict = None) -> str:
-    """Главное слово товара: «повербанк» у «Повербанк для iPhone».
+def ad_key_words(title: str, crit: Dict = None, limit: int = 2) -> list:
+    """Значимые слова товара: «iphone», «13» у «iPhone 13 128Gb».
 
-    По нему и считаем рынок. Без этого в выборку по запросу «Айфон»
-    попадали и телефоны за 40 000, и провода за 200 — медиана выходила
-    бессмысленной, и бот писал «рынок 3 500 ₽» про повербанк за 800.
+    Одно слово слишком грубо: по «128gb» в выборку лезут любые телефоны с
+    таким объёмом. Два слова дают бренд с моделью — рынок становится
+    честным, и с ним можно сравнивать цену.
     """
     skip = _criterion_words(crit or {})
-    best = ''
+    words = []
     for raw in re.split(r'[^0-9a-zA-Zа-яёА-ЯЁ]+', str(title or '').lower()):
         w = raw.strip()
-        if len(w) < 4 or w in skip or w in HUNT_STOP_WORDS:
+        if len(w) < 2 or w in skip or w in HUNT_STOP_WORDS:
             continue
-        # Цифробуквенные вроде «128gb» тоже годятся: это вид товара
-        if len(w) > len(best):
-            best = w
-    return best
+        if w.isdigit() and len(w) < 2:
+            continue
+        words.append(w)
+    # Длинные слова важнее («повербанк» > «для»), числа — это модель
+    words.sort(key=lambda w: (-len(w), w))
+    picked = []
+    for w in words:
+        if w not in picked:
+            picked.append(w)
+        if len(picked) >= limit:
+            break
+    return picked
+
+
+def ad_key_word(title: str, crit: Dict = None) -> str:
+    """Одно главное слово — оставлено для совместимости."""
+    words = ad_key_words(title, crit, limit=1)
+    return words[0] if words else ''
 
 
 def median_for_ad(ad: Dict, crit: Dict = None, min_samples: int = 3) -> Optional[int]:
-    """Медиана цен по ТАКИМ ЖЕ товарам, а не по всему запросу.
+    """Медиана цен по ТАКИМ ЖЕ товарам. Сравниваем повербанк с повербанками.
 
-    Сравниваем повербанк с повербанками, провод с проводами. Возвращает
-    None, если похожих мало: лучше промолчать, чем назвать выдуманный рынок.
+    Сначала пробуем самое точное совпадение — по двум значимым словам
+    (бренд + модель). Если таких мало, ослабляем до одного слова. Если и
+    этого мало — возвращаем None: лучше промолчать, чем назвать
+    выдуманный рынок, как было с повербанком за 1750 ₽ и «рынком 3500 ₽».
     """
-    key = ad_key_word(ad.get('title'), crit)
-    if not key:
-        return None
+    title = ad.get('title') or ''
     cursor = db.conn.cursor()
-    try:
-        cursor.execute("SELECT price FROM ads WHERE status='active' AND price > 0 "
-                       "AND COALESCE(title_lower, title) LIKE ? AND id <> ? ORDER BY price",
-                       (f"%{key}%", ad.get('id') or 0))
-        prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
-    except Exception:
+    words = ad_key_words(title, crit, limit=2)
+    if not words:
         return None
-    if len(prices) < min_samples:
-        return None
-    mid = len(prices) // 2
-    return prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+    # От точного к грубому: [w1+w2] -> [w1] -> [w2]
+    attempts = [words]
+    for w in words:
+        attempts.append([w])
+    for attempt in attempts:
+        conds = " AND ".join("COALESCE(title_lower, title) LIKE ?" for _ in attempt)
+        try:
+            cursor.execute(
+                f"SELECT price FROM ads WHERE status='active' AND price > 0 "
+                f"AND {conds} AND id <> ? ORDER BY price",
+                tuple(f"%{w}%" for w in attempt) + (ad.get('id') or 0,))
+            prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
+        except Exception:
+            return None
+        if len(prices) >= min_samples:
+            mid = len(prices) // 2
+            return prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+    return None
 
 
 def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
@@ -18034,11 +18063,16 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
         return None
 
     if (crit.get('mode') or 'any') == 'any':
-        # Рынок ещё не знаем — шлём всё подходящее, иначе будет тишина.
-        # Когда медиана появилась, заведомо дорогое уже не присылаем.
-        if median and price > median:
+        # Рынка не знаем — шлём: иначе будет тишина, а человек ждёт.
+        if not median:
+            return 0
+        if price >= median:
             return None
-        return int(round((median - price) * 100.0 / median)) if median and price < median else 0
+        discount = int(round((median - price) * 100.0 / median))
+        # Даже в «любых» нужна осмысленная выгода: минус 2% — не находка
+        if discount < HUNT_MIN_DISCOUNT:
+            return None
+        return discount
 
     if not median or price >= median:
         return None
