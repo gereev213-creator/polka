@@ -2790,3 +2790,7 @@ select.text-input {
 .board-note strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
 .board-note span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
 .board-note .cta-primary { align-self: flex-start; margin-top: 4px; }
+
+/* У лота с Авито плашки на фото не показываем: это чужая находка,
+   а не объявление пользователя. Доски не касается. */
+.hero-pins.is-hidden { display: none; }

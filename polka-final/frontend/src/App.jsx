@@ -2229,6 +2229,9 @@ function ListingPage() {
 
   const isOwner = Boolean(item?.is_owner)
   const isAuction = item?.sale_type === 'auction'
+  // Лот с Авито: для него интерфейс другой — это чужая находка,
+  // а не объявление пользователя. Доски это не касается.
+  const isFinding = Boolean(item.source_url)
 
   const loadBids = async () => {
     try {
@@ -2359,7 +2362,7 @@ function ListingPage() {
 
         {/* Плавающие плашки-«якоря» поверх фото — ключевая деталь референса.
             Они информационные, кликов не подразумевают, поэтому не <button>. */}
-        <div className="hero-pins" aria-hidden="true">
+        <div className={`hero-pins ${isFinding ? 'is-hidden' : ''}`} aria-hidden="true">
           <div className="hero-pin" style={{ top: '11%' }}>
             <span className="hero-pin-anchor" />
             <span className="hero-pin-pill">
@@ -2480,7 +2483,7 @@ function ListingPage() {
         ) : null}
         {item.city ? (
           <span className="spec-chip">
-            <Icon name="pin" /><span className="spec-chip-label">Город</span><span className="spec-chip-value">{item.city}</span>
+            <Icon name="pin" /><span className="spec-chip-label">{isFinding ? 'Объявление с Авито' : 'Город'}</span><span className="spec-chip-value">{item.city}</span>
           </span>
         ) : null}
         {item.delivery ? (
@@ -2493,9 +2496,11 @@ function ListingPage() {
             <Icon name="ruler" /><span className="spec-chip-label">Размер</span><span className="spec-chip-value">{item.size}</span>
           </span>
         ) : null}
-        <span className="spec-chip">
-          <Icon name="clock" /><span className="spec-chip-label">Просмотры</span><span className="spec-chip-value">{item.views || 0}</span>
-        </span>
+        {!isFinding ? (
+          <span className="spec-chip">
+            <Icon name="clock" /><span className="spec-chip-label">Просмотры</span><span className="spec-chip-value">{item.views || 0}</span>
+          </span>
+        ) : null}
       </div>
 
       <div className="copy-block glass-card mt-12">
@@ -2528,10 +2533,22 @@ function ListingPage() {
                 Сделать ставку
               </button>
             ) : (
-              <button className="cta-primary" type="button" onClick={handleStartChat}>
-                <Icon name="chat" />
-                {chatLoading ? 'Открываем…' : 'Написать'}
-              </button>
+              isFinding ? (
+                <button className="cta-primary" type="button"
+                  onClick={() => {
+                    const tg = window.Telegram?.WebApp
+                    if (tg?.openLink) tg.openLink(item.source_url)
+                    else window.open(item.source_url, '_blank', 'noopener')
+                  }}>
+                  <Icon name="arrowUpRight" />
+                  Открыть на Авито
+                </button>
+              ) : (
+                <button className="cta-primary" type="button" onClick={handleStartChat}>
+                  <Icon name="chat" />
+                  {chatLoading ? 'Открываем…' : 'Написать'}
+                </button>
+              )
             )}
             {isAuction && item.time_left > 0 && item.buy_now_price ? (
               <button className="cta-dark" type="button" onClick={handleBuyNow}

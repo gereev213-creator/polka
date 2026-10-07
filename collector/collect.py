@@ -390,9 +390,16 @@ def items_from_microdata(html: str) -> list:
         m = re.search(r'data-item-id="(\d+)"', chunk)
         ext = m.group(1) if m else external_id_from_url(url)
 
-        photos = re.findall(r'itemProp="image"[^>]*?src="([^"]+)"', chunk, re.I)
+        # Фото: Авито подгружает часть картинок лениво, поэтому кроме src
+        # смотрим data-src и srcset. Без этого фотографии были лишь у 12
+        # карточек из 50, а в приложении показывалась серая заглушка.
+        photos = re.findall(r'itemProp="image"[^>]*?(?:data-)?src="([^"]+)"', chunk, re.I)
         if not photos:
-            photos = re.findall(r'src="(https://[\w.-]*img\.avito\.st/[^"]+)"', chunk)
+            photos = re.findall(r'(?:data-)?src="(https://[\w.-]*img\.avito\.st/[^"]+)"', chunk)
+        if not photos:
+            photos = re.findall(r"https://[\w.-]*img\.avito\.st/[^\s<>]+", chunk)
+        photos = [x.strip('"\',') for x in photos if x.startswith("http")]
+        photos = list(dict.fromkeys(p for p in photos if p))
 
         city = ''
         m = re.search(r'itemProp="addressLocality"[^>]*content="([^"]*)"', chunk, re.I)
@@ -403,6 +410,7 @@ def items_from_microdata(html: str) -> list:
         m = re.search(r'data-marker="item-date"[^>]*>([^<]+)<', chunk)
         ago = hours_ago(m.group(1)) if m else None
 
+        photos = [p.split(' ')[0] for p in photos]
         if title and price and url.startswith('http'):
             out.append({
                 'title': title[:200],
