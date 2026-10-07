@@ -1241,6 +1241,7 @@ function FindingsView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [minDiscount, setMinDiscount] = useState(15)
+  const [needCriteria, setNeedCriteria] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -1248,6 +1249,7 @@ function FindingsView() {
     try {
       const data = await api.getFindings({ minDiscount, limit: 40 })
       setItems(data.items || [])
+      setNeedCriteria(Boolean(data.need_criteria))
     } catch {
       setError('Не удалось загрузить находки.')
       setItems([])
@@ -1263,16 +1265,15 @@ function FindingsView() {
 
   return (
     <>
-      <div className="auction-sort">
-        {[10, 20, 30].map((d) => (
-          <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
-            onClick={() => setMinDiscount(d)}>от −{d}%</button>
-        ))}
-      </div>
+
       {error ? <ErrorBlock text={error} onRetry={load} /> : null}
       {loading ? <div className="muted-line">Ищем выгодные предложения…</div> : null}
       {!loading && !error && !items.length ? (
-        <EmptyBlock text="Пока ничего дешевле рынка не нашлось. Сборщик постепенно наполняет базу — загляните позже." />
+        needCriteria ? (
+          <EmptyBlock text="Сначала скажите, что искать — нажмите «Что ловить?» выше. Тогда здесь появятся свежие объявления дешевле рынка." />
+        ) : (
+          <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
+        )
       ) : null}
       <div className="grid-two">
         {items.map((item) => (
