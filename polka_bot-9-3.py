@@ -2586,6 +2586,10 @@ class Database:
             # Сверху выдачи Авито висят объявления недельной давности,
             # поэтому «новое для нас» и «свежее» — разные вещи.
             "ALTER TABLE ads ADD COLUMN published_hours_ago INTEGER",
+            # Заголовок в нижнем регистре, посчитанный в PYTHON. Встроенный
+            # LOWER() в SQLite не умеет кириллицу: «Повербанк» он не опускает,
+            # и поиск по русским словам молча не находил ничего.
+            "ALTER TABLE ads ADD COLUMN title_lower TEXT",
             # Судьба лота: жив, пропал или продан. Из этого считается,
             # сколько он провисел — главный ориентир цены для перекупа.
             "ALTER TABLE ads ADD COLUMN listing_state TEXT DEFAULT 'active'",
@@ -17492,10 +17496,11 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             cursor.execute('''
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
-                                 external_id, parsed_at, sale_type, views, published_hours_ago)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0, ?)
+                                 external_id, parsed_at, sale_type, views, published_hours_ago,
+                                 title_lower)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0, ?, ?)
             ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
-                  now, now, source, url, ext, now, ago))
+                  now, now, source, url, ext, now, ago, title.lower()))
             stats['accepted'] += 1
             stats['ids'].append(cursor.lastrowid)
         except Exception as e:
@@ -17578,7 +17583,9 @@ HUNT_MIN_SAMPLE = 5   # меньше пяти наблюдений — меди�
 # «Айфон», но это не телефон. Без этого списка бот присылал кабель за 490 ₽
 # с «выгодой 90%» — и выглядел врущим.
 HUNT_ACCESSORY_WORDS = (
-    'кабель', 'шнур', 'чехол', 'бампер', 'стекло', 'защитное стекло', 'плёнка',
+    'кабель', 'шнур', 'провод', 'переходник', 'повербанк', 'powerbank', 'павербанк',
+    'зарядное устройство', 'беспроводная зарядка', 'брелок', 'держатель в авто',
+    'чехол', 'бампер', 'стекло', 'защитное стекло', 'плёнка',
     'пленка', 'зарядка', 'зарядное', 'адаптер', 'переходник', 'держатель',
     'подставка', 'крепление', 'сумка для', 'ремешок', 'браслет', 'наклейка',
     'запчасть', 'запчасти', 'ремонт', 'разбит', 'не работает', 'на запчасти',
@@ -17881,13 +17888,13 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         if not variants:
             continue
         # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
-        where.append("(" + " OR ".join("LOWER(title) LIKE ?" for _ in variants) + ")")
+        where.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?" for _ in variants) + ")")
         params.extend(f"%{v}%" for v in variants)
     # Аксессуары не участвуют и в медиане. Иначе по критерию «Айфон» медиана
     # считалась вместе с кабелями и чехлами (5 000 ₽), настоящие телефоны за
     # 40 000 ₽ отсекались как «дорогие», а кабель за 490 ₽ выглядел находкой.
     for bad in HUNT_ACCESSORY_WORDS:
-        where.append("LOWER(title) NOT LIKE ?")
+        where.append("COALESCE(title_lower, title) NOT LIKE ?")
         params.append(f"%{bad}%")
     return ' AND '.join(where), params
 
@@ -17929,6 +17936,67 @@ def recompute_criterion_medians() -> int:
     except Exception:
         pass
     return updated
+
+
+# Слова, которые не описывают товар: по ним сравнивать бессмысленно
+HUNT_STOP_WORDS = (
+    'для', 'и', 'в', 'на', 'с', 'от', 'до', 'по', 'или', 'the', 'and', 'new',
+    'новый', 'новая', 'новое', 'новые', 'оригинал', 'оригинальный', 'срочно',
+    'продам', 'продаю', 'отдам', 'недорого', 'дешево', 'дёшево', 'торг',
+    'состояние', 'отличное', 'хорошее', 'идеальное', 'рабочий', 'рабочая',
+    'б/у', 'бу', 'шт', 'штук', 'комплект', 'подарок', 'вместе', 'только',
+    'есть', 'можно', 'очень', 'самый', 'весь', 'все', 'опт', 'розница',
+)
+
+
+def _criterion_words(crit: Dict) -> set:
+    """Слова самого критерия — они не описывают вид товара."""
+    out = set()
+    for w in re.split(r'\s+', str(crit.get('query') or '').lower()):
+        out.update(query_word_variants(w))
+    return out
+
+
+def ad_key_word(title: str, crit: Dict = None) -> str:
+    """Главное слово товара: «повербанк» у «Повербанк для iPhone».
+
+    По нему и считаем рынок. Без этого в выборку по запросу «Айфон»
+    попадали и телефоны за 40 000, и провода за 200 — медиана выходила
+    бессмысленной, и бот писал «рынок 3 500 ₽» про повербанк за 800.
+    """
+    skip = _criterion_words(crit or {})
+    best = ''
+    for raw in re.split(r'[^0-9a-zA-Zа-яёА-ЯЁ]+', str(title or '').lower()):
+        w = raw.strip()
+        if len(w) < 4 or w in skip or w in HUNT_STOP_WORDS:
+            continue
+        # Цифробуквенные вроде «128gb» тоже годятся: это вид товара
+        if len(w) > len(best):
+            best = w
+    return best
+
+
+def median_for_ad(ad: Dict, crit: Dict = None, min_samples: int = 3) -> Optional[int]:
+    """Медиана цен по ТАКИМ ЖЕ товарам, а не по всему запросу.
+
+    Сравниваем повербанк с повербанками, провод с проводами. Возвращает
+    None, если похожих мало: лучше промолчать, чем назвать выдуманный рынок.
+    """
+    key = ad_key_word(ad.get('title'), crit)
+    if not key:
+        return None
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT price FROM ads WHERE status='active' AND price > 0 "
+                       "AND COALESCE(title_lower, title) LIKE ? AND id <> ? ORDER BY price",
+                       (f"%{key}%", ad.get('id') or 0))
+        prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
+    except Exception:
+        return None
+    if len(prices) < min_samples:
+        return None
+    mid = len(prices) // 2
+    return prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
 
 
 def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
@@ -18035,7 +18103,11 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 fresh = "только что" if hours == 0 else f"{hours} ч назад"
             # Показываем просто цену и разницу с рынком. Никаких «наваров»,
             # «окупаемостей» и комиссий: человеку нужна цена, а не расчёты.
-            median = int(crit['median_price'])
+            # Рынок считаем по ТАКИМ ЖЕ товарам: повербанк с повербанками.
+            # Если похожих мало — не выдумываем цифру, а молчим.
+            median = median_for_ad(ad, crit)
+            if not median or median <= int(ad['price']):
+                continue
             diff = median - int(ad['price'])
             lines = [
                 "🔥 <b>Новое объявление дешевле рынка</b>",
@@ -18176,10 +18248,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     if len(query) < 2:
         return None
     cursor = db.conn.cursor()
-    cursor.execute("SELECT id FROM hunt_criteria WHERE user_id=? AND LOWER(query)=LOWER(?) "
-                   "AND COALESCE(city,'')=? AND active=1", (user_id, query, city or ''))
-    if cursor.fetchone():
-        return None
+    # Сравниваем в Python: LOWER() в SQLite не понимает кириллицу, из-за чего
+    # «Пуховик» и «пуховик» считались разными критериями.
+    cursor.execute("SELECT query, COALESCE(city,'') AS city FROM hunt_criteria "
+                   "WHERE user_id=? AND active=1", (user_id,))
+    for row in cursor.fetchall():
+        if str(row['query'] or '').lower() == query.lower() and row['city'] == (city or ''):
+            return None
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
                                    active, created_at, mode)
@@ -24495,7 +24570,26 @@ def main():
     _bot_app_ref = application
 
     # API-сервер запускается всегда
+    def _backfill_title_lower():
+        """Заполняет title_lower у объявлений, собранных до этой правки.
+
+        LOWER() в SQLite не умеет кириллицу, поэтому считаем в Python.
+        """
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT id, title FROM ads WHERE title_lower IS NULL")
+            rows = cur.fetchall()
+            for r in rows:
+                cur.execute("UPDATE ads SET title_lower=? WHERE id=?",
+                            (str(r['title'] or '').lower(), r['id']))
+            if rows:
+                db.conn.commit()
+                logger.info(f"title_lower заполнен для {len(rows)} объявлений")
+        except Exception as e:
+            logger.warning(f"backfill title_lower: {e}")
+
     async def run_all():
+        _backfill_title_lower()
         # Ещё раз: к этому моменту httpx и telegram уже могли добавить свои
         # обработчики, и на них фильтра не было
         install_token_filter()
