@@ -1051,6 +1051,8 @@ function CriteriaPage() {
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   const [minDiscount, setMinDiscount] = useState(15)
+  const [mode, setMode] = useState('any')
+  const [collector, setCollector] = useState(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -1060,6 +1062,7 @@ function CriteriaPage() {
     try {
       const data = await api.getCriteria()
       setItems(data.items || [])
+      setCollector(data.collector || null)
       setError('')
     } catch {
       setError('Не удалось загрузить критерии.')
@@ -1085,7 +1088,8 @@ function CriteriaPage() {
         query: query.trim(),
         city,
         max_price: Number(maxPrice) || 0,
-        min_discount: minDiscount,
+        min_discount: mode === 'deal' ? minDiscount : 0,
+        mode,
       })
       setQuery('')
       setCity('')
@@ -1112,9 +1116,28 @@ function CriteriaPage() {
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Что ловить</div>
       <p className="sub-copy">
-        Напишите, что искать на Авито. Бот пришлёт, когда найдёт дешевле обычной цены,
-        и покажет, сколько на этом заработать.
+        Напишите, что искать на Авито. Бот будет присылать подходящие объявления,
+        а когда наберётся статистика — покажет, сколько на них заработать.
       </p>
+
+      {collector && !collector.alive ? (
+        <div className="collector-warn">
+          <strong>Объявления пока не приходят</strong>
+          <span>
+            {collector.minutes == null
+              ? 'Сборщик ещё ни разу не выходил на связь. Он работает на вашем компьютере — без него искать некому.'
+              : `Сборщик последний раз выходил ${Math.round(collector.minutes / 60)} ч назад. Проверьте, запущен ли он.`}
+          </span>
+        </div>
+      ) : collector && collector.alive ? (
+        <div className="collector-ok">
+          <Icon name="check" />
+          <span>
+            Сборщик на связи{collector.minutes === 0 ? ' только что' : ` ${collector.minutes} мин назад`}
+            {' '}— ждём подходящие объявления
+          </span>
+        </div>
+      ) : null}
 
       <div className="form-stack">
         <input className="text-input glass-card" value={query}
@@ -1131,13 +1154,29 @@ function CriteriaPage() {
           {cities.map((c) => <option key={c.value} value={c.label} />)}
         </datalist>
 
-        <div className="field-label-row">Присылать, если дешевле обычного на</div>
-        <div className="auction-sort">
-          {[10, 15, 25].map((d) => (
-            <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
-              onClick={() => setMinDiscount(d)}>−{d}%</button>
-          ))}
+        <div className="field-label-row">Что присылать</div>
+        <div className="segmented">
+          <button type="button" className={mode === 'any' ? 'is-active' : ''}
+            onClick={() => setMode('any')}>Любые подходящие</button>
+          <button type="button" className={mode === 'deal' ? 'is-active' : ''}
+            onClick={() => setMode('deal')}>Только выгодные</button>
         </div>
+        {mode === 'any' ? (
+          <p className="sub-copy">
+            Пришлём сразу, как только появится подходящее — ждать статистики не нужно.
+            Когда наберётся достаточно объявлений, начнём отсеивать дорогое.
+          </p>
+        ) : (
+          <>
+            <div className="field-label-row">Присылать, если дешевле обычного на</div>
+            <div className="auction-sort">
+              {[10, 15, 25].map((d) => (
+                <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
+                  onClick={() => setMinDiscount(d)}>−{d}%</button>
+              ))}
+            </div>
+          </>
+        )}
 
         {error ? <div className="status-line error">{error}</div> : null}
         <button type="button" className="cta-primary" disabled={busy} onClick={add}>
@@ -1156,9 +1195,11 @@ function CriteriaPage() {
             <div className="hunt-row">
               <strong>{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
               <span>
+                {c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}
+                {' · '}
                 {c.ready
-                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ · по ${c.sample_size} шт`
-                  : `копим данные: ${c.sample_size} из 5`}
+                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ (${c.sample_size} шт)`
+                  : `собираем статистику: ${c.sample_size} из 5`}
                 {c.max_price ? ` · не дороже ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
               </span>
             </div>

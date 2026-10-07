@@ -2572,6 +2572,11 @@ class Database:
             "ALTER TABLE ads ADD COLUMN last_seen_at TEXT",
             "ALTER TABLE ads ADD COLUMN sold_at TEXT",
             "ALTER TABLE ads ADD COLUMN sold_after_hours INTEGER",
+            # Режим ловли: 'any' — присылать всё подходящее, 'deal' — только
+            # заметно дешевле рынка. По умолчанию 'any': иначе человек
+            # создаёт критерий и не получает НИЧЕГО, пока не наберётся
+            # статистика — и уходит, не поняв почему.
+            "ALTER TABLE hunt_criteria ADD COLUMN mode TEXT DEFAULT 'any'",
         ]:
             try:
                 cursor.execute(_auction_sql)
@@ -17483,6 +17488,7 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     if not isinstance(items, list):
         return _miniapp_err('bad_items', 400)
     stats = ingest_findings(items, source)
+    _touch_collector(source)
     logger.info(f"ingest {source}: принято {stats['accepted']}, "
                 f"дублей {stats['duplicate']}, пропущено {stats['skipped']}")
     pushed = 0
@@ -17586,6 +17592,58 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
     return int(round(sum(hours) / len(hours)))
 
 
+def _touch_collector(source: str = ''):
+    """Отмечает, что сборщик выходил на связь."""
+    try:
+        now = get_moscow_time().isoformat()
+        db.conn.execute("INSERT INTO settings (key, value, updated_at) VALUES ('last_ingest_at',?,?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?",
+                        (now, now, now, now))
+        if source:
+            db.conn.execute("INSERT INTO settings (key, value, updated_at) "
+                            "VALUES ('last_ingest_source',?,?) "
+                            "ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?",
+                            (source, now, source, now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"collector touch: {e}")
+
+
+def collector_status() -> Dict:
+    """Жив ли сборщик. Без него объявления не придут НИКОГДА, и человек
+    должен видеть это прямо в приложении, а не гадать."""
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key='last_ingest_at'")
+        row = cur.fetchone()
+        cur.execute("SELECT value FROM settings WHERE key='last_ingest_source'")
+        src = cur.fetchone()
+    except Exception:
+        return {'alive': False, 'minutes': None, 'source': ''}
+    try:
+        last_value = row['value'] if row else ''
+        source_value = src['value'] if src else ''
+    except Exception:
+        return {'alive': False, 'minutes': None, 'source': ''}
+    if not last_value:
+        return {'alive': False, 'minutes': None, 'source': ''}
+    minutes = _minutes_since(last_value)
+    # Сборщик считается живым, если выходил на связь за последний час
+    return {'alive': minutes is not None and minutes <= 60,
+            'minutes': minutes,
+            'source': source_value or ''}
+
+
+def _minutes_since(iso_value) -> Optional[int]:
+    if not iso_value:
+        return None
+    try:
+        delta = get_moscow_time() - _safe_isoparse(str(iso_value))
+        return max(0, int(delta.total_seconds() // 60))
+    except Exception:
+        return None
+
+
 def _criterion_where(crit: Dict, active_only: bool = True):
     """SQL-условие отбора под критерий.
 
@@ -17656,16 +17714,17 @@ def recompute_criterion_medians() -> int:
 
 
 def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
-    """Подходит ли находка под критерий. Возвращает скидку в % или None."""
+    """Подходит ли находка под критерий. Возвращает скидку в % (0 = без скидки).
+
+    Режим 'any' работает СРАЗУ, без накопленной статистики: иначе человек
+    создаёт критерий, ждёт и не получает ничего, не понимая почему.
+    """
     median = int(crit.get('median_price') or 0)
     price = int(ad.get('price') or 0)
-    if not median or price <= 0 or price >= median:
+    if price <= 0:
         return None
     max_price = int(crit.get('max_price') or 0)
     if max_price and price > max_price:
-        return None
-    discount = int(round((median - price) * 100.0 / median))
-    if discount < int(crit.get('min_discount') or 15):
         return None
     title = str(ad.get('title') or '').lower()
     for word in [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if len(w) > 1]:
@@ -17674,6 +17733,19 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
         return None
     if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
+        return None
+
+    if (crit.get('mode') or 'any') == 'any':
+        # Рынок ещё не знаем — шлём всё подходящее, иначе будет тишина.
+        # Когда медиана появилась, заведомо дорогое уже не присылаем.
+        if median and price > median:
+            return None
+        return int(round((median - price) * 100.0 / median)) if median and price < median else 0
+
+    if not median or price >= median:
+        return None
+    discount = int(round((median - price) * 100.0 / median))
+    if discount < int(crit.get('min_discount') or 15):
         return None
     return discount
 
@@ -17822,6 +17894,7 @@ async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Respons
             updated += 1
             if state != 'active':
                 gone += 1
+    _touch_collector(source)
     logger.info(f"ingest status {source}: обновлено {updated}, исчезло {gone}")
     return _miniapp_json({'ok': True, 'updated': updated, 'gone': gone})
 
@@ -17840,6 +17913,7 @@ def _criterion_public(crit: Dict) -> Dict:
         # Медиана считается только от пяти наблюдений — показываем честно
         'ready': bool(crit.get('median_price')),
         'active': bool(crit.get('active')),
+        'mode': crit.get('mode') or 'any',
     }
 
 
@@ -17850,7 +17924,8 @@ def get_user_criteria(user_id: int) -> List[Dict]:
 
 
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
-                  max_price: int = 0, min_discount: int = 15) -> Optional[int]:
+                  max_price: int = 0, min_discount: int = 15,
+                  mode: str = 'any') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -17862,10 +17937,11 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
         return None
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
-                                   active, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+                                   active, created_at, mode)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
     ''', (user_id, query, category or '', city or '', int(max_price or 0),
-          max(5, min(int(min_discount or 15), 90)), get_moscow_time().isoformat()))
+          max(0, min(int(min_discount or 0), 90)), get_moscow_time().isoformat(),
+          'deal' if str(mode) == 'deal' else 'any'))
     db.conn.commit()
     crit_id = cursor.lastrowid
     # Сразу считаем медиану, чтобы критерий начал работать не «когда-нибудь»
@@ -17901,7 +17977,11 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         return _miniapp_err('unauthorized', 401)
 
     if method == 'GET':
-        return _miniapp_json({'items': [_criterion_public(c) for c in get_user_criteria(viewer_id)]})
+        return _miniapp_json({
+            'items': [_criterion_public(c) for c in get_user_criteria(viewer_id)],
+            # Без этого человек не понимает, почему ничего не приходит
+            'collector': collector_status(),
+        })
 
     if method == 'POST':
         try:
@@ -17914,7 +17994,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             category=str((body or {}).get('category') or ''),
             city=str((body or {}).get('city') or ''),
             max_price=int((body or {}).get('max_price') or 0),
-            min_discount=int((body or {}).get('min_discount') or 15),
+            min_discount=int((body or {}).get('min_discount') or 0),
+            mode=str((body or {}).get('mode') or 'any'),
         )
         if not crit_id:
             return _miniapp_json({'error': 'duplicate_or_short',
@@ -17944,6 +18025,7 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if not args:
         crits = get_user_criteria(user.id)
+        col = collector_status()
         if not crits:
             await update.message.reply_text(
                 "🔎 <b>Ловля находок</b>\n\n"
@@ -17954,6 +18036,9 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode=ParseMode.HTML)
             return
         lines = ["🔎 <b>Ваши критерии</b>\n"]
+        if not col.get('alive'):
+            lines.append("⚠️ <b>Сборщик не на связи.</b> Он работает на вашем "
+                         "компьютере — пока он не запущен, объявления не придут.\n")
         for c in crits:
             city = f" · {c['city']}" if c.get('city') else ""
             cap = f" · до {_money(c['max_price'])} ₽" if c.get('max_price') else ""
@@ -17970,8 +18055,8 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if speed:
                     lines.append(f"   похожие уходили за ~{speed} ч")
             else:
-                lines.append(f"   мало данных: {c.get('sample_size') or 0} из "
-                             f"{HUNT_MIN_SAMPLE} нужных")
+                lines.append(f"   собираем статистику: {c.get('sample_size') or 0} из "
+                             f"{HUNT_MIN_SAMPLE} — присылаю любые подходящие")
             lines.append(f"   убрать: <code>/hunt -{c['id']}</code>")
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
         return
@@ -18004,11 +18089,17 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                    f"Посчитана по {crit.get('sample_size')} объявлениям.\n\n"
                    f"Пришлю, как только появится дешевле на {crit.get('min_discount') or 15}%.",
             parse_mode=ParseMode.HTML)
+    elif (crit.get('mode') or 'any') == 'any':
+        await update.message.reply_text(
+            head + "Буду присылать всё подходящее сразу — статистику ждать не нужно.\n\n"
+                   "Как наберётся достаточно объявлений, начну отсеивать дорогое "
+                   "и показывать, сколько на этом заработать.",
+            parse_mode=ParseMode.HTML)
     else:
         await update.message.reply_text(
-            head + f"Пока мало данных: нужно минимум {HUNT_MIN_SAMPLE} объявлений "
+            head + f"Копим статистику: нужно минимум {HUNT_MIN_SAMPLE} объявлений "
                    f"по этому запросу, чтобы медиана была честной.\n\n"
-                   f"Как сборщик их наберёт — начну присылать находки.",
+                   f"Пока их нет, присылать нечего — иначе скидка была бы выдуманной.",
             parse_mode=ParseMode.HTML)
 
 
