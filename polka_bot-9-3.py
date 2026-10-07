@@ -3,6 +3,7 @@ import logging
 import json
 import sqlite3
 import asyncio
+import sys
 import re
 import hashlib
 import hmac
@@ -17592,6 +17593,77 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
     return int(round(sum(hours) / len(hours)))
 
 
+# ── Сборщик находок на сервере ──────────────────────────────────────────────
+# Раньше он запускался только на компьютере владельца, и продукт умирал,
+# стоило тому выключиться. Теперь это фоновый процесс рядом с ботом.
+# Блокировка Авито не ломает сервис: страдает только сбор находок, а бот,
+# подписки и приложение продолжают работать.
+COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '300'))
+COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
+
+
+async def _notify_admins_collector_blocked():
+    app = _get_bot_app()
+    if not app:
+        return
+    for admin_id in ADMIN_USER_IDS:
+        try:
+            await app.bot.send_message(
+                chat_id=admin_id,
+                text=("⚠️ <b>Авито заблокировал сбор с сервера</b>\n\n"
+                      "Бот и приложение работают, но новые находки не приходят. "
+                      f"Повторю попытку через {int(COLLECTOR_BLOCK_HOURS)} ч.\n\n"
+                      "Что можно сделать: подключить прокси или вернуться к запуску "
+                      "сборщика со своего компьютера."),
+                parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.warning(f"admin notify blocked: {e}")
+
+
+async def _collector_loop():
+    """Держит сборщик находок запущенным прямо на сервере."""
+    if not COLLECTOR_ENABLED:
+        logger.info("Сборщик находок выключен (COLLECTOR_ENABLED=0)")
+        return
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector', 'collect.py')
+    if not os.path.exists(script):
+        logger.warning(f"Сборщик находок не найден: {script}")
+        return
+    token = os.environ.get('INGEST_TOKEN', '')
+    if not token:
+        logger.warning("Сборщик находок ждёт INGEST_TOKEN — принимать находки нечем")
+        return
+
+    logger.info(f"Сборщик находок запущен: раз в {COLLECTOR_INTERVAL} с")
+    backoff = 0
+    while True:
+        if backoff:
+            await asyncio.sleep(backoff)
+            backoff = 0
+        env = dict(os.environ)
+        # Внутри контейнера ходим к себе же, а не в интернет
+        env['POLKA_SERVER'] = f"http://127.0.0.1:{WEBAPP_PORT}"
+        env['POLKA_INGEST_TOKEN'] = token
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, script, '--loop', '--every', str(COLLECTOR_INTERVAL),
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env)
+            out, _ = await proc.communicate()
+            text = (out or b'').decode('utf-8', 'replace').strip()
+            if text:
+                logger.info("Сборщик находок: " + text[-1200:])
+            if proc.returncode == 3:
+                backoff = int(COLLECTOR_BLOCK_HOURS * 3600)
+                logger.warning(f"Сбор заблокирован. Пауза {COLLECTOR_BLOCK_HOURS} ч.")
+                await _notify_admins_collector_blocked()
+            else:
+                backoff = 60
+        except Exception as e:
+            logger.warning(f"Сборщик находок упал: {e}")
+            backoff = 120
+
+
 def _touch_collector(source: str = ''):
     """Отмечает, что сборщик выходил на связь."""
     try:
@@ -17631,7 +17703,9 @@ def collector_status() -> Dict:
     # Сборщик считается живым, если выходил на связь за последний час
     return {'alive': minutes is not None and minutes <= 60,
             'minutes': minutes,
-            'source': source_value or ''}
+            'source': source_value or '',
+            # true — сбор идёт на сервере, человеку ничего запускать не нужно
+            'server_mode': COLLECTOR_ENABLED}
 
 
 def _minutes_since(iso_value) -> Optional[int]:
@@ -24035,6 +24109,7 @@ def main():
             site = aiohttp_web.TCPSite(runner, '0.0.0.0', WEBAPP_PORT)
             await site.start()
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
+            asyncio.ensure_future(_collector_loop())
             print(f"   Health check:      {SERVER_URL}/health")
         except Exception as _srv_err:
             print(f"{EM_FAIL} ОШИБКА запуска API-сервера на порту {WEBAPP_PORT}: {_srv_err}")

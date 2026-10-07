@@ -36,8 +36,8 @@ USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
 
 # Признаки того, что нас остановили — по ним сразу выходим, а не долбим сайт
-BLOCK_MARKERS = ('captcha', 'showcaptcha', 'Доступ ограничен', 'IP-адрес',
-                 'подтвердите, что вы не робот', 'blocked')
+BLOCK_MARKERS = ('captcha', 'showcaptcha', 'Доступ ограничен', 'проблема с IP',
+                 'IP-адрес', 'подтвердите, что вы не робот', 'blocked')
 
 # Признаки того, что лот больше не продаётся. Авито не отдаёт статус
 # в выдаче — узнаём только переоткрыв страницу.
@@ -57,8 +57,17 @@ def fetch(url: str, timeout: int = 25) -> str:
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'ru-RU,ru;q=0.9',
     })
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        # 429 и 403 Авито отдаёт на «плохой» IP. Это НЕ обычная ошибка:
+        # без этой ветки сборщик счёл бы её временной и пошёл долбить дальше,
+        # закрепляя блокировку. Проверено: наш IP получает 429 с текстом
+        # «Доступ ограничен: проблема с IP» на первом же запросе.
+        if exc.code in (403, 429):
+            raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
+        raise
     html = raw.decode('utf-8', errors='replace')
     low = html.lower()
     for marker in BLOCK_MARKERS:
@@ -172,6 +181,64 @@ def items_from_initial_data(html: str) -> list:
     return out
 
 
+def items_from_microdata(html: str) -> list:
+    """Разбор микроразметки schema.org — ОСНОВНОЙ путь для Авито.
+
+    Проверено на настоящей странице выдачи: карточки размечены атрибутами
+    itemProp, а не JSON-LD, поэтому прежний разбор находил НОЛЬ карточек из 80.
+    Классы у Авито хешированные (iva-item-title-KE8A9), так что цепляемся за
+    itemProp — он смысловой и переживает пересборку вёрстки.
+    """
+    out = []
+    for chunk in re.split(r'data-marker="item"', html)[1:]:
+        chunk = chunk[:40000]
+
+        def prop(name: str, attr: str = 'content') -> str:
+            """Значение itemProp, в любом порядке атрибутов."""
+            m = re.search(r'itemProp="%s"[^>]*?%s="([^"]*)"' % (name, attr), chunk, re.I)
+            if m:
+                return m.group(1)
+            m = re.search(r'%s="([^"]*)"[^>]*?itemProp="%s"' % (attr, name), chunk, re.I)
+            return m.group(1) if m else ''
+
+        price = parse_price(prop('price'))
+        url = prop('url', 'href')
+        if not url:
+            m = re.search(r'href="(/[^"]+_\d{6,}[^"]*)"', chunk)
+            url = m.group(1) if m else ''
+        if url.startswith('/'):
+            url = "https://www.avito.ru" + url
+
+        # Заголовок лежит внутри <a>, поэтому между тегами допускаем вложенность
+        title = ''
+        m = re.search(r'item-title[^>]*>(?:\s*<[^>]+>)*\s*([^<]{3,200})', chunk)
+        if m:
+            title = unescape(re.sub(r'\s+', ' ', m.group(1))).strip()
+
+        m = re.search(r'data-item-id="(\d+)"', chunk)
+        ext = m.group(1) if m else external_id_from_url(url)
+
+        photos = re.findall(r'itemProp="image"[^>]*?src="([^"]+)"', chunk, re.I)
+        if not photos:
+            photos = re.findall(r'src="(https://[\w.-]*img\.avito\.st/[^"]+)"', chunk)
+
+        city = ''
+        m = re.search(r'itemProp="addressLocality"[^>]*content="([^"]*)"', chunk, re.I)
+        if m:
+            city = unescape(m.group(1)).strip()
+
+        if title and price and url.startswith('http'):
+            out.append({
+                'title': title[:200],
+                'price': price,
+                'url': url.split('?')[0],
+                'photos': photos[:5],
+                'external_id': ext,
+                'city': city,
+            })
+    return out
+
+
 def items_from_html(html: str) -> list:
     """Третий путь: обычный разбор карточек, если разметки нет."""
     out = []
@@ -199,7 +266,10 @@ def items_from_html(html: str) -> list:
 
 def parse_page(html: str) -> list:
     """Пробуем три способа по очереди и берём тот, что дал больше карточек."""
-    results = [items_from_jsonld(html), items_from_initial_data(html), items_from_html(html)]
+    # Микроразметка первая: проверено, что на живой выдаче Авито JSON-LD нет,
+    # а данные лежат именно в itemProp
+    results = [items_from_microdata(html), items_from_jsonld(html),
+               items_from_initial_data(html), items_from_html(html)]
     best = max(results, key=len) if results else []
     # Чистим: без цены и без ссылки карточка бесполезна
     clean, seen = [], set()
@@ -321,13 +391,23 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
 
 
 def load_config(path: str) -> dict:
-    with open(path, encoding='utf-8') as fh:
-        cfg = json.load(fh)
+    # Файл может отсутствовать: на сервере всё приходит из переменных
+    # окружения, а цели берутся из критериев пользователей.
+    cfg = {}
+    if os.path.exists(path):
+        try:
+            with open(path, encoding='utf-8') as fh:
+                cfg = json.load(fh)
+        except Exception as exc:
+            print(f"  ⚠ config.json не прочитан: {exc}")
     server = os.environ.get('POLKA_SERVER') or cfg.get('server') or ''
     token = os.environ.get('POLKA_INGEST_TOKEN') or cfg.get('token') or ''
     if not server or not token:
         sys.exit("Не заданы server и token: заполните config.json "
                  "или переменные POLKA_SERVER и POLKA_INGEST_TOKEN")
+    cfg['server'] = server
+    cfg['token'] = token
+    cfg.setdefault('targets', [])
     return cfg
 
 
@@ -352,7 +432,9 @@ def run_once(cfg: dict) -> int:
             html = fetch(url)
         except Blocked as exc:
             print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
-            break
+            # Код 3 = «нас заблокировали». Супервизор на сервере по нему
+            # делает длинную паузу вместо бессмысленных повторов.
+            raise SystemExit(3)
         except (urllib.error.URLError, TimeoutError) as exc:
             print(f"  ✖ не открылось: {exc}")
             continue
@@ -406,8 +488,9 @@ def main() -> int:
         return selftest()
 
     cfg = load_config(args.config)
-    cfg.setdefault('server', os.environ.get('POLKA_SERVER', ''))
-    cfg.setdefault('token', os.environ.get('POLKA_INGEST_TOKEN', ''))
+    # Режим сервера: цели только из критериев пользователей, файл не нужен
+    if os.environ.get('POLKA_SERVER_MODE') == '1':
+        args.loop = True if args.loop is None else args.loop
 
     if args.check:
         print("Проверяем, что уже продано…")
@@ -416,7 +499,13 @@ def main() -> int:
 
     while True:
         started = time.time()
-        sent = run_once(cfg)
+        try:
+            sent = run_once(cfg)
+        except SystemExit as exc:
+            if exc.code == 3:
+                print("Нас заблокировали. Ждём долго, чтобы не закрепить блокировку.")
+                raise
+            raise
         print(f"\nПроход завершён, принято новых: {sent}")
         # Раз в проход смотрим, что уже ушло — так копится статистика
         # «за сколько часов уходит такая цена»

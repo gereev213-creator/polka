@@ -19,6 +19,9 @@ COPY max_compat.py ./
 
 # Static assets (email banner, etc.)
 COPY assets/ ./assets/
+# Сборщик находок: запускается на сервере как дочерний процесс,
+# чтобы не требовать компьютера пользователя
+COPY collector/ ./collector/
 
 # Собранный Mini App frontend (API + SPA из одного процесса/БД)
 COPY --from=frontend /build/dist ./frontend_dist
