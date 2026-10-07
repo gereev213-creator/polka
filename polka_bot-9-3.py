@@ -2354,6 +2354,30 @@ class Database:
                 created_at TEXT
             )
         ''')
+        # Критерии перекупа: «ищу iPhone 13 до 40 000, Ижевск».
+        # Медиана считается ПО КРИТЕРИЮ, а не по категории: цена айфона
+        # не имеет отношения к цене наушников.
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS hunt_criteria (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                query TEXT NOT NULL,
+                category TEXT,
+                city TEXT,
+                max_price INTEGER DEFAULT 0,
+                min_discount INTEGER DEFAULT 15,
+                median_price INTEGER,
+                sample_size INTEGER DEFAULT 0,
+                active INTEGER DEFAULT 1,
+                created_at TEXT,
+                last_pushed_at TEXT
+            )
+        ''')
+        try:
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_active ON hunt_criteria(active)")
+        except Exception:
+            pass
+
         # Истории продавцов: фото/видео на 24 часа с пре-модерацией
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS stories (
@@ -2534,6 +2558,20 @@ class Database:
             "ALTER TABLE ads ADD COLUMN bids_count INTEGER DEFAULT 0",
             "ALTER TABLE ads ADD COLUMN winner_id INTEGER",
             "ALTER TABLE ads ADD COLUMN finished_at TEXT",
+            # ── Находки из внешних источников (агрегатор) ───────────────────
+            # Храним ТОЛЬКО публичное: без имён и телефонов продавцов.
+            "ALTER TABLE ads ADD COLUMN source TEXT DEFAULT 'polka'",
+            "ALTER TABLE ads ADD COLUMN source_url TEXT",
+            "ALTER TABLE ads ADD COLUMN external_id TEXT",
+            "ALTER TABLE ads ADD COLUMN market_median INTEGER",
+            "ALTER TABLE ads ADD COLUMN discount_percent INTEGER",
+            "ALTER TABLE ads ADD COLUMN parsed_at TEXT",
+            # Судьба лота: жив, пропал или продан. Из этого считается,
+            # сколько он провисел — главный ориентир цены для перекупа.
+            "ALTER TABLE ads ADD COLUMN listing_state TEXT DEFAULT 'active'",
+            "ALTER TABLE ads ADD COLUMN last_seen_at TEXT",
+            "ALTER TABLE ads ADD COLUMN sold_at TEXT",
+            "ALTER TABLE ads ADD COLUMN sold_after_hours INTEGER",
         ]:
             try:
                 cursor.execute(_auction_sql)
@@ -2553,6 +2591,8 @@ class Database:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_ad ON bids(ad_id, amount DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_user ON bids(user_id, created_at)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_auction ON ads(sale_type, status, ends_at)")
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ads_external "
+                           "ON ads(source, external_id) WHERE external_id IS NOT NULL")
         except Exception:
             pass
         # Создаем индексы для поиска
@@ -17288,6 +17328,726 @@ def _prepare_upload_dir() -> str:
     return upload_dir
 
 
+# ── Агрегатор находок: приём извне, дедупликация, оценка скидки ──────────────
+FINDING_SOURCES = ('avito', 'yula', 'vk', 'telegram', 'other')
+# Внешние находки живут столько же, сколько обычное объявление
+FINDING_TTL_DAYS = 14
+
+
+def recompute_market_medians(category: Optional[str] = None) -> int:
+    """Пересчитывает медиану цены по категориям и скидку для находок.
+
+    Медиана считается по ВСЕМ активным объявлениям категории (и находкам,
+    и своим) — именно это даёт честную картину рынка. Без неё «скидка»
+    была бы выдумкой.
+    """
+    cursor = db.conn.cursor()
+    where = ("status='active' AND price > 0 AND category IS NOT NULL AND category <> ''")
+    params: tuple = ()
+    if category:
+        where += " AND category = ?"
+        params = (category,)
+    try:
+        cursor.execute(f"SELECT category, price FROM ads WHERE {where} ORDER BY category, price", params)
+        rows = cursor.fetchall()
+    except Exception as e:
+        logger.error(f"median read: {e}")
+        return 0
+    if not rows:
+        return 0
+
+    grouped: Dict[str, List[int]] = {}
+    for r in rows:
+        grouped.setdefault(r['category'], []).append(int(r['price'] or 0))
+
+    updated = 0
+    for cat, prices in grouped.items():
+        prices = [p for p in prices if p > 0]
+        if len(prices) < 3:
+            continue  # на двух объявлениях медиана бессмысленна
+        mid = len(prices) // 2
+        median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+        if median <= 0:
+            continue
+        try:
+            cursor.execute("UPDATE ads SET market_median=? WHERE category=? AND status='active'",
+                           (median, cat))
+            cursor.execute('''
+                UPDATE ads SET discount_percent =
+                  CASE WHEN price > 0 AND price < ?
+                       THEN CAST(ROUND((? - price) * 100.0 / ?) AS INTEGER)
+                       ELSE NULL END
+                WHERE category=? AND status='active'
+            ''', (median, median, median, cat))
+            updated += 1
+        except Exception as e:
+            logger.warning(f"median update {cat}: {e}")
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    logger.info(f"market medians: обновлено категорий {updated}")
+    return updated
+
+
+def ingest_findings(items: List[Dict], source: str) -> Dict:
+    """Принимает находки от сборщика: дедуп, вставка, пересчёт скидок.
+
+    Храним только публичное: заголовок, цена, город, категория, фото, ссылка.
+    Никаких имён и телефонов — и по закону о персональных данных, и по совести.
+    """
+    if source not in FINDING_SOURCES:
+        source = 'other'
+    cursor = db.conn.cursor()
+    now = get_moscow_time().isoformat()
+    stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': []}
+
+    for raw in (items or [])[:500]:
+        if not isinstance(raw, dict):
+            stats['skipped'] += 1
+            continue
+        title = str(raw.get('title') or '').strip()[:200]
+        url = str(raw.get('url') or '').strip()[:500]
+        ext = str(raw.get('external_id') or '').strip()[:64]
+        city = str(raw.get('city') or '').strip()[:100]
+        cat = _miniapp_display_category(str(raw.get('category') or '').strip()[:100])
+        try:
+            price = int(raw.get('price') or 0)
+        except (TypeError, ValueError):
+            price = 0
+        photos = raw.get('photos') or []
+        if isinstance(photos, list):
+            photos = [str(p) for p in photos if isinstance(p, str) and p.startswith('http')][:5]
+        else:
+            photos = []
+        if not title or price <= 0 or not url.startswith('http'):
+            stats['skipped'] += 1
+            continue
+        if not ext:
+            # Идентификатор не прислали — сделаем из ссылки, чтобы дедуп работал
+            ext = hashlib.md5(url.encode()).hexdigest()[:32]
+
+        try:
+            cursor.execute("SELECT id FROM ads WHERE source=? AND external_id=?", (source, ext))
+            if cursor.fetchone():
+                stats['duplicate'] += 1
+                continue
+            # Второй рубеж: тот же заголовок и цена в том же городе
+            cursor.execute("SELECT id FROM ads WHERE source=? AND title=? AND price=? AND city=?",
+                           (source, title, price, city))
+            if cursor.fetchone():
+                stats['duplicate'] += 1
+                continue
+            cursor.execute('''
+                INSERT INTO ads (user_id, title, description, price, photos, category, city,
+                                 status, created_at, published_at, source, source_url,
+                                 external_id, parsed_at, sale_type, views)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0)
+            ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
+                  now, now, source, url, ext, now))
+            stats['accepted'] += 1
+            stats['ids'].append(cursor.lastrowid)
+        except Exception as e:
+            logger.warning(f"ingest item: {e}")
+            stats['skipped'] += 1
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    if stats['accepted']:
+        recompute_market_medians()
+        # Медианы критериев пересчитываем ДО рассылки: иначе скидка
+        # считалась бы по устаревшей выборке
+        recompute_criterion_medians()
+    return stats
+
+
+async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ingest — приём находок от сборщика (запускается у вас локально).
+
+    Сбор идёт с домашнего IP, а не с сервера: Авито блокирует адреса
+    дата-центров, и при блокировке лёг бы весь сервис вместе с ботом.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    source = str((body or {}).get('source') or 'other').lower()
+    items = (body or {}).get('items') or []
+    if not isinstance(items, list):
+        return _miniapp_err('bad_items', 400)
+    stats = ingest_findings(items, source)
+    logger.info(f"ingest {source}: принято {stats['accepted']}, "
+                f"дублей {stats['duplicate']}, пропущено {stats['skipped']}")
+    pushed = 0
+    if stats['accepted']:
+        try:
+            pushed = await notify_hunt_matches(stats.get('ids') or [])
+        except Exception as e:
+            logger.warning(f"hunt notify: {e}")
+    return _miniapp_json({'ok': True, 'source': source, 'pushed': pushed, **stats})
+
+
+async def api_findings_stats(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/findings/stats — что собралось, по источникам и категориям."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT source, COUNT(*) AS total,
+                   SUM(CASE WHEN discount_percent >= 20 THEN 1 ELSE 0 END) AS deals
+            FROM ads WHERE status='active' AND source <> 'polka'
+            GROUP BY source ORDER BY total DESC
+        ''')
+        by_source = [dict(r) for r in cursor.fetchall()]
+        cursor.execute('''
+            SELECT category, market_median, COUNT(*) AS total
+            FROM ads WHERE status='active' AND market_median IS NOT NULL
+            GROUP BY category ORDER BY total DESC LIMIT 20
+        ''')
+        by_category = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT COUNT(*) AS n FROM ads WHERE status='active' AND source <> 'polka'")
+        total = (cursor.fetchone() or {}).get('n', 0)
+    except Exception as e:
+        logger.error(f"findings stats: {e}")
+        return _miniapp_err('load_failed', 500)
+    return _miniapp_json({'total': total, 'by_source': by_source, 'by_category': by_category})
+
+
+# ── Критерии перекупа: «ловлю дешёвое под свой запрос» ──────────────────────
+HUNT_MIN_SAMPLE = 5   # меньше пяти наблюдений — медиана недостоверна, молчим
+
+
+def _hours_since(iso_value) -> Optional[int]:
+    """Сколько часов назад. None, если дата битая."""
+    if not iso_value:
+        return None
+    try:
+        delta = get_moscow_time() - _safe_isoparse(str(iso_value))
+        return max(0, int(delta.total_seconds() // 3600))
+    except Exception:
+        return None
+
+
+# Комиссия площадки при продаже: у Авито это примерно 2–5% в зависимости
+# от способа сделки. Считаем навар ЗА ВЫЧЕТОМ, иначе цифра будет обманчивой.
+HUNT_FEE_PERCENT = float(os.environ.get('HUNT_FEE_PERCENT', '3'))
+
+
+def _money(value) -> str:
+    return f"{int(round(value)):,}".replace(',', ' ')
+
+
+def hunt_profit(price: int, median: int) -> Dict:
+    """Что получит перекуп: навар в рублях и окупаемость вложения.
+
+    Процент скидки ничего не говорит о заработке: 30% от 1 000 ₽ и 30%
+    от 100 000 ₽ — разные деньги. Считаем рубли.
+    """
+    price = int(price or 0)
+    median = int(median or 0)
+    if price <= 0 or median <= price:
+        return {'ok': False}
+    fee = median * HUNT_FEE_PERCENT / 100.0
+    net = median - fee - price
+    return {
+        'ok': True,
+        'profit': int(round(net)),
+        'gross': int(median - price),
+        'fee': int(round(fee)),
+        'margin': int(round(net * 100.0 / price)) if price else 0,
+        'discount': int(round((median - price) * 100.0 / median)),
+    }
+
+
+def _criterion_sell_speed(crit: Dict) -> Optional[int]:
+    """Средний срок продажи похожих лотов, в часах.
+
+    Считается по тем находкам критерия, которые уже исчезли. Это и есть
+    «окупаемость» во времени: как быстро вернутся деньги.
+    """
+    where, params = _criterion_where(crit, active_only=False)
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            f"SELECT sold_after_hours FROM ads WHERE {where} "
+            f"AND status='sold' AND sold_after_hours IS NOT NULL AND sold_after_hours > 0",
+            params)
+        hours = [int(r['sold_after_hours']) for r in cursor.fetchall()]
+    except Exception:
+        return None
+    if len(hours) < 3:
+        return None  # на двух наблюдениях среднее — случайное число
+    return int(round(sum(hours) / len(hours)))
+
+
+def _criterion_where(crit: Dict, active_only: bool = True):
+    """SQL-условие отбора под критерий.
+
+    Каждое слово запроса должно быть в заголовке: так «iphone 13» не поймает
+    «iphone 14», а «13 pro» найдёт нужную модель.
+
+    active_only=False нужен для статистики по УЖЕ проданным лотам: у них
+    status='sold', и с фильтром «только активные» выборка всегда пустая —
+    из-за этого срок оборота не считался вовсе.
+    """
+    where = ["price > 0"]
+    if active_only:
+        where.insert(0, "status='active'")
+    params: List = []
+    if crit.get('category'):
+        where.append("category LIKE ?")
+        params.append(f"%{crit['category']}%")
+    if crit.get('city'):
+        where.append("city = ?")
+        params.append(crit['city'])
+    max_price = int(crit.get('max_price') or 0)
+    if max_price > 0:
+        where.append("price <= ?")
+        params.append(max_price)
+    for word in [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if len(w) > 1]:
+        where.append("LOWER(title) LIKE ?")
+        params.append(f"%{word}%")
+    return ' AND '.join(where), params
+
+
+def recompute_criterion_medians() -> int:
+    """Медиана цены ПО КАЖДОМУ КРИТЕРИЮ.
+
+    Медиана по категории для перекупа бесполезна: если критерий «iPhone 13»,
+    то цена наушников и кабелей из той же категории ничего не говорит.
+    """
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM hunt_criteria WHERE active=1")
+        crits = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"criteria read: {e}")
+        return 0
+    updated = 0
+    for crit in crits:
+        where, params = _criterion_where(crit)
+        try:
+            cursor.execute(f"SELECT price FROM ads WHERE {where} ORDER BY price", params)
+            prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
+        except Exception:
+            continue
+        if len(prices) < HUNT_MIN_SAMPLE:
+            # На трёх объявлениях медиана — гадание. Лучше промолчать, чем
+            # прислать перекупу выдуманную «скидку 60%».
+            cursor.execute("UPDATE hunt_criteria SET median_price=NULL, sample_size=? WHERE id=?",
+                           (len(prices), crit['id']))
+            continue
+        mid = len(prices) // 2
+        median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+        cursor.execute("UPDATE hunt_criteria SET median_price=?, sample_size=? WHERE id=?",
+                       (median, len(prices), crit['id']))
+        updated += 1
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    return updated
+
+
+def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
+    """Подходит ли находка под критерий. Возвращает скидку в % или None."""
+    median = int(crit.get('median_price') or 0)
+    price = int(ad.get('price') or 0)
+    if not median or price <= 0 or price >= median:
+        return None
+    max_price = int(crit.get('max_price') or 0)
+    if max_price and price > max_price:
+        return None
+    discount = int(round((median - price) * 100.0 / median))
+    if discount < int(crit.get('min_discount') or 15):
+        return None
+    title = str(ad.get('title') or '').lower()
+    for word in [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if len(w) > 1]:
+        if word not in title:
+            return None
+    if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
+        return None
+    if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
+        return None
+    return discount
+
+
+async def notify_hunt_matches(ad_ids: List[int]):
+    """Рассылает находки тем, чьи критерии они удовлетворяют.
+
+    Использует готовые таблицы проекта: search_notifications_sent не даёт
+    отправить одно и то же дважды.
+    """
+    if not ad_ids:
+        return 0
+    app = _get_bot_app()
+    if not app:
+        return 0
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM hunt_criteria WHERE active=1")
+        crits = [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        return 0
+    sent = 0
+    for ad_id in ad_ids:
+        ad = db.get_ad(ad_id)
+        if not ad or int(ad.get('price') or 0) <= 0:
+            continue
+        for crit in crits:
+            discount = match_findings_for_user(crit, ad)
+            if discount is None:
+                continue
+            user_id = int(crit['user_id'])
+            try:
+                if db.is_search_notification_sent(user_id, ad_id):
+                    continue
+            except Exception:
+                pass
+            hours = _hours_since(ad.get('parsed_at') or ad.get('created_at'))
+            fresh = f"{hours} ч назад" if hours else "только что"
+            prof = hunt_profit(ad['price'], crit['median_price'])
+            if not prof.get('ok'):
+                continue
+            speed = _criterion_sell_speed(crit)
+            lines = [
+                "🔥 <b>Находка по вашему критерию</b>",
+                "",
+                f"<b>{str(ad.get('title'))[:70]}</b>",
+                f"Купить: <b>{_money(ad['price'])} ₽</b>",
+                f"Обычная цена: {_money(crit['median_price'])} ₽",
+                f"Ниже рынка на {prof['discount']}%",
+                "",
+                f"💰 <b>Навар ~{_money(prof['profit'])} ₽</b> "
+                f"(минус комиссия {_money(prof['fee'])} ₽)",
+                f"Вложение окупится на {prof['margin']}%",
+            ]
+            if speed:
+                lines.append(f"⏱ Похожие уходили за ~{speed} ч")
+            lines.append("")
+            lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
+            text = "\n".join(lines)
+            kb = None
+            if ad.get('source_url'):
+                kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте",
+                                         url=str(ad['source_url']))
+                ]])
+            try:
+                await app.bot.send_message(chat_id=user_id, text=text,
+                                           parse_mode=ParseMode.HTML, reply_markup=kb)
+                try:
+                    db.mark_search_notification_sent(user_id, ad_id)
+                except Exception:
+                    pass
+                sent += 1
+            except Exception as e:
+                logger.warning(f"hunt push -> {user_id}: {e}")
+    if sent:
+        try:
+            cursor.execute("UPDATE hunt_criteria SET last_pushed_at=? WHERE active=1",
+                           (get_moscow_time().isoformat(),))
+            db.conn.commit()
+        except Exception:
+            pass
+    return sent
+
+
+def mark_listing_state(source: str, external_id: str, state: str) -> Optional[Dict]:
+    """Обновляет судьбу лота: жив, пропал или продан.
+
+    Авито не отдаёт «продано» в выдаче — узнаём повторной проверкой страницы.
+    Отсюда считается, сколько лот провисел: «ушло за 3 часа» и есть ответ
+    на вопрос перекупа «за сколько покупать».
+    """
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT * FROM ads WHERE source=? AND external_id=?", (source, external_id))
+    row = cursor.fetchone()
+    if not row:
+        return None
+    ad = dict(row)
+    now = get_moscow_time().isoformat()
+    if state == 'active':
+        cursor.execute("UPDATE ads SET listing_state='active', last_seen_at=? WHERE id=?",
+                       (now, ad['id']))
+        db.conn.commit()
+        return ad
+    # Исчез: продано или снято — различить нельзя, сохраняем как сообщил сборщик
+    hours = _hours_since(ad.get('parsed_at') or ad.get('created_at')) or 0
+    cursor.execute("UPDATE ads SET listing_state=?, sold_at=?, sold_after_hours=?, "
+                   "status='sold' WHERE id=?", (state, now, hours, ad['id']))
+    db.conn.commit()
+    ad['listing_state'] = state
+    ad['sold_after_hours'] = hours
+    return ad
+
+
+async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ingest/status — сборщик сообщает судьбу лотов.
+
+    Тело: {"source": "avito", "items": [{"external_id": "...", "state": "gone"}]}
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    source = str((body or {}).get('source') or 'other').lower()
+    items = (body or {}).get('items') or []
+    updated = gone = 0
+    for item in (items if isinstance(items, list) else []):
+        if not isinstance(item, dict):
+            continue
+        ext = str(item.get('external_id') or '').strip()
+        state = str(item.get('state') or 'active')
+        if not ext or state not in ('active', 'gone', 'sold'):
+            continue
+        try:
+            result = mark_listing_state(source, ext, state)
+        except Exception as e:
+            logger.warning(f"listing state {ext}: {e}")
+            continue
+        if result:
+            updated += 1
+            if state != 'active':
+                gone += 1
+    logger.info(f"ingest status {source}: обновлено {updated}, исчезло {gone}")
+    return _miniapp_json({'ok': True, 'updated': updated, 'gone': gone})
+
+
+# ── API критериев перекупа ───────────────────────────────────────────────────
+def _criterion_public(crit: Dict) -> Dict:
+    return {
+        'id': crit.get('id'),
+        'query': crit.get('query') or '',
+        'category': crit.get('category') or '',
+        'city': crit.get('city') or '',
+        'max_price': crit.get('max_price') or 0,
+        'min_discount': crit.get('min_discount') or 15,
+        'median_price': crit.get('median_price'),
+        'sample_size': crit.get('sample_size') or 0,
+        # Медиана считается только от пяти наблюдений — показываем честно
+        'ready': bool(crit.get('median_price')),
+        'active': bool(crit.get('active')),
+    }
+
+
+def get_user_criteria(user_id: int) -> List[Dict]:
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT * FROM hunt_criteria WHERE user_id=? ORDER BY id DESC", (user_id,))
+    return [dict(r) for r in cursor.fetchall()]
+
+
+def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
+                  max_price: int = 0, min_discount: int = 15) -> Optional[int]:
+    """Добавляет критерий. Пустой запрос или дубль — не создаём."""
+    query = ' '.join(str(query or '').split())[:100]
+    if len(query) < 2:
+        return None
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT id FROM hunt_criteria WHERE user_id=? AND LOWER(query)=LOWER(?) "
+                   "AND COALESCE(city,'')=? AND active=1", (user_id, query, city or ''))
+    if cursor.fetchone():
+        return None
+    cursor.execute('''
+        INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
+                                   active, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?)
+    ''', (user_id, query, category or '', city or '', int(max_price or 0),
+          max(5, min(int(min_discount or 15), 90)), get_moscow_time().isoformat()))
+    db.conn.commit()
+    crit_id = cursor.lastrowid
+    # Сразу считаем медиану, чтобы критерий начал работать не «когда-нибудь»
+    recompute_criterion_medians()
+    return crit_id
+
+
+def remove_criterion(user_id: int, crit_id: int) -> bool:
+    cursor = db.conn.cursor()
+    cursor.execute("DELETE FROM hunt_criteria WHERE id=? AND user_id=?", (crit_id, user_id))
+    db.conn.commit()
+    return cursor.rowcount > 0
+
+
+async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET/POST/DELETE /api/hunt — критерии ловли для текущего пользователя."""
+    viewer_id = _miniapp_viewer(request)
+    method = request.method.upper()
+
+    # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
+    # страницы — он авторизуется токеном, а не initData
+    if method == 'GET' and request.query.get('for_collector'):
+        expected = os.environ.get('INGEST_TOKEN', '')
+        got = request.headers.get('X-Ingest-Token', '')
+        if not expected or not hmac.compare_digest(str(got), str(expected)):
+            return _miniapp_err('forbidden', 403)
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT DISTINCT query, category, city FROM hunt_criteria WHERE active=1")
+        rows = [dict(r) for r in cursor.fetchall()]
+        return _miniapp_json({'items': rows})
+
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+
+    if method == 'GET':
+        return _miniapp_json({'items': [_criterion_public(c) for c in get_user_criteria(viewer_id)]})
+
+    if method == 'POST':
+        try:
+            body = await request.json()
+        except Exception:
+            return _miniapp_err('bad_json', 400)
+        crit_id = add_criterion(
+            viewer_id,
+            str((body or {}).get('query') or ''),
+            category=str((body or {}).get('category') or ''),
+            city=str((body or {}).get('city') or ''),
+            max_price=int((body or {}).get('max_price') or 0),
+            min_discount=int((body or {}).get('min_discount') or 15),
+        )
+        if not crit_id:
+            return _miniapp_json({'error': 'duplicate_or_short',
+                                  'detail': 'такой критерий уже есть или запрос слишком короткий'},
+                                 status=400)
+        return _miniapp_json({'ok': True, 'id': crit_id}, status=201)
+
+    if method == 'DELETE':
+        try:
+            crit_id = int(request.query.get('id') or 0)
+        except ValueError:
+            crit_id = 0
+        if not crit_id or not remove_criterion(viewer_id, crit_id):
+            return _miniapp_err('not_found', 404)
+        return _miniapp_json({'ok': True})
+
+    return _miniapp_err('method_not_allowed', 405)
+
+
+async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /hunt iphone 13 — критерий ловли. Без аргументов — список.
+
+    Можно уточнить: /hunt iphone 13 | Ижевск | 45000
+    """
+    user = update.effective_user
+    args = ' '.join(context.args or []).strip()
+
+    if not args:
+        crits = get_user_criteria(user.id)
+        if not crits:
+            await update.message.reply_text(
+                "🔎 <b>Ловля находок</b>\n\n"
+                "Напишите, что искать: <code>/hunt iphone 13</code>\n"
+                "Бот будет присылать свежие объявления дешевле рынка.\n\n"
+                "Можно уточнить город и потолок цены:\n"
+                "<code>/hunt iphone 13 | Ижевск | 45000</code>",
+                parse_mode=ParseMode.HTML)
+            return
+        lines = ["🔎 <b>Ваши критерии</b>\n"]
+        for c in crits:
+            city = f" · {c['city']}" if c.get('city') else ""
+            cap = f" · до {_money(c['max_price'])} ₽" if c.get('max_price') else ""
+            lines.append(f"• <b>{c['query']}</b>{city}{cap}")
+            if c.get('median_price'):
+                speed = _criterion_sell_speed(c)
+                lines.append(f"   обычная цена {_money(c['median_price'])} ₽ "
+                             f"(по {c.get('sample_size') or 0} шт)")
+                # Показываем заработок на примере текущей обычной цены,
+                # чтобы было видно, ради чего критерий вообще нужен
+                example = hunt_profit(int(c['median_price'] * 0.8), c['median_price'])
+                if example.get('ok'):
+                    lines.append(f"   при цене на 20% ниже: навар ~{_money(example['profit'])} ₽")
+                if speed:
+                    lines.append(f"   похожие уходили за ~{speed} ч")
+            else:
+                lines.append(f"   мало данных: {c.get('sample_size') or 0} из "
+                             f"{HUNT_MIN_SAMPLE} нужных")
+            lines.append(f"   убрать: <code>/hunt -{c['id']}</code>")
+        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+        return
+
+    if args.startswith('-'):
+        digits = re.sub(r'[^0-9]', '', args[1:])
+        removed = remove_criterion(user.id, int(digits)) if digits else False
+        await update.message.reply_text("Критерий убран." if removed else "Такого критерия нет.")
+        return
+
+    parts = [p.strip() for p in args.split('|')]
+    query = parts[0][:100]
+    city = parts[1][:100] if len(parts) > 1 else ''
+    max_price = 0
+    if len(parts) > 2:
+        digits = re.sub(r'[^0-9]', '', parts[2])
+        max_price = int(digits) if digits else 0
+
+    crit_id = add_criterion(user.id, query, city=city, max_price=max_price)
+    if not crit_id:
+        await update.message.reply_text(
+            "Такой критерий уже есть — или запрос слишком короткий.")
+        return
+    crit = next((c for c in get_user_criteria(user.id) if c['id'] == crit_id), None) or {}
+    head = f"✅ Ловлю <b>{query}</b>" + (f" · {city}" if city else "") + "\n\n"
+    if crit.get('median_price'):
+        med = f"{crit['median_price']:,} ₽".replace(',', ' ')
+        await update.message.reply_text(
+            head + f"Медиана по этому запросу сейчас: <b>{med}</b>\n"
+                   f"Посчитана по {crit.get('sample_size')} объявлениям.\n\n"
+                   f"Пришлю, как только появится дешевле на {crit.get('min_discount') or 15}%.",
+            parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(
+            head + f"Пока мало данных: нужно минимум {HUNT_MIN_SAMPLE} объявлений "
+                   f"по этому запросу, чтобы медиана была честной.\n\n"
+                   f"Как сборщик их наберёт — начну присылать находки.",
+            parse_mode=ParseMode.HTML)
+
+
+async def api_ingest_checklist(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/ingest/checklist — что перепроверить на «продано».
+
+    Авито не отдаёт статус в выдаче, поэтому сборщик периодически
+    переоткрывает страницы лотов. Здесь он получает список: ссылку и id.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    source = str(request.query.get('source') or 'avito')
+    try:
+        limit = min(max(int(request.query.get('limit', 30) or 30), 1), 100)
+    except ValueError:
+        limit = 30
+    # Берём то, что недавно нашли и ещё считаем живым: старое проверять
+    # бессмысленно — оно и так осядет по сроку
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute('''
+            SELECT external_id, source_url, title, price, parsed_at
+            FROM ads
+            WHERE source=? AND external_id IS NOT NULL AND source_url IS NOT NULL
+              AND COALESCE(listing_state,'active')='active'
+              AND parsed_at IS NOT NULL
+            ORDER BY parsed_at DESC LIMIT ?
+        ''', (source, limit))
+        items = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"checklist: {e}")
+        return _miniapp_err('load_failed', 500)
+    return _miniapp_json({'source': source, 'items': items})
+
+
 def _remove_story_file(media: str):
     """Удаляет файл истории с диска (медиа лежит в UPLOAD_DIR)."""
     if not media:
@@ -19377,7 +20137,9 @@ async def api_send_message(request: aiohttp_web.Request) -> aiohttp_web.Response
 CHAT_MEDIA_LIMITS = {
     'photo': 10 * 1024 * 1024,
     'voice': 10 * 1024 * 1024,
-    'video': 25 * 1024 * 1024,
+    # Платформа режет запрос на ~10 МБ, поэтому 25 МБ были фикцией:
+    # держим 9 МБ — ровно столько же, сколько пускает клиент.
+    'video': 9 * 1024 * 1024,
 }
 
 
@@ -19752,6 +20514,56 @@ async def api_miniapp_story_delete(request: aiohttp_web.Request) -> aiohttp_web.
 
 
 # ── API аукционов ────────────────────────────────────────────────────────────
+async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/findings — находки, отсортированные по выгоде.
+
+    Отдаём то, что заметно дешевле медианы по категории: именно за это
+    подписчик и держится, а не за «свежую публикацию».
+    """
+    viewer_id = _miniapp_viewer(request)
+    try:
+        min_discount = max(0, int(request.query.get('min_discount', 10) or 10))
+    except ValueError:
+        min_discount = 10
+    category = request.query.get('category', '')
+    city = request.query.get('city', '')
+    try:
+        limit = min(max(int(request.query.get('limit', 20) or 20), 1), 100)
+    except ValueError:
+        limit = 20
+    try:
+        offset = max(int(request.query.get('offset', 0) or 0), 0)
+    except ValueError:
+        offset = 0
+
+    where = ["status='active'", "discount_percent IS NOT NULL", "discount_percent >= ?"]
+    params: List = [min_discount]
+    if category:
+        where.append("category LIKE ?")
+        params.append(f"%{category}%")
+    if city:
+        where.append("city = ?")
+        params.append(city)
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            f"SELECT * FROM ads WHERE {' AND '.join(where)} "
+            f"ORDER BY discount_percent DESC, id DESC LIMIT ? OFFSET ?",
+            (*params, limit + 1, offset))
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"findings list: {e}")
+        return _miniapp_err('load_failed', 500)
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    fav_counts, fav_mine = _miniapp_fav_map([a['id'] for a in rows], viewer_id)
+    return _miniapp_json({
+        'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in rows],
+        'has_more': has_more,
+    })
+
+
 async def api_miniapp_auctions(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/auctions — активные лоты.
 
@@ -20937,6 +21749,11 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
         },
         'is_favorite': bool(is_fav),
         'is_owner': bool(viewer_id and ad.get('user_id') == viewer_id),
+        # Находки из внешних источников: источник, ссылка и выгода
+        'source': ad.get('source') or 'polka',
+        'source_url': ad.get('source_url') or '',
+        'discount_percent': ad.get('discount_percent'),
+        'market_median': ad.get('market_median'),
         **_miniapp_auction_fields(ad, viewer_id),
     }
 
@@ -22611,6 +23428,13 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/stories/{story_id}/view', api_miniapp_story_view)
     app.router.add_delete('/api/stories/{story_id}', api_miniapp_story_delete)
     # ── Аукционы ─────────────────────────────────────────────────────────────
+    # ── Агрегатор находок ────────────────────────────────────────────────────
+    app.router.add_post('/api/ingest', api_ingest_findings)
+    app.router.add_post('/api/ingest/status', api_ingest_status)
+    app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
+    app.router.add_route('*', '/api/hunt', api_hunt_criteria)
+    app.router.add_get('/api/findings/stats', api_findings_stats)
+    app.router.add_get('/api/findings', api_miniapp_findings)
     app.router.add_get('/api/auctions', api_miniapp_auctions)
     app.router.add_get('/api/my-bids', api_miniapp_my_bids)
     app.router.add_get('/api/ads/{ad_id}/bids', api_miniapp_ad_bids)
@@ -22721,6 +23545,7 @@ def main():
 
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
+    application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
     application.add_handler(CommandHandler("city",    city_command))

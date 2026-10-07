@@ -21,3 +21,6 @@ __pycache__/
 *.db-shm
 *.db-wal
 *.db-journal
+
+# Конфиг сборщика содержит токен приёма находок
+collector/config.json

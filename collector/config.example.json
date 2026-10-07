@@ -1,0 +1,28 @@
+{
+  "_пояснение": "Скопируйте в config.json и заполните своими значениями.",
+
+  "server": "https://polka-mini-app-nikicev2009.mia0.amvera.tech",
+  "token": "СЮДА_ТОКЕН_ИЗ_ПЕРЕМЕННОЙ_INGEST_TOKEN",
+
+  "_targets": "Страницы поиска, которые обходим. category нужна, чтобы скидка считалась по правильной полке.",
+  "targets": [
+    {
+      "source": "avito",
+      "url": "https://www.avito.ru/izhevsk/odezhda_obuv_aksessuary?s=104",
+      "city": "Ижевск",
+      "category": "Одежда, обувь, аксессуары"
+    },
+    {
+      "source": "avito",
+      "url": "https://www.avito.ru/izhevsk/velosipedy?s=104",
+      "city": "Ижевск",
+      "category": "Другое"
+    },
+    {
+      "source": "yula",
+      "url": "https://youla.ru/izhevsk/velosipedy",
+      "city": "Ижевск",
+      "category": "Другое"
+    }
+  ]
+}

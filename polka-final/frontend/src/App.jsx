@@ -291,8 +291,15 @@ function uploadErrorText(err) {
   }
   // Safari/WebKit так сообщает об обрыве соединения при отправке
   if (/load failed|failed to fetch|networkerror|network request failed|обрыв/i.test(detail)) {
-    return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова — если повторяется, выберите фото меньшего размера.'
+    return 'Соединение прервалось при загрузке. Проверьте интернет и попробуйте снова — если повторяется, выберите файл меньшего размера.'
   }
+  // Понятные причины вместо «http_500»
+  const code = err?.status
+  if (code === 401) return 'Откройте приложение через Telegram и попробуйте снова.'
+  if (code === 403) return 'Нет доступа к этому диалогу.'
+  if (code === 404) return 'Диалог или файл не найден — обновите страницу.'
+  if (code === 415) return 'Такой формат не поддерживается: подойдут фото, видео и голосовые.'
+  if (code === 500) return 'Сервер не смог сохранить файл. Попробуйте ещё раз через минуту.'
   return detail ? `Не удалось: ${detail}` : 'Не удалось отправить.'
 }
 
@@ -319,6 +326,11 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
     <Link to={`/listing/${item.id}`} className="product-card">
       <div className="product-media">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
+        {/* Выгода относительно медианы по категории — то, ради чего подписчик
+            и открывает ленту, а не «свежесть публикации» */}
+        {Number(item.discount_percent) >= 15 ? (
+          <span className="deal-badge">−{Math.round(item.discount_percent)}%</span>
+        ) : null}
         <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}>
           <Icon name="heart" />
         </button>
@@ -1029,6 +1041,57 @@ const BID_STATE_LABELS = {
   lost: { text: 'Проиграна', tone: 'is-muted' },
 }
 
+/* Находки агрегатора: то, что заметно дешевле медианы по категории.
+ * Порядок задаёт сервер — по убыванию выгоды. */
+function FindingsView() {
+  const { favoriteIds, toggleFavorite } = useApp()
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [minDiscount, setMinDiscount] = useState(15)
+
+  const load = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const data = await api.getFindings({ minDiscount, limit: 40 })
+      setItems(data.items || [])
+    } catch {
+      setError('Не удалось загрузить находки.')
+      setItems([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minDiscount])
+
+  return (
+    <>
+      <div className="auction-sort">
+        {[10, 20, 30].map((d) => (
+          <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
+            onClick={() => setMinDiscount(d)}>от −{d}%</button>
+        ))}
+      </div>
+      {error ? <ErrorBlock text={error} onRetry={load} /> : null}
+      {loading ? <div className="muted-line">Ищем выгодные предложения…</div> : null}
+      {!loading && !error && !items.length ? (
+        <EmptyBlock text="Пока ничего дешевле рынка не нашлось. Сборщик постепенно наполняет базу — загляните позже." />
+      ) : null}
+      <div className="grid-two">
+        {items.map((item) => (
+          <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)}
+            onToggleFavorite={toggleFavorite} />
+        ))}
+      </div>
+    </>
+  )
+}
+
 /* Содержимое аукционов без обёртки экрана: показывается переключателем
  * в ленте, поэтому Screen и TopBar здесь не нужны. */
 function AuctionsView() {
@@ -1621,10 +1684,14 @@ function FeedPage() {
       <div className="segmented feed-switch">
         <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
           onClick={() => setFeedTab('ads')}>Объявления</button>
+        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
+          onClick={() => setFeedTab('deals')}>Скидки</button>
         <button type="button" className={feedTab === 'auctions' ? 'is-active' : ''}
           onClick={() => setFeedTab('auctions')}>Аукционы</button>
       </div>
-      {feedTab === 'auctions' ? <AuctionsView /> : (
+      {feedTab === 'auctions' ? <AuctionsView />
+        : feedTab === 'deals' ? <FindingsView />
+        : (
         <>
       <StoriesRow />
       <FeedBanner />
@@ -2961,7 +3028,10 @@ function ChatPage() {
     event.target.value = ''
     if (!file) return
     if (file.size > UPLOAD_LIMIT_BYTES && !String(file.type || '').startsWith('image/')) {
-      setError(`Файл больше ${UPLOAD_LIMIT_MB} МБ — видео можно только короткое.`)
+      // Чат не может переслать через бота: он доставляет только истории,
+      // поэтому честно объясняем предел и что делать
+      setError(`Видео ${formatSize(file.size)} не проходит: платформа принимает `
+        + `загрузки до ${UPLOAD_LIMIT_MB} МБ. Отправьте ролик покороче — примерно до 10 секунд.`)
       return
     }
     await sendMedia(file)

@@ -1672,6 +1672,14 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
   max-width: 220px;
   border-radius: 14px;
 }
+/* У видео не было высоты: до загрузки метаданных элемент держал размер по
+   умолчанию (300x150), а потом прыгал под реальные пропорции — это и был
+   «пинг». Фиксируем бокс, само видео вписываем внутрь. */
+video.bubble-media-img {
+  height: 210px;
+  object-fit: contain;
+  background: #0B0C10;
+}
 .bubble-time {
   display: block;
   margin-top: 3px;
@@ -2692,3 +2700,18 @@ select.text-input {
 }
 .story-bot-head span { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
 .story-bot-card .cta-primary { width: 100%; }
+
+/* Метка выгоды на карточке: «−32%» к медиане по категории */
+.deal-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: #16A34A;
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  box-shadow: 0 2px 8px rgba(22,163,74,.4);
+}

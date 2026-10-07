@@ -233,6 +233,16 @@ export const api = {
   deleteStory: (storyId) => request(`/api/stories/${storyId}`, { method: 'DELETE' }),
 
   // ── Аукционы ─────────────────────────────────────────────────────────────
+  // Находки агрегатора: отсортированы по выгоде относительно рынка
+  getFindings: ({ category = '', city = '', minDiscount = 10, limit = 20, offset = 0 } = {}) => {
+    const params = new URLSearchParams()
+    if (category) params.set('category', category)
+    if (city) params.set('city', city)
+    params.set('min_discount', String(minDiscount))
+    params.set('limit', String(limit))
+    params.set('offset', String(offset))
+    return request(`/api/findings?${params.toString()}`)
+  },
   getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
   getBids: (adId) => request(`/api/ads/${adId}/bids`),
   placeBid: (adId, amount) => request(`/api/ads/${adId}/bid`, {
