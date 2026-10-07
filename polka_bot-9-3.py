@@ -2597,6 +2597,8 @@ class Database:
             # создаёт критерий и не получает НИЧЕГО, пока не наберётся
             # статистика — и уходит, не поняв почему.
             "ALTER TABLE hunt_criteria ADD COLUMN mode TEXT DEFAULT 'any'",
+            # Когда мы уже объяснили человеку, что по критерию пока пусто
+            "ALTER TABLE hunt_criteria ADD COLUMN told_empty_at TEXT",
         ]:
             try:
                 cursor.execute(_auction_sql)
@@ -17321,6 +17323,22 @@ def expire_stories() -> Dict[str, int]:
     return result
 
 
+def _row_get(row, key, default=0):
+    """Достаёт поле из sqlite3.Row без падений.
+
+    У sqlite3.Row НЕТ метода .get(), и вызов row.get('n', 0) бросал
+    AttributeError. Из-за этого счётчики статистики отдавали ошибку, а
+    профиль ВСЕГДА показывал нули в объявлениях и избранном.
+    """
+    if row is None:
+        return default
+    try:
+        value = row[key]
+    except Exception:
+        return default
+    return default if value is None else value
+
+
 def _prepare_upload_dir() -> str:
     """Готовит папку загрузок на ПОСТОЯННОМ томе.
 
@@ -17542,7 +17560,7 @@ async def api_findings_stats(request: aiohttp_web.Request) -> aiohttp_web.Respon
         ''')
         by_category = [dict(r) for r in cursor.fetchall()]
         cursor.execute("SELECT COUNT(*) AS n FROM ads WHERE status='active' AND source <> 'polka'")
-        total = (cursor.fetchone() or {}).get('n', 0)
+        total = _row_get(cursor.fetchone(), 'n', 0)
     except Exception as e:
         logger.error(f"findings stats: {e}")
         return _miniapp_err('load_failed', 500)
@@ -18184,6 +18202,14 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             return _miniapp_json({'error': 'duplicate',
                                   'detail': 'Такой критерий уже есть — он в списке ниже'},
                                  status=409)
+        # Сразу говорим человеку в боте, что критерий принят: иначе он ввёл
+        # товар, услышал тишину и решил, что его обманули
+        try:
+            crit = next((c for c in get_user_criteria(viewer_id) if c['id'] == crit_id), None)
+            if crit:
+                await tell_criterion_created(viewer_id, crit)
+        except Exception as e:
+            logger.warning(f"criterion notice: {e}")
         return _miniapp_json({'ok': True, 'id': crit_id}, status=201)
 
     if method == 'DELETE':
@@ -18196,6 +18222,90 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         return _miniapp_json({'ok': True})
 
     return _miniapp_err('method_not_allowed', 405)
+
+
+async def tell_criterion_created(user_id: int, crit: Dict):
+    """Сразу отвечаем человеку, что критерий принят и что будет дальше.
+
+    Без этого он вводит товар и слышит тишину — выглядит как обман.
+    """
+    app = _get_bot_app()
+    if not app:
+        return
+    query = crit.get('query') or ''
+    city = f" · {crit['city']}" if crit.get('city') else ""
+    cap = f"\nПотолок цены: {_money(crit['max_price'])} ₽" if crit.get('max_price') else ""
+    text = (f"✅ <b>Ловлю «{query}»</b>{city}{cap}\n\n"
+            f"Теперь ищу это на Авито и пришлю, как только найду подходящее.\n\n"
+            f"Посмотреть, как идёт ловля, можно командой /hunt")
+    try:
+        await app.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"criterion created notice -> {user_id}: {e}")
+
+
+async def _hunt_feedback_loop():
+    """Если по критерию долго ничего не нашлось — говорим об этом сами.
+
+    Человек ввёл товар и ждёт. Молчание он читает как обман, поэтому через
+    час объясняем: сбор идёт, но подходящего пока нет — и почему.
+    """
+    while True:
+        try:
+            await asyncio.sleep(1800)
+            app = _get_bot_app()
+            if not app:
+                continue
+            cur = db.conn.cursor()
+            cur.execute("SELECT * FROM hunt_criteria WHERE active=1 AND told_empty_at IS NULL")
+            crits = [dict(r) for r in cur.fetchall()]
+            for crit in crits:
+                if _hours_since(crit.get('created_at')) is None:
+                    continue
+                if (_hours_since(crit.get('created_at')) or 0) < 1:
+                    continue  # даём сборщику время
+                user_id = int(crit['user_id'])
+                sent_any = 0
+                try:
+                    cur.execute("SELECT COUNT(*) AS n FROM search_notifications_sent WHERE user_id=?",
+                                (user_id,))
+                    sent_any = _row_get(cur.fetchone(), 'n', 0)
+                except Exception:
+                    pass
+                if sent_any:
+                    cur.execute("UPDATE hunt_criteria SET told_empty_at=? WHERE id=?",
+                                (get_moscow_time().isoformat(), crit['id']))
+                    db.conn.commit()
+                    continue
+                where, params = _criterion_where(crit, active_only=False)
+                try:
+                    cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE {where}", params)
+                    matches = _row_get(cur.fetchone(), 'n', 0)
+                except Exception:
+                    matches = 0
+                col = collector_status()
+                if not col.get('alive'):
+                    why = ("Сборщик объявлений сейчас не на связи — искать некому.\n"
+                           "Напишите мне, если это длится долго.")
+                elif matches:
+                    why = (f"Похожих объявлений в базе: <b>{matches}</b>, но все старше "
+                           f"{HUNT_FRESH_HOURS} ч или выше вашего потолка цены.")
+                else:
+                    why = ("Подходящих объявлений пока не появилось. Это нормально: "
+                           "на узкий запрос в продаже может не быть неделями.")
+                try:
+                    await app.bot.send_message(
+                        chat_id=user_id,
+                        text=(f"🔎 <b>Ловлю «{crit.get('query')}» — пока пусто</b>\n\n{why}\n\n"
+                              f"Продолжаю искать и пришлю сразу, как появится."),
+                        parse_mode=ParseMode.HTML)
+                    cur.execute("UPDATE hunt_criteria SET told_empty_at=? WHERE id=?",
+                                (get_moscow_time().isoformat(), crit['id']))
+                    db.conn.commit()
+                except Exception as e:
+                    logger.warning(f"hunt feedback -> {user_id}: {e}")
+        except Exception as e:
+            logger.warning(f"hunt feedback loop: {e}")
 
 
 def hunt_report(user_id: int) -> str:
@@ -18219,10 +18329,10 @@ def hunt_report(user_id: int) -> str:
     cur = db.conn.cursor()
     try:
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
-        total = (cur.fetchone() or {}).get('n', 0)
+        total = _row_get(cur.fetchone(), 'n', 0)
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka' "
                     "AND parsed_at >= ?", ((get_moscow_time() - timedelta(hours=24)).isoformat(),))
-        today = (cur.fetchone() or {}).get('n', 0)
+        today = _row_get(cur.fetchone(), 'n', 0)
         lines.append(f"📦 Находок в базе: <b>{total}</b> (за сутки {today})")
     except Exception as e:
         logger.warning(f"hunt report counts: {e}")
@@ -18238,18 +18348,18 @@ def hunt_report(user_id: int) -> str:
         where, params = _criterion_where(c, active_only=False)
         try:
             cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE {where}", params)
-            matches = (cur.fetchone() or {}).get('n', 0)
+            matches = _row_get(cur.fetchone(), 'n', 0)
             cur.execute(
                 f"SELECT COUNT(*) AS n FROM ads WHERE {where} AND status='active' "
                 f"AND COALESCE(published_hours_ago, 0) <= ?", params + [HUNT_FRESH_HOURS])
-            fresh = (cur.fetchone() or {}).get('n', 0)
+            fresh = _row_get(cur.fetchone(), 'n', 0)
         except Exception:
             matches = fresh = 0
         sent = 0
         try:
             cur.execute("SELECT COUNT(*) AS n FROM search_notifications_sent WHERE user_id=?",
                         (user_id,))
-            sent = (cur.fetchone() or {}).get('n', 0)
+            sent = _row_get(cur.fetchone(), 'n', 0)
         except Exception:
             pass
         mark = "✅" if fresh else "⏳"
@@ -23618,12 +23728,12 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         cur = db.conn.cursor()
         cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='active'",
                     (viewer_id,))
-        active_count = (cur.fetchone() or {}).get('c', 0)
+        active_count = _row_get(cur.fetchone(), 'c', 0)
         cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='moderation'",
                     (viewer_id,))
-        moderation_count = (cur.fetchone() or {}).get('c', 0)
+        moderation_count = _row_get(cur.fetchone(), 'c', 0)
         cur.execute("SELECT COUNT(*) AS c FROM favorites WHERE user_id=?", (viewer_id,))
-        fav_count = (cur.fetchone() or {}).get('c', 0)
+        fav_count = _row_get(cur.fetchone(), 'c', 0)
     except Exception:
         active_count, moderation_count, fav_count = 0, 0, 0
     verify = None
@@ -24290,6 +24400,7 @@ def main():
             await site.start()
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
+            asyncio.ensure_future(_hunt_feedback_loop())
             print(f"   Health check:      {SERVER_URL}/health")
         except Exception as _srv_err:
             print(f"{EM_FAIL} ОШИБКА запуска API-сервера на порту {WEBAPP_PORT}: {_srv_err}")
