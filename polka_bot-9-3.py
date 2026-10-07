@@ -17712,7 +17712,7 @@ COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 COLLECTOR_INLINE = os.environ.get('COLLECTOR_INLINE', '1') == '1'
 # Для слабого тарифа хватает четырёх категорий: остальные можно включить
 # переменной POLKA_MAX_CATEGORIES
-COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '4')
+COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '3')
 
 
 def _setting_get(key: str, default: str = '') -> str:
@@ -17791,6 +17791,13 @@ async def _collector_inline_loop():
                 'targets': collector.default_targets(),
             }
             sent = await asyncio.to_thread(collector.run_once, cfg)
+            # Освобождаем память сразу после прохода: страницы Авито весят
+            # по 2,5 МБ, и на слабом тарифе они копились до перезапуска
+            try:
+                import gc
+                gc.collect()
+            except Exception:
+                pass
             logger.info(f"Сбор находок: принято новых {sent}")
             if first:
                 # Первый успешный проход — контейнер выдержал, снимаем отметку
