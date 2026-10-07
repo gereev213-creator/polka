@@ -7796,13 +7796,17 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # search, my_ads, favorites, profile) НЕ удалены и работают как fallback.
     keyboard = [
         [_wbtn("Открыть Полку", "/")],
-        [_wbtn("Поиск",         "/search"),
-         _wbtn("Разместить",    "/create")],
-        [_wbtn("Мои объявления", "/my"),
-         _wbtn("Избранное",      "/favorites")],
-        [_wbtn("Сообщения",     "/chats"),
-         _wbtn("Профиль",       "/profile")],
-        [_mbtn("Добавить историю", "story_start")],
+        # Главное для перекупа: задать, что ловить, и смотреть находки
+        [_wbtn("Что ловить",    "/hunt"),
+         _wbtn("Находки",       "/")],
+        [_wbtn("Разместить",    "/create"),
+         _wbtn("Мои объявления", "/my")],
+        [_wbtn("Избранное",     "/favorites"),
+         _wbtn("Сообщения",     "/chats")],
+        [_wbtn("Профиль",       "/profile"),
+         # Возврат в это же меню: нужно, когда человек ушёл вглубь
+         # какого-то сценария и хочет вернуться
+         _mbtn("В меню",        "back_to_menu")],
     ]
 
     cursor = db.conn.cursor()
