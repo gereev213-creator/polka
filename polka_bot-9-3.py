@@ -21170,48 +21170,22 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     except ValueError:
         offset = 0
 
-    # Показываем ТОЛЬКО то, что подходит под критерии этого человека.
-    # Раньше лента отдавала всё, у чего посчитана скидка по КАТЕГОРИИ, —
-    # и в неё лезли случайные товары вроде пудры за 100 ₽ с «минус 99%»,
-    # потому что категория широкая, а медиана по ней бессмысленная.
-    crits = [c for c in get_user_criteria(viewer_id) if c.get('active')]
-    if not crits:
-        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
-
-    where = ["status='active'", "source <> 'polka'"]
-    params: List = []
-    titles_cond, titles_params = [], []
-    for crit in crits:
-        words = [w for w in re.split(r'\s+', str(crit.get('query') or '').lower()) if w]
-        if not words:
-            continue
-        word_cond, word_params = [], []
-        for w in words:
-            variants = query_word_variants(w)
-            if not variants:
-                continue
-            word_cond.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?"
-                                               for _ in variants) + ")")
-            word_params.extend(f"%{v}%" for v in variants)
-        if word_cond:
-            titles_cond.append("(" + " AND ".join(word_cond) + ")")
-            titles_params.extend(word_params)
-    if not titles_cond:
-        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
-    where.append("(" + " OR ".join(titles_cond) + ")")
-    params.extend(titles_params)
-    # Аксессуары не показываем и здесь
-    for bad in HUNT_ACCESSORY_WORDS:
-        where.append("COALESCE(title_lower, title) NOT LIKE ?")
-        params.append(f"%{bad}%")
+    # Лента = то, что бот УЖЕ прислал этому человеку. Источник истины —
+    # таблица отправок: она заполняется там же, где уходит сообщение,
+    # поэтому лента и чат всегда совпадают. Раньше лента собиралась по
+    # своим правилам, и в неё попадали случайные товары вроде пудры за 100 ₽.
+    where = ["a.status='active'", "a.source <> 'polka'"]
+    params: List = [viewer_id]
     if city:
-        where.append("city = ?")
+        where.append("a.city = ?")
         params.append(city)
     try:
         cursor = db.conn.cursor()
         cursor.execute(
-            f"SELECT * FROM ads WHERE {' AND '.join(where)} "
-            f"ORDER BY COALESCE(discount_percent, 0) DESC, id DESC LIMIT ? OFFSET ?",
+            f"SELECT a.* FROM ads a JOIN search_notifications_sent s "
+            f"ON s.ad_id = a.id AND s.user_id = ? "
+            f"WHERE {' AND '.join(where)} "
+            f"ORDER BY s.sent_at DESC, a.id DESC LIMIT ? OFFSET ?",
             (*params, limit + 1, offset))
         rows = [dict(r) for r in cursor.fetchall()]
     except Exception as e:

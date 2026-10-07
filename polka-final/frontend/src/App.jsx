@@ -15,6 +15,8 @@ import { api, resolveAssetUrl } from './api'
 const AppContext = createContext(null)
 
 const iconPaths = {
+  // Стрелка «открыть на сайте»: ведёт на исходное объявление Авито
+  arrowUpRight: 'M7 17L17 7M17 7H8M17 7v9',
   home: [<path key="1" d="M3 10.5 12 3l9 7.5" />, <path key="2" d="M5 9.5V21h14V9.5" />, <path key="3" d="M9.5 21v-6h5v6" />],
   search: [<circle key="1" cx="10.5" cy="10.5" r="6.5" />, <path key="2" d="m21 21-5.8-5.8" />],
   plus: [<path key="1" d="M12 4v16" />, <path key="2" d="M4 12h16" />],
@@ -340,9 +342,23 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         <div className="product-city">{item.city}</div>
         <div className="product-bottom">
           <div className="product-price">{priceText(item)}</div>
-          <button className="product-action" type="button" onClick={handleFavorite}>
-            <Icon name="chat" />
-          </button>
+          {item.source_url ? (
+            /* Находка с Авито: стрелка ведёт на исходное объявление */
+            <button className="product-action" type="button"
+              onClick={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                const tg = window.Telegram?.WebApp
+                if (tg?.openLink) tg.openLink(item.source_url)
+                else window.open(item.source_url, '_blank', 'noopener')
+              }}>
+              <Icon name="arrowUpRight" />
+            </button>
+          ) : (
+            <button className="product-action" type="button" onClick={handleFavorite}>
+              <Icon name="chat" />
+            </button>
+          )}
         </div>
       </div>
     </Link>
