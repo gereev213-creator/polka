@@ -1890,8 +1890,12 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      {/* Переключатель разделов убран: главное — находки. Доска переехала
-          в профиль, чтобы не путать человека чужими объявлениями. */}
+      <div className="segmented feed-switch">
+        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
+          onClick={() => setFeedTab('deals')}>Находки</button>
+        <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
+          onClick={() => setFeedTab('ads')}>Барахолка</button>
+      </div>
       {feedTab === 'deals' ? (
         <>
           <Link to="/hunt" className="hunt-cta">
@@ -1907,7 +1911,15 @@ function FeedPage() {
       )
         : (
         <>
-      {/* Истории убраны с глаз: в ловле скидок они только шумят */}
+      {/* Доска: здесь перекупы выставляют то, что поймали дешёвым */}
+      <div className="board-note">
+        <strong>Барахолка перекупов</strong>
+        <span>
+          Сюда выставляют товары, которые нашли дешевле рынка. Купили дёшево —
+          продайте здесь дороже. Находки с Авито живут в соседнем разделе.
+        </span>
+        <Link to="/create" className="cta-primary">Выставить товар</Link>
+      </div>
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>

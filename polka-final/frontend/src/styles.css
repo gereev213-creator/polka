@@ -2776,3 +2776,17 @@ select.text-input {
   font-weight: 600;
 }
 .collector-ok .icon-svg { width: 15px; height: 15px; flex: 0 0 auto; }
+
+/* Подпись барахолки перекупов: объясняет, зачем этот раздел */
+.board-note {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.board-note strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
+.board-note span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
+.board-note .cta-primary { align-self: flex-start; margin-top: 4px; }
