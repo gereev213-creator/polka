@@ -42,14 +42,19 @@ async function request(path, options = {}) {
 
   if (!response.ok) {
     let code = `http_${response.status}`
+    // ВАЖНО: причина из detail раньше терялась, и на экран попадало
+    // бесполезное «Не удалось…» вместо «такой критерий уже есть».
+    let detail = ''
     try {
       const data = await response.json()
       code = data.error || code
+      detail = data.detail || data.message || ''
     } catch {
       // ignore
     }
     const error = new Error(code)
     error.code = code
+    error.detail = detail
     error.status = response.status
     throw error
   }

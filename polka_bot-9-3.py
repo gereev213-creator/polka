@@ -18062,9 +18062,13 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             body = await request.json()
         except Exception:
             return _miniapp_err('bad_json', 400)
+        raw_query = ' '.join(str((body or {}).get('query') or '').split())
+        if len(raw_query) < 2:
+            return _miniapp_json({'error': 'query_too_short',
+                                  'detail': 'Напишите хотя бы два символа'}, status=400)
         crit_id = add_criterion(
             viewer_id,
-            str((body or {}).get('query') or ''),
+            raw_query,
             category=str((body or {}).get('category') or ''),
             city=str((body or {}).get('city') or ''),
             max_price=int((body or {}).get('max_price') or 0),
@@ -18072,9 +18076,9 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             mode=str((body or {}).get('mode') or 'any'),
         )
         if not crit_id:
-            return _miniapp_json({'error': 'duplicate_or_short',
-                                  'detail': 'такой критерий уже есть или запрос слишком короткий'},
-                                 status=400)
+            return _miniapp_json({'error': 'duplicate',
+                                  'detail': 'Такой критерий уже есть — он в списке ниже'},
+                                 status=409)
         return _miniapp_json({'ok': True, 'id': crit_id}, status=201)
 
     if method == 'DELETE':

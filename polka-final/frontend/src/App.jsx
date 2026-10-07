@@ -1096,7 +1096,14 @@ function CriteriaPage() {
       setMaxPrice('')
       await load()
     } catch (err) {
-      setError(err?.detail ? `Не получилось: ${err.detail}` : 'Не удалось добавить критерий.')
+      // Показываем ПРИЧИНУ, а не «не удалось»: без этого человек не поймёт,
+      // что критерий просто уже есть в списке
+      const code = err?.code || ''
+      if (code === 'duplicate') setError('Такой критерий уже есть — он в списке ниже.')
+      else if (code === 'query_too_short') setError('Напишите, что искать — хотя бы два символа.')
+      else if (err?.status === 401) setError('Откройте приложение через Telegram.')
+      else if (err?.status === 400 && err?.detail) setError(`Не получилось: ${err.detail}`)
+      else setError('Не удалось добавить критерий. Попробуйте ещё раз.')
     } finally {
       setBusy(false)
     }
