@@ -3404,7 +3404,11 @@ class Database:
         cursor = self.conn.cursor()
         moscow_now = get_moscow_time().isoformat()
 
-        conditions = ["status = 'active'"]
+        # Лента «Объявления» — это ДОСКА, то есть то, что выставили люди.
+        # Находки, собранные с Авито, живут отдельно (раздел «Находки»),
+        # иначе они забивали доску и было непонятно, откуда объявления.
+        conditions = ["status = 'active'",
+                      "(source IS NULL OR source = 'polka')"]
         params = []
 
         # Текстовый поиск — используем общую нормализацию запроса
