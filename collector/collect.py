@@ -448,12 +448,22 @@ def parse_page(html: str) -> list:
 
 # ── Отправка на сервер ──────────────────────────────────────────────────────
 def push(server: str, token: str, source: str, items: list) -> dict:
+    """Отправка находок на сервер.
+
+    Идёт через curl_cffi: у системного Python на macOS нет корневых
+    сертификатов, и обычный urllib падал с CERTIFICATE_VERIFY_FAILED — из-за
+    этого находки собирались, но НЕ доходили до сервера и до бота.
+    """
+    url = f"{server.rstrip('/')}/api/ingest"
     body = json.dumps({'source': source, 'items': items}).encode()
-    req = urllib.request.Request(f"{server.rstrip('/')}/api/ingest", data=body, headers={
-        'Content-Type': 'application/json',
-        'X-Ingest-Token': token,
-    })
-    with urllib.request.urlopen(req, timeout=60) as resp:
+    headers = {'Content-Type': 'application/json', 'X-Ingest-Token': token}
+    if _cffi is not None:
+        r = _cffi.post(url, data=body, headers=headers, timeout=60)
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:140]}")
+        return json.loads(r.text)
+    req = urllib.request.Request(url, data=body, headers=headers)
+    with _opener().open(req, timeout=60) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -512,7 +522,7 @@ def targets_from_criteria(server: str, token: str) -> list:
         if str(crit.get('query') or '').strip():
             skipped += 1
     if skipped:
-        print(f"  Критериев: {skipped}. Они работают как ФиЛЬТР заголовков,")
+        print(f"  Критериев: {skipped}. Они работают как фильтр заголовков,")
         print("  а страницы для обхода берутся из config.json (категории Авито).")
     return targets
 
