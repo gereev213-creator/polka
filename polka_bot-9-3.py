@@ -18029,25 +18029,20 @@ async def notify_hunt_matches(ad_ids: List[int]):
             else:
                 hours = int(ago)
                 fresh = "только что" if hours == 0 else f"{hours} ч назад"
-            prof = hunt_profit(ad['price'], crit['median_price'])
-            if not prof.get('ok'):
-                continue
-            speed = _criterion_sell_speed(crit)
+            # Показываем просто цену и разницу с рынком. Никаких «наваров»,
+            # «окупаемостей» и комиссий: человеку нужна цена, а не расчёты.
+            median = int(crit['median_price'])
+            diff = median - int(ad['price'])
             lines = [
-                "🔥 <b>Находка по вашему критерию</b>",
+                "🔥 <b>Новое объявление дешевле рынка</b>",
                 "",
                 f"<b>{str(ad.get('title'))[:70]}</b>",
-                f"Купить: <b>{_money(ad['price'])} ₽</b>",
-                f"Обычная цена: {_money(crit['median_price'])} ₽",
-                f"Ниже рынка на {prof['discount']}%",
                 "",
-                f"💰 <b>Навар ~{_money(prof['profit'])} ₽</b> "
-                f"(минус комиссия {_money(prof['fee'])} ₽)",
-                f"Вложение окупится на {prof['margin']}%",
+                f"Цена: <b>{_money(ad['price'])} ₽</b>",
+                f"Обычная цена: {_money(median)} ₽",
+                f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)",
+                "",
             ]
-            if speed:
-                lines.append(f"⏱ Похожие уходили за ~{speed} ч")
-            lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
             text = "\n".join(lines)
             kb = None
