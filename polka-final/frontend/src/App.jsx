@@ -356,7 +356,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
                 if (tg?.openLink) tg.openLink(item.source_url)
                 else window.open(item.source_url, '_blank', 'noopener')
               }}>
-              <Icon name="arrowUpRight" />
+              <Icon name="send" />
             </button>
           ) : (
             <button className="product-action" type="button" onClick={handleFavorite}>
@@ -2414,7 +2414,9 @@ function ListingPage() {
       </div>
 
       <div className="detail-head">
-        <div className="eyebrow">{item.category || 'Объявление'}</div>
+        {!isFinding ? (
+          <div className="eyebrow">{item.category || 'Объявление'}</div>
+        ) : null}
         <div className="listing-title">{item.title}</div>
         {item.seller?.rating ? (
           <div className="rating-row">
@@ -2546,8 +2548,8 @@ function ListingPage() {
                     if (tg?.openLink) tg.openLink(item.source_url)
                     else window.open(item.source_url, '_blank', 'noopener')
                   }}>
-                  <Icon name="arrowUpRight" />
-                  Открыть на Авито
+                  <Icon name="send" />
+                  Открыть
                 </button>
               ) : (
                 <button className="cta-primary" type="button" onClick={handleStartChat}>
@@ -2582,6 +2584,7 @@ function ListingPage() {
           </>
         )}
       </div>
+      {!isFinding ? (
       <div className="seller-card glass-card mt-12">
         <div className="avatar" />
         <div className="seller-meta">
@@ -2589,6 +2592,7 @@ function ListingPage() {
           <span>{item.seller?.verified ? 'Проверен' : 'Профиль продавца'} · {item.favorites_count || 0} в избранном</span>
         </div>
       </div>
+      ) : null}
       {isOwner ? (
         <div className="setting-row glass-card mt-12">
           <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>
