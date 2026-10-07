@@ -318,6 +318,10 @@ function mediaKind(message) {
 }
 
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
+  // Защита: если пришёл пустой элемент, карточка не должна ронять ВСЁ
+  // приложение. Была ошибка «null is not an object (evaluating
+  // 'a.source_url')» — один пустой объект в списке ломал весь экран.
+  if (!item || typeof item !== 'object') return null
   const handleFavorite = (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -2231,7 +2235,9 @@ function ListingPage() {
   const isAuction = item?.sale_type === 'auction'
   // Лот с Авито: для него интерфейс другой — это чужая находка,
   // а не объявление пользователя. Доски это не касается.
-  const isFinding = Boolean(item.source_url)
+  // item приходит null, пока объявление грузится — без ?. страница падала
+  // с «null is not an object (evaluating 'a.source_url')»
+  const isFinding = Boolean(item?.source_url)
 
   const loadBids = async () => {
     try {
