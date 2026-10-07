@@ -17669,15 +17669,17 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
 # стоило тому выключиться. Теперь это фоновый процесс рядом с ботом.
 # Блокировка Авито не ломает сервис: страдает только сбор находок, а бот,
 # подписки и приложение продолжают работать.
-# ВЫКЛЮЧЕНО по умолчанию. Серверный сборщик запускает ВТОРОЙ python-процесс
-# рядом с rembg/onnxruntime, и контейнер Amvera уходил в перезапуск по кругу
-# (сайт отвечал то 200, то 503). Стабильность важнее: сбор идёт с компьютера
-# владельца через collector/start-local.sh, где памяти достаточно.
-# Включить обратно: COLLECTOR_ENABLED=1 в переменных Amvera.
-COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '0') == '1'
+# Сборщик на сервере. Однажды он уже уронил контейнер (сайт отвечал то 200,
+# то 503) — не хватало ресурсов на второй python-процесс. Поэтому теперь
+# нагрузка урезана: 6 категорий вместо 16 и проход раз в 30 минут.
+# Если сервер снова начнёт перезапускаться — выключить: COLLECTOR_ENABLED=0.
+COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
+# Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
+# между покрытием и памятью контейнера.
+COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
 # 15 минут вместо 5: Авито начинает ограничивать при частых запросах,
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '900'))
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '1800'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 
@@ -17723,6 +17725,7 @@ async def _collector_loop():
         # Внутри контейнера ходим к себе же, а не в интернет
         env['POLKA_SERVER'] = f"http://127.0.0.1:{WEBAPP_PORT}"
         env['POLKA_INGEST_TOKEN'] = token
+        env['POLKA_MAX_CATEGORIES'] = COLLECTOR_MAX_CATEGORIES
         try:
             proc = await asyncio.create_subprocess_exec(
                 sys.executable, script, '--loop', '--every', str(COLLECTOR_INTERVAL),

@@ -133,8 +133,17 @@ DATE_SORT = "?s=104"
 
 
 def default_targets() -> list:
+    cats = DEFAULT_CATEGORIES
+    # На сервере Amvera контейнер слабее, чем домашний Mac: ограничиваем
+    # число категорий, иначе сбор съедает память и сервис уходит в перезапуск.
+    try:
+        limit = int(os.environ.get('POLKA_MAX_CATEGORIES', '0') or 0)
+    except ValueError:
+        limit = 0
+    if limit > 0:
+        cats = cats[:limit]
     return [{"source": "avito", "url": f"https://www.avito.ru/all/{slug}{DATE_SORT}",
-             "city": "Россия", "category": cat} for cat, slug in DEFAULT_CATEGORIES]
+             "city": "Россия", "category": cat} for cat, slug in cats]
 
 
 def fetch(url: str, timeout: int = 25) -> str:
