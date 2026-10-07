@@ -18100,10 +18100,8 @@ async def notify_hunt_matches(ad_ids: List[int]):
     except Exception:
         return 0
     sent = 0
-    # Предохранитель: без него после снятия фильтра даты мог уйти залп
-    # из сотен сообщений — по 5 на критерий за проход достаточно
-    per_crit: Dict[int, int] = {}
-    HUNT_MAX_PER_PASS = 5
+    # Шлём ВСЕ подходящие варианты, без ограничения. Раньше стоял лимит
+    # 5 на критерий за проход, и часть находок молча терялась.
     for ad_id in ad_ids:
         ad = db.get_ad(ad_id)
         if not ad or int(ad.get('price') or 0) <= 0:
@@ -18113,8 +18111,6 @@ async def notify_hunt_matches(ad_ids: List[int]):
             if discount is None:
                 continue
             user_id = int(crit['user_id'])
-            if per_crit.get(crit['id'], 0) >= HUNT_MAX_PER_PASS:
-                continue
             try:
                 if db.is_search_notification_sent(user_id, ad_id):
                     continue
@@ -18169,7 +18165,6 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 except Exception:
                     pass
                 sent += 1
-                per_crit[crit['id']] = per_crit.get(crit['id'], 0) + 1
             except Exception as e:
                 logger.warning(f"hunt push -> {user_id}: {e}")
     if sent:
@@ -21208,19 +21203,46 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     # таблица отправок: она заполняется там же, где уходит сообщение,
     # поэтому лента и чат всегда совпадают. Раньше лента собиралась по
     # своим правилам, и в неё попадали случайные товары вроде пудры за 100 ₽.
+    # Лента показывает ВСЁ, что нашлось по критериям человека — включая то,
+    # что бот не отправил в чат. Так видно, что поиск работает и сколько
+    # вариантов есть, даже если сообщение ушло не про каждый.
+    crits = [c for c in get_user_criteria(viewer_id) if c.get('active')]
+    if not crits:
+        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
+
     where = ["a.status='active'", "a.source <> 'polka'"]
-    params: List = [viewer_id]
+    params: List = []
+    titles_cond, titles_params = [], []
+    for crit in crits:
+        word_cond, word_params = [], []
+        for w in re.split(r'\s+', str(crit.get('query') or '').lower()):
+            variants = query_word_variants(w)
+            if not variants:
+                continue
+            word_cond.append("(" + " OR ".join("COALESCE(a.title_lower, a.title) LIKE ?"
+                                               for _ in variants) + ")")
+            word_params.extend(f"%{v}%" for v in variants)
+        if word_cond:
+            titles_cond.append("(" + " AND ".join(word_cond) + ")")
+            titles_params.extend(word_params)
+    if not titles_cond:
+        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
+    where.append("(" + " OR ".join(titles_cond) + ")")
+    params.extend(titles_params)
+    for bad in HUNT_ACCESSORY_WORDS:
+        where.append("COALESCE(a.title_lower, a.title) NOT LIKE ?")
+        params.append(f"%{bad}%")
     if city:
         where.append("a.city = ?")
         params.append(city)
     try:
         cursor = db.conn.cursor()
         cursor.execute(
-            f"SELECT a.* FROM ads a JOIN search_notifications_sent s "
-            f"ON s.ad_id = a.id AND s.user_id = ? "
-            f"WHERE {' AND '.join(where)} "
-            f"ORDER BY s.sent_at DESC, a.id DESC LIMIT ? OFFSET ?",
-            (*params, limit + 1, offset))
+            f"SELECT a.*, (SELECT COUNT(*) FROM search_notifications_sent s2 "
+            f" WHERE s2.ad_id = a.id AND s2.user_id = ?) AS was_sent "
+            f"FROM ads a WHERE {' AND '.join(where)} "
+            f"ORDER BY COALESCE(a.discount_percent, 0) DESC, a.id DESC LIMIT ? OFFSET ?",
+            (viewer_id, *params, limit + 1, offset))
         rows = [dict(r) for r in cursor.fetchall()]
     except Exception as e:
         logger.error(f"findings list: {e}")
