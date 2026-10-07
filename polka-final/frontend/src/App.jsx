@@ -3519,7 +3519,6 @@ function ProfilePage() {
         <Link to="/my" className="setting-row glass-card"><span>Мои объявления</span></Link>
         <Link to="/favorites" className="setting-row glass-card"><span>Избранное</span><Icon name="bookmark" /></Link>
         <Link to="/chats" className="setting-row glass-card"><span>Сообщения</span><Icon name="chat" /></Link>
-        <Link to="/auctions" className="setting-row glass-card"><span>Аукционы</span><Icon name="gavel" /></Link>
         <Link to="/create" className="setting-row glass-card"><span>Разместить объявление</span><Icon name="plus" /></Link>
       </div>
     </Screen>

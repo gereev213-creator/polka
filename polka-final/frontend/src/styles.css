@@ -2794,3 +2794,38 @@ select.text-input {
 /* У лота с Авито плашки на фото не показываем: это чужая находка,
    а не объявление пользователя. Доски не касается. */
 .hero-pins.is-hidden { display: none; }
+
+/* ── Правки по замечаниям ───────────────────────────────────────────────── */
+
+/* 1. Свечение при нажатии. На плашках с overflow:hidden тень-свечение
+   обрезалась по краю и выглядела криво. Оставляем только лёгкое сжатие. */
+.product-card:active,
+.cat-tile:active,
+.setting-row:active,
+.stat-card:active,
+.dock-item:active,
+.chip:active,
+.segmented button:active,
+[class*="tile"]:active {
+  box-shadow: none !important;
+}
+
+/* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
+   подложка цвета плашки, справа иллюстрация остаётся открытой. */
+.cat-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(100deg,
+    var(--surface-2) 34%,
+    color-mix(in srgb, var(--surface-2) 70%, transparent) 52%,
+    transparent 72%);
+}
+.cat-tile-label {
+  z-index: 3;
+  /* Тёмный текст на светлой подложке — единый вид на всех плашках */
+  color: var(--text);
+  text-shadow: none;
+}
