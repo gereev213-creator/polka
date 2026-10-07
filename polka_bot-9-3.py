@@ -17695,7 +17695,7 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
 # перезапуск (сайт отвечает то 200, то 503) и сервис ложится. Ему не хватает
 # ресурсов на второй python-процесс рядом с rembg. Сбор идёт с Mac,
 # где памяти достаточно (служба com.polka.collector).
-COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '0') == '1'
+COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
 # Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
 # между покрытием и памятью контейнера.
 COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
@@ -17703,6 +17703,102 @@ COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
 COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '1800'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
+
+
+# ── Сбор внутри процесса бота ───────────────────────────────────────────────
+# Раньше сборщик запускался ВТОРЫМ интерпретатором Python, и контейнер
+# Amvera уходил в перезапуск: не хватало памяти на два процесса. Теперь
+# сбор идёт в этом же процессе, в отдельном потоке — интерпретатор один.
+COLLECTOR_INLINE = os.environ.get('COLLECTOR_INLINE', '1') == '1'
+# Для слабого тарифа хватает четырёх категорий: остальные можно включить
+# переменной POLKA_MAX_CATEGORIES
+COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '4')
+
+
+def _setting_get(key: str, default: str = '') -> str:
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT value FROM settings WHERE key=?", (key,))
+        row = cur.fetchone()
+        return (row['value'] if row and row['value'] is not None else default)
+    except Exception:
+        return default
+
+
+def _setting_set(key: str, value: str):
+    try:
+        now = get_moscow_time().isoformat()
+        db.conn.execute("INSERT INTO settings (key, value, updated_at) VALUES (?,?,?) "
+                        "ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?",
+                        (key, value, now, value, now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"setting {key}: {e}")
+
+
+async def _notify_admins_collector_disabled(why: str):
+    app = _get_bot_app()
+    if not app:
+        return
+    for admin_id in ADMIN_USER_IDS:
+        try:
+            await app.bot.send_message(
+                chat_id=admin_id,
+                text=("⚠️ <b>Сбор находок выключен</b>\n\n" + why +
+                      "\n\nБот и приложение работают. Включить снова: убрать "
+                      "переменную <code>COLLECTOR_INLINE</code> или задать "
+                      "<code>COLLECTOR_INLINE=1</code> в Amvera."),
+                parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+
+async def _collector_inline_loop():
+    """Собирает находки в этом же процессе — без второго интерпретатора."""
+    if not COLLECTOR_ENABLED or not COLLECTOR_INLINE:
+        return
+    # Защита от вечного падения: если прошлый запуск завершился аварийно
+    # с включённым сборщиком, второй раз не рискуем — иначе сервис будет
+    # перезапускаться по кругу и ляжет целиком.
+    if _setting_get('collector_crashed') == '1':
+        logger.warning("Сборщик НЕ запущен: прошлый запуск падал с ним. "
+                       "Сбросить: удалить строку collector_crashed из settings.")
+        await _notify_admins_collector_disabled(
+            "Прошлый запуск контейнера завершился аварийно. Чтобы сервис "
+            "не падал по кругу, сбор не запускаю.")
+        return
+    token = os.environ.get('INGEST_TOKEN', '')
+    if not token:
+        logger.warning("Сборщик находок ждёт INGEST_TOKEN")
+        return
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+    if path not in sys.path:
+        sys.path.insert(0, path)
+    try:
+        import collect as collector
+    except Exception as e:
+        logger.warning(f"сборщик не импортирован: {e}")
+        return
+    _setting_set('collector_crashed', '1')
+    logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
+                f"{COLLECTOR_MAX_CATEGORIES} категорий")
+    first = True
+    while True:
+        try:
+            cfg = {
+                'server': f"http://127.0.0.1:{WEBAPP_PORT}",
+                'token': token,
+                'targets': collector.default_targets(),
+            }
+            sent = await asyncio.to_thread(collector.run_once, cfg)
+            logger.info(f"Сбор находок: принято новых {sent}")
+            if first:
+                # Первый успешный проход — контейнер выдержал, снимаем отметку
+                _setting_set('collector_crashed', '')
+                first = False
+        except Exception as e:
+            logger.warning(f"Сбор находок: ошибка {e}")
+        await asyncio.sleep(COLLECTOR_INTERVAL)
 
 
 async def _notify_admins_collector_blocked():
@@ -17724,7 +17820,15 @@ async def _notify_admins_collector_blocked():
 
 
 async def _collector_loop():
-    """Держит сборщик находок запущенным прямо на сервере."""
+    """Держит сборщик находок запущенным прямо на сервере.
+
+    Через ОТДЕЛЬНЫЙ процесс. Не используется, когда включён сбор внутри
+    процесса: два сборщика одновременно — это двойная память и двойные
+    запросы к Авито, из-за чего контейнер и падал.
+    """
+    if COLLECTOR_INLINE:
+        logger.info("Сбор идёт внутри процесса, отдельный не запускаю")
+        return
     if not COLLECTOR_ENABLED:
         logger.info("Сборщик находок выключен (COLLECTOR_ENABLED=0)")
         return
@@ -24731,6 +24835,7 @@ def main():
             await site.start()
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
+            asyncio.ensure_future(_collector_inline_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())
             print(f"   Health check:      {SERVER_URL}/health")
