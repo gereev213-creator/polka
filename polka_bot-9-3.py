@@ -17602,6 +17602,11 @@ HUNT_MIN_PRICE_SHARE = 0.15
 # «любые» не шлём то, что дешевле рынка на 2%: перекупу это не заработок,
 # а шум. Меняется через HUNT_MIN_DISCOUNT в переменных Amvera.
 HUNT_MIN_DISCOUNT = int(os.environ.get('HUNT_MIN_DISCOUNT', '10'))
+
+# Если за один проход по критерию нашлось больше этого числа находок —
+# шлём одну сводку вместо потока сообщений. Иначе человек может получить
+# сотню уведомлений подряд и просто закрыть бота.
+HUNT_DIGEST_AFTER = int(os.environ.get('HUNT_DIGEST_AFTER', '15'))
 # Старше этого срока объявление уже не «находка», а архив: сверху выдачи
 # Авито висят объявления недельной давности, и слать их как свежие нельзя.
 HUNT_FRESH_HOURS = int(os.environ.get('HUNT_FRESH_HOURS', '24'))
@@ -17995,13 +18000,16 @@ def ad_key_word(title: str, crit: Dict = None) -> str:
     return words[0] if words else ''
 
 
-def median_for_ad(ad: Dict, crit: Dict = None, min_samples: int = 3) -> Optional[int]:
+def median_for_ad(ad: Dict, crit: Dict = None, min_samples: int = 5) -> Optional[int]:
     """Медиана цен по ТАКИМ ЖЕ товарам. Сравниваем повербанк с повербанками.
 
     Сначала пробуем самое точное совпадение — по двум значимым словам
     (бренд + модель). Если таких мало, ослабляем до одного слова. Если и
     этого мало — возвращаем None: лучше промолчать, чем назвать
     выдуманный рынок, как было с повербанком за 1750 ₽ и «рынком 3500 ₽».
+
+    Порог — ПЯТЬ объявлений: на трёх цифрах медиана случайна, и в первый
+    момент, когда она появляется, бот принял бы за выгоду случайность.
     """
     title = ad.get('title') or ''
     cursor = db.conn.cursor()
@@ -18082,6 +18090,57 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     return discount
 
 
+async def _send_hunt_digest(crit: Dict, items: list) -> int:
+    """Одна сводка вместо потока, когда находок слишком много.
+
+    items: список (ad, crit, discount), уже отфильтрованный.
+    """
+    app = _get_bot_app()
+    if not app:
+        return 0
+    user_id = int(crit['user_id'])
+    fresh = []
+    for ad, _c, discount in items:
+        ago = ad.get('published_hours_ago')
+        if ago is not None and int(ago) > HUNT_FRESH_HOURS:
+            continue
+        if ago is None and not HUNT_ALLOW_UNDATED:
+            continue
+        try:
+            if db.is_search_notification_sent(user_id, ad['id']):
+                continue
+        except Exception:
+            pass
+        fresh.append((ad, discount))
+    if not fresh:
+        return 0
+    # Лучшие — наверх: сначала самая большая выгода
+    fresh.sort(key=lambda x: -x[1])
+    top = fresh[:10]
+    lines = [f"🔥 <b>Нашлось {len(fresh)} вариантов — «{crit.get('query')}»</b>", ""]
+    for ad, discount in top:
+        lines.append(f"• <b>{_money(ad['price'])} ₽</b> (−{discount}%) — "
+                     f"{str(ad.get('title'))[:44]}")
+    if len(fresh) > len(top):
+        lines.append("")
+        lines.append(f"…и ещё {len(fresh) - len(top)}. Все — в приложении.")
+    lines.append("")
+    lines.append("Открыть можно в приложении: Главная → Находки.")
+    try:
+        await app.bot.send_message(chat_id=user_id, text="\n".join(lines),
+                                   parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"hunt digest -> {user_id}: {e}")
+        return 0
+    # Помечаем все отправленные, чтобы не слать их повторно поштучно
+    for ad, _d in fresh:
+        try:
+            db.mark_search_notification_sent(user_id, ad['id'])
+        except Exception:
+            pass
+    return 1
+
+
 async def notify_hunt_matches(ad_ids: List[int]):
     """Рассылает находки тем, чьи критерии они удовлетворяют.
 
@@ -18100,19 +18159,26 @@ async def notify_hunt_matches(ad_ids: List[int]):
     except Exception:
         return 0
     sent = 0
-    # Шлём ВСЕ подходящие варианты, без ограничения. Раньше стоял лимит
-    # 5 на критерий за проход, и часть находок молча терялась.
+    # Сначала собираем все совпадения, чтобы понять объём: если по критерию
+    # нашлось много, шлём одну сводку вместо потока сообщений.
+    matched: Dict[int, list] = {}
     for ad_id in ad_ids:
         ad = db.get_ad(ad_id)
         if not ad or int(ad.get('price') or 0) <= 0:
             continue
         for crit in crits:
             discount = match_findings_for_user(crit, ad)
-            if discount is None:
-                continue
+            if discount is not None:
+                matched.setdefault(int(crit['id']), []).append((ad, crit, discount))
+    for crit in crits:
+        items = matched.get(int(crit['id'])) or []
+        if len(items) > HUNT_DIGEST_AFTER:
+            sent += await _send_hunt_digest(crit, items)
+            continue
+        for ad, crit, discount in items:
             user_id = int(crit['user_id'])
             try:
-                if db.is_search_notification_sent(user_id, ad_id):
+                if db.is_search_notification_sent(user_id, ad['id']):
                     continue
             except Exception:
                 pass
@@ -18161,7 +18227,7 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 await app.bot.send_message(chat_id=user_id, text=text,
                                            parse_mode=ParseMode.HTML, reply_markup=kb)
                 try:
-                    db.mark_search_notification_sent(user_id, ad_id)
+                    db.mark_search_notification_sent(user_id, ad['id'])
                 except Exception:
                     pass
                 sent += 1
