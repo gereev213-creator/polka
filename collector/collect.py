@@ -98,6 +98,39 @@ def _opener():
     return _OPENER
 
 
+# ── Цели по умолчанию ───────────────────────────────────────────────────────
+# Проверены на живом Авито: каждая отдаёт 50–80 объявлений.
+#
+# Зачем в коде, а не только в config.json: на сервере config.json нет —
+# он в .gitignore, потому что содержит токен. Без этого списка серверный
+# сборщик запускался с нулём целей и не собирал НИЧЕГО.
+#
+# Форма адреса: /all/ — вся Россия. /rossiya/ Авито отдаёт пустой страницей.
+DEFAULT_CATEGORIES = [
+    ("Электроника", "telefony"),
+    ("Электроника", "noutbuki"),
+    ("Электроника", "planshety_i_elektronnye_knigi"),
+    ("Электроника", "nastolnye_kompyutery"),
+    ("Электроника", "igry_pristavki_i_programmy"),
+    ("Электроника", "audio_i_video"),
+    ("Электроника", "bytovaya_tehnika"),
+    ("Электроника", "tovary_dlya_kompyutera"),
+    ("Одежда, обувь, аксессуары", "odezhda_obuv_aksessuary"),
+    ("Хобби и отдых", "hobbi_i_otdyh"),
+    ("Транспорт", "avtomobili"),
+    ("Недвижимость", "kvartiry"),
+    ("Работа и подработка", "rabota"),
+    ("Другое", "velosipedy"),
+    ("Другое", "muzykalnye_instrumenty"),
+    ("Другое", "krasota_i_zdorove"),
+]
+
+
+def default_targets() -> list:
+    return [{"source": "avito", "url": f"https://www.avito.ru/all/{slug}",
+             "city": "Россия", "category": cat} for cat, slug in DEFAULT_CATEGORIES]
+
+
 def fetch(url: str, timeout: int = 25) -> str:
     """Один вежливый запрос. Никаких заголовков, имитирующих «свой» сайт."""
     req = urllib.request.Request(url, headers={
@@ -608,10 +641,12 @@ def run_once(cfg: dict) -> int:
     server, token = cfg['server'], cfg['token']
     total_sent = 0
     targets = list(cfg.get('targets', []))
-    # Критерии пользователей добавляются к ручному списку
+    if not targets:
+        # На сервере config.json нет — иначе сборщик шёл бы в пустоту
+        targets = default_targets()
+        print(f"Цели не заданы — берём встроенный список: {len(targets)} категорий по всей России")
     from_crit = targets_from_criteria(server, token)
     if from_crit:
-        print(f"Критериев от пользователей: {len(from_crit)}")
         known = {t.get('url') for t in targets}
         targets += [t for t in from_crit if t['url'] not in known]
     for target in targets:
