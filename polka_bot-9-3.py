@@ -18198,6 +18198,72 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
     return _miniapp_err('method_not_allowed', 405)
 
 
+def hunt_report(user_id: int) -> str:
+    """Простыми словами: идёт ли сбор и придёт ли что-то по критериям.
+
+    Раньше человек должен был искать логи в панели Amvera. Это неправильно:
+    ответ должен быть там, где он уже есть — в боте.
+    """
+    lines = ["🔎 <b>Ловля находок</b>", ""]
+    col = collector_status()
+    if col.get('alive'):
+        mins = col.get('minutes') or 0
+        lines.append(f"✅ Сборщик на связи — был {mins} мин назад")
+    elif col.get('minutes') is None:
+        lines.append("⚠️ Сборщик ещё не выходил на связь.")
+        lines.append("   Запустите его на компьютере: <code>./start-local.sh</code>")
+    else:
+        hrs = int((col.get('minutes') or 0) // 60)
+        lines.append(f"⚠️ Сборщик молчит {hrs} ч — проверьте, идёт ли он у вас.")
+
+    cur = db.conn.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
+        total = (cur.fetchone() or {}).get('n', 0)
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka' "
+                    "AND parsed_at >= ?", ((get_moscow_time() - timedelta(hours=24)).isoformat(),))
+        today = (cur.fetchone() or {}).get('n', 0)
+        lines.append(f"📦 Находок в базе: <b>{total}</b> (за сутки {today})")
+    except Exception as e:
+        logger.warning(f"hunt report counts: {e}")
+    lines.append("")
+
+    crits = get_user_criteria(user_id)
+    if not crits:
+        lines.append("Критериев нет. Добавьте: <code>/hunt iphone 13</code>")
+        return "\n".join(lines)
+
+    lines.append("<b>Ваши критерии</b>")
+    for c in crits:
+        where, params = _criterion_where(c, active_only=False)
+        try:
+            cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE {where}", params)
+            matches = (cur.fetchone() or {}).get('n', 0)
+            cur.execute(
+                f"SELECT COUNT(*) AS n FROM ads WHERE {where} AND status='active' "
+                f"AND COALESCE(published_hours_ago, 0) <= ?", params + [HUNT_FRESH_HOURS])
+            fresh = (cur.fetchone() or {}).get('n', 0)
+        except Exception:
+            matches = fresh = 0
+        sent = 0
+        try:
+            cur.execute("SELECT COUNT(*) AS n FROM search_notifications_sent WHERE user_id=?",
+                        (user_id,))
+            sent = (cur.fetchone() or {}).get('n', 0)
+        except Exception:
+            pass
+        mark = "✅" if fresh else "⏳"
+        lines.append(f"{mark} <b>{c['query']}</b> — подходит {matches}, из них свежих {fresh}")
+        if not fresh:
+            if matches:
+                lines.append("   свежих нет: подходящие есть, но старше суток")
+            else:
+                lines.append("   пока пусто — ждём, чтобы сборщик принёс такие объявления")
+    lines.append("")
+    lines.append(f"Всего отправлено вам: {sent}")
+    return "\n".join(lines)
+
+
 async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ /hunt iphone 13 — критерий ловли. Без аргументов — список.
 
@@ -18207,6 +18273,8 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = ' '.join(context.args or []).strip()
 
     if not args:
+        await update.message.reply_text(hunt_report(user.id), parse_mode=ParseMode.HTML)
+        return
         crits = get_user_criteria(user.id)
         col = collector_status()
         if not crits:
