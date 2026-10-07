@@ -12,21 +12,35 @@
 set -u
 cd "$(dirname "$0")" || exit 1
 
+PY=python3
+command -v "$PY" >/dev/null 2>&1 || PY=python
 SERVER="${POLKA_SERVER:-https://polka-mini-app-nikicev2009.mia0.amvera.tech}"
 TOKEN="${POLKA_INGEST_TOKEN:-}"
 
 if [ -z "$TOKEN" ]; then
+  # Токен спрашиваем один раз: сохраняем в config.json, дальше подхватится сам
+  if [ -f config.json ]; then
+    TOKEN="$("$PY" -c "import json;print(json.load(open('config.json')).get('token') or '')" 2>/dev/null || true)"
+  fi
+fi
+if [ -z "$TOKEN" ]; then
   echo "Нужен токен, который вы задали в Amvera как INGEST_TOKEN."
   printf "Вставьте его и нажмите Enter: "
   read -r TOKEN
+  if [ -n "$TOKEN" ] && [ -f config.json ]; then
+    "$PY" - "$TOKEN" <<'PYEOF'
+import json, sys
+cfg = json.load(open('config.json', encoding='utf-8'))
+cfg['token'] = sys.argv[1]
+json.dump(cfg, open('config.json', 'w', encoding='utf-8'), ensure_ascii=False, indent=2)
+PYEOF
+    echo "Токен сохранён — в следующий раз спрашивать не буду."
+  fi
 fi
 if [ -z "$TOKEN" ]; then
   echo "Токен не введён — выходим."
   exit 1
 fi
-
-PY=python3
-command -v "$PY" >/dev/null 2>&1 || PY=python
 
 # curl_cffi решает главную проблему: Авито блокирует обычный Python по
 # отпечатку клиента. Без него сбор не пойдёт, поэтому ставим сразу.

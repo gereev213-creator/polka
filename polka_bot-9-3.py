@@ -17929,6 +17929,10 @@ async def notify_hunt_matches(ad_ids: List[int]):
     except Exception:
         return 0
     sent = 0
+    # Предохранитель: без него после снятия фильтра даты мог уйти залп
+    # из сотен сообщений — по 5 на критерий за проход достаточно
+    per_crit: Dict[int, int] = {}
+    HUNT_MAX_PER_PASS = 5
     for ad_id in ad_ids:
         ad = db.get_ad(ad_id)
         if not ad or int(ad.get('price') or 0) <= 0:
@@ -17938,18 +17942,26 @@ async def notify_hunt_matches(ad_ids: List[int]):
             if discount is None:
                 continue
             user_id = int(crit['user_id'])
+            if per_crit.get(crit['id'], 0) >= HUNT_MAX_PER_PASS:
+                continue
             try:
                 if db.is_search_notification_sent(user_id, ad_id):
                     continue
             except Exception:
                 pass
             # Несвежее не присылаем: недельное объявление — не находка.
-            # Если даты нет вовсе — пропускаем, чтобы не устроить залп старьём.
+            # НО: если даты нет вовсе — присылаем. Проверено на живой выдаче
+            # Авито: дату не проставляет БОЛЬШИНСТВО карточек (52 из 76), и
+            # прежнее правило «нет даты — молчим» приводило к полной тишине.
+            # От повторов защищает дедупликация, поэтому риск невелик.
             ago = ad.get('published_hours_ago')
-            if ago is None or int(ago) > HUNT_FRESH_HOURS:
+            if ago is not None and int(ago) > HUNT_FRESH_HOURS:
                 continue
-            hours = int(ago)
-            fresh = "только что" if hours == 0 else f"{hours} ч назад"
+            if ago is None:
+                fresh = "дата не указана"
+            else:
+                hours = int(ago)
+                fresh = "только что" if hours == 0 else f"{hours} ч назад"
             prof = hunt_profit(ad['price'], crit['median_price'])
             if not prof.get('ok'):
                 continue
@@ -17985,6 +17997,7 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 except Exception:
                     pass
                 sent += 1
+                per_crit[crit['id']] = per_crit.get(crit['id'], 0) + 1
             except Exception as e:
                 logger.warning(f"hunt push -> {user_id}: {e}")
     if sent:

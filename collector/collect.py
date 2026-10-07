@@ -471,20 +471,16 @@ def targets_from_criteria(server: str, token: str) -> list:
         print(f"  ⚠ критерии не получены: {exc}")
         return []
     targets = []
+    # ВАЖНО: ссылки вида «?q=запрос» Авито отдаёт пустыми — поиск у него
+    # защищён. Поэтому такие цели НЕ строим: критерий работает как фильтр
+    # на сервере, а страницы берём из config.json (категории).
+    skipped = 0
     for crit in data.get('items', []):
-        query = str(crit.get('query') or '').strip()
-        if not query:
-            continue
-        city = str(crit.get('city') or '').strip()
-        base = "https://www.avito.ru"
-        slug = CITY_SLUG.get(city, 'rossiya')
-        from urllib.parse import quote_plus
-        targets.append({
-            'source': 'avito',
-            'url': f"{base}/{slug}?q={quote_plus(query)}&s=104",
-            'city': city,
-            'category': str(crit.get('category') or ''),
-        })
+        if str(crit.get('query') or '').strip():
+            skipped += 1
+    if skipped:
+        print(f"  Критериев: {skipped}. Они работают как ФиЛЬТР заголовков,")
+        print("  а страницы для обхода берутся из config.json (категории Авито).")
     return targets
 
 
@@ -641,7 +637,17 @@ def run_once(cfg: dict) -> int:
             item['city'] = item.get('city') or city
         print(f"  найдено карточек: {len(items)}")
         if not items:
-            print("  ⚠ разбор ничего не дал — возможно, изменилась вёрстка сайта")
+            if '?' in url and 'q=' in url:
+                # Проверено на живом сайте: на поисковый запрос Авито отдаёт
+                # HTTP 200, но страницу БЕЗ объявлений — только подвал.
+                # Это не поломка разбора, а защита именно поиска.
+                print("  ⚠ Авито отдал пустую страницу: он не любит поиск по запросу (?q=).")
+                print("    Ссылки на КАТЕГОРИИ работают. Возьмите нужную категорию")
+                print("    на сайте, скопируйте адрес и добавьте в config.json:")
+                print('      {"source":"avito","url":"https://www.avito.ru/izhevsk/telefony",'
+                      '"city":"Ижевск","category":"Электроника"}')
+            else:
+                print("  ⚠ разбор ничего не дал — возможно, изменилась вёрстка сайта")
             continue
         try:
             stats = push(server, token, source, items)
