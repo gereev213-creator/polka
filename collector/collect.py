@@ -26,6 +26,7 @@ import json
 import os
 import random
 import re
+import ssl
 import sys
 import time
 import urllib.error
@@ -50,6 +51,48 @@ class Blocked(Exception):
     """Сайт показал капчу или ограничение — прекращаем работу."""
 
 
+# Прокси для обхода блокировки по IP. Авито не пускает адреса дата-центров
+# (проверено: сервер Amvera получает 429 «проблема с IP» на первом запросе),
+# а резидентный или мобильный прокси выглядит как обычный домашний абонент.
+# Формат: http://логин:пароль@хост:порт
+PROXY = os.environ.get('POLKA_PROXY', '')
+_OPENER = None
+
+# ── Главное открытие ────────────────────────────────────────────────────────
+# Авито блокирует не только по IP, но и по ОТПЕЧАТКУ КЛИЕНТА. Обычный Python
+# и даже подделка под Chrome получают 429, а клиент с отпечатком Safari —
+# HTTP 200 и полную выдачу. Проверено на живом сайте: 3 запроса подряд, 50
+# карточек каждый. Поэтому ходим через curl_cffi, а не через urllib.
+try:
+    from curl_cffi import requests as _cffi
+except Exception:
+    _cffi = None
+
+# safari прошёл там, где chrome получил блокировку — не менять без проверки
+IMPERSONATE = os.environ.get('POLKA_IMPERSONATE', 'safari')
+
+
+def _opener():
+    """Открывалка запросов. Собирается один раз, с прокси или без."""
+    global _OPENER
+    if _OPENER is None:
+        handlers = []
+        if PROXY:
+            handlers.append(urllib.request.ProxyHandler({'http': PROXY, 'https': PROXY}))
+        # На macOS у системного python3 часто нет корневых сертификатов, и
+        # запрос падает с CERTIFICATE_VERIFY_FAILED — это выглядит как
+        # блокировка, хотя дело в локальной настройке. Если есть certifi,
+        # берём сертификаты оттуда.
+        try:
+            import certifi
+            handlers.append(urllib.request.HTTPSHandler(
+                context=ssl.create_default_context(cafile=certifi.where())))
+        except Exception:
+            pass
+        _OPENER = urllib.request.build_opener(*handlers)
+    return _OPENER
+
+
 def fetch(url: str, timeout: int = 25) -> str:
     """Один вежливый запрос. Никаких заголовков, имитирующих «свой» сайт."""
     req = urllib.request.Request(url, headers={
@@ -57,8 +100,29 @@ def fetch(url: str, timeout: int = 25) -> str:
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'ru-RU,ru;q=0.9',
     })
+    # Основной путь: клиент с отпечатком Safari. Именно он проходит защиту
+    if _cffi is not None:
+        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
+        try:
+            r = _cffi.get(url, impersonate=IMPERSONATE, timeout=timeout, proxies=proxies)
+        except Exception as exc:
+            raise Blocked(f"не удалось открыть через {IMPERSONATE}: {str(exc)[:90]}")
+        if r.status_code in (403, 429):
+            raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
+        html_cffi = r.text
+        # Признаки блокировки проверяем ТОЛЬКО если карточек нет: слово
+        # captcha встречается и на обычной странице выдачи, и раньше это
+        # давало ложное «нас заблокировали» на живых данных.
+        if 'data-marker="item"' not in html_cffi:
+            low_cffi = html_cffi.lower()
+            for marker in BLOCK_MARKERS:
+                if marker.lower() in low_cffi:
+                    raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+        return html_cffi
+
+    # Запасной путь, если curl_cffi не установлен: обычно получает 429
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with _opener().open(req, timeout=timeout) as resp:
             raw = resp.read()
     except urllib.error.HTTPError as exc:
         # 429 и 403 Авито отдаёт на «плохой» IP. Это НЕ обычная ошибка:
@@ -69,10 +133,11 @@ def fetch(url: str, timeout: int = 25) -> str:
             raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
         raise
     html = raw.decode('utf-8', errors='replace')
-    low = html.lower()
-    for marker in BLOCK_MARKERS:
-        if marker.lower() in low:
-            raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+    if 'data-marker="item"' not in html:
+        low = html.lower()
+        for marker in BLOCK_MARKERS:
+            if marker.lower() in low:
+                raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
     return html
 
 
@@ -335,15 +400,31 @@ def push(server: str, token: str, source: str, items: list) -> dict:
 
 
 def fetch_json(url: str, token: str, timeout: int = 30) -> dict:
+    """GET с токеном. Идёт через curl_cffi: у системного Python на macOS
+    нет корневых сертификатов, и любой https-запрос падал с
+    CERTIFICATE_VERIFY_FAILED. curl_cffi проверяет сертификаты сам."""
+    if _cffi is not None:
+        r = _cffi.get(url, headers={'X-Ingest-Token': token}, timeout=timeout)
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:140]}")
+        return json.loads(r.text)
     req = urllib.request.Request(url, headers={'X-Ingest-Token': token})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _opener().open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode())
 
 
 def post_json(url: str, token: str, payload: dict, timeout: int = 60) -> dict:
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={
+    """POST с токеном. Тоже через curl_cffi — по той же причине."""
+    body = json.dumps(payload).encode()
+    if _cffi is not None:
+        r = _cffi.post(url, data=body, timeout=timeout, headers={
+            'Content-Type': 'application/json', 'X-Ingest-Token': token})
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:140]}")
+        return json.loads(r.text)
+    req = urllib.request.Request(url, data=body, headers={
         'Content-Type': 'application/json', 'X-Ingest-Token': token})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with _opener().open(req, timeout=timeout) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -429,6 +510,50 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
     return gone
 
 
+def check_proxy(url: str) -> int:
+    """Пускает ли Авито через этот прокси.
+
+    Запускать ДО того, как платить за тариф: дешёвые прокси из дата-центров
+    Авито блокирует так же, как сервер. Нужен резидентный или мобильный.
+    """
+    print(f"Прокси: {PROXY or 'не задан — идём напрямую'}")
+    print(f"Клиент: {'curl_cffi, отпечаток ' + IMPERSONATE if _cffi else 'urllib (curl_cffi НЕ установлен!)'}")
+    print(f"Проверяем: {url}")
+    try:
+        html = fetch(url)
+    except Blocked as exc:
+        print(f"  ⛔ {exc}")
+        if PROXY:
+            print("  Этот прокси Авито не пускает — адреса дата-центров")
+            print("  блокируются целиком. Нужен резидентный или мобильный.")
+        else:
+            print("  Если curl_cffi не установлен — поставьте его:")
+            print("      pip3 install curl_cffi")
+            print("  Именно отпечаток клиента решает: обычный Python Авито")
+            print("  блокирует, а Safari-отпечаток проходит.")
+        return 1
+    except Exception as exc:
+        print(f"  ✖ не открылось: {exc}")
+        if 'CERTIFICATE_VERIFY' in str(exc):
+            print("  Это НЕ блокировка Авито, а отсутствие корневых сертификатов")
+            print("  у вашего Python. Лечится: pip3 install certifi")
+        else:
+            print("  Проверьте адрес, логин и пароль прокси.")
+        return 1
+    items = parse_page(html)
+    print(f"  страница получена: {len(html)} байт")
+    print(f"  карточек разобрано: {len(items)}")
+    for it in items[:5]:
+        ago = it.get('hours_ago')
+        print(f"    {it['title'][:40]:42} {it['price']:>9} ₽  "
+              f"{('свежее' if ago is not None and ago <= 24 else (str(ago) + ' ч' if ago is not None else 'без даты'))}")
+    if not items:
+        print("  ⚠ Страница открылась, но карточек нет — возможно, изменилась вёрстка.")
+        return 2
+    print("  ✅ Работает: Авито отдаёт выдачу, разбор находит объявления.")
+    return 0
+
+
 def load_config(path: str) -> dict:
     # Файл может отсутствовать: на сервере всё приходит из переменных
     # окружения, а цели берутся из критериев пользователей.
@@ -444,6 +569,14 @@ def load_config(path: str) -> dict:
     if not server or not token:
         sys.exit("Не заданы server и token: заполните config.json "
                  "или переменные POLKA_SERVER и POLKA_INGEST_TOKEN")
+    # Токен уходит в HTTP-заголовке, а там допустима только латиница.
+    # Кириллический токен иначе падал бы загадочной ошибкой кодировки.
+    try:
+        token.encode('ascii')
+    except UnicodeEncodeError:
+        sys.exit("Токен должен состоять только из латинских букв, цифр и "
+                 "знаков -_ . Кириллица в заголовок не помещается.\n"
+                 "Сгенерируйте новый: openssl rand -base64 32")
     cfg['server'] = server
     cfg['token'] = token
     cfg.setdefault('targets', [])
@@ -517,6 +650,8 @@ def main() -> int:
     ap.add_argument('--config', default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                                      'config.json'))
     ap.add_argument('--selftest', action='store_true', help='проверить разбор на образце')
+    ap.add_argument('--check-proxy', metavar='URL', nargs='?', const='DEF',
+                    help='проверить, пускает ли Авито через прокси')
     ap.add_argument('--check', action='store_true',
                     help='перепроверить лоты: продано или ещё висит')
     ap.add_argument('--loop', action='store_true', help='работать постоянно')
@@ -525,6 +660,14 @@ def main() -> int:
 
     if args.selftest:
         return selftest()
+
+    # Проверка прокси — отдельная диагностика: сервер и токен тут не нужны,
+    # иначе проверить прокси до покупки было бы невозможно
+    if args.check_proxy is not None:
+        target = args.check_proxy
+        if target in ('DEF', ''):
+            target = "https://www.avito.ru/izhevsk/velosipedy"
+        return check_proxy(target)
 
     cfg = load_config(args.config)
     # Режим сервера: цели только из критериев пользователей, файл не нужен
