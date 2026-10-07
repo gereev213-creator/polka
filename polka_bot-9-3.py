@@ -18561,6 +18561,49 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
 HUNT_KEEP_DAYS = int(os.environ.get('HUNT_KEEP_DAYS', '7'))
 
 
+def cleanup_all() -> Dict:
+    """Чистит всё, что копится мусором. Данные пользователей не трогает.
+
+    Что убираем и почему:
+      • находки старше недели — объявление уже продано, искать поздно;
+      • отметки об отправке старше месяца — нужны только чтобы не слать
+        одно и то же дважды, дальше это балласт;
+      • логи старше двух недель — забивают базу быстрее всего;
+      • истории и их просмотры старше трёх дней — живут 24 часа, дальше мусор.
+
+    НЕ трогаем: объявления доски, переписку, платежи, отзывы, подписки —
+    это данные людей и деньги.
+    """
+    result = cleanup_findings()
+    cursor = db.conn.cursor()
+    now = get_moscow_time()
+    removed = {}
+
+    def _cut(table: str, days: int, column: str = 'created_at') -> int:
+        cutoff = (now - timedelta(days=days)).isoformat()
+        try:
+            cursor.execute(f"DELETE FROM {table} WHERE {column} IS NOT NULL AND {column} < ?",
+                           (cutoff,))
+            n = cursor.rowcount or 0
+            db.conn.commit()
+            return n
+        except Exception as e:
+            logger.warning(f"cleanup {table}: {e}")
+            return 0
+
+    removed['отметки об отправке'] = _cut('search_notifications_sent', 30, 'sent_at')
+    removed['логи'] = _cut('logs', 14)
+    removed['просмотры историй'] = _cut('story_views', 3, 'viewed_at')
+    removed['истории'] = _cut('stories', 3, 'created_at')
+
+    total = sum(removed.values())
+    if total:
+        logger.info("Чистка базы: " + ", ".join(f"{k} {v}" for k, v in removed.items() if v))
+    result['details'] = {k: v for k, v in removed.items() if v}
+    result['removed_total'] = (result.get('removed') or 0) + total
+    return result
+
+
 def cleanup_findings() -> Dict:
     """Убирает старые находки из базы.
 
@@ -18595,25 +18638,27 @@ async def _findings_cleanup_loop():
     while True:
         try:
             await asyncio.sleep(6 * 3600)
-            cleanup_findings()
+            cleanup_all()
         except Exception as e:
             logger.warning(f"findings cleanup loop: {e}")
 
 
 async def _cleanup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ручная чистка — на случай, если база распухла."""
-    res = cleanup_findings()
+    res = cleanup_all()
     cur = db.conn.cursor()
     try:
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
         left = _row_get(cur.fetchone(), 'n', 0)
     except Exception:
         left = 0
-    await update.message.reply_text(
-        f"🧹 Убрано старых находок: <b>{res['removed']}</b>\n"
-        f"Храню объявления {res['keep_days']} дней.\n"
-        f"Осталось в базе: {left}",
-        parse_mode=ParseMode.HTML)
+    lines = [f"🧹 <b>Чистка базы</b>", "",
+             f"Находки старше {res['keep_days']} дней: убрано <b>{res['removed']}</b>"]
+    for name, count in (res.get('details') or {}).items():
+        lines.append(f"{name}: убрано {count}")
+    lines.append("")
+    lines.append(f"Осталось находок в базе: {left}")
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def tell_criterion_created(user_id: int, crit: Dict):
