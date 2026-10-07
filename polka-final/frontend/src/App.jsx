@@ -1873,12 +1873,8 @@ function FeedPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <div className="segmented feed-switch">
-        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
-          onClick={() => setFeedTab('deals')}>Находки</button>
-        <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
-          onClick={() => setFeedTab('ads')}>Объявления</button>
-      </div>
+      {/* Переключатель разделов убран: главное — находки. Доска переехала
+          в профиль, чтобы не путать человека чужими объявлениями. */}
       {feedTab === 'deals' ? (
         <>
           <Link to="/hunt" className="hunt-cta">

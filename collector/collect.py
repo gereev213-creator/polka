@@ -126,8 +126,14 @@ DEFAULT_CATEGORIES = [
 ]
 
 
+# ?s=104 — сортировка Авито «по дате». Проверено на живом сайте: с ней
+# выдача состоит ТОЛЬКО из свежих объявлений (49 из 49 — по часу давности),
+# а без неё даты есть у 10 из 50 и попадается недельное старьё.
+DATE_SORT = "?s=104"
+
+
 def default_targets() -> list:
-    return [{"source": "avito", "url": f"https://www.avito.ru/all/{slug}",
+    return [{"source": "avito", "url": f"https://www.avito.ru/all/{slug}{DATE_SORT}",
              "city": "Россия", "category": cat} for cat, slug in DEFAULT_CATEGORIES]
 
 
