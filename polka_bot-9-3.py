@@ -17625,7 +17625,9 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
 # Блокировка Авито не ломает сервис: страдает только сбор находок, а бот,
 # подписки и приложение продолжают работать.
 COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '300'))
+# 15 минут вместо 5: Авито начинает ограничивать при частых запросах,
+# а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '900'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 

@@ -68,8 +68,13 @@ try:
 except Exception:
     _cffi = None
 
-# safari прошёл там, где chrome получил блокировку — не менять без проверки
+# Авито пропускает не всегда: несколько запросов проходят, потом 429.
+# Поэтому перебираем отпечатки — какой-то из них в этот момент проходит, —
+# и запоминаем удачный, чтобы не тратить попытки впустую.
 IMPERSONATE = os.environ.get('POLKA_IMPERSONATE', 'safari')
+IMPERSONATE_POOL = ('safari', 'safari17_0', 'safari15_3', 'chrome131',
+                    'edge101', 'firefox133', 'chrome')
+_WORKING_PROFILE = None
 
 
 def _opener():
@@ -100,13 +105,31 @@ def fetch(url: str, timeout: int = 25) -> str:
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'ru-RU,ru;q=0.9',
     })
-    # Основной путь: клиент с отпечатком Safari. Именно он проходит защиту
+    # Основной путь: перебираем отпечатки, пока какой-нибудь не пройдёт
     if _cffi is not None:
+        global _WORKING_PROFILE
         proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
-        try:
-            r = _cffi.get(url, impersonate=IMPERSONATE, timeout=timeout, proxies=proxies)
-        except Exception as exc:
-            raise Blocked(f"не удалось открыть через {IMPERSONATE}: {str(exc)[:90]}")
+        # Удачный отпечаток пробуем первым: он уже доказал, что работает
+        order = list(IMPERSONATE_POOL)
+        if _WORKING_PROFILE and _WORKING_PROFILE in order:
+            order.remove(_WORKING_PROFILE)
+            order.insert(0, _WORKING_PROFILE)
+        last_error = 'ни один отпечаток не прошёл'
+        for profile in order:
+            try:
+                r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+            except Exception as exc:
+                last_error = f"{profile}: {str(exc)[:70]}"
+                continue
+            if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
+                last_error = f"{profile}: HTTP {r.status_code}"
+                time.sleep(random.uniform(2.0, 5.0))
+                continue
+            _WORKING_PROFILE = profile
+            if profile != IMPERSONATE:
+                print(f"  (сработал отпечаток {profile})")
+            return r.text
+        raise Blocked(last_error)
         if r.status_code in (403, 429):
             raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
         html_cffi = r.text
@@ -119,6 +142,8 @@ def fetch(url: str, timeout: int = 25) -> str:
                 if marker.lower() in low_cffi:
                     raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
         return html_cffi
+
+    # Без curl_cffi шансов почти нет, но оставляем запасной путь
 
     # Запасной путь, если curl_cffi не установлен: обычно получает 429
     try:
@@ -625,8 +650,9 @@ def run_once(cfg: dict) -> int:
             total_sent += int(stats.get('accepted') or 0)
         except Exception as exc:
             print(f"  ✖ сервер не принял: {exc}")
-        # Вежливая пауза между страницами
-        time.sleep(random.uniform(2.0, 4.0))
+        # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
+        # 429 обходится дороже, чем несколько секунд ожидания
+        time.sleep(random.uniform(6.0, 12.0))
     return total_sent
 
 

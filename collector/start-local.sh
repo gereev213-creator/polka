@@ -51,8 +51,8 @@ if ! "$PY" collect.py --check-proxy; then
 fi
 
 echo
-echo "Шаг 2 из 2. Авито доступен. Запускаю сбор каждые 5 минут."
+echo "Шаг 2 из 2. Авито доступен. Запускаю сбор каждые 15 минут."
 echo "Окно должно оставаться открытым. Остановить — Ctrl+C."
 echo
 POLKA_SERVER="$SERVER" POLKA_INGEST_TOKEN="$TOKEN" \
-  exec "$PY" collect.py --loop --every 300
+  exec "$PY" collect.py --loop --every 900
