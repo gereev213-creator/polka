@@ -243,6 +243,10 @@ export const api = {
     params.set('offset', String(offset))
     return request(`/api/findings?${params.toString()}`)
   },
+  // Критерии ловли: что бот ищет на Авито для этого пользователя
+  getCriteria: () => request('/api/hunt'),
+  addCriterion: (body) => request('/api/hunt', { method: 'POST', body: JSON.stringify(body) }),
+  removeCriterion: (id) => request(`/api/hunt?id=${id}`, { method: 'DELETE' }),
   getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
   getBids: (adId) => request(`/api/ads/${adId}/bids`),
   placeBid: (adId, amount) => request(`/api/ads/${adId}/bid`, {

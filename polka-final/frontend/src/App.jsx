@@ -1041,6 +1041,135 @@ const BID_STATE_LABELS = {
   lost: { text: 'Проиграна', tone: 'is-muted' },
 }
 
+/* «Что ловить» — критерии, по которым бот ищет дешёвое на Авито.
+ * Раньше их можно было задать ТОЛЬКО командой /hunt в боте: в приложении
+ * входа не было вовсе, поэтому человек его и не находил. */
+function CriteriaPage() {
+  const [items, setItems] = useState([])
+  const [cities, setCities] = useState([])
+  const [query, setQuery] = useState('')
+  const [city, setCity] = useState('')
+  const [maxPrice, setMaxPrice] = useState('')
+  const [minDiscount, setMinDiscount] = useState(15)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const data = await api.getCriteria()
+      setItems(data.items || [])
+      setError('')
+    } catch {
+      setError('Не удалось загрузить критерии.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    api.getFilters().then((d) => setCities(d.cities || [])).catch(() => {})
+  }, [])
+
+  const add = async () => {
+    if (query.trim().length < 2) {
+      setError('Напишите, что искать — например «iphone 13»')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      await api.addCriterion({
+        query: query.trim(),
+        city,
+        max_price: Number(maxPrice) || 0,
+        min_discount: minDiscount,
+      })
+      setQuery('')
+      setCity('')
+      setMaxPrice('')
+      await load()
+    } catch (err) {
+      setError(err?.detail ? `Не получилось: ${err.detail}` : 'Не удалось добавить критерий.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const remove = async (id) => {
+    try {
+      await api.removeCriterion(id)
+      await load()
+    } catch {
+      setError('Не удалось убрать критерий.')
+    }
+  }
+
+  return (
+    <Screen>
+      <TopBar left={<IconButton icon="back" to="/" />} />
+      <div className="page-title">Что ловить</div>
+      <p className="sub-copy">
+        Напишите, что искать на Авито. Бот пришлёт, когда найдёт дешевле обычной цены,
+        и покажет, сколько на этом заработать.
+      </p>
+
+      <div className="form-stack">
+        <input className="text-input glass-card" value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Что искать — например «iphone 13»" />
+        <div className="grid-two">
+          <input className="text-input glass-card" value={city}
+            onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
+          <input className="text-input glass-card" value={maxPrice} inputMode="numeric"
+            onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9]/g, ''))}
+            placeholder="Не дороже, ₽" />
+        </div>
+        <datalist id="hunt-cities">
+          {cities.map((c) => <option key={c.value} value={c.label} />)}
+        </datalist>
+
+        <div className="field-label-row">Присылать, если дешевле обычного на</div>
+        <div className="auction-sort">
+          {[10, 15, 25].map((d) => (
+            <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
+              onClick={() => setMinDiscount(d)}>−{d}%</button>
+          ))}
+        </div>
+
+        {error ? <div className="status-line error">{error}</div> : null}
+        <button type="button" className="cta-primary" disabled={busy} onClick={add}>
+          {busy ? 'Добавляем…' : 'Ловить это'}
+        </button>
+      </div>
+
+      <div className="section-head"><strong>Мои критерии</strong><span>{items.length}</span></div>
+      {loading ? <div className="muted-line">Загружаем…</div> : null}
+      {!loading && !items.length ? (
+        <EmptyBlock text="Пока ничего не ловим. Добавьте первый критерий — поле выше." />
+      ) : null}
+      <div className="list-stack">
+        {items.map((c) => (
+          <div key={c.id} className="setting-row glass-card">
+            <div className="hunt-row">
+              <strong>{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
+              <span>
+                {c.ready
+                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ · по ${c.sample_size} шт`
+                  : `копим данные: ${c.sample_size} из 5`}
+                {c.max_price ? ` · не дороже ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
+              </span>
+            </div>
+            <button type="button" className="ghost-btn" onClick={() => remove(c.id)}>Убрать</button>
+          </div>
+        ))}
+      </div>
+    </Screen>
+  )
+}
+
 /* Находки агрегатора: то, что заметно дешевле медианы по категории.
  * Порядок задаёт сервер — по убыванию выгоды. */
 function FindingsView() {
@@ -1553,7 +1682,7 @@ function FeedPage() {
   const [activeCategory, setActiveCategory] = useState('Все')
   // Объявления или аукционы. Раньше аукционы жили отдельной вкладкой в доке,
   // но с шестью пунктами док переставал помещаться — перенесли сюда.
-  const [feedTab, setFeedTab] = useState('ads')
+  const [feedTab, setFeedTab] = useState('deals')
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
   const [showTop, setShowTop] = useState(false)
@@ -1682,18 +1811,27 @@ function FeedPage() {
     <Screen>
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
       <div className="segmented feed-switch">
+        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
+          onClick={() => setFeedTab('deals')}>Находки</button>
         <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
           onClick={() => setFeedTab('ads')}>Объявления</button>
-        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
-          onClick={() => setFeedTab('deals')}>Скидки</button>
-        <button type="button" className={feedTab === 'auctions' ? 'is-active' : ''}
-          onClick={() => setFeedTab('auctions')}>Аукционы</button>
       </div>
-      {feedTab === 'auctions' ? <AuctionsView />
-        : feedTab === 'deals' ? <FindingsView />
+      {feedTab === 'deals' ? (
+        <>
+          <Link to="/hunt" className="hunt-cta">
+            <span className="hunt-cta-icon"><Icon name="search" /></span>
+            <span className="hunt-cta-text">
+              <strong>Что ловить?</strong>
+              <span>Настроим поиск дешёвых лотов под вас</span>
+            </span>
+            <span className="hunt-cta-arrow"><Icon name="back" /></span>
+          </Link>
+          <FindingsView />
+        </>
+      )
         : (
         <>
-      <StoriesRow />
+      {/* Истории убраны с глаз: в ловле скидок они только шумят */}
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
@@ -3270,6 +3408,7 @@ function ProfilePage() {
         <Link to="/my" className="setting-row glass-card"><span>Мои объявления</span></Link>
         <Link to="/favorites" className="setting-row glass-card"><span>Избранное</span><Icon name="bookmark" /></Link>
         <Link to="/chats" className="setting-row glass-card"><span>Сообщения</span><Icon name="chat" /></Link>
+        <Link to="/auctions" className="setting-row glass-card"><span>Аукционы</span><Icon name="gavel" /></Link>
         <Link to="/create" className="setting-row glass-card"><span>Разместить объявление</span><Icon name="plus" /></Link>
       </div>
     </Screen>
@@ -3315,6 +3454,7 @@ function Layout() {
         <Route path="/edit/:id" element={<EditAdPage />} />
         <Route path="/my" element={<MyAdsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
+        <Route path="/hunt" element={<CriteriaPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/chats" element={<ChatsPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
