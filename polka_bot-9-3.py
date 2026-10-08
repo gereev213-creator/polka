@@ -18860,8 +18860,8 @@ async def notify_hunt_matches(ad_ids: List[int]):
             elif not any_mode:
                 continue
             lines = [
-                ("🔥 <b>Новое объявление дешевле рынка</b>" if diff
-                 else "🔎 <b>Подходит под ваш критерий</b>"),
+                ("<b>Дешевле рынка</b>" if diff
+                 else "<b>Подходит под критерий</b>"),
                 "",
                 f"<b>{str(ad.get('title'))[:70]}</b>",
                 "",
@@ -19352,7 +19352,7 @@ def hunt_report(user_id: int) -> str:
     Раньше человек должен был искать логи в панели Amvera. Это неправильно:
     ответ должен быть там, где он уже есть — в боте.
     """
-    lines = ["🔎 <b>Ловля находок</b>", ""]
+    lines = ["<b>Находки</b>", ""]
     col = collector_status()
     if col.get('alive'):
         mins = col.get('minutes') or 0
