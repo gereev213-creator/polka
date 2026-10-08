@@ -17549,12 +17549,16 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     _touch_collector(source)
     logger.info(f"ingest {source}: принято {stats['accepted']}, "
                 f"дублей {stats['duplicate']}, пропущено {stats['skipped']}")
+    # Рассылка уходит в ФОН. Раньше она выполнялась прямо в обработчике
+    # запроса: при отправке 300 находок сервер прогонял тысячи запросов к
+    # базе, и всё это время приложение не могло получить ответ — висело на
+    # загрузке. Теперь отвечаем сразу, а рассылка идёт параллельно.
     pushed = 0
     if stats['accepted']:
         try:
-            pushed = await notify_hunt_matches(stats.get('ids') or [])
+            asyncio.create_task(notify_hunt_matches(stats.get('ids') or []))
         except Exception as e:
-            logger.warning(f"hunt notify: {e}")
+            logger.warning(f"hunt notify start: {e}")
     return _miniapp_json({'ok': True, 'source': source, 'pushed': pushed, **stats})
 
 
@@ -18321,8 +18325,9 @@ async def notify_hunt_matches(ad_ids: List[int]):
     except Exception:
         return 0
     sent = 0
-    # Сначала собираем все совпадения, чтобы понять объём: если по критерию
-    # нашлось много, шлём одну сводку вместо потока сообщений.
+    # Ограничиваем объём: если пришло 300 находок, проверять все дорого,
+    # а старые всё равно не нужны — свежие важнее.
+    ad_ids = list(ad_ids)[:200]
     matched: Dict[int, list] = {}
     for ad_id in ad_ids:
         ad = db.get_ad(ad_id)
