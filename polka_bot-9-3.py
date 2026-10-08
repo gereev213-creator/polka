@@ -18478,19 +18478,29 @@ async def notify_hunt_matches(ad_ids: List[int]):
             # Рынок считаем по ТАКИМ ЖЕ товарам: повербанк с повербанками.
             # Если похожих мало — не выдумываем цифру, а молчим.
             median = median_for_ad(ad, crit)
-            if not median or median <= int(ad['price']):
+            # Раньше здесь стоял безусловный continue: в чат попадали ТОЛЬКО
+            # товары дешевле рынка. В ленте при этом были все совпадения —
+            # человек видел варианты в приложении и не понимал, почему в
+            # чате тишина. Теперь в режиме «любые подходящие» присылаем
+            # каждое совпадение, а выгоду показываем, только если она есть.
+            any_mode = (crit.get('mode') or 'any') == 'any'
+            diff = 0
+            if median and median > int(ad['price']):
+                diff = median - int(ad['price'])
+            elif not any_mode:
                 continue
-            diff = median - int(ad['price'])
             lines = [
-                "🔥 <b>Новое объявление дешевле рынка</b>",
+                ("🔥 <b>Новое объявление дешевле рынка</b>" if diff
+                 else "🔎 <b>Подходит под ваш критерий</b>"),
                 "",
                 f"<b>{str(ad.get('title'))[:70]}</b>",
                 "",
                 f"Цена: <b>{_money(ad['price'])} ₽</b>",
-                f"Обычная цена: {_money(median)} ₽",
-                f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)",
-                "",
             ]
+            if diff:
+                lines.append(f"Обычная цена: {_money(median)} ₽")
+                lines.append(f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)")
+            lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
             text = "\n".join(lines)
             kb = None
@@ -21616,13 +21626,23 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     titles_cond, titles_params = [], []
     for crit in crits:
         word_cond, word_params = [], []
-        for w in re.split(r'\s+', str(crit.get('query') or '').lower()):
+        # Те же правила, что и в рассылке: обязательны бренд и модель, а не
+        # все слова запроса. Здесь был СТАРЫЙ код — из-за него лента и чат
+        # вели себя по-разному.
+        for w in _query_words_required(crit.get('query')):
             variants = query_word_variants(w)
             if not variants:
                 continue
             word_cond.append("(" + " OR ".join("COALESCE(a.title_lower, a.title) LIKE ?"
                                                for _ in variants) + ")")
             word_params.extend(f"%{v}%" for v in variants)
+        # Потолок цены из критерия. Без него в ленте показывались айфоны
+        # за 78 000 ₽ при выставленном лимите 30 000 ₽ — человек ставил
+        # цену, а получал всё подряд.
+        max_price = int(crit.get('max_price') or 0)
+        if max_price > 0:
+            word_cond.append("a.price > 0 AND a.price <= ?")
+            word_params.append(max_price)
         if word_cond:
             titles_cond.append("(" + " AND ".join(word_cond) + ")")
             titles_params.extend(word_params)
