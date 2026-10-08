@@ -18109,6 +18109,15 @@ def _query_words_required(query: str) -> list:
         ascii_letters = [c for c in letters if c.isascii()]
         return len(ascii_letters) >= len(letters) * 0.7
 
+    # Отсекаем окончания у русских слов: «мальчика» → «мальчи»,
+    # «зимняя» → «зимн». Без этого запрос «Куртка зимняя для мальчика»
+    # не находил заголовок «Куртка зимняя мальчик» — падежи не совпадали.
+    def stem(w: str) -> str:
+        if len(w) >= 6 and not w.isascii():
+            return w[:-2]
+        return w
+
+    words = [stem(w) for w in words]
     brands = [w for w in words if is_brand(w)]
     base = brands[0] if brands else max(words, key=len)
     required = [base]
