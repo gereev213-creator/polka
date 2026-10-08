@@ -17926,20 +17926,24 @@ async def _collector_inline_loop():
     # Защита от вечного падения: если прошлый запуск завершился аварийно
     # с включённым сборщиком, второй раз не рискуем — иначе сервис будет
     # перезапускаться по кругу и ляжет целиком.
-    crashed_at = _setting_get('collector_crashed')
-    if crashed_at:
-        # Предохранитель не вечный: если с падения прошло больше суток,
-        # пробуем снова. Иначе после одного сбоя сбор был бы мёртв навсегда —
-        # даже если тариф подняли и памяти теперь хватает.
-        hours = _hours_since(crashed_at)
+    # Отметка ставится НЕ при старте, а на время самого прохода. Поэтому
+    # обычный перезапуск при деплое её не оставляет, и предохранитель
+    # больше не принимает деплой за падение — раньше из-за этого при
+    # каждом обновлении приходило ложное «сбор выключен».
+    if _setting_get('collector_pass_running') == '1':
+        cooldown = _setting_get('collector_crashed')
+        hours = _hours_since(cooldown)
         if hours is None or hours < 24:
-            logger.warning(f"Сборщик НЕ запущен: контейнер падал с ним {hours} ч назад.")
+            _setting_set('collector_pass_running', '')
+            logger.warning(f"Контейнер падал во время сбора {hours} ч назад — пауза.")
             await _notify_admins_collector_disabled(
-                "Прошлый запуск контейнера завершился аварийно — сбор выключен, "
-                "чтобы сервис не падал по кругу. Попробую снова через сутки. "
-                "Amvera не тянет сбор: нужен отдельный сервер или тариф с 2 ГБ.")
+                "Контейнер упал ВО ВРЕМЯ сбора — выключаю его, чтобы сервис "
+                "не падал по кругу. Попробую снова через сутки.\n\n"
+                "Если это будет повторяться, уменьшите нагрузку: "
+                "POLKA_MAX_CATEGORIES=2")
             return
         logger.info("С прошлого падения прошли сутки — пробую сбор снова")
+        _setting_set('collector_pass_running', '')
     token = os.environ.get('INGEST_TOKEN', '')
     if not token:
         logger.warning("Сборщик находок ждёт INGEST_TOKEN")
@@ -17952,7 +17956,6 @@ async def _collector_inline_loop():
     except Exception as e:
         logger.warning(f"сборщик не импортирован: {e}")
         return
-    _setting_set('collector_crashed', get_moscow_time().isoformat())
     logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
                 f"{COLLECTOR_MAX_CATEGORIES} категорий")
     first = True
@@ -17963,6 +17966,11 @@ async def _collector_inline_loop():
                 'token': token,
                 'targets': collector.default_targets(),
             }
+            # Отметка «сбор идёт». Снимается в finally ниже. Останется
+            # только если процесс умер ВО ВРЕМЯ сбора — это и есть признак
+            # настоящего падения, в отличие от обычного перезапуска
+            # при деплое.
+            _setting_set('collector_pass_running', '1')
             sent = await asyncio.to_thread(collector.run_once, cfg)
             # Освобождаем память сразу после прохода: страницы Авито весят
             # по 2,5 МБ, и на слабом тарифе они копились до перезапуска
@@ -17972,14 +17980,10 @@ async def _collector_inline_loop():
             except Exception:
                 pass
             logger.info(f"Сбор находок: принято новых {sent}")
-            if first:
-                # Первый успешный проход — контейнер выдержал, снимаем отметку.
-                # Проверяем именно ПРОХОД, а не старт: падение случается
-                # во время сбора, а не при запуске.
-                _setting_set('collector_crashed', '')
-                first = False
         except Exception as e:
             logger.warning(f"Сбор находок: ошибка {e}")
+        finally:
+            _setting_set('collector_pass_running', '')
         await asyncio.sleep(COLLECTOR_INTERVAL)
 
 
