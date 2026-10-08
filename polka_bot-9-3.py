@@ -370,7 +370,7 @@ async def rate_limit_middleware(update, context):
         ch_url = EMAIL_TG_CHANNEL_URL
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton(EM_ARROW_R + " Подписаться", url=ch_url)],
-            [InlineKeyboardButton("✅ Я подписался", callback_data="check_subscription")],
+            [InlineKeyboardButton(" Я подписался", callback_data="check_subscription")],
         ])
         try:
             await update.message.reply_text(
@@ -5327,7 +5327,7 @@ async def admin_reindex_photos(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     await safe_edit_message(query,
-        f"⏳ Переиндексирую {len(targets)} объявлений — это займёт время "
+        f" Переиндексирую {len(targets)} объявлений — это займёт время "
         f"(примерно {len(targets) // 2} сек.), пришлю отчёт по готовности...",
     )
 
@@ -5383,7 +5383,7 @@ def _format_ad_text(ad: dict, seller=None, verify=None, rating=None,
         rating_tag = ""
 
     # Местоположение
-    coord_match = _re.match(r'📍\s*([\d.]+),\s*([\d.]+)', city)
+    coord_match = _re.match(r'\s*([\d.]+),\s*([\d.]+)', city)
     address = (ad.get('address') or '').strip()
     if coord_match:
         lat, lon = coord_match.group(1), coord_match.group(2)
@@ -5465,7 +5465,7 @@ async def publish_ad_to_channel(ad_id: int, context: ContextTypes.DEFAULT_TYPE, 
     desc      = (ad.get('description') or '')[:300]
     # Хэштег только для реального города из списка
     import re as _re
-    coord_match = _re.match(r'📍\s*([\d.]+),\s*([\d.]+)', city)
+    coord_match = _re.match(r'\s*([\d.]+),\s*([\d.]+)', city)
     city_for_tag = '' if coord_match else (city if city in ALLOWED_CITIES else '')
     city_ch   = CITY_CHANNELS.get(city_for_tag, '') or CITY_CHANNELS.get(city, '')
     hashtag   = f"#{city_for_tag.replace(' ', '').replace('-', '')}" if city_for_tag else ""
@@ -5830,7 +5830,7 @@ async def republish_ad_to_max(ad_id: int, bot_obj) -> Optional[int]:
     city = (ad.get('city') or '').strip()
 
     import re as _re
-    coord_match = _re.match(r'📍\s*([\d.]+),\s*([\d.]+)', city)
+    coord_match = _re.match(r'\s*([\d.]+),\s*([\d.]+)', city)
     if coord_match:
         lat, lon = coord_match.group(1), coord_match.group(2)
         city_line = f"<b>Местоположение:</b> <a href=\"https://yandex.ru/maps/?pt={lon},{lat}&z=16\">на карте</a>"
@@ -11488,7 +11488,7 @@ async def rembg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # query.answer() Telegram отклоняет с ошибкой вида "query is too old /
     # query id is invalid", а safe_answer() такие ошибки молча глотает
     # (ищет "query"/"invalid" в тексте). Раньше здесь СНАЧАЛА показывался
-    # тост "⏳ Удаляю фон…", а потом — если лимит исчерпан — второй алерт
+    # тост " Удаляю фон…", а потом — если лимит исчерпан — второй алерт
     # с текстом лимита. Для Free-тарифа (daily_enhance=0) лимит исчерпан
     # ВСЕГДА, то есть второй alert должен был показаться на каждое
     # нажатие — но он проглатывался как "двойной ответ", и пользователь
@@ -11517,7 +11517,7 @@ async def rembg_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if _trial_used_now:
         await safe_answer(query, "✦ Бесплатная пробная попытка! Дальше — по подписке ПОЛКА ПЛЮС.", show_alert=True)
     else:
-        await safe_answer(query, "⏳ Удаляю фон…", show_alert=False)
+        await safe_answer(query, " Удаляю фон…", show_alert=False)
 
     ad = context.user_data.get('creating_ad')
     if not ad:
@@ -11765,7 +11765,7 @@ async def enhance_photo_handler(update: Update, context: ContextTypes.DEFAULT_TY
     if _trial_used_now:
         await safe_answer(query, "✦ Бесплатная пробная попытка! Дальше — по подписке ПОЛКА ПЛЮС.", show_alert=True)
     else:
-        await safe_answer(query, "⏳ Улучшаю фото…", show_alert=False)
+        await safe_answer(query, " Улучшаю фото…", show_alert=False)
 
     ad = context.user_data.get('creating_ad')
     if not ad:
@@ -12573,21 +12573,21 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     for _key in ('broadcast_data', 'grant_step', 'grant_target', 'grant_service', 'del_ad_id', 'republish_step'):
         context.user_data.pop(_key, None)
     keyboard = [
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+        [InlineKeyboardButton(" Статистика", callback_data="admin_stats"),
          InlineKeyboardButton(EM_DOT + " Модерация", callback_data="admin_moderation")],
         [InlineKeyboardButton(EM_DOT + " Платежи", callback_data="admin_payments"),
          InlineKeyboardButton(EM_DOT + " Рассылка", callback_data="admin_broadcast_start")],
         [InlineKeyboardButton(EM_DOT + " Промокоды", callback_data="admin_promocodes"),
-         InlineKeyboardButton("📈 Аналитика", callback_data="admin_advanced_analytics")],
-        [InlineKeyboardButton("💰 Цены закрепов", callback_data="admin_prices"),
+         InlineKeyboardButton(" Аналитика", callback_data="admin_advanced_analytics")],
+        [InlineKeyboardButton(" Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
-        [InlineKeyboardButton("🗂 Истории", callback_data="admin_stories")],
-        [InlineKeyboardButton("🖼 Баннеры", callback_data="admin_banners"),
+        [InlineKeyboardButton(" Истории", callback_data="admin_stories")],
+        [InlineKeyboardButton(" Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
-         InlineKeyboardButton("💾 Восстановить БД", callback_data="admin_recover_db")],
-        [InlineKeyboardButton("🎫 Выдать лимиты", callback_data="admin_grant"),
-         InlineKeyboardButton("🗑 Удалить объявление", callback_data="admin_del_ad")],
+         InlineKeyboardButton(" Восстановить БД", callback_data="admin_recover_db")],
+        [InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant"),
+         InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad")],
         [InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max"),
          InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
     ]
@@ -12778,7 +12778,7 @@ async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tariff_info = get_tariff_info(target_id)
         end_date = user_data.get('tariff_end_date') or '—'
         text = (
-            f"👤 Пользователь: {target_id}\n"
+            f" Пользователь: {target_id}\n"
             f"• Тариф: {user_data.get('tariff', 'Free')}\n"
             f"• Подписка до: {end_date}\n"
             f"• photo_search_count: {user_data.get('photo_search_count', 0)}\n"
@@ -12870,7 +12870,7 @@ async def admin_grant_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     context.user_data['grant_step'] = 'user_id'
     await safe_edit_message(query,
-        "🎫 <b>Выдача лимитов</b>\n\nВведите ID пользователя:",
+        " <b>Выдача лимитов</b>\n\nВведите ID пользователя:",
         [[InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="admin_back")]],
         parse_mode=ParseMode.HTML
     )
@@ -12920,15 +12920,15 @@ async def handle_grant_user_id_text(update: Update, context: ContextTypes.DEFAUL
     context.user_data['grant_step'] = 'service'
     end_date = user_data.get('tariff_end_date') or '—'
     keyboard = [
-        [InlineKeyboardButton("📷 Поиск по фото", callback_data="grant_svc:photo_search"),
-         InlineKeyboardButton("📋 Объявления", callback_data="grant_svc:daily_ads")],
-        [InlineKeyboardButton("🤖 AI-генерация", callback_data="grant_svc:ai_gen"),
-         InlineKeyboardButton("🎨 Обработка фото", callback_data="grant_svc:photo_edit")],
-        [InlineKeyboardButton("⭐ Premium (дни)", callback_data="grant_svc:premium")],
+        [InlineKeyboardButton(" Поиск по фото", callback_data="grant_svc:photo_search"),
+         InlineKeyboardButton(" Объявления", callback_data="grant_svc:daily_ads")],
+        [InlineKeyboardButton(" AI-генерация", callback_data="grant_svc:ai_gen"),
+         InlineKeyboardButton(" Обработка фото", callback_data="grant_svc:photo_edit")],
+        [InlineKeyboardButton(" Premium (дни)", callback_data="grant_svc:premium")],
         [InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="admin_back")]
     ]
     await update.message.reply_text(
-        f"👤 Пользователь: {target_id}\n"
+        f" Пользователь: {target_id}\n"
         f"• Тариф: {user_data.get('tariff', 'Free')}\n"
         f"• Подписка до: {end_date}\n\n"
         f"Выберите услугу:",
@@ -13012,7 +13012,7 @@ async def admin_del_ad_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
     context.user_data['del_ad_step'] = 'id_input'
     await safe_edit_message(query,
-        "🗑 <b>Удаление объявления</b>\n\n"
+        " <b>Удаление объявления</b>\n\n"
         "Напишите ID объявления (число).\n\n"
         "<i>ID можно увидеть в карточке объявления (админ-панель): «#123».\n"
         "Также можно ввести номер сообщения из канала.</i>",
@@ -13044,7 +13044,7 @@ async def handle_admin_del_ad_text(update: Update, context: ContextTypes.DEFAULT
     seller_name = get_anon_id(seller) if seller else '—'
 
     await msg.reply_text(
-        f"🗑 <b>Удаление #{ad_id}</b>\n\n"
+        f" <b>Удаление #{ad_id}</b>\n\n"
         f"<b>{ad['title']}</b>\n"
         f"Цена: {price_fmt} ₽\n"
         f"Продавец: {seller_name}\n"
@@ -13159,21 +13159,21 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     keyboard = [
-        [InlineKeyboardButton("📊 Статистика", callback_data="admin_stats"),
+        [InlineKeyboardButton(" Статистика", callback_data="admin_stats"),
          InlineKeyboardButton(EM_DOT + " Модерация", callback_data="admin_moderation")],
         [InlineKeyboardButton(EM_DOT + " Платежи", callback_data="admin_payments"),
          InlineKeyboardButton(EM_DOT + " Рассылка", callback_data="admin_broadcast_start")],
         [InlineKeyboardButton(EM_DOT + " Промокоды", callback_data="admin_promocodes"),
-         InlineKeyboardButton("📈 Аналитика", callback_data="admin_advanced_analytics")],
-        [InlineKeyboardButton("💰 Цены закрепов", callback_data="admin_prices"),
+         InlineKeyboardButton(" Аналитика", callback_data="admin_advanced_analytics")],
+        [InlineKeyboardButton(" Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
-        [InlineKeyboardButton("🗂 Истории", callback_data="admin_stories")],
-        [InlineKeyboardButton("🖼 Баннеры", callback_data="admin_banners"),
+        [InlineKeyboardButton(" Истории", callback_data="admin_stories")],
+        [InlineKeyboardButton(" Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
-          InlineKeyboardButton("💾 Восстановить БД", callback_data="admin_recover_db")],
-        [InlineKeyboardButton("🎫 Выдать лимиты", callback_data="admin_grant"),
-         InlineKeyboardButton("🗑 Удалить объявление", callback_data="admin_del_ad")],
+          InlineKeyboardButton(" Восстановить БД", callback_data="admin_recover_db")],
+        [InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant"),
+         InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad")],
         [InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max"),
          InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
     ]
@@ -13218,18 +13218,18 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"<b>Статистика системы</b>\n\n"
-        f"👤 Пользователи: <b>{stats['total_users']}</b>\n"
-        f"📋 Объявления: <b>{stats['total_ads']}</b>\n"
+        f" Пользователи: <b>{stats['total_users']}</b>\n"
+        f" Объявления: <b>{stats['total_ads']}</b>\n"
         f" • Активных: {stats['active_ads']}\n"
         f" • На модерации: {stats['moderation_ads']}\n\n"
-        f"💰 Финансы:\n"
+        f" Финансы:\n"
         f" • Всего платежей: {stats['total_payments']}\n"
         f" • Общая выручка: <b>{stats['total_revenue']} ₽</b>\n\n"
-        f"📌 Закрепы:\n"
+        f" Закрепы:\n"
         f" • Сейчас активных: {active_pins}\n"
         f" • Продано закрепов: {pin_count}\n"
         f" • Выручка с закрепов: <b>{pin_revenue} ₽</b>\n\n"
-        f"📊 Активность:\n"
+        f" Активность:\n"
         f" • Активных пользователей (7д): {stats['active_users_7d']}"
     )
     
@@ -13531,7 +13531,7 @@ async def handle_moderation_reason(update: Update, context: ContextTypes.DEFAULT
                 chat_id=user_id,
                 text=f"{EM_FAIL} Ваше объявление отклонено\n\n{title}\n\nПричина: {reason}\n\nИсправьте и создайте заново — это займёт минуту.",
                 reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("➕ Создать заново",
+                    [InlineKeyboardButton(" Создать заново",
                                           web_app=WebAppInfo(url=f"{_miniapp_url()}/create"))],
                 ]),
             )
@@ -14077,9 +14077,9 @@ async def broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Отправляем сообщение о начале
     try:
-        await query.edit_message_text(f"⏳ Начинаю рассылку для {total_users} пользователей...")
+        await query.edit_message_text(f" Начинаю рассылку для {total_users} пользователей...")
     except Exception:
-        await query.message.reply_text(f"⏳ Начинаю рассылку для {total_users} пользователей...")
+        await query.message.reply_text(f" Начинаю рассылку для {total_users} пользователей...")
     
     sent_count = 0
     failed_count = 0
@@ -14279,8 +14279,8 @@ async def admin_promo_input_code(update: Update, context: ContextTypes.DEFAULT_T
     )
     keyboard = [
         [InlineKeyboardButton("✦ На всё (любая услуга)", callback_data="admin_promo_service:all")],
-        [InlineKeyboardButton("📌 На закреп объявления", callback_data="admin_promo_service:pin")],
-        [InlineKeyboardButton("⭐ На ПОЛКА ПЛЮС", callback_data="admin_promo_service:sub")],
+        [InlineKeyboardButton(" На закреп объявления", callback_data="admin_promo_service:pin")],
+        [InlineKeyboardButton(" На ПОЛКА ПЛЮС", callback_data="admin_promo_service:sub")],
         [InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="admin_promocodes")],
     ]
     
@@ -14560,7 +14560,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if update and update.effective_chat:
                 await context.bot.send_message(chat_id=update.effective_chat.id,
-                    text="⚠️ Обнаружено повреждение базы данных. Запускаю автоматическое восстановление и перезапуск...")
+                    text=" Обнаружено повреждение базы данных. Запускаю автоматическое восстановление и перезапуск...")
         except Exception:
             pass
         await _recover_database()
@@ -14581,7 +14581,7 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if _is_net:
                     error_handler._last_warn = _last
                     error_handler._last_warn[_chat_id] = _now_ts
-                msg = "⚠️ Сервер долго отвечает. Попробуйте ещё раз." if _is_timeout else "Что-то пошло не так. Попробуйте ещё раз или вернитесь в /start"
+                msg = " Сервер долго отвечает. Попробуйте ещё раз." if _is_timeout else "Что-то пошло не так. Попробуйте ещё раз или вернитесь в /start"
                 try:
                     await context.bot.send_message(chat_id=update.effective_chat.id, text=msg)
                 except Exception:
@@ -17044,18 +17044,18 @@ async def admin_advanced_analytics(update: Update, context: ContextTypes.DEFAULT
     text = f"<b>Аналитика</b>\n\n"
 
     text += (
-        f"📌 <b>Закрепы</b>\n"
+        f" <b>Закрепы</b>\n"
         f" • Активных сейчас: <b>{active_pins}</b>\n"
         f" • За 7 дней: {pin_week} шт. / <b>{rev_week} ₽</b>\n"
         f" • За 30 дней: {pin_month} шт. / <b>{rev_month} ₽</b>\n"
         f" • Всего продано: {pin_count} шт. / <b>{pin_revenue} ₽</b>\n\n"
-        f"📋 <b>За 7 дней</b>\n"
+        f" <b>За 7 дней</b>\n"
         f" • Новых пользователей: {new_users_week}\n"
         f" • Новых объявлений: {new_ads_week}\n\n"
     )
 
     if top_ads:
-        text += "🔥 <b>Топ по просмотрам</b>\n"
+        text += " <b>Топ по просмотрам</b>\n"
         for i, row in enumerate(top_ads, 1):
             ad_id, title, views = row
             short = title[:30] + ("…" if len(title) > 30 else "")
@@ -18122,7 +18122,7 @@ async def _notify_admins_collector_disabled(why: str):
         try:
             await app.bot.send_message(
                 chat_id=admin_id,
-                text=("⚠️ <b>Сбор находок выключен</b>\n\n" + why +
+                text=(" <b>Сбор находок выключен</b>\n\n" + why +
                       "\n\nБот и приложение работают. Сбор возобновится сам "
                       "через час. Если падения повторятся — снизьте нагрузку: "
                       "<code>POLKA_MAX_CATEGORIES=1</code>"),
@@ -18209,7 +18209,7 @@ async def _notify_admins_collector_blocked():
         try:
             await app.bot.send_message(
                 chat_id=admin_id,
-                text=("⚠️ <b>Авито заблокировал сбор с сервера</b>\n\n"
+                text=(" <b>Авито заблокировал сбор с сервера</b>\n\n"
                       "Бот и приложение работают, но новые находки не приходят. "
                       f"Повторю попытку через {int(COLLECTOR_BLOCK_HOURS)} ч.\n\n"
                       "Что можно сделать: подключить прокси или вернуться к запуску "
@@ -18730,7 +18730,7 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
     # Лучшие — наверх: сначала самая большая выгода
     fresh.sort(key=lambda x: -x[1])
     top = fresh[:10]
-    lines = [f"🔥 <b>Нашлось {len(fresh)} вариантов — «{crit.get('query')}»</b>", ""]
+    lines = [f" <b>Нашлось {len(fresh)} вариантов — «{crit.get('query')}»</b>", ""]
     for ad, discount in top:
         lines.append(f"• <b>{_money(ad['price'])} ₽</b> (−{discount}%) — "
                      f"{str(ad.get('title'))[:44]}")
@@ -19243,7 +19243,7 @@ async def _cleanup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         left = _row_get(cur.fetchone(), 'n', 0)
     except Exception:
         left = 0
-    lines = [f"🧹 <b>Чистка базы</b>", "",
+    lines = [f" <b>Чистка базы</b>", "",
              f"Находки старше {res['keep_days']} дней: убрано <b>{res['removed']}</b>"]
     for name, count in (res.get('details') or {}).items():
         lines.append(f"{name}: убрано {count}")
@@ -19263,7 +19263,7 @@ async def tell_criterion_created(user_id: int, crit: Dict):
     query = crit.get('query') or ''
     city = f" · {crit['city']}" if crit.get('city') else ""
     cap = f"\nПотолок цены: {_money(crit['max_price'])} ₽" if crit.get('max_price') else ""
-    text = (f"✅ <b>Ловлю «{query}»</b>{city}{cap}\n\n"
+    text = (f" <b>Ловлю «{query}»</b>{city}{cap}\n\n"
             f"Теперь ищу это на Авито и пришлю, как только найду подходящее.\n\n"
             f"Посмотреть, как идёт ловля, можно командой /hunt")
     try:
@@ -19324,7 +19324,7 @@ async def _hunt_feedback_loop():
                 try:
                     await app.bot.send_message(
                         chat_id=user_id,
-                        text=(f"🔎 <b>Ловлю «{crit.get('query')}» — пока пусто</b>\n\n{why}\n\n"
+                        text=(f" <b>Ловлю «{crit.get('query')}» — пока пусто</b>\n\n{why}\n\n"
                               f"Продолжаю искать и пришлю сразу, как появится."),
                         parse_mode=ParseMode.HTML)
                     cur.execute("UPDATE hunt_criteria SET told_empty_at=? WHERE id=?",
@@ -19346,13 +19346,13 @@ def hunt_report(user_id: int) -> str:
     col = collector_status()
     if col.get('alive'):
         mins = col.get('minutes') or 0
-        lines.append(f"✅ Сборщик на связи — был {mins} мин назад")
+        lines.append(f" Сборщик на связи — был {mins} мин назад")
     elif col.get('minutes') is None:
-        lines.append("⚠️ Сборщик ещё не выходил на связь.")
+        lines.append(" Сборщик ещё не выходил на связь.")
         lines.append("   Запустите его на компьютере: <code>./start-local.sh</code>")
     else:
         hrs = int((col.get('minutes') or 0) // 60)
-        lines.append(f"⚠️ Сборщик молчит {hrs} ч — проверьте, идёт ли он у вас.")
+        lines.append(f" Сборщик молчит {hrs} ч — проверьте, идёт ли он у вас.")
 
     cur = db.conn.cursor()
     try:
@@ -19361,7 +19361,7 @@ def hunt_report(user_id: int) -> str:
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka' "
                     "AND parsed_at >= ?", ((get_moscow_time() - timedelta(hours=24)).isoformat(),))
         today = _row_get(cur.fetchone(), 'n', 0)
-        lines.append(f"📦 Находок в базе: <b>{total}</b> (за сутки {today})")
+        lines.append(f" Находок в базе: <b>{total}</b> (за сутки {today})")
     except Exception as e:
         logger.warning(f"hunt report counts: {e}")
     lines.append("")
@@ -19391,7 +19391,7 @@ def hunt_report(user_id: int) -> str:
             sent = _row_get(cur.fetchone(), 'n', 0)
         except Exception:
             pass
-        mark = "✅" if fresh else "⏳"
+        mark = "" if fresh else ""
         lines.append(f"{mark} <b>{c['query']}</b> — подходит {matches}, из них свежих {fresh}")
         if not fresh:
             if matches:
@@ -19439,16 +19439,16 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         col = collector_status()
         if not crits:
             await update.message.reply_text(
-                "🔎 <b>Ловля находок</b>\n\n"
+                " <b>Ловля находок</b>\n\n"
                 "Напишите, что искать: <code>/hunt iphone 13</code>\n"
                 "Бот будет присылать свежие объявления дешевле рынка.\n\n"
                 "Можно уточнить город и потолок цены:\n"
                 "<code>/hunt iphone 13 | Ижевск | 45000</code>",
                 parse_mode=ParseMode.HTML)
             return
-        lines = ["🔎 <b>Ваши критерии</b>\n"]
+        lines = [" <b>Ваши критерии</b>\n"]
         if not col.get('alive'):
-            lines.append("⚠️ <b>Сборщик не на связи.</b> Он работает на вашем "
+            lines.append(" <b>Сборщик не на связи.</b> Он работает на вашем "
                          "компьютере — пока он не запущен, объявления не придут.\n")
         for c in crits:
             city = f" · {c['city']}" if c.get('city') else ""
@@ -19492,7 +19492,7 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Такой критерий уже есть — или запрос слишком короткий.")
         return
     crit = next((c for c in get_user_criteria(user.id) if c['id'] == crit_id), None) or {}
-    head = f"✅ Ловлю <b>{query}</b>" + (f" · {city}" if city else "") + "\n\n"
+    head = f" Ловлю <b>{query}</b>" + (f" · {city}" if city else "") + "\n\n"
     if crit.get('median_price'):
         med = f"{crit['median_price']:,} ₽".replace(',', ' ')
         await update.message.reply_text(
@@ -20177,7 +20177,7 @@ async def open_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ts     = m['created_at'][11:16] if m.get('created_at') else ''
             txt    = m.get('text') or ''
             mtype  = m.get('msg_type') or 'text'
-            icon   = {'photo': '📷 ', 'video': '📹 ', 'voice': '🎵 ', 'document': '📄 '}.get(mtype, '')
+            icon   = {'photo': ' ', 'video': ' ', 'voice': ' ', 'document': ' '}.get(mtype, '')
             if mtype == 'voice':
                 txt = 'Голосовое сообщение'
             elif mtype in ('photo', 'video', 'document') and txt:
@@ -20240,7 +20240,7 @@ async def my_chats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             my_last_read = ch.get('buyer_last_read') if is_buyer else ch.get('seller_last_read')
             last_msg_at  = ch.get('last_message_at') or ''
             unread = bool(last_msg_at) and (not my_last_read or last_msg_at > my_last_read) and ch.get('last_sender_id') != user_id
-            unread_mark = "🔴 " if unread else ""
+            unread_mark = " " if unread else ""
 
             text += f"{unread_mark}{role} {other_anon}  {EM_DOT}  {title_short}  {EM_DOT}  {last}\n"
 
@@ -20845,7 +20845,7 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     city_7d = round(city_price * 3.5)
 
     text = (
-        f"<b>💰 Цены на услуги</b>\n\n"
+        f"<b> Цены на услуги</b>\n\n"
         f"<b><a href=\"https://t.me/polkaudm\">Основной канал — вся Россия</a>:</b>\n"
         f" • 24 часа — <b>{rf_price} ₽</b>\n"
         f" • 3 дня — {rf_3d} ₽\n"
@@ -20862,7 +20862,7 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for key, label, default in _PRICE_KEYS:
         current = get_price(key, default)
         keyboard.append([InlineKeyboardButton(
-            f"✏️ {label} — {current} ₽",
+            f" {label} — {current} ₽",
             callback_data=f"admin_price_edit:{key}"
         )])
     keyboard.append([InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")])
@@ -21089,14 +21089,14 @@ async def expire_ads_task(context):
             await context.bot.send_message(
                 chat_id=ad['user_id'],
                 text=(
-                    f"⚠️ <b>Объявление скоро снимется</b>\n\n"
+                    f" <b>Объявление скоро снимется</b>\n\n"
                     f"«{ad['title']}»\n\n"
                     f"Через <b>{days_left} дн.</b> объявление будет автоматически удалено из каналов и базы данных.\n\n"
                     f"Если товар ещё не продан — создайте новое объявление заранее."
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("📋 Мои объявления", callback_data="my_ads")
+                    InlineKeyboardButton(" Мои объявления", callback_data="my_ads")
                 ]])
             )
             # Помечаем что предупредили
@@ -21129,14 +21129,14 @@ async def expire_ads_task(context):
             await context.bot.send_message(
                 chat_id=ad['user_id'],
                 text=(
-                    f"🗑 <b>Объявление удалено</b>\n\n"
+                    f" <b>Объявление удалено</b>\n\n"
                     f"«{ad['title']}»\n\n"
                     f"Прошло 30 дней — объявление снято с каналов и удалено.\n"
                     f"Если товар ещё не продан, создайте новое объявление."
                 ),
                 parse_mode="HTML",
                 reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("➕ Подать объявление", callback_data="create_ad")
+                    InlineKeyboardButton(" Подать объявление", callback_data="create_ad")
                 ]])
             )
         except Exception as e:
@@ -21203,7 +21203,7 @@ async def setup_scheduler(application: Application):
                     await context.bot.send_message(
                         chat_id=uid,
                         text=(
-                            f"⏳ <b>Подписка ПОЛКА ПЛЮС заканчивается через {days} дн.</b>\n\n"
+                            f" <b>Подписка ПОЛКА ПЛЮС заканчивается через {days} дн.</b>\n\n"
                             f"Продлите сейчас, чтобы не потерять доступ к премиум-функциям.\n"
                             f"• До {TARIFFS['Premium']['daily_ads']} объявлений в день\n"
                             f"• AI-улучшение и удаление фона без лимита\n"
@@ -21403,11 +21403,11 @@ async def post_init(application: Application):
     ]
     await application.bot.set_my_commands(commands)
 
-    # Кнопка ☰ меню рядом с полем ввода
+    # Кнопка  меню рядом с полем ввода
     try:
         from telegram import MenuButtonCommands as _MBC
         await application.bot.set_chat_menu_button(menu_button=_MBC())
-        logger.info("Кнопка меню ☰ установлена")
+        logger.info("Кнопка меню  установлена")
     except Exception as _e:
         logger.warning(f"set_chat_menu_button error: {_e}")
     await setup_scheduler(application)
@@ -23006,9 +23006,9 @@ async def api_views_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
             lines.append(f"  тестирую https://t.me/{TG_CHANNEL_USERNAME}/{_wb_msg_id}?embed=1&mode=tme")
             views = await _get_tg_views_web({'id': 80, 'channel_message_id': _wb_msg_id})
             if views is not None:
-                lines.append(f"  ✅ ПОЛУЧЕНО: views = {views}")
+                lines.append(f"   ПОЛУЧЕНО: views = {views}")
             else:
-                lines.append(f"  ❌ не удалось получить views (сеть блокирует t.me или пост не найден)")
+                lines.append(f"   не удалось получить views (сеть блокирует t.me или пост не найден)")
     except Exception as e:
         lines.append(f"  веб-метод ошибка: {e}")
 
@@ -23717,7 +23717,7 @@ async def story_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if query:
         await safe_answer(query, )
     context.user_data['story_adding'] = True
-    text = ("📸 <b>Новая история</b>\n\n"
+    text = (" <b>Новая история</b>\n\n"
             "Пришлите фото или видео одним сообщением — подпись к нему станет "
             "текстом истории.\n\n"
             "Через бота можно и большое видео: ограничения платформы здесь не мешают.")
@@ -23764,7 +23764,7 @@ async def story_media_received(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception:
         active = []
     if active:
-        kb_rows.append([InlineKeyboardButton("🔗 Привязать объявление",
+        kb_rows.append([InlineKeyboardButton(" Привязать объявление",
                                              callback_data=f"story_attach_ad:{story_id}")])
     kb_rows.append([InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")])
     await msg.reply_text(
@@ -25200,16 +25200,16 @@ def main():
         # Фильтр города в поиске (ввод вручную)
         if ud.get('sf_awaiting_city'):       return await sf_city_custom_input(update, context)
         # Кнопки главного меню — приоритетнее активного чата (иначе текст кнопки
-        # "🔍 Поиск" при открытом чате улетит собеседнику как релей)
+        # " Поиск" при открытом чате улетит собеседнику как релей)
         txt_menu = update.message.text.strip()
         if txt_menu in ("+ Разместить",):
             return await create_ad_start(update, context)
-        if txt_menu in ("🔍 Поиск", "📋 Мои объявления"):
+        if txt_menu in (" Поиск", " Мои объявления"):
             if "Поиск" in txt_menu: return await search_start(update, context)
             return await my_ads_text(update, context)
-        if txt_menu == "👤 Профиль":
+        if txt_menu == " Профиль":
             return await show_profile_text(update, context)
-        if txt_menu == "❓ Помощь":
+        if txt_menu == " Помощь":
             return await help_command(update, context)
         # Активный поисковый запрос — приоритетнее активного чата
         if ud.get('awaiting_search'):
