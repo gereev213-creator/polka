@@ -2829,3 +2829,57 @@ select.text-input {
   color: var(--text);
   text-shadow: none;
 }
+
+/* ── Поля ввода ─────────────────────────────────────────────────────────── */
+/* Класс .input использовался в форме «Поиск лотов», но стилей для него не
+   было: поля выглядели как голые браузерные прямоугольники. Отсюда и
+   ощущение, что экран сырой. */
+.input,
+input.input,
+textarea.input {
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  transition: border-color .18s ease, background .18s ease;
+}
+.input:focus {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.input::placeholder { color: var(--text-secondary); opacity: .75; }
+textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
+
+/* Поля «от» и «до» — одной ширины в ряд */
+.price-pair {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.price-pair .input { flex: 1; min-width: 0; }
+
+/* Карточка ИИ-разбора: «опишите словами» */
+.ai-card {
+  padding: 15px 16px 16px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.ai-card .ghost-btn {
+  width: 100%;
+  margin-top: 10px;
+}
+.ai-card .ghost-btn:disabled { opacity: .5; }
+.ai-card .field-label-row { margin-top: 0; }
+
+/* Строка подсказок: кнопки переносятся, а не уезжают за край */
+.auction-sort {
+  flex-wrap: wrap;
+}

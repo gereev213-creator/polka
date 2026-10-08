@@ -1206,7 +1206,7 @@ function CriteriaPage() {
 
       {/* Способ 2: написать словами. ИИ разберёт это в те же фильтры,
           что задаются руками, и поиск пойдёт обычным путём. */}
-      <div className="glass-card mt-12">
+      <div className="ai-card mt-12">
         <div className="field-label-row">Описать словами</div>
         <textarea className="input" rows={2} value={aiText}
           onChange={(e) => setAiText(e.target.value)}
@@ -1285,7 +1285,7 @@ function CriteriaPage() {
         ) : null}
 
         <div className="field-label-row">Цена, ₽</div>
-        <div className="auction-sort">
+        <div className="price-pair">
           <input className="input" type="number" inputMode="numeric" placeholder="от"
             value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
           <input className="input" type="number" inputMode="numeric" placeholder="до"
