@@ -17614,7 +17614,14 @@ async def ai_parse_hunt(user_text: str) -> Dict:
 
 
 async def api_hunt_ai(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/hunt/ai — разобрать фразу словами в фильтры поиска."""
+    """POST /api/hunt/ai — разобрать фразу словами в фильтры поиска.
+
+    Доступно только из приложения: проверяем подпись Telegram. Без этого
+    адрес был открыт всем, и любой, узнав его, мог гонять платный ключ
+    Yandex AI за наш счёт.
+    """
+    if not _miniapp_viewer(request):
+        return _miniapp_err('unauthorized', 401)
     try:
         body = await request.json()
     except Exception:
