@@ -18088,10 +18088,10 @@ _DISABLED_BY_ENV = os.environ.get('POLKA_NO_COLLECTOR', '') == '1'
 COLLECTOR_ENABLED = not _DISABLED_BY_ENV
 # Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
 # между покрытием и памятью контейнера.
-COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
+COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '2')
 # 15 минут вместо 5: Авито начинает ограничивать при частых запросах,
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '1800'))
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '3600'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 
@@ -18157,7 +18157,9 @@ async def _collector_inline_loop():
     if _setting_get('collector_pass_running') == '1':
         cooldown = _setting_get('collector_crashed')
         hours = _hours_since(cooldown)
-        if hours is None or hours < 24:
+        # Час, а не сутки: сутки тишины — слишком дорогая цена за один
+        # сбой. Предохранитель и так не даёт падать по кругу.
+        if hours is None or hours < 1:
             _setting_set('collector_pass_running', '')
             logger.warning(f"Контейнер падал во время сбора {hours} ч назад — пауза.")
             await _notify_admins_collector_disabled(
