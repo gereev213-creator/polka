@@ -2488,7 +2488,9 @@ function ListingPage() {
 
         {/* Плавающие плашки-«якоря» поверх фото — ключевая деталь референса.
             Они информационные, кликов не подразумевают, поэтому не <button>. */}
-        <div className={`hero-pins ${isFinding ? 'is-hidden' : ''}`} aria-hidden="true">
+        {/* Плашки на фото убраны: цена, город и состояние дублировали то,
+            что и так написано ниже, и закрывали сам товар. */}
+        <div className="hero-pins is-hidden" aria-hidden="true">
           <div className="hero-pin" style={{ top: '11%' }}>
             <span className="hero-pin-anchor" />
             <span className="hero-pin-pill">
@@ -2534,9 +2536,6 @@ function ListingPage() {
       </div>
 
       <div className="detail-head">
-        {!isFinding ? (
-          <div className="eyebrow">{item.category || 'Объявление'}</div>
-        ) : null}
         <div className="listing-title">{item.title}</div>
         {item.seller?.rating ? (
           <div className="rating-row">
