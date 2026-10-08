@@ -205,7 +205,11 @@ PHOTOROOM_API_KEY = os.environ.get("PHOTOROOM_API_KEY", "")
 HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
 YANDEX_FOLDER_ID = os.environ.get("YANDEX_FOLDER_ID", "b1gntsv2j2rsmaiaun8o")
 YANDEX_API_KEY   = os.environ.get("YANDEX_API_KEY", "")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", YANDEX_API_KEY)
+# ВАЖНО: через or, а не через значение по умолчанию. Если в Amvera есть
+# переменная LLM_API_KEY, но ПУСТАЯ, то os.environ.get(..., YANDEX_API_KEY)
+# вернёт пустую строку и ключ Yandex проигнорируется — ИИ молча не работает.
+LLM_API_KEY = os.environ.get("LLM_API_KEY") or YANDEX_API_KEY
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 LLM_URL     = os.environ.get("LLM_URL", "https://ai.api.cloud.yandex.net/v1/chat/completions")
 LLM_MODEL   = os.environ.get("LLM_MODEL", f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite")
 VISION_MODEL = os.environ.get("VISION_MODEL", f"gpt://{YANDEX_FOLDER_ID}/gemma-3-27b-it/latest")
@@ -17668,6 +17672,18 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception:
         pass
     out['uptime_min'] = _minutes_since(_PROCESS_STARTED_AT)
+    # Что видит приложение из переменных: имена и длину, без значений.
+    # Нужно, чтобы понять, дошёл ли ключ и нет ли опечатки в имени.
+    def _key_info(*names):
+        info = {}
+        for n in names:
+            v = os.environ.get(n)
+            info[n] = ('нет переменной' if v is None
+                       else ('пустая' if not str(v).strip() else f'задана ({len(str(v))} симв.)'))
+        return info
+    out['env_keys'] = _key_info('YANDEX_API_KEY', 'YANDEX_FOLDER_ID',
+                                'LLM_API_KEY', 'GROQ_API_KEY', 'INGEST_TOKEN')
+    out['ai_ready'] = bool(LLM_API_KEY or GROQ_API_KEY)
     out['collector_enabled'] = COLLECTOR_ENABLED
     out['collector_inline'] = COLLECTOR_INLINE
     out['collector'] = collector_status()
