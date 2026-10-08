@@ -17702,7 +17702,13 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
 # перезапуск (сайт отвечает то 200, то 503) и сервис ложится. Ему не хватает
 # ресурсов на второй python-процесс рядом с rembg. Сбор идёт с Mac,
 # где памяти достаточно (служба com.polka.collector).
-COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
+# Сбор ВЫКЛЮЧЕН на сервере. Он идёт на GitHub Actions
+# (.github/workflows/collector.yml), оттуда Авито доступен и находки
+# доходят. Внутренний сборщик только вредил: с Amvera Авито недоступен,
+# каждый проход висел по 25 секунд на категорию и душил контейнер —
+# из-за этого приложение не открывалось, а приём находок отваливался
+# по таймауту. Включать обратно не нужно.
+COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '0') == '1'
 # Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
 # между покрытием и памятью контейнера.
 COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
