@@ -7806,18 +7806,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # search, my_ads, favorites, profile) НЕ удалены и работают как fallback.
     keyboard = [
         [_wbtn("Открыть Полку", "/")],
-        # Главное для перекупа: задать, что ловить, и смотреть находки
-        [_wbtn("Поиск лотов",   "/hunt"),
-         _wbtn("Находки",       "/")],
-        # Отчёт без команды: нажал и видишь, что нашлось и сколько
-        [_mbtn("Что нашлось",   "hunt_show"),
-         _wbtn("Разместить",    "/create")],
-        [_wbtn("Мои объявления", "/my"),
-         _wbtn("Избранное",     "/favorites")],
-        [_wbtn("Сообщения",     "/chats"),
-         _wbtn("Профиль",       "/profile")],
-        # «В меню» здесь не нужна: это и есть меню. Кнопка осталась
-        # только в отчёте, куда человек уходит из меню.
+        # Четыре понятных входа. Всё остальное живёт внутри приложения,
+        # поэтому меню больше не забито кнопками.
+        [_wbtn("Находки",      "/?tab=findings"),
+         _wbtn("Барахолка",    "/?tab=board")],
+        [_wbtn("Поиск лотов",  "/hunt")],
     ]
 
     cursor = db.conn.cursor()
@@ -7828,10 +7821,10 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         ads_hint = "Разместите первое — это займёт 30 секунд"
     text = (
-        f"<b>Полка — площадка объявлений России</b>\n\n"
-        f"Привет, {user.first_name}! {ads_hint}.\n\n"
-        f"Лента, поиск, размещение и сообщения — в приложении "
-        f"по кнопке «Открыть Полку»."
+        f"<b>Полка</b>\n\n"
+        f"Находки дешевле рынка по вашим критериям и барахолка "
+        f"для перекупов.\n\n"
+        f"{ads_hint}."
     )
     
     markup = InlineKeyboardMarkup(keyboard)

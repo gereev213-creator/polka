@@ -1880,7 +1880,13 @@ function FeedPage() {
   const [activeCategory, setActiveCategory] = useState('Все')
   // Объявления или аукционы. Раньше аукционы жили отдельной вкладкой в доке,
   // но с шестью пунктами док переставал помещаться — перенесли сюда.
-  const [feedTab, setFeedTab] = useState('deals')
+  // Вкладку можно открыть ссылкой: из меню бота приходят
+  // /#/?tab=board и /#/?tab=findings. Читаем hash напрямую, чтобы
+  // не тянуть новый импорт роутера.
+  const [feedTab, setFeedTab] = useState(
+    (typeof window !== 'undefined' && (window.location.hash || '').includes('tab=board'))
+      ? 'ads' : 'deals'
+  )
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
   const [showTop, setShowTop] = useState(false)
