@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<!--
+  Образец страницы для самопроверки разбора: `python3 collect.py --selftest`.
+  Структура повторяет то, что отдают сайты объявлений: разметка schema.org
+  для поисковиков, блок данных страницы и обычные карточки.
+
+  Это НЕ копия чужого сайта — просто слепок формата.
+-->
+<html lang="ru">
+<head>
+  <title>Объявления — образец</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Product",
+        "name": "Куртка Zara oversize, размер M",
+        "url": "https://www.avito.ru/izhevsk/odezhda/kurtka_zara_2738491025",
+        "image": ["https://img.avito.st/image/1/kurtka.jpg"],
+        "offers": {"@type": "Offer", "price": "2450", "priceCurrency": "RUB"}
+      },
+      {
+        "@type": "Product",
+        "name": "Велосипед Stels Navigator 700",
+        "url": "https://www.avito.ru/izhevsk/velosipedy/stels_navigator_700_2738119844",
+        "image": ["https://img.avito.st/image/2/velo.jpg"],
+        "offers": {"@type": "Offer", "price": "8 900", "priceCurrency": "RUB"}
+      },
+      {
+        "@type": "Product",
+        "name": "Стиральная машина Bosch без нареканий",
+        "url": "https://www.avito.ru/izhevsk/bytovaya_tehnika/bosch_2738001234",
+        "image": ["https://img.avito.st/image/3/bosch.jpg"],
+        "offers": {"@type": "Offer", "price": 12000, "priceCurrency": "RUB"}
+      },
+      {
+        "@type": "Product",
+        "name": "Без цены — не должна попасть",
+        "url": "https://www.avito.ru/izhevsk/other/nothing_2738009999",
+        "offers": {"@type": "Offer", "price": "", "priceCurrency": "RUB"}
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <div data-marker="item">
+    <a href="/izhevsk/odezhda/kurtka_zara_2738491025">
+      <h3 item-title>Куртка Zara oversize, размер M</h3>
+      <span item-price>2 450 ₽</span>
+      <img src="https://img.avito.st/image/1/kurtka.jpg">
+      <span geo-address>Ижевск</span>
+    </a>
+  </div>
+  <div data-marker="item">
+    <a href="/izhevsk/velosipedy/stels_navigator_700_2738119844">
+      <h3 item-title>Велосипед Stels Navigator 700</h3>
+      <span item-price>8 900 ₽</span>
+      <img src="https://img.avito.st/image/2/velo.jpg">
+      <span geo-address>Ижевск</span>
+    </a>
+  </div>
+</body>
+</html>

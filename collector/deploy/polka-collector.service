@@ -1,0 +1,19 @@
+# Служба для отдельного сервера (VPS): держит сборщик круглосуточно.
+# Установка: см. deploy/README.md
+[Unit]
+Description=Polka collector — сбор свежих объявлений с Авито
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/polka-collector
+ExecStart=/usr/bin/python3 -u collect.py --loop --every 900
+Restart=always
+RestartSec=30
+# Логи в journalctl -u polka-collector -f
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

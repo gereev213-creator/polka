@@ -1,0 +1,49 @@
+# Сбор находок на серверах GitHub — БЕСПЛАТНО и без своего компьютера.
+#
+# GitHub даёт бесплатные минуты для публичных репозиториев без ограничений,
+# поэтому сборщик может жить здесь и запускаться по расписанию. Ваш Mac и
+# любой VPS при этом не нужны.
+#
+# Перед первым запуском добавьте в настройках репозитория два секрета:
+#   Settings → Secrets and variables → Actions → New repository secret
+#     POLKA_SERVER        = https://polka-mini-app-nikicev2009.mia0.amvera.tech
+#     POLKA_INGEST_TOKEN  = ваш токен из Amvera
+#
+# Токен хранится в секретах и в код не попадает.
+
+name: Сбор находок
+
+on:
+  schedule:
+    # Раз в 30 минут. GitHub может задержать запуск при нагрузке — это нормально.
+    - cron: '*/30 * * * *'
+  workflow_dispatch:   # кнопка «запустить сейчас» во вкладке Actions
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Ставлю библиотеку против защиты Авито
+        run: pip install --quiet curl_cffi certifi
+
+      - name: Проверяю, что Авито пускает
+        working-directory: collector
+        run: python collect.py --check-proxy
+        continue-on-error: true
+
+      - name: Собираю находки
+        working-directory: collector
+        env:
+          POLKA_SERVER: ${{ secrets.POLKA_SERVER }}
+          POLKA_INGEST_TOKEN: ${{ secrets.POLKA_INGEST_TOKEN }}
+          # Шесть категорий за прогон: при медленном Авито 16 не укладываются
+          # в лимит времени GitHub. Каждый прогон берёт следующие по кругу.
+          POLKA_MAX_CATEGORIES: '6'
+        run: python collect.py

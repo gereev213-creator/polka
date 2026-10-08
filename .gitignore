@@ -1,0 +1,26 @@
+# Сборка фронтенда и зависимости — восстанавливаются в Docker-сборке
+node_modules/
+dist/
+build/
+
+# Виртуальные окружения
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.pyc
+
+# IDE / OS
+.idea/
+.DS_Store
+
+# Локальные данные и сессии — не должны попадать в образ и в git
+*.session
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# Конфиг сборщика содержит токен приёма находок
+collector/config.json
