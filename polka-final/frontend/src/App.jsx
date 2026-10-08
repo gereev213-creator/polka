@@ -2626,6 +2626,17 @@ function ListingPage() {
         </div>
       </div>
       ) : null}
+      {isFinding ? (
+        <button type="button" className="ghost-btn mt-12"
+          onClick={async () => {
+            try {
+              await api.hideFinding(item.id)
+              window.history.back()
+            } catch (e) {
+              setError('Не удалось убрать лот')
+            }
+          }}>Удалить лот из находок</button>
+      ) : null}
       {isOwner ? (
         <div className="setting-row glass-card mt-12">
           <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>

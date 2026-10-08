@@ -252,6 +252,9 @@ export const api = {
   getCriteria: () => request('/api/hunt'),
   addCriterion: (body) => request('/api/hunt', { method: 'POST', body: JSON.stringify(body) }),
   removeCriterion: (id) => request(`/api/hunt?id=${id}`, { method: 'DELETE' }),
+  // Убрать лот из находок: пропадёт из ленты и больше не придёт в чат
+  hideFinding: (adId) => request('/api/findings/hide',
+    { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
   getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
   getBids: (adId) => request(`/api/ads/${adId}/bids`),
   placeBid: (adId, amount) => request(`/api/ads/${adId}/bid`, {
