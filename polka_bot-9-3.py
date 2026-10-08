@@ -17427,6 +17427,22 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
         out['notifications_sent'] = _row_get(cur.fetchone(), 'n', 0)
     except Exception as e:
         out['db_error'] = str(e)[:200]
+    # Сколько места занимаем — главный риск на слабом тарифе
+    try:
+        db_file = os.environ.get('DB_PATH', '/data/polka.db')
+        out['db_mb'] = round(os.path.getsize(db_file) / 1048576.0, 1)
+        up_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
+        total = 0
+        for root, _dirs, files in os.walk(up_dir):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+        out['uploads_mb'] = round(total / 1048576.0, 1)
+    except Exception as e:
+        out['size_error'] = str(e)[:120]
+    out['last_cleanup'] = _setting_get('last_cleanup_at') or 'ещё не было'
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
     return _miniapp_json(out)
@@ -18742,6 +18758,7 @@ def cleanup_all() -> Dict:
     removed['истории'] = _cut('stories', 3, 'created_at')
 
     total = sum(removed.values())
+    _setting_set('last_cleanup_at', get_moscow_time().isoformat())
     if total:
         logger.info("Чистка базы: " + ", ".join(f"{k} {v}" for k, v in removed.items() if v))
     result['details'] = {k: v for k, v in removed.items() if v}
@@ -18761,13 +18778,29 @@ def cleanup_findings() -> Dict:
     Отметки об отправке тоже оставляем — они крошечные и защищают
     от повторной присылки, если объявление появится снова.
     """
-    cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
     cursor = db.conn.cursor()
     removed = 0
+    deals_removed = 0
     try:
-        cursor.execute("DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
-                       "AND COALESCE(parsed_at, created_at) < ?", (cutoff,))
+        # 1. Мусор без выгоды живёт один день. Таких большинство: сбор идёт
+        #    каждые 15 минут по 6 категорий, и без этого база распухает до
+        #    сотен мегабайт, а на слабом тарифе это смертельно.
+        junk_cutoff = (get_moscow_time() - timedelta(days=1)).isoformat()
+        cursor.execute(
+            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
+            "AND (discount_percent IS NULL OR discount_percent < ?) "
+            "AND COALESCE(parsed_at, created_at) < ?",
+            (HUNT_MIN_DISCOUNT, junk_cutoff))
         removed = cursor.rowcount or 0
+        # 2. Выгодные предложения храним дольше — они нужны для медианы
+        #    и для показа в ленте.
+        cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
+        cursor.execute(
+            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
+            "AND discount_percent >= ? AND COALESCE(parsed_at, created_at) < ?",
+            (HUNT_MIN_DISCOUNT, cutoff))
+        deals_removed = cursor.rowcount or 0
+        removed += deals_removed
         db.conn.commit()
     except Exception as e:
         logger.warning(f"cleanup findings: {e}")
