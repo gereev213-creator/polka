@@ -17731,7 +17731,13 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     # По каждому критерию: сколько подходит, сколько свежих, сколько
     # уже отправлено. Это отвечает на вопрос «почему в ленте есть, а в чате нет».
     try:
-        crits = [c for c in get_user_criteria(viewer_id)] if viewer_id else []
+        # Берём критерии всех пользователей: диагностика вызывается по
+        # токену сборщика, и «текущего пользователя» тут нет.
+        cur0 = db.conn.cursor()
+        cur0.execute("SELECT DISTINCT user_id FROM hunt_criteria WHERE active=1 LIMIT 3")
+        crits = []
+        for row0 in cur0.fetchall():
+            crits.extend(get_user_criteria(int(row0['user_id'])))
         report = []
         for crit in crits[:5]:
             where, params = _criterion_where(crit, active_only=False)
