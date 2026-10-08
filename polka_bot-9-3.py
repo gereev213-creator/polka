@@ -19283,6 +19283,38 @@ def cleanup_findings() -> Dict:
     return {'removed': removed, 'keep_days': HUNT_KEEP_DAYS}
 
 
+async def _hunt_catchup_loop():
+    """Досылает то, что подходит под критерии, но ещё не отправлено.
+
+    Зачем: рассылка при сборе видит ТОЛЬКО объявления из текущей партии.
+    Всё, что пришло раньше, оставалось в ленте и не доходило в чат —
+    человек видел варианты в приложении, а бот молчал. Проверено на
+    живых данных: по критерию подходило 30, а отправлено было 10.
+
+    Работает раз в 10 минут и добирает всё, что подходит и ещё не ушло.
+    """
+    await asyncio.sleep(240)
+    while True:
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT DISTINCT user_id FROM hunt_criteria WHERE active=1")
+            rows = cur.fetchall()
+            sent_total = 0
+            for row in rows:
+                try:
+                    for crit in get_user_criteria(int(row['user_id'])):
+                        ids = fresh_ids_for_criterion(crit, limit=30)
+                        if ids:
+                            sent_total += await notify_hunt_matches(ids)
+                except Exception as e:
+                    logger.warning(f"hunt catchup по критерию: {e}")
+            if sent_total:
+                logger.info(f"Досылка находок: отправлено {sent_total}")
+        except Exception as e:
+            logger.warning(f"hunt catchup loop: {e}")
+        await asyncio.sleep(600)
+
+
 async def _findings_cleanup_loop():
     """Чистит базу от старого мусора.
 
@@ -25584,6 +25616,7 @@ def main():
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
             asyncio.ensure_future(_collector_inline_loop())
+            asyncio.ensure_future(_hunt_catchup_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())
             print(f"   Health check:      {SERVER_URL}/health")
