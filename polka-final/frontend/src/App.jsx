@@ -1204,18 +1204,30 @@ function CriteriaPage() {
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Поиск лотов</div>
 
-      {/* Описать словами: ИИ разбирает фразу в те же фильтры, что
-          задаются руками, и дальше идёт обычный поиск. */}
+      {/* Умный подбор: главный способ задать поиск. Написал словами —
+          ИИ разложил на фильтры, они появились ниже. */}
       <div className="ai-card mt-12">
-        <div className="field-label-row">Описать словами</div>
-        <textarea className="input" rows={2} value={aiText}
+        <div className="ai-hero" onClick={() => document.getElementById('ai-hunt-input')?.focus()}>
+          <div className="ai-hero-icon"><Icon name="sparkles" /></div>
+          <div className="ai-hero-body">
+            <div className="ai-hero-title">Умный подбор</div>
+            <div className="ai-hero-sub">Напишите, что ищете — разложу на фильтры</div>
+          </div>
+          <div className="ai-hero-arrow">›</div>
+        </div>
+        <textarea id="ai-hunt-input" className="input mt-12" rows={2} value={aiText}
           onChange={(e) => setAiText(e.target.value)}
-          placeholder="айфон 15 про на 256, до 55 тысяч, Москва" />
-        <button type="button" className="ghost-btn mt-12"
+          placeholder="Например: айфон 15 про на 256, до 55 тысяч, Москва" />
+        {aiNote ? (
+          <div className="ai-result mt-12">
+            <span className="ai-result-mark">✓</span>
+            <span>{aiNote}</span>
+          </div>
+        ) : null}
+        <button type="button" className="cta-primary is-wide mt-12"
           disabled={aiBusy || !aiText.trim()} onClick={runAi}>
-          {aiBusy ? 'Разбираю…' : 'Разобрать в фильтры'}
+          {aiBusy ? 'Анализирую…' : 'Разобрать на фильтры'}
         </button>
-        {aiNote ? <div className="sub-copy">{aiNote}</div> : null}
       </div>
 
       <p className="sub-copy">
@@ -1332,8 +1344,8 @@ function CriteriaPage() {
         )}
 
         {error ? <div className="status-line error">{error}</div> : null}
-        <button type="button" className="cta-primary" disabled={busy} onClick={add}>
-          {busy ? 'Добавляем…' : 'Ловить это'}
+        <button type="button" className="cta-primary is-wide" disabled={busy} onClick={add}>
+          {busy ? 'Добавляем…' : 'Найти лоты'}
         </button>
       </div>
 
