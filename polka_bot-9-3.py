@@ -17728,6 +17728,39 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception as e:
         out['size_error'] = str(e)[:120]
     out['last_cleanup'] = _setting_get('last_cleanup_at') or 'ещё не было'
+    # По каждому критерию: сколько подходит, сколько свежих, сколько
+    # уже отправлено. Это отвечает на вопрос «почему в ленте есть, а в чате нет».
+    try:
+        crits = [c for c in get_user_criteria(viewer_id)] if viewer_id else []
+        report = []
+        for crit in crits[:5]:
+            where, params = _criterion_where(crit, active_only=False)
+            cur = db.conn.cursor()
+            cur.execute("SELECT COUNT(*) AS n FROM ads WHERE " + str(where), tuple(params))
+            total = _row_get(cur.fetchone(), 'n', 0)
+            cur.execute("SELECT COUNT(*) AS n FROM ads WHERE " + str(where) +
+                        " AND COALESCE(published_hours_ago, 0) <= ?",
+                        (*params, HUNT_FRESH_HOURS))
+            fresh = _row_get(cur.fetchone(), 'n', 0)
+            cur.execute("SELECT COUNT(*) AS n FROM search_notifications_sent WHERE user_id=?",
+                        (int(crit.get('user_id') or 0),))
+            sent = _row_get(cur.fetchone(), 'n', 0)
+            report.append({
+                'query': str(crit.get('query') or '')[:40],
+                'mode': crit.get('mode'),
+                'max_price': crit.get('max_price'),
+                'max_hours': crit.get('max_hours'),
+                'with_photo': crit.get('with_photo'),
+                'подходит': total,
+                'свежих': fresh,
+                'отправлено_всего': sent,
+            })
+        out['criteria_report'] = report
+        out['limits'] = {'fresh_hours': HUNT_FRESH_HOURS,
+                         'digest_after': HUNT_DIGEST_AFTER,
+                         'min_discount': HUNT_MIN_DISCOUNT}
+    except Exception as e:
+        out['criteria_error'] = str(e)[:200]
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
     return _miniapp_json(out)
