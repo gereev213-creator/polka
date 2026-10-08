@@ -601,6 +601,11 @@ def get_moscow_time():
     """Возвращает текущее время в московском часовом поясе"""
     return datetime.now(ZoneInfo('Europe/Moscow'))
 
+# Момент старта процесса — для расчёта времени работы в диагностике.
+# ВАЖНО: только ЗДЕСЬ, после определения get_moscow_time. Раньше эта строка
+# стояла выше и роняла приложение с NameError при запуске.
+_PROCESS_STARTED_AT = get_moscow_time().isoformat()
+
 
 
 def _safe_isoparse(value: str):
@@ -17354,6 +17359,79 @@ def _row_get(row, key, default=0):
     return default if value is None else value
 
 
+# ── Диагностика приложения ──────────────────────────────────────────────────
+# Держим последние строки лога в памяти, чтобы отдавать их по запросу.
+# Зачем: владелец не должен лазить по панели Amvera и искать логи, а
+# разработчик не должен просить у него пароль от аккаунта.
+from collections import deque as _deque
+
+_LOG_BUFFER = _deque(maxlen=300)
+
+
+class _RingBufferHandler(logging.Handler):
+    """Копия логов в памяти — последние 300 записей."""
+
+    def emit(self, record):
+        try:
+            _LOG_BUFFER.append(self.format(record))
+        except Exception:
+            pass
+
+
+def _install_log_buffer():
+    try:
+        h = _RingBufferHandler()
+        h.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s'))
+        logging.getLogger().addHandler(h)
+        return True
+    except Exception:
+        return False
+
+
+async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/diag?token=... — состояние приложения одним ответом.
+
+    Токен тот же, что у сборщика (INGEST_TOKEN): посторонним не отдаём.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    got = request.query.get('token', '') or request.headers.get('X-Ingest-Token', '')
+    if not expected or not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+
+    out: Dict = {}
+    # Память и время работы — главное подозрение на слабом тарифе
+    try:
+        import resource
+        out['memory_mb'] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1)
+    except Exception:
+        pass
+    out['uptime_min'] = _minutes_since(_PROCESS_STARTED_AT)
+    out['collector_enabled'] = COLLECTOR_ENABLED
+    out['collector_inline'] = COLLECTOR_INLINE
+    out['collector'] = collector_status()
+    out['settings'] = {
+        'collector_crashed': _setting_get('collector_crashed') or 'нет',
+        'last_ingest_at': _setting_get('last_ingest_at') or 'нет',
+        'last_ingest_source': _setting_get('last_ingest_source') or 'нет',
+    }
+    # Что в базе
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
+        out['findings'] = _row_get(cur.fetchone(), 'n', 0)
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE (source IS NULL OR source='polka')")
+        out['board_ads'] = _row_get(cur.fetchone(), 'n', 0)
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE active=1")
+        out['criteria'] = _row_get(cur.fetchone(), 'n', 0)
+        cur.execute("SELECT COUNT(*) AS n FROM search_notifications_sent")
+        out['notifications_sent'] = _row_get(cur.fetchone(), 'n', 0)
+    except Exception as e:
+        out['db_error'] = str(e)[:200]
+    # Хвост лога — то, ради чего всё это
+    out['log_tail'] = list(_LOG_BUFFER)[-80:]
+    return _miniapp_json(out)
+
+
 def _prepare_upload_dir() -> str:
     """Готовит папку загрузок на ПОСТОЯННОМ томе.
 
@@ -24409,6 +24487,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)
+    app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/auctions', api_miniapp_auctions)
     app.router.add_get('/api/my-bids', api_miniapp_my_bids)
     app.router.add_get('/api/ads/{ad_id}/bids', api_miniapp_ad_bids)
@@ -24933,6 +25012,7 @@ def main():
         # Ещё раз: к этому моменту httpx и telegram уже могли добавить свои
         # обработчики, и на них фильтра не было
         install_token_filter()
+        _install_log_buffer()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
