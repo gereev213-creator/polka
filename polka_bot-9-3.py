@@ -5329,7 +5329,6 @@ async def admin_reindex_photos(update: Update, context: ContextTypes.DEFAULT_TYP
     await safe_edit_message(query,
         f"⏳ Переиндексирую {len(targets)} объявлений — это займёт время "
         f"(примерно {len(targets) // 2} сек.), пришлю отчёт по готовности...",
-        []
     )
 
     done, failed = 0, 0
@@ -7817,9 +7816,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
          _wbtn("Избранное",     "/favorites")],
         [_wbtn("Сообщения",     "/chats"),
          _wbtn("Профиль",       "/profile")],
-        # Возврат в это же меню: нужно, когда человек ушёл вглубь
-        # какого-то сценария и хочет вернуться
-        [_mbtn("В меню",        "back_to_menu")],
+        # «В меню» здесь не нужна: это и есть меню. Кнопка осталась
+        # только в отчёте, куда человек уходит из меню.
     ]
 
     cursor = db.conn.cursor()
@@ -19377,7 +19375,8 @@ def hunt_report(user_id: int) -> str:
 
     crits = get_user_criteria(user_id)
     if not crits:
-        lines.append("Критериев нет. Добавьте: <code>/hunt iphone 13</code>")
+        lines.append("Пока ничего не ищем. Откройте приложение — «Поиск лотов» — "
+                     "и задайте, что искать.")
         return "\n".join(lines)
 
     lines.append("<b>Ваши критерии</b>")
