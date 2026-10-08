@@ -1204,6 +1204,20 @@ function CriteriaPage() {
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Поиск лотов</div>
 
+      {/* Описать словами: ИИ разбирает фразу в те же фильтры, что
+          задаются руками, и дальше идёт обычный поиск. */}
+      <div className="ai-card mt-12">
+        <div className="field-label-row">Описать словами</div>
+        <textarea className="input" rows={2} value={aiText}
+          onChange={(e) => setAiText(e.target.value)}
+          placeholder="айфон 15 про на 256, до 55 тысяч, Москва" />
+        <button type="button" className="ghost-btn mt-12"
+          disabled={aiBusy || !aiText.trim()} onClick={runAi}>
+          {aiBusy ? 'Разбираю…' : 'Разобрать в фильтры'}
+        </button>
+        {aiNote ? <div className="sub-copy">{aiNote}</div> : null}
+      </div>
+
       <p className="sub-copy">
         Напишите, что искать на Авито. Бот будет присылать подходящие объявления,
         а когда наберётся статистика — покажет, сколько на них заработать.
