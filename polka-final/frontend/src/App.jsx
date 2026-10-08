@@ -1102,6 +1102,8 @@ function CriteriaPage() {
   const [aiText, setAiText] = useState('')
   const [aiBusy, setAiBusy] = useState(false)
   const [aiNote, setAiNote] = useState('')
+  // Что ИИ разобрал: показываем чипами, чтобы было видно и можно было убрать
+  const [aiParsed, setAiParsed] = useState(null)
 
   const runAi = async () => {
     setAiBusy(true); setAiNote('')
@@ -1117,7 +1119,15 @@ function CriteriaPage() {
       if (d.max_price) setMaxPrice(String(d.max_price))
       if (d.max_hours) setMaxHours(d.max_hours)
       if (d.mode) setMode(d.mode)
-      setAiNote('Разобрал в фильтры — проверьте ниже и нажмите «Ловить это»')
+      setAiParsed({
+        query: d.query || '',
+        price: (d.min_price || d.max_price)
+          ? `${d.min_price ? 'от ' + d.min_price.toLocaleString('ru-RU') + ' ' : ''}до ${(d.max_price || 0).toLocaleString('ru-RU')} ₽`
+          : '',
+        city: d.city || '',
+        hours: d.max_hours ? `за ${d.max_hours} ч` : '',
+      })
+      setAiNote('Распознал запрос')
     } catch (e) {
       setAiNote('Ошибка связи с сервером')
     } finally {
@@ -1223,6 +1233,38 @@ function CriteriaPage() {
             <span className="ai-result-mark">✓</span>
             <span>{aiNote}</span>
           </div>
+        ) : null}
+        {aiParsed ? (
+          <>
+            <div className="field-label-row">Распознанные фильтры</div>
+            <div className="auction-sort">
+              {aiParsed.query ? (
+                <button type="button" className="is-active"
+                  onClick={() => { setQuery(''); setAiParsed({ ...aiParsed, query: '' }) }}>
+                  {aiParsed.query} ×
+                </button>
+              ) : null}
+              {aiParsed.price ? (
+                <button type="button" className="is-active"
+                  onClick={() => { setMinPrice(''); setMaxPrice(''); setAiParsed({ ...aiParsed, price: '' }) }}>
+                  {aiParsed.price} ×
+                </button>
+              ) : null}
+              {aiParsed.city ? (
+                <button type="button" className="is-active"
+                  onClick={() => { setCity(''); setAiParsed({ ...aiParsed, city: '' }) }}>
+                  {aiParsed.city} ×
+                </button>
+              ) : null}
+              {aiParsed.hours ? (
+                <button type="button" className="is-active"
+                  onClick={() => { setMaxHours(0); setAiParsed({ ...aiParsed, hours: '' }) }}>
+                  {aiParsed.hours} ×
+                </button>
+              ) : null}
+            </div>
+            <div className="sub-copy">Любой фильтр можно изменить ниже вручную</div>
+          </>
         ) : null}
         <button type="button" className="cta-primary is-wide mt-12"
           disabled={aiBusy || !aiText.trim()} onClick={runAi}>
