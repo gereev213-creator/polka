@@ -7810,14 +7810,16 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Главное для перекупа: задать, что ловить, и смотреть находки
         [_wbtn("Что ловить",    "/hunt"),
          _wbtn("Находки",       "/")],
-        [_wbtn("Разместить",    "/create"),
-         _wbtn("Мои объявления", "/my")],
-        [_wbtn("Избранное",     "/favorites"),
-         _wbtn("Сообщения",     "/chats")],
-        [_wbtn("Профиль",       "/profile"),
-         # Возврат в это же меню: нужно, когда человек ушёл вглубь
-         # какого-то сценария и хочет вернуться
-         _mbtn("В меню",        "back_to_menu")],
+        # Отчёт без команды: нажал и видишь, что нашлось и сколько
+        [_mbtn("Что нашлось",   "hunt_show"),
+         _wbtn("Разместить",    "/create")],
+        [_wbtn("Мои объявления", "/my"),
+         _wbtn("Избранное",     "/favorites")],
+        [_wbtn("Сообщения",     "/chats"),
+         _wbtn("Профиль",       "/profile")],
+        # Возврат в это же меню: нужно, когда человек ушёл вглубь
+        # какого-то сценария и хочет вернуться
+        [_mbtn("В меню",        "back_to_menu")],
     ]
 
     cursor = db.conn.cursor()
@@ -19133,6 +19135,27 @@ def hunt_report(user_id: int) -> str:
     return "\n".join(lines)
 
 
+async def hunt_show_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Что нашлось» — тот же отчёт, что даёт команда /hunt.
+
+    Раньше отчёт приходилось вызывать командой: надо было знать, что она
+    есть и как называется. Теперь это кнопка в меню — рядом с «Что ловить».
+    """
+    query = update.callback_query
+    await safe_answer(query)
+    try:
+        text = hunt_report(update.effective_user.id)
+    except Exception as e:
+        logger.warning(f"hunt_report по кнопке: {e}")
+        text = "Не удалось собрать отчёт. Попробуйте позже."
+    # Кнопка возврата: человек посмотрел отчёт и вернулся в меню
+    try:
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("В меню", callback_data="back_to_menu")]])
+        await query.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
+    except Exception as e:
+        logger.warning(f"hunt_show отправка: {e}")
+
+
 async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ /hunt iphone 13 — критерий ловли. Без аргументов — список.
 
@@ -24794,6 +24817,7 @@ def main():
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
+    application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
