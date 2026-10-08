@@ -595,13 +595,16 @@ def install_token_filter():
 
 install_token_filter()
 logger = logging.getLogger(__name__)
-# Момент старта процесса — для расчёта времени работы
-_PROCESS_STARTED_AT = get_moscow_time().isoformat()
 
 # Функция для получения московского времени
 def get_moscow_time():
     """Возвращает текущее время в московском часовом поясе"""
     return datetime.now(ZoneInfo('Europe/Moscow'))
+
+# Момент старта процесса — для расчёта времени работы в диагностике.
+# ВАЖНО: только ЗДЕСЬ, после определения get_moscow_time. Раньше эта строка
+# стояла выше и роняла приложение с NameError при запуске.
+_PROCESS_STARTED_AT = get_moscow_time().isoformat()
 
 
 
