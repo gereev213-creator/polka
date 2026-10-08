@@ -17760,13 +17760,20 @@ async def _collector_inline_loop():
     # Защита от вечного падения: если прошлый запуск завершился аварийно
     # с включённым сборщиком, второй раз не рискуем — иначе сервис будет
     # перезапускаться по кругу и ляжет целиком.
-    if _setting_get('collector_crashed') == '1':
-        logger.warning("Сборщик НЕ запущен: прошлый запуск падал с ним. "
-                       "Сбросить: удалить строку collector_crashed из settings.")
-        await _notify_admins_collector_disabled(
-            "Прошлый запуск контейнера завершился аварийно. Чтобы сервис "
-            "не падал по кругу, сбор не запускаю.")
-        return
+    crashed_at = _setting_get('collector_crashed')
+    if crashed_at:
+        # Предохранитель не вечный: если с падения прошло больше суток,
+        # пробуем снова. Иначе после одного сбоя сбор был бы мёртв навсегда —
+        # даже если тариф подняли и памяти теперь хватает.
+        hours = _hours_since(crashed_at)
+        if hours is None or hours < 24:
+            logger.warning(f"Сборщик НЕ запущен: контейнер падал с ним {hours} ч назад.")
+            await _notify_admins_collector_disabled(
+                "Прошлый запуск контейнера завершился аварийно — сбор выключен, "
+                "чтобы сервис не падал по кругу. Попробую снова через сутки. "
+                "Amvera не тянет сбор: нужен отдельный сервер или тариф с 2 ГБ.")
+            return
+        logger.info("С прошлого падения прошли сутки — пробую сбор снова")
     token = os.environ.get('INGEST_TOKEN', '')
     if not token:
         logger.warning("Сборщик находок ждёт INGEST_TOKEN")
@@ -17779,7 +17786,7 @@ async def _collector_inline_loop():
     except Exception as e:
         logger.warning(f"сборщик не импортирован: {e}")
         return
-    _setting_set('collector_crashed', '1')
+    _setting_set('collector_crashed', get_moscow_time().isoformat())
     logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
                 f"{COLLECTOR_MAX_CATEGORIES} категорий")
     first = True
@@ -17800,7 +17807,9 @@ async def _collector_inline_loop():
                 pass
             logger.info(f"Сбор находок: принято новых {sent}")
             if first:
-                # Первый успешный проход — контейнер выдержал, снимаем отметку
+                # Первый успешный проход — контейнер выдержал, снимаем отметку.
+                # Проверяем именно ПРОХОД, а не старт: падение случается
+                # во время сбора, а не при запуске.
                 _setting_set('collector_crashed', '')
                 first = False
         except Exception as e:
