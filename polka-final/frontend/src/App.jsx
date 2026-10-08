@@ -1104,6 +1104,10 @@ function CriteriaPage() {
   const [aiNote, setAiNote] = useState('')
   // Что ИИ разобрал: показываем чипами, чтобы было видно и можно было убрать
   const [aiParsed, setAiParsed] = useState(null)
+  // Какой раздел фильтров раскрыт. Свёрнутые фильтры продолжают работать:
+  // их значения хранятся в состоянии, а не в разметке.
+  const [openSec, setOpenSec] = useState('')
+  const toggleSec = (name) => setOpenSec(openSec === name ? '' : name)
 
   const runAi = async () => {
     setAiBusy(true); setAiNote('')
@@ -1357,27 +1361,52 @@ function CriteriaPage() {
           </>
         ) : null}
 
-        <div className="field-label-row">Цена, ₽</div>
+        <div className={`field-label-row is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
+          onClick={() => toggleSec('price')}>
+          <span>Цена, ₽{maxPrice || minPrice
+            ? ` · ${minPrice ? 'от ' + Number(minPrice).toLocaleString('ru-RU') + ' ' : ''}${maxPrice ? 'до ' + Number(maxPrice).toLocaleString('ru-RU') + ' ₽' : ''}`
+            : ''}</span> <span className="toggle-mark">›</span>
+        </div>
+        {openSec === 'price' ? (
+          <>
         <div className="price-pair">
           <input className="input" type="number" inputMode="numeric" placeholder="от"
             value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
           <input className="input" type="number" inputMode="numeric" placeholder="до"
             value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
         </div>
+          </>
+        ) : null}
 
-        <div className="field-label-row">Свежесть объявления</div>
+        <div className={`field-label-row is-toggle ${openSec === 'fresh' ? 'is-open' : ''}`}
+          onClick={() => toggleSec('fresh')}>
+          <span>Свежесть{maxHours
+            ? ` · ${maxHours === 1 ? 'за час' : 'за ' + maxHours + ' ч'}`
+            : ' · любая'}</span> <span className="toggle-mark">›</span>
+        </div>
+        {openSec === 'fresh' ? (
+          <>
         <div className="auction-sort">
           {[[0, 'любая'], [1, 'за час'], [3, 'за 3 часа'], [24, 'за сутки']].map(([v, label]) => (
             <button key={v} type="button" className={maxHours === v ? 'is-active' : ''}
               onClick={() => setMaxHours(v)}>{label}</button>
           ))}
         </div>
+          </>
+        ) : null}
 
-        <div className="field-label-row">Дополнительно</div>
+        <div className={`field-label-row is-toggle ${openSec === 'more' ? 'is-open' : ''}`}
+          onClick={() => toggleSec('more')}>
+          <span>Дополнительно{withPhoto ? ' · с фото' : ''}</span> <span className="toggle-mark">›</span>
+        </div>
+        {openSec === 'more' ? (
+          <>
         <div className="auction-sort">
           <button type="button" className={withPhoto ? 'is-active' : ''}
             onClick={() => setWithPhoto(!withPhoto)}>Только с фото</button>
         </div>
+          </>
+        ) : null}
 
         <div className="field-label-row">Что присылать</div>
         <div className="segmented">
