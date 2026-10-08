@@ -17855,7 +17855,13 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
 # сервер, и Amvera перезапускала контейнер. Рассылка переведена в фон,
 # поэтому сбор теперь безопасен. На всякий случай работает предохранитель:
 # если контейнер всё-таки упадёт, сбор выключится сам и придёт уведомление.
-COLLECTOR_ENABLED = os.environ.get('COLLECTOR_ENABLED', '1') == '1'
+# ВНИМАНИЕ: старые переменные COLLECTOR_ENABLED и COLLECTOR_INLINE больше
+# не используются. Раньше они включали и выключали сбор, и в Amvera
+# осталась переменная с запретом — из-за неё сбор молча не запускался,
+# хотя код был готов. Теперь сбор включён всегда, а выключить его можно
+# только явной переменной POLKA_NO_COLLECTOR=1.
+_DISABLED_BY_ENV = os.environ.get('POLKA_NO_COLLECTOR', '') == '1'
+COLLECTOR_ENABLED = not _DISABLED_BY_ENV
 # Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
 # между покрытием и памятью контейнера.
 COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '6')
@@ -17869,7 +17875,7 @@ COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 # Раньше сборщик запускался ВТОРЫМ интерпретатором Python, и контейнер
 # Amvera уходил в перезапуск: не хватало памяти на два процесса. Теперь
 # сбор идёт в этом же процессе, в отдельном потоке — интерпретатор один.
-COLLECTOR_INLINE = os.environ.get('COLLECTOR_INLINE', '1') == '1'
+COLLECTOR_INLINE = not _DISABLED_BY_ENV
 # Для слабого тарифа хватает четырёх категорий: остальные можно включить
 # переменной POLKA_MAX_CATEGORIES
 COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '3')
