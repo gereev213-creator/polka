@@ -326,8 +326,8 @@ input, textarea, select { font-family: inherit; }
   box-shadow: 0 2px 8px rgba(0,0,0,.1);
   transition: all .2s ease;
 }
-.save-btn.is-on { color: var(--danger); }
-.save-btn.is-on .icon-svg { fill: var(--danger); }
+.save-btn.is-on { color: var(--accent); }
+.save-btn.is-on .icon-svg { fill: var(--accent); }
 .product-info { padding: 12px 14px 14px; }
 .product-card .product-title {
   font-size: 14px;
@@ -624,8 +624,8 @@ input, textarea, select { font-family: inherit; }
 }
 .cta-round:active { transform: scale(.9); }
 .cta-round.is-on {
-  background: var(--danger);
-  border-color: var(--danger);
+  background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 .cta-round.is-on .icon-svg { fill: #fff; }
