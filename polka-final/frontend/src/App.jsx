@@ -1270,6 +1270,24 @@ function CriteriaPage() {
           disabled={aiBusy || !aiText.trim()} onClick={runAi}>
           {aiBusy ? 'Анализирую…' : 'Разобрать на фильтры'}
         </button>
+        {/* Пока идёт разбор — понятный экран вместо «ничего не происходит» */}
+        {aiBusy ? (
+          <div className="ai-overlay">
+            <div className="ai-modal">
+              <div className="ai-modal-icon"><Icon name="sparkles" /></div>
+              <div className="ai-modal-title">AI анализирует ваш запрос</div>
+              <div className="ai-modal-sub">Разложу текст на фильтры и заполню их автоматически</div>
+              {aiText ? (
+                <div className="ai-result">
+                  <span>«{aiText}»</span>
+                </div>
+              ) : null}
+              <button type="button" className="cta-primary is-wide mt-12" disabled>
+                <span className="ai-spinner" />Анализируем…
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <p className="sub-copy">

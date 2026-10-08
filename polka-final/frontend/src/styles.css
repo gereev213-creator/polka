@@ -2933,3 +2933,53 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 
 /* Главная кнопка экрана — во всю ширину */
 .cta-primary.is-wide { width: 100%; }
+
+/* ── Экран разбора: «AI анализирует ваш запрос» ───────────────────────── */
+.ai-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(15, 23, 42, .55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+}
+.ai-modal {
+  width: 100%;
+  max-width: 380px;
+  background: var(--surface);
+  border-radius: 26px;
+  padding: 26px 22px 22px;
+  text-align: center;
+}
+.ai-modal-icon {
+  width: 62px;
+  height: 62px;
+  margin: 0 auto 14px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, var(--accent), #4C7DFF);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ai-modal-icon .icon-svg { width: 30px; height: 30px; fill: #fff; }
+.ai-modal-title { font-size: 19px; font-weight: 700; margin-bottom: 8px; }
+.ai-modal-sub {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin-bottom: 16px;
+}
+.ai-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  margin-right: 8px;
+  vertical-align: -3px;
+  border-radius: 50%;
+  border: 2.5px solid rgba(255, 255, 255, .35);
+  border-top-color: #fff;
+  animation: ai-spin .8s linear infinite;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
