@@ -393,7 +393,7 @@ RATE_LIMIT_CALLBACKS = int(os.environ.get("RATE_LIMIT_CB",   "60"))  # callback 
 # Настройки бота (обратная совместимость)
 ADMIN_CHANNEL_ID = os.environ.get("MAIN_CHANNEL", "-1003994334268")
 
-# ── Города Удмуртской Республики ─────────────────────────────────────────────
+# ── Города России ─────────────────────────────────────────────
 ALLOWED_CITIES = {
     "Ижевск", "Сарапул", "Воткинск", "Глазов", "Можга",
     "Камбарка", "Ува", "Балезино", "Кизнер", "Игра",
@@ -439,7 +439,7 @@ def _safe_cb(prefix: str, text: str) -> str:
         return prefix + text
     return prefix + encoded[:max_bytes].decode('utf-8', errors='ignore')
 
-# Городские каналы Удмуртии
+# Городские каналы России
 CITY_CHANNELS = {
     "Ижевск":        "@PolkaIzhevsk",
     "Сарапул":       "@PolkaSarapul",
@@ -1334,7 +1334,7 @@ async def _describe_via_llm_text(photo_bytes: bytes) -> str | None:
         meta_parts.append("PIL: не удалось проанализировать")
     meta_str = "\n".join(meta_parts)
     prompt = (
-        "Ты помогаешь доске объявлений «ПОЛКА» (Удмуртия). "
+        "Ты помогаешь сервису «ПОЛКА»: поиск дешёвых объявлений по всей России и барахолка для перекупов. "
         "Пользователь отправил фото товара, но Vision API недоступен. "
         "У тебя есть только метаданные изображения, без самой картинки. "
         "На основе метаданных угадай, что может быть на фото, "
@@ -1353,7 +1353,7 @@ async def _describe_via_llm_text(photo_bytes: bytes) -> str | None:
 
 async def describe_photo_gpt(photo_bytes: bytes) -> tuple:
     prompt = (
-        "Опиши товар на фото для доски объявлений. "
+        "Опиши товар на фото для объявления на барахолке. "
         "Ответь строго в формате:\n"
         "ОПИСАНИЕ: <2-3 предложения: что за вещь, бренд, модель, цвет, материал, состояние>\n"
         "ТЕГИ: <5-10 ключевых слов через запятую: бренд, категория, цвет, материал, состояние>\n"
@@ -5391,12 +5391,12 @@ def _format_ad_text(ad: dict, seller=None, verify=None, rating=None,
         map_link = f"<a href=\"https://yandex.ru/maps/?pt={lon},{lat}&z=16\">на карте</a>"
         city_line_content = map_link
     elif address and city:
-        q = _up.quote_plus(f"{address}, {city}, Удмуртия")
+        q = _up.quote_plus(f"{address}, {city}")
         map_link = f"<a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
         city_line_content = f"{address}, {city} · {map_link}"
     elif city:
         q = city.replace(' ', '+')
-        map_link = f"<a href=\"https://yandex.ru/maps/?text={q},+Удмуртия\">на карте</a>"
+        map_link = f"<a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
         city_line_content = f"{city} · {map_link}"
     else:
         city_line_content = ""
@@ -5480,12 +5480,12 @@ async def publish_ad_to_channel(ad_id: int, context: ContextTypes.DEFAULT_TYPE, 
         city_line = f"Местоположение: {map_link}"
     elif address and city:
         import urllib.parse as _up
-        q = _up.quote_plus(f"{address}, {city}, Удмуртия")
+        q = _up.quote_plus(f"{address}, {city}")
         map_link = f"<a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
         city_line = f"Местоположение: {address}, {city} · {map_link}"
     elif city:
         q = city.replace(' ', '+')
-        map_link = f"<a href=\"https://yandex.ru/maps/?text={q},+Удмуртия\">на карте</a>"
+        map_link = f"<a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
         city_line = f"Местоположение: {city} · {map_link}"
     else:
         city_line = ""
@@ -5837,11 +5837,11 @@ async def republish_ad_to_max(ad_id: int, bot_obj) -> Optional[int]:
         city_line = f"<b>Местоположение:</b> <a href=\"https://yandex.ru/maps/?pt={lon},{lat}&z=16\">на карте</a>"
     elif ad.get('address'):
         import urllib.parse as _up
-        q = _up.quote_plus(f"{ad['address']}, {city}, Удмуртия")
+        q = _up.quote_plus(f"{ad['address']}, {city}")
         city_line = f"<b>Местоположение:</b> {ad['address']}, {city} · <a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
     elif city:
         q = city.replace(' ', '+')
-        city_line = f"<b>Местоположение:</b> {city} · <a href=\"https://yandex.ru/maps/?text={q},+Удмуртия\">на карте</a>"
+        city_line = f"<b>Местоположение:</b> {city} · <a href=\"https://yandex.ru/maps/?text={q}\">на карте</a>"
     else:
         city_line = ""
 
@@ -6763,7 +6763,7 @@ async def pin_ad_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         f"Закрепление объявления\n\n"
         f"Закреп держит объявление в топе на <b>24 часа</b>.\n"
-        f"{EM_DOT} Основной канал (вся Удмуртия) — <b>{get_price(PRICE_KEY_PIN_RF, PIN_PRICE)} ₽</b>\n"
+        f"{EM_DOT} Основной канал (вся Россия) — <b>{get_price(PRICE_KEY_PIN_RF, PIN_PRICE)} ₽</b>\n"
         f"{EM_DOT} Городской канал — <b>от 49 ₽/сутки</b> (зависит от аудитории)\n\n"
         f"Выберите объявление:"
     )
@@ -6833,7 +6833,7 @@ async def pin_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = []
     # Основной канал
-    main_label = f"{EM_DIAMOND} Основной канал — уже закреплён" if main_pinned else f"{EM_DOT} Основной канал — вся Удмуртия"
+    main_label = f"{EM_DIAMOND} Основной канал — уже закреплён" if main_pinned else f"{EM_DOT} Основной канал — вся Россия"
     keyboard.append([InlineKeyboardButton(main_label, callback_data=f"pin_choose_dur:rf:{ad_id}")])
 
     # Городской канал
@@ -6875,7 +6875,7 @@ async def pin_choose_duration(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Определяем канал и базовую цену
     if pin_type == "rf":
         base_price  = get_price(PRICE_KEY_PIN_RF, PIN_PRICE)
-        channel_label = "Основной канал (вся Удмуртия)"
+        channel_label = "Основной канал (вся Россия)"
     else:
         city_name   = pin_type[5:]  # убираем 'city_'
         city_ch     = CITY_CHANNELS.get(city_name, '')
@@ -6922,7 +6922,7 @@ async def pin_pay(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if pin_type == "rf":
         base_price    = get_price(PRICE_KEY_PIN_RF, PIN_PRICE)
-        channel_label = "Основной канал (вся Удмуртия)"
+        channel_label = "Основной канал (вся Россия)"
         plan_key      = f"pin_{ad_id}_{pin_hours}h"
     else:
         # pin_type вида 'city_Ижевск'
@@ -7104,7 +7104,7 @@ async def admin_pin_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ch_label     = f"{city} (городской канал)"
     else:
         target_chat  = ADMIN_CHANNEL_ID
-        ch_label     = "Основной канал (вся Удмуртия)"
+        ch_label     = "Основной канал (вся Россия)"
 
     if pin_type == "city":
         cursor.execute("UPDATE ads SET pinned_until_city=?, pinned_chat_id_city=? WHERE id=?", (pinned_until, str(target_chat), ad_id))
@@ -7245,7 +7245,7 @@ async def unpin_ad_callback(context: ContextTypes.DEFAULT_TYPE):
                 city = (ad.get('city') or '').strip()
                 ch_label = f"{city} (городской канал)" if city else "городской канал"
             else:
-                ch_label = "Основной канал (вся Удмуртия)"
+                ch_label = "Основной канал (вся Россия)"
             try:
                 await context.bot.send_message(
                     chat_id=ad['user_id'],
@@ -7428,7 +7428,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await update.message.reply_text(
             "Добро пожаловать в Полку!\n\n"
-            "Площадка объявлений Удмуртии. Никаких комиссий.\n\n"
+            "Площадка объявлений России. Никаких комиссий.\n\n"
             f"Для доступа подпишитесь на наш канал:\n{EMAIL_TG_CHANNEL_URL}\n"
             "После подписки нажмите кнопку ниже.",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -7760,10 +7760,10 @@ async def show_onboarding(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         stats_line = ""
     text = (
-        f"<b>Полка — Удмуртия</b>{stats_line}\n"
-        "Доска объявлений прямо в Telegram.\n"
-        "Бесплатно, без регистрации, без лишних шагов.\n\n"
-        "Вы хотите продать или купить?"
+        f"<b>Полка — находки по всей России</b>{stats_line}\n"
+        "Ловлю свежие объявления дешевле рынка по вашим критериям.\n"
+        "Плюс барахолка: тут перекупы выставляют свой товар.\n\n"
+        "Что делаем?"
     )
     keyboard = [
         [InlineKeyboardButton("+ Разместить объявление", callback_data="create_ad")],
@@ -7830,7 +7830,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         ads_hint = "Разместите первое — это займёт 30 секунд"
     text = (
-        f"<b>Полка — площадка объявлений Удмуртии</b>\n\n"
+        f"<b>Полка — площадка объявлений России</b>\n\n"
         f"Привет, {user.first_name}! {ads_hint}.\n\n"
         f"Лента, поиск, размещение и сообщения — в приложении "
         f"по кнопке «Открыть Полку»."
@@ -10537,7 +10537,7 @@ async def referral_share(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"<code>{ref_link}</code>\n\n"
         f"Текст для приглашения:\n"
         f"Привет! Присоединяйся к Полке — удобной площадке для покупки и продажи товаров! "
-        f"Присоединяйся к Полке Удмуртия!"
+        f"Присоединяйся к Полке Россия!"
     )
     
     keyboard = [
@@ -11135,7 +11135,7 @@ async def create_ad_address_text(update: Update, context: ContextTypes.DEFAULT_T
     context.user_data['creating_ad'].pop('_awaiting_address', None)
     # Показываем ссылку на карту
     import urllib.parse as _urlparse
-    full_addr = f"{address}, {city}, Удмуртия" if city else f"{address}, Удмуртия"
+    full_addr = f"{address}, {city}" if city else f"{address}"
     map_query = _urlparse.quote_plus(full_addr)
     map_url = f"https://yandex.ru/maps/?text={map_query}"
     await update.message.reply_text(
@@ -12010,7 +12010,7 @@ async def create_ad_city_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data['creating_ad'].pop('_awaiting_city', None)
     # Формируем ссылку на карту для введённого адреса
     import urllib.parse as _urlparse
-    map_query = _urlparse.quote_plus(f"{text}, Удмуртия")
+    map_query = _urlparse.quote_plus(f"{text}")
     map_url = f"https://yandex.ru/maps/?text={map_query}"
     await update.message.reply_text(
         f"✓ Адрес сохранён: <b>{text}</b>\n"
@@ -12034,7 +12034,7 @@ async def create_ad_city_custom(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['creating_ad'].pop('_awaiting_city', None)
     # Показываем ссылку на карту
     import urllib.parse as _urlparse
-    map_query = _urlparse.quote_plus(f"{address}, Удмуртия")
+    map_query = _urlparse.quote_plus(f"{address}")
     map_url = f"https://yandex.ru/maps/?text={map_query}"
     map_text = f"{EM_OK} Адрес: <b>{address}</b>\n<a href=\"{map_url}\">Посмотреть на карте</a>"
     await query.message.reply_text(
@@ -14601,7 +14601,15 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Дополнительные функции
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
-        "<b>Полка — доска объявлений Удмуртии</b>\n\n"
+        "<b>Полка — находки дешевле рынка, по всей России</b>\n\n"
+        "<b>Ловить находки</b>\n"
+        "Откройте приложение → «Что ловить». Задайте запрос, цену от и до, "
+        "свежесть и город — бот пришлёт объявление, как только оно появится.\n\n"
+        "<b>Что нашлось</b>\n"
+        "Кнопка «Что нашлось» в меню — покажет, что уже поймано.\n\n"
+        "<b>Барахолка для перекупов</b>\n"
+        "Нажмите «+ Разместить», выберите категорию, заполните данные и добавьте фото. "
+        "Объявление проходит модерацию и появляется в канале.\n\n"
         "<b>Разместить объявление</b>\n"
         "Нажмите «+ Разместить», выберите категорию, заполните данные и добавьте фото. "
         "Объявление проходит модерацию и появляется в канале.\n\n"
@@ -14631,7 +14639,7 @@ async def menu_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def city_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /city — список городов Удмуртии с ссылками на каналы"""
+    """Команда /city — список городов России с ссылками на каналы"""
     lines = []
     for city in ALLOWED_CITIES_SORTED:
         channel = CITY_CHANNELS.get(city)
@@ -14641,7 +14649,7 @@ async def city_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines.append(f"{EM_DOT} {city}")
 
     text = (
-        "<b>Города Удмуртии</b>\n\n"
+        "<b>Города России</b>\n\n"
         + "\n".join(lines)
         + "\n\n"
         "Нажмите на город — откроется канал с объявлениями."
@@ -20578,7 +20586,7 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"<b>💰 Цены на услуги</b>\n\n"
-        f"<b><a href=\"https://t.me/polkaudm\">Основной канал — вся Удмуртия</a>:</b>\n"
+        f"<b><a href=\"https://t.me/polkaudm\">Основной канал — вся Россия</a>:</b>\n"
         f" • 24 часа — <b>{rf_price} ₽</b>\n"
         f" • 3 дня — {rf_3d} ₽\n"
         f" • 7 дней — {rf_7d} ₽\n\n"
@@ -21032,7 +21040,7 @@ async def setup_scheduler(application: Application):
                     text=(
                         f"{EM_DIAMOND} Закрепление истекло\n\n"
                         f"<b>{ad['title']}</b>\n"
-                        f"Канал: <a href=\"https://t.me/polkaudm\">Основной канал (вся Удмуртия)</a>\n\n"
+                        f"Канал: <a href=\"https://t.me/polkaudm\">Основной канал (вся Россия)</a>\n\n"
                         f"Хотите закрепить снова?"
                     ),
                     parse_mode="HTML",
@@ -21131,7 +21139,7 @@ async def post_init(application: Application):
         BotCommand("start",  "Запустить / главное меню"),
         BotCommand("menu",   "Главное меню"),
         BotCommand("help",   "Помощь и поддержка"),
-        BotCommand("city",   "Список городов Удмуртии"),
+        BotCommand("city",   "Список городов России"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -22586,7 +22594,7 @@ async def create_pin_crypto_invoice(
     try:
         usdt_amount = round(price_rub * CRYPTO_RUB_TO_USDT, 2)
         usdt_amount = max(usdt_amount, 1.00)  # минимум 1 USDT (требование CryptoBot API)
-        pin_label   = "вся Удмуртия" if pin_type == "rf" else "городской канал"
+        pin_label   = "вся Россия" if pin_type == "rf" else "городской канал"
         desc        = f"Закреп объявления #{ad_id} — {pin_label} {pin_hours}ч ({price_rub} ₽)"
         # payload: pin:{user_id}:{ad_id}:{pin_type}:{price_rub}:{pin_hours}:{promo_code}
         payload_str = f"pin:{user_id}:{ad_id}:{pin_type}:{price_rub}:{pin_hours}:{promo_code}"
@@ -23162,7 +23170,7 @@ def _default_feed_banner_svg() -> str:
         '<rect width="750" height="320" fill="url(#bg)"/>'
         '<circle cx="650" cy="40" r="210" fill="url(#glow)"/>'
         '<text x="44" y="132" font-family="sans-serif" font-size="42" font-weight="700" fill="#fff">ПОЛКА</text>'
-        '<text x="44" y="180" font-family="sans-serif" font-size="21" fill="rgba(255,255,255,.94)">Покупка и продажа товаров в Удмуртии</text>'
+        '<text x="44" y="180" font-family="sans-serif" font-size="21" fill="rgba(255,255,255,.94)">Покупка и продажа товаров в России</text>'
         '<text x="44" y="216" font-family="sans-serif" font-size="16" fill="rgba(255,255,255,.78)">Разместите объявление — покупатели уже рядом</text>'
         '</svg>'
     )
