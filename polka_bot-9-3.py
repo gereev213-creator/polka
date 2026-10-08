@@ -19192,13 +19192,20 @@ def cleanup_findings() -> Dict:
 
 
 async def _findings_cleanup_loop():
-    """Чистит базу раз в сутки."""
+    """Чистит базу от старого мусора.
+
+    Первая чистка идёт через две минуты после старта, а не через шесть
+    часов. Причина: контейнер перезапускается при каждом деплое, и цикл
+    «раз в 6 часов» мог не сработать ни разу за всё время — в диагностике
+    так и было: «чистка была: ещё не было». База росла без уборки.
+    """
+    await asyncio.sleep(120)
     while True:
         try:
-            await asyncio.sleep(6 * 3600)
             cleanup_all()
         except Exception as e:
             logger.warning(f"findings cleanup loop: {e}")
+        await asyncio.sleep(6 * 3600)
 
 
 async def _cleanup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
