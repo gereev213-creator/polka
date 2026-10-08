@@ -18100,9 +18100,6 @@ COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 # Amvera уходил в перезапуск: не хватало памяти на два процесса. Теперь
 # сбор идёт в этом же процессе, в отдельном потоке — интерпретатор один.
 COLLECTOR_INLINE = not _DISABLED_BY_ENV
-# Для слабого тарифа хватает четырёх категорий: остальные можно включить
-# переменной POLKA_MAX_CATEGORIES
-COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '3')
 
 
 def _setting_get(key: str, default: str = '') -> str:
@@ -18135,9 +18132,9 @@ async def _notify_admins_collector_disabled(why: str):
             await app.bot.send_message(
                 chat_id=admin_id,
                 text=("⚠️ <b>Сбор находок выключен</b>\n\n" + why +
-                      "\n\nБот и приложение работают. Включить снова: убрать "
-                      "переменную <code>COLLECTOR_INLINE</code> или задать "
-                      "<code>COLLECTOR_INLINE=1</code> в Amvera."),
+                      "\n\nБот и приложение работают. Сбор возобновится сам "
+                      "через час. Если падения повторятся — снизьте нагрузку: "
+                      "<code>POLKA_MAX_CATEGORIES=1</code>"),
                 parse_mode=ParseMode.HTML)
         except Exception:
             pass
