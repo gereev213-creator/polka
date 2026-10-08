@@ -8576,7 +8576,7 @@ import struct as _struct
 import math as _math
 
 CLIP_HF_MODEL = "radames/blip_image_embeddings"  # единственная модель с image embeddings на HF Inference API
-HF_API_TOKEN  = os.environ.get("HF_API_TOKEN", "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")
+HF_API_TOKEN  = os.environ.get("HF_API_TOKEN", "")  # только из переменных окружения
 
 
 async def get_clip_embedding_hf(bot, file_id: str):
@@ -20375,15 +20375,12 @@ def _detect_carrier(track_num: str) -> str:
 
 
 # ── Где посылка API — универсальное отслеживание всех служб ─────────────────
-GDEPOSYLKA_API_KEY = os.environ.get(
-    "GDEPOSYLKA_API_KEY",
-    "e4cfe86fb425cb2589c0544d065ad9fa02662b790299caf0f67ef1823d92262c2dd86458d1c4dcdc"
-)
+GDEPOSYLKA_API_KEY = os.environ.get("GDEPOSYLKA_API_KEY", "")
 GDEPOSYLKA_URL = "https://gdeposylka.ru/api/v4/tracker/{track}"
 
 # Заголовки для API
 GDEPOSYLKA_HEADERS = {
-    "X-Authorization-Token": "e4cfe86fb425cb2589c0544d065ad9fa02662b790299caf0f67ef1823d92262c2dd86458d1c4dcdc",
+    "X-Authorization-Token": GDEPOSYLKA_API_KEY,
     "Content-Type": "application/json",
     "Accept": "application/json",
 }
