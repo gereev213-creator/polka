@@ -18764,6 +18764,26 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
     return 1
 
 
+def fresh_ids_for_criterion(crit: Dict, limit: int = 8) -> List[int]:
+    """Свежие находки, подходящие под критерий ПРЯМО СЕЙЧАС.
+
+    Нужно при создании критерия: объявления, собранные до этого, в ленте
+    видны, а в чат никогда не приходили — рассылка видит только те, что
+    пришли с очередным сбором. Человек создавал критерий, видел находки
+    в ленте и не понимал, почему бот молчит.
+    """
+    try:
+        where, params = _criterion_where(crit)
+        sql = ("SELECT id FROM ads WHERE " + str(where) +
+               " ORDER BY COALESCE(parsed_at, created_at) DESC LIMIT ?")
+        cur = db.conn.cursor()
+        cur.execute(sql, (*params, int(limit)))
+        return [int(r['id']) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning(f"fresh_ids_for_criterion: {e}")
+        return []
+
+
 async def notify_hunt_matches(ad_ids: List[int]):
     """Рассылает находки тем, чьи критерии они удовлетворяют.
 
@@ -19008,6 +19028,22 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     crit_id = cursor.lastrowid
     # Сразу считаем медиану, чтобы критерий начал работать не «когда-нибудь»
     recompute_criterion_medians()
+    # Сразу отправляем то, что уже собрано и подходит: иначе критерий
+    # создан, находки в ленте есть, а в чате тишина — объявления попали
+    # в базу РАНЬШЕ, чем человек задал критерий.
+    try:
+        crit_row = None
+        for c in get_user_criteria(user_id):
+            if int(c.get('id') or 0) == int(crit_id):
+                crit_row = c
+                break
+        if crit_row:
+            ids = fresh_ids_for_criterion(crit_row)
+            if ids:
+                logger.info(f"критерий {crit_id}: сразу отправляю {len(ids)} находок")
+                asyncio.get_running_loop().create_task(notify_hunt_matches(ids))
+    except Exception as e:
+        logger.warning(f"первичная отправка по критерию: {e}")
     return crit_id
 
 
