@@ -3613,14 +3613,17 @@ function FavoritesPage() {
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Вы пока ничего не сохранили." /> : null}
       <div className="list-stack mt-14">
         {items.map((item) => (
-          <div key={item.id} className="favorite-row glass-card">
+          <div key={item.id} className="favorite-row glass-card"
+            style={{ cursor: 'pointer' }}
+            onClick={() => { window.location.hash = `#/listing/${item.id}` }}>
             <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
             <div>
               <div className="product-price result-price">{priceText(item)}</div>
               <div className="row-title">{item.title}</div>
               <div className="product-city">{item.city}</div>
             </div>
-            <button className="trash-btn" type="button" onClick={() => toggleFavorite(item.id)}>×</button>
+            <button className="trash-btn" type="button"
+              onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id) }}>×</button>
           </div>
         ))}
       </div>
