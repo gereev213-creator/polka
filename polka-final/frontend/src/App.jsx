@@ -1072,6 +1072,32 @@ function CriteriaPage() {
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
   // Свежесть — главное: перекуп звонит первым, пока товар не ушёл.
+  // Подсказки под категорию. Появляются, когда человек начал печатать
+  // запрос: набрал «айфон» — видит объёмы памяти, набрал «ботинки» —
+  // размеры. Это то, чем реально фильтруют на Авито, и эти слова есть
+  // в заголовках объявлений, поэтому поиск находит точно.
+  const ATTR_CHIPS = [
+    { words: ['айфон', 'iphone', 'самсунг', 'samsung', 'телефон', 'смартфон', 'xiaomi', 'redmi', 'pixel', 'huawei', 'honor'],
+      items: ['64', '128', '256', '512'] },
+    { words: ['ноутбук', 'macbook', 'макбук', 'lenovo', 'asus', 'acer', 'dell', 'hp', 'msi'],
+      items: ['8', '16', '32', 'SSD', 'Touch Bar'] },
+    { words: ['куртка', 'пуховик', 'кроссовки', 'ботинки', 'сапоги', 'худи', 'платье', 'джинсы', 'футболка', 'пальто'],
+      items: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', 'S', 'M', 'L', 'XL'] },
+    { words: ['планшет', 'ipad'], items: ['32', '64', '128', '256'] },
+    { words: ['наушники', 'airpods', 'колонка', 'телевизор'], items: ['Pro', 'Max', '2', '3'] },
+  ]
+
+  const queryWords = query.toLowerCase().split(/\s+/).filter(Boolean)
+  const activeChips = (ATTR_CHIPS.find((g) => g.words.some((w) => queryWords.includes(w))) || {}).items || []
+
+  const toggleChip = (word) => {
+    const parts = query.split(/\s+/).filter(Boolean)
+    if (parts.includes(word)) {
+      setQuery(parts.filter((p) => p !== word).join(' '))
+    } else {
+      setQuery([...parts, word].join(' '))
+    }
+  }
   const [minPrice, setMinPrice] = useState('')
   const [maxHours, setMaxHours] = useState(0)
   const [withPhoto, setWithPhoto] = useState(false)
@@ -1203,6 +1229,19 @@ function CriteriaPage() {
         <datalist id="hunt-cities">
           {cities.map((c) => <option key={c.value} value={c.label} />)}
         </datalist>
+
+        {activeChips.length ? (
+          <>
+            <div className="field-label-row">Уточнить</div>
+            <div className="auction-sort">
+              {activeChips.map((word) => (
+                <button key={word} type="button"
+                  className={query.split(/\s+/).includes(word) ? 'is-active' : ''}
+                  onClick={() => toggleChip(word)}>{word}</button>
+              ))}
+            </div>
+          </>
+        ) : null}
 
         <div className="field-label-row">Цена, ₽</div>
         <div className="auction-sort">
