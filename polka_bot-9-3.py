@@ -18909,7 +18909,13 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         if not expected or not hmac.compare_digest(str(got), str(expected)):
             return _miniapp_err('forbidden', 403)
         cursor = db.conn.cursor()
-        cursor.execute("SELECT DISTINCT query, category, city FROM hunt_criteria WHERE active=1")
+        # Отдаём сборщику цену и свежесть: без них он не может попросить
+        # Авито отфильтровать выдачу, и качает всё подряд.
+        cursor.execute("SELECT DISTINCT query, category, city, "
+                       "COALESCE(min_price,0) AS min_price, "
+                       "COALESCE(max_price,0) AS max_price, "
+                       "COALESCE(max_hours,0) AS max_hours "
+                       "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
         return _miniapp_json({'items': rows})
 

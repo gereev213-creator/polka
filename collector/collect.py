@@ -525,6 +525,48 @@ CITY_SLUG = {
 }
 
 
+# Слово из запроса → категория Авито (родной слаг сайта).
+#
+# Зачем: «?q=запрос» Авито блокирует, поэтому раньше критерии НЕ влияли на
+# сбор — качались все телефоны подряд, а нужное отсеивалось уже на сервере.
+# Если подходящий айфон лежал на пятой странице, его просто не находили.
+# Теперь запрос переводится в категорию + цену, и фильтрует САМ Авито.
+CATEGORY_BY_WORD = {
+    # телефоны
+    'айфон': 'telefony', 'iphone': 'telefony', 'самсунг': 'telefony',
+    'samsung': 'telefony', 'телефон': 'telefony', 'смартфон': 'telefony',
+    'xiaomi': 'telefony', 'redmi': 'telefony', 'pixel': 'telefony',
+    'huawei': 'telefony', 'realme': 'telefony', 'honor': 'telefony',
+    # ноутбуки
+    'ноутбук': 'noutbuki', 'macbook': 'noutbuki', 'макбук': 'noutbuki',
+    'lenovo': 'noutbuki', 'acer': 'noutbuki', 'asus': 'noutbuki',
+    'hp': 'noutbuki', 'dell': 'noutbuki', 'msi': 'noutbuki',
+    # планшеты
+    'планшет': 'planshety_i_elektronnye_knigi', 'ipad': 'planshety_i_elektronnye_knigi',
+    # приставки и игры
+    'приставка': 'igry_pristavki_i_programmy', 'playstation': 'igry_pristavki_i_programmy',
+    'xbox': 'igry_pristavki_i_programmy', 'nintendo': 'igry_pristavki_i_programmy',
+    # аудио и видео
+    'наушники': 'audio_i_video', 'airpods': 'audio_i_video', 'колонка': 'audio_i_video',
+    'телевизор': 'audio_i_video', 'телек': 'audio_i_video', 'саундбар': 'audio_i_video',
+    # бытовая техника
+    'холодильник': 'bytovaya_tehnika', 'стиральная': 'bytovaya_tehnika',
+    'пылесос': 'bytovaya_tehnika', 'микроволновка': 'bytovaya_tehnika',
+    # комплектующие
+    'монитор': 'tovary_dlya_kompyutera', 'клавиатура': 'tovary_dlya_kompyutera',
+    'видеокарта': 'tovary_dlya_kompyutera', 'мышь': 'tovary_dlya_kompyutera',
+    # одежда и обувь
+    'куртка': 'odezhda_obuv_aksessuary', 'пуховик': 'odezhda_obuv_aksessuary',
+    'кроссовки': 'odezhda_obuv_aksessuary', 'ботинки': 'odezhda_obuv_aksessuary',
+    'сапоги': 'odezhda_obuv_aksessuary', 'платье': 'odezhda_obuv_aksessuary',
+    'сумка': 'odezhda_obuv_aksessuary', 'джинсы': 'odezhda_obuv_aksessuary',
+    'худи': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    # прочее
+    'велосипед': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
+    'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+}
+
+
 def targets_from_criteria(server: str, token: str) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 
@@ -537,16 +579,40 @@ def targets_from_criteria(server: str, token: str) -> list:
         print(f"  ⚠ критерии не получены: {exc}")
         return []
     targets = []
-    # ВАЖНО: ссылки вида «?q=запрос» Авито отдаёт пустыми — поиск у него
-    # защищён. Поэтому такие цели НЕ строим: критерий работает как фильтр
-    # на сервере, а страницы берём из config.json (категории).
-    skipped = 0
+    seen = set()
+    built = 0
     for crit in data.get('items', []):
-        if str(crit.get('query') or '').strip():
-            skipped += 1
-    if skipped:
-        print(f"  Критериев: {skipped}. Они работают как фильтр заголовков,")
-        print("  а страницы для обхода берутся из config.json (категории Авито).")
+        words = [w for w in str(crit.get('query') or '').lower().split() if w]
+        slug = None
+        for word in words:
+            clean = word.strip('.,!?()"\'')
+            if clean in CATEGORY_BY_WORD:
+                slug = CATEGORY_BY_WORD[clean]
+                break
+        if not slug:
+            continue
+        # Родные параметры Авито: цена и сортировка по дате
+        params = ['s=104']
+        try:
+            if int(crit.get('min_price') or 0) > 0:
+                params.append(f"pmin={int(crit['min_price'])}")
+            if int(crit.get('max_price') or 0) > 0:
+                params.append(f"pmax={int(crit['max_price'])}")
+        except Exception:
+            pass
+        url = f"https://www.avito.ru/all/{slug}?" + "&".join(params)
+        if url in seen:
+            continue
+        seen.add(url)
+        all_word = " ".join(words)
+        targets.append({'url': url, 'category': crit.get('category') or slug,
+                        'query': all_word, 'page': 1})
+        built += 1
+    if built:
+        print(f"  Целей из критериев: {built} — Авито фильтрует сам по категории и цене")
+    skipped = len(data.get('items', [])) - built
+    if skipped > 0:
+        print(f"  Критериев без узнаваемой категории: {skipped} (ищут по общим страницам)")
     return targets
 
 
