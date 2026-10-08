@@ -17468,6 +17468,75 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json(out)
 
 
+# ── Скрытые лоты ────────────────────────────────────────────────────────────
+# Человек посмотрел объявление и понял: не то. Просил убрать его из ленты и
+# из чата. Запоминаем это, чтобы лот не возвращался при следующем сборе.
+def ensure_hidden_table():
+    try:
+        db.conn.execute("""
+            CREATE TABLE IF NOT EXISTS hunt_hidden (
+                user_id INTEGER NOT NULL,
+                ad_id INTEGER NOT NULL,
+                created_at TEXT,
+                UNIQUE(user_id, ad_id)
+            )
+        """)
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"hunt_hidden: {e}")
+
+
+def hide_finding(user_id: int, ad_id: int) -> bool:
+    """Убирает лот у конкретного человека: из ленты и из будущих рассылок."""
+    try:
+        db.conn.execute("INSERT OR IGNORE INTO hunt_hidden (user_id, ad_id, created_at) "
+                        "VALUES (?, ?, ?)", (int(user_id), int(ad_id), get_moscow_time().isoformat()))
+        db.conn.commit()
+        return True
+    except Exception as e:
+        logger.warning(f"hide_finding: {e}")
+        return False
+
+
+def is_finding_hidden(user_id: int, ad_id: int) -> bool:
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT 1 FROM hunt_hidden WHERE user_id=? AND ad_id=?", (int(user_id), int(ad_id)))
+        return cur.fetchone() is not None
+    except Exception:
+        return False
+
+
+async def api_findings_hide(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/findings/hide — убрать лот из ленты."""
+    viewer_id = _miniapp_viewer(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    ad_id = int((body or {}).get('ad_id') or 0)
+    if not ad_id:
+        return _miniapp_err('bad_request', 400)
+    hide_finding(viewer_id, ad_id)
+    return _miniapp_json({'ok': True, 'ad_id': ad_id})
+
+
+async def hunt_hide_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Убрать» под сообщением о находке."""
+    query = update.callback_query
+    await safe_answer(query, "Убрал из находок")
+    try:
+        ad_id = int(str(query.data).split(':', 1)[1])
+    except Exception:
+        return
+    hide_finding(update.effective_user.id, ad_id)
+    try:
+        await query.message.edit_reply_markup(reply_markup=None)
+        await query.message.reply_text("Убрал этот лот из находок. Больше не придёт.")
+    except Exception as e:
+        logger.warning(f"hunt_hide_button: {e}")
+
+
 async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/diag?token=... — состояние приложения одним ответом.
 
@@ -18613,6 +18682,8 @@ async def notify_hunt_matches(ad_ids: List[int]):
             try:
                 if db.is_search_notification_sent(user_id, ad['id']):
                     continue
+                if is_finding_hidden(user_id, ad['id']):
+                    continue  # человек этот лот уже убрал
             except Exception:
                 pass
             # Несвежее не присылаем: недельное объявление — не находка.
@@ -18665,6 +18736,10 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 kb = InlineKeyboardMarkup([[
                     InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте",
                                          url=str(ad['source_url']))
+                ], [
+                    # Убрать лот: человек посмотрел и понял — не то.
+                    # Больше не придёт ни в чат, ни в ленту приложения.
+                    InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
                 ]])
             try:
                 await app.bot.send_message(chat_id=user_id, text=text,
@@ -21836,6 +21911,9 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
     where.append("(" + " OR ".join(titles_cond) + ")")
     params.extend(titles_params)
+    # Скрытые лоты не показываем: человек их уже убрал
+    where.append("a.id NOT IN (SELECT ad_id FROM hunt_hidden WHERE user_id = ?)")
+    params.append(viewer_id)
     for bad in HUNT_ACCESSORY_WORDS:
         where.append("COALESCE(a.title_lower, a.title) NOT LIKE ?")
         params.append(f"%{bad}%")
@@ -24735,6 +24813,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)
+    app.router.add_post('/api/findings/hide', api_findings_hide)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
     app.router.add_get('/api/auctions', api_miniapp_auctions)
@@ -24849,6 +24928,7 @@ def main():
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
+    application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
@@ -25264,6 +25344,7 @@ def main():
         install_token_filter()
         _install_log_buffer()
         ensure_filter_columns()
+        ensure_hidden_table()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
