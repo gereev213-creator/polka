@@ -17507,6 +17507,128 @@ def is_finding_hidden(user_id: int, ad_id: int) -> bool:
         return False
 
 
+# ── ИИ-разбор запроса ───────────────────────────────────────────────────────
+# Человек пишет словами: «нужен айфон 15 про на 256, не битый, до 55 тысяч,
+# Москва». ИИ превращает это в те же фильтры, что задаются руками, и запуск
+# идёт ровно тот же поиск — никакой отдельной ветки логики.
+#
+# Требуется YANDEX_API_KEY (или LLM_API_KEY) в переменных окружения Amvera.
+# Без ключа разбор вернёт понятную ошибку, а не молчание.
+HUNT_AI_CATEGORIES = (
+    "telefony", "noutbuki", "planshety_i_elektronnye_knigi",
+    "nastolnye_kompyutery", "igry_pristavki_i_programmy", "audio_i_video",
+    "bytovaya_tehnika", "tovary_dlya_kompyutera", "odezhda_obuv_aksessuary",
+    "hobbi_i_otdyh", "avtomobili", "kvartiry", "velosipedy",
+    "muzykalnye_instrumenty", "krasota_i_zdorove",
+)
+
+
+def _hunt_ai_prompt(user_text: str) -> str:
+    """Задача для ИИ. Чем точнее правила, тем меньше мусора в фильтрах."""
+    return (
+        "Ты превращаешь фразу покупателя в фильтры поиска объявлений на Авито.\n\n"
+        f"Фраза: «{user_text}»\n\n"
+        "Верни ТОЛЬКО JSON, без пояснений и без markdown:\n"
+        "{\n"
+        '  "query": "2-4 главных слова для поиска в заголовке — бренд и модель",\n'
+        '  "category": "одна категория Авито из списка ниже или пустая строка",\n'
+        '  "min_price": 0,\n'
+        '  "max_price": 0,\n'
+        '  "max_hours": 0,\n'
+        '  "city": "",\n'
+        '  "mode": "any"\n'
+        "}\n\n"
+        "Категории Авито, только из этого списка: " + ", ".join(HUNT_AI_CATEGORIES) + "\n\n"
+        "Правила:\n"
+        "— Цены только числами в рублях: «до 50 тысяч» → max_price 50000.\n"
+        "— «не битый», «целый», «рабочий» — пожелания, а не слова для заголовка: "
+        "в query их не добавляй.\n"
+        "— max_hours: 1 для «за час», 3 для «за пару часов», 24 для «за сутки», иначе 0.\n"
+        "— city — название города из фразы, иначе пустая строка.\n"
+        "— mode: \"deal\", если просят только выгодные; иначе \"any\".\n"
+        "— Если фраза непонятна, верни в query исходные слова и нули в остальном."
+    )
+
+
+def _ai_json_from_text(raw: str) -> Dict:
+    """Достаёт JSON из ответа модели: она любит обернуть его в ```."""
+    if not raw:
+        return {}
+    text = str(raw).strip()
+    if "```" in text:
+        parts = text.split("```")
+        for part in parts:
+            chunk = part.strip()
+            if chunk.startswith("json"):
+                chunk = chunk[4:].strip()
+            if chunk.startswith("{"):
+                text = chunk
+                break
+    start, end = text.find("{"), text.rfind("}")
+    if start == -1 or end == -1:
+        return {}
+    try:
+        return json.loads(text[start:end + 1])
+    except Exception:
+        return {}
+
+
+async def ai_parse_hunt(user_text: str) -> Dict:
+    """Разбирает фразу в фильтры. Возвращает готовый набор для критерия."""
+    user_text = str(user_text or "").strip()
+    if not user_text:
+        return {'ok': False, 'error': 'Пустой запрос'}
+    if not (LLM_API_KEY or GROQ_API_KEY):
+        return {'ok': False, 'need_key': True,
+                'error': 'ИИ не настроен: добавьте YANDEX_API_KEY в переменные Amvera'}
+    try:
+        raw = await _llm_completion(
+            messages=[{'role': 'user', 'content': _hunt_ai_prompt(user_text)}],
+            max_tokens=400, temperature=0.1,
+        )
+    except Exception as e:
+        logger.warning(f"ai_parse_hunt: {e}")
+        return {'ok': False, 'error': f'ИИ не ответил: {str(e)[:120]}'}
+    data = _ai_json_from_text(raw)
+    if not data:
+        return {'ok': False, 'error': 'ИИ вернул непонятный ответ'}
+
+    def _int(key: str, lo: int = 0, hi: int = 100_000_000) -> int:
+        try:
+            return max(lo, min(int(float(str(data.get(key) or 0).replace(' ', ''))), hi))
+        except Exception:
+            return 0
+
+    category = str(data.get('category') or '').strip()
+    if category not in HUNT_AI_CATEGORIES:
+        category = ''
+    max_hours = _int('max_hours')
+    if max_hours not in (1, 3, 24):
+        max_hours = 0
+    return {
+        'ok': True,
+        'source_text': user_text,
+        'query': str(data.get('query') or user_text)[:120].strip(),
+        'category': category,
+        'min_price': _int('min_price'),
+        'max_price': _int('max_price'),
+        'max_hours': max_hours,
+        'city': str(data.get('city') or '')[:60].strip(),
+        'mode': 'deal' if str(data.get('mode') or '') == 'deal' else 'any',
+    }
+
+
+async def api_hunt_ai(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/ai — разобрать фразу словами в фильтры поиска."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    text = str((body or {}).get('text') or '')
+    parsed = await ai_parse_hunt(text)
+    return _miniapp_json(parsed)
+
+
 async def api_findings_hide(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/findings/hide — убрать лот из ленты."""
     viewer_id = _miniapp_viewer(request)
@@ -24820,6 +24942,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)
     app.router.add_post('/api/findings/hide', api_findings_hide)
+    app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
     app.router.add_get('/api/auctions', api_miniapp_auctions)

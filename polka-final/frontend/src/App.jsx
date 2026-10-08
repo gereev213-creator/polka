@@ -1098,6 +1098,33 @@ function CriteriaPage() {
       setQuery([...parts, word].join(' '))
     }
   }
+  // Способ 2: человек пишет словами, ИИ разбирает в фильтры
+  const [aiText, setAiText] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiNote, setAiNote] = useState('')
+
+  const runAi = async () => {
+    setAiBusy(true); setAiNote('')
+    try {
+      const d = await api.parseHunt(aiText)
+      if (!d || !d.ok) {
+        setAiNote((d && d.error) || 'Не получилось разобрать')
+        return
+      }
+      if (d.query) setQuery(d.query)
+      if (d.city) setCity(d.city)
+      if (d.min_price) setMinPrice(String(d.min_price))
+      if (d.max_price) setMaxPrice(String(d.max_price))
+      if (d.max_hours) setMaxHours(d.max_hours)
+      if (d.mode) setMode(d.mode)
+      setAiNote('Разобрал в фильтры — проверьте ниже и нажмите «Ловить это»')
+    } catch (e) {
+      setAiNote('Ошибка связи с сервером')
+    } finally {
+      setAiBusy(false)
+    }
+  }
+
   const [minPrice, setMinPrice] = useState('')
   const [maxHours, setMaxHours] = useState(0)
   const [withPhoto, setWithPhoto] = useState(false)
@@ -1176,6 +1203,20 @@ function CriteriaPage() {
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Поиск лотов</div>
+
+      {/* Способ 2: написать словами. ИИ разберёт это в те же фильтры,
+          что задаются руками, и поиск пойдёт обычным путём. */}
+      <div className="glass-card mt-12">
+        <div className="field-label-row">Описать словами</div>
+        <textarea className="input" rows={2} value={aiText}
+          onChange={(e) => setAiText(e.target.value)}
+          placeholder="айфон 15 про на 256, не битый, до 55 тысяч, Москва" />
+        <button type="button" className="ghost-btn mt-12"
+          disabled={aiBusy || !aiText.trim()} onClick={runAi}>
+          {aiBusy ? 'Разбираю…' : 'Разобрать в фильтры'}
+        </button>
+        {aiNote ? <div className="sub-copy">{aiNote}</div> : null}
+      </div>
       <p className="sub-copy">
         Напишите, что искать на Авито. Бот будет присылать подходящие объявления,
         а когда наберётся статистика — покажет, сколько на них заработать.

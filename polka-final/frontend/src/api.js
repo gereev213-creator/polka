@@ -253,6 +253,9 @@ export const api = {
   addCriterion: (body) => request('/api/hunt', { method: 'POST', body: JSON.stringify(body) }),
   removeCriterion: (id) => request(`/api/hunt?id=${id}`, { method: 'DELETE' }),
   // Убрать лот из находок: пропадёт из ленты и больше не придёт в чат
+  // ИИ разбирает фразу словами в те же фильтры, что задаются руками
+  parseHunt: (text) => request('/api/hunt/ai',
+    { method: 'POST', body: JSON.stringify({ text }) }),
   hideFinding: (adId) => request('/api/findings/hide',
     { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
   getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
