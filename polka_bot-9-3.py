@@ -2389,6 +2389,9 @@ class Database:
                 category TEXT,
                 city TEXT,
                 max_price INTEGER DEFAULT 0,
+                min_price INTEGER DEFAULT 0,
+                max_hours INTEGER DEFAULT 0,
+                with_photo INTEGER DEFAULT 0,
                 min_discount INTEGER DEFAULT 15,
                 median_price INTEGER,
                 sample_size INTEGER DEFAULT 0,
@@ -17427,6 +17430,22 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
         out['notifications_sent'] = _row_get(cur.fetchone(), 'n', 0)
     except Exception as e:
         out['db_error'] = str(e)[:200]
+    # Сколько места занимаем — главный риск на слабом тарифе
+    try:
+        db_file = os.environ.get('DB_PATH', '/data/polka.db')
+        out['db_mb'] = round(os.path.getsize(db_file) / 1048576.0, 1)
+        up_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
+        total = 0
+        for root, _dirs, files in os.walk(up_dir):
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+        out['uploads_mb'] = round(total / 1048576.0, 1)
+    except Exception as e:
+        out['size_error'] = str(e)[:120]
+    out['last_cleanup'] = _setting_get('last_cleanup_at') or 'ещё не было'
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
     return _miniapp_json(out)
@@ -18109,6 +18128,15 @@ def _query_words_required(query: str) -> list:
         ascii_letters = [c for c in letters if c.isascii()]
         return len(ascii_letters) >= len(letters) * 0.7
 
+    # Отсекаем окончания у русских слов: «мальчика» → «мальчи»,
+    # «зимняя» → «зимн». Без этого запрос «Куртка зимняя для мальчика»
+    # не находил заголовок «Куртка зимняя мальчик» — падежи не совпадали.
+    def stem(w: str) -> str:
+        if len(w) >= 6 and not w.isascii():
+            return w[:-2]
+        return w
+
+    words = [stem(w) for w in words]
     brands = [w for w in words if is_brand(w)]
     base = brands[0] if brands else max(words, key=len)
     required = [base]
@@ -18117,6 +18145,57 @@ def _query_words_required(query: str) -> list:
             required.append(w)
             break
     return required
+
+
+FILTER_COLUMNS = [
+    # (колонка, тип, значение по умолчанию)
+    ('min_price', 'INTEGER DEFAULT 0', 0),
+    ('max_hours', 'INTEGER DEFAULT 0', 0),
+    ('with_photo', 'INTEGER DEFAULT 0', 0),
+]
+
+
+def ensure_filter_columns():
+    """Добавляет колонки фильтров, если их ещё нет (обновление на живой базе)."""
+    for col, coltype, _default in FILTER_COLUMNS:
+        try:
+            db.conn.execute(f"ALTER TABLE hunt_criteria ADD COLUMN {col} {coltype}")
+            db.conn.commit()
+            logger.info(f"hunt_criteria: добавлена колонка {col}")
+        except Exception:
+            pass
+
+
+def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str = ""):
+    """Добавляет в SQL условия фильтров критерия.
+
+    Здесь живут понятные перекупу условия — без них поиск находил «что-то
+    похожее», а не конкретный товар:
+      • цена от и до — свой диапазон, а не только потолок;
+      • свежесть — объявления за N часов: перекуп звонит первым, и это
+        главное его преимущество;
+      • только с фото — иначе не понять состояние;
+      • только частные — перекупу нужен человек, а не магазин с наценкой.
+    """
+    col = lambda name: f"{prefix}{name}" if prefix else name
+    min_price = int(crit.get('min_price') or 0)
+    if min_price > 0:
+        where.append(f"{col('price')} >= ?")
+        params.append(min_price)
+    max_price = int(crit.get('max_price') or 0)
+    if max_price > 0:
+        where.append(f"{col('price')} <= ?")
+        params.append(max_price)
+    max_hours = int(crit.get('max_hours') or 0)
+    if max_hours > 0:
+        where.append(f"COALESCE({col('published_hours_ago')}, 0) <= ?")
+        params.append(max_hours)
+    if int(crit.get('with_photo') or 0):
+        where.append(f"COALESCE({col('photos')}, '') NOT IN ('', '[]')")
+    # Фильтра «только частные» пока нет: тип продавца Авито отдаёт не в
+    # каждом объявлении, и колонки в базе нет. Добавим вместе с разбором
+    # продавца — иначе фильтр молча ломал бы запросы.
+    return where
 
 
 def _criterion_where(crit: Dict, active_only: bool = True):
@@ -18139,10 +18218,7 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     if crit.get('city'):
         where.append("city = ?")
         params.append(crit['city'])
-    max_price = int(crit.get('max_price') or 0)
-    if max_price > 0:
-        where.append("price <= ?")
-        params.append(max_price)
+    _apply_criterion_filters(where, params, crit)
     for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
         if not variants:
@@ -18299,6 +18375,19 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     max_price = int(crit.get('max_price') or 0)
     if max_price and price > max_price:
         return None
+    # Те же фильтры, что и в ленте: иначе бот присылал бы не то, что видно
+    min_price = int(crit.get('min_price') or 0)
+    if min_price and price < min_price:
+        return None
+    max_hours = int(crit.get('max_hours') or 0)
+    if max_hours:
+        ago = ad.get('published_hours_ago')
+        if ago is None or int(ago) > max_hours:
+            return None
+    if int(crit.get('with_photo') or 0):
+        photos = str(ad.get('photos') or '')
+        if photos in ('', '[]', 'null'):
+            return None
     title = str(ad.get('title') or '').lower()
     for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
@@ -18453,19 +18542,29 @@ async def notify_hunt_matches(ad_ids: List[int]):
             # Рынок считаем по ТАКИМ ЖЕ товарам: повербанк с повербанками.
             # Если похожих мало — не выдумываем цифру, а молчим.
             median = median_for_ad(ad, crit)
-            if not median or median <= int(ad['price']):
+            # Раньше здесь стоял безусловный continue: в чат попадали ТОЛЬКО
+            # товары дешевле рынка. В ленте при этом были все совпадения —
+            # человек видел варианты в приложении и не понимал, почему в
+            # чате тишина. Теперь в режиме «любые подходящие» присылаем
+            # каждое совпадение, а выгоду показываем, только если она есть.
+            any_mode = (crit.get('mode') or 'any') == 'any'
+            diff = 0
+            if median and median > int(ad['price']):
+                diff = median - int(ad['price'])
+            elif not any_mode:
                 continue
-            diff = median - int(ad['price'])
             lines = [
-                "🔥 <b>Новое объявление дешевле рынка</b>",
+                ("🔥 <b>Новое объявление дешевле рынка</b>" if diff
+                 else "🔎 <b>Подходит под ваш критерий</b>"),
                 "",
                 f"<b>{str(ad.get('title'))[:70]}</b>",
                 "",
                 f"Цена: <b>{_money(ad['price'])} ₽</b>",
-                f"Обычная цена: {_money(median)} ₽",
-                f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)",
-                "",
             ]
+            if diff:
+                lines.append(f"Обычная цена: {_money(median)} ₽")
+                lines.append(f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)")
+            lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
             text = "\n".join(lines)
             kb = None
@@ -18570,6 +18669,9 @@ def _criterion_public(crit: Dict) -> Dict:
         'category': crit.get('category') or '',
         'city': crit.get('city') or '',
         'max_price': crit.get('max_price') or 0,
+        'min_price': crit.get('min_price') or 0,
+        'max_hours': crit.get('max_hours') or 0,
+        'with_photo': crit.get('with_photo') or 0,
         'min_discount': crit.get('min_discount') or 15,
         'median_price': crit.get('median_price'),
         'sample_size': crit.get('sample_size') or 0,
@@ -18588,6 +18690,7 @@ def get_user_criteria(user_id: int) -> List[Dict]:
 
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
+                  min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
                   mode: str = 'any') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
@@ -18603,10 +18706,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             return None
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
+                                   min_price, max_hours, with_photo,
                                    active, created_at, mode)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     ''', (user_id, query, category or '', city or '', int(max_price or 0),
-          max(0, min(int(min_discount or 0), 90)), get_moscow_time().isoformat(),
+          max(0, min(int(min_discount or 0), 90)),
+          int(min_price or 0), int(max_hours or 0), int(with_photo or 0),
+          get_moscow_time().isoformat(),
           'deal' if str(mode) == 'deal' else 'any'))
     db.conn.commit()
     crit_id = cursor.lastrowid
@@ -18664,6 +18770,9 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             category=str((body or {}).get('category') or ''),
             city=str((body or {}).get('city') or ''),
             max_price=int((body or {}).get('max_price') or 0),
+            min_price=int((body or {}).get('min_price') or 0),
+            max_hours=int((body or {}).get('max_hours') or 0),
+            with_photo=1 if (body or {}).get('with_photo') else 0,
             min_discount=int((body or {}).get('min_discount') or 0),
             mode=str((body or {}).get('mode') or 'any'),
         )
@@ -18733,6 +18842,7 @@ def cleanup_all() -> Dict:
     removed['истории'] = _cut('stories', 3, 'created_at')
 
     total = sum(removed.values())
+    _setting_set('last_cleanup_at', get_moscow_time().isoformat())
     if total:
         logger.info("Чистка базы: " + ", ".join(f"{k} {v}" for k, v in removed.items() if v))
     result['details'] = {k: v for k, v in removed.items() if v}
@@ -18752,13 +18862,29 @@ def cleanup_findings() -> Dict:
     Отметки об отправке тоже оставляем — они крошечные и защищают
     от повторной присылки, если объявление появится снова.
     """
-    cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
     cursor = db.conn.cursor()
     removed = 0
+    deals_removed = 0
     try:
-        cursor.execute("DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
-                       "AND COALESCE(parsed_at, created_at) < ?", (cutoff,))
+        # 1. Мусор без выгоды живёт один день. Таких большинство: сбор идёт
+        #    каждые 15 минут по 6 категорий, и без этого база распухает до
+        #    сотен мегабайт, а на слабом тарифе это смертельно.
+        junk_cutoff = (get_moscow_time() - timedelta(days=1)).isoformat()
+        cursor.execute(
+            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
+            "AND (discount_percent IS NULL OR discount_percent < ?) "
+            "AND COALESCE(parsed_at, created_at) < ?",
+            (HUNT_MIN_DISCOUNT, junk_cutoff))
         removed = cursor.rowcount or 0
+        # 2. Выгодные предложения храним дольше — они нужны для медианы
+        #    и для показа в ленте.
+        cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
+        cursor.execute(
+            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
+            "AND discount_percent >= ? AND COALESCE(parsed_at, created_at) < ?",
+            (HUNT_MIN_DISCOUNT, cutoff))
+        deals_removed = cursor.rowcount or 0
+        removed += deals_removed
         db.conn.commit()
     except Exception as e:
         logger.warning(f"cleanup findings: {e}")
@@ -21574,13 +21700,21 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     titles_cond, titles_params = [], []
     for crit in crits:
         word_cond, word_params = [], []
-        for w in re.split(r'\s+', str(crit.get('query') or '').lower()):
+        # Те же правила, что и в рассылке: обязательны бренд и модель, а не
+        # все слова запроса. Здесь был СТАРЫЙ код — из-за него лента и чат
+        # вели себя по-разному.
+        for w in _query_words_required(crit.get('query')):
             variants = query_word_variants(w)
             if not variants:
                 continue
             word_cond.append("(" + " OR ".join("COALESCE(a.title_lower, a.title) LIKE ?"
                                                for _ in variants) + ")")
             word_params.extend(f"%{v}%" for v in variants)
+        # Потолок цены из критерия. Без него в ленте показывались айфоны
+        # за 78 000 ₽ при выставленном лимите 30 000 ₽ — человек ставил
+        # цену, а получал всё подряд.
+        word_cond.append("a.price > 0")
+        _apply_criterion_filters(word_cond, word_params, crit, prefix="a.")
         if word_cond:
             titles_cond.append("(" + " AND ".join(word_cond) + ")")
             titles_params.extend(word_params)
@@ -25013,6 +25147,7 @@ def main():
         # обработчики, и на них фильтра не было
         install_token_filter()
         _install_log_buffer()
+        ensure_filter_columns()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

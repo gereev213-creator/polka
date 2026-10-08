@@ -1070,6 +1070,11 @@ function CriteriaPage() {
   const [query, setQuery] = useState('')
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
+  // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
+  // Свежесть — главное: перекуп звонит первым, пока товар не ушёл.
+  const [minPrice, setMinPrice] = useState('')
+  const [maxHours, setMaxHours] = useState(0)
+  const [withPhoto, setWithPhoto] = useState(false)
   const [minDiscount, setMinDiscount] = useState(15)
   const [mode, setMode] = useState('any')
   const [collector, setCollector] = useState(null)
@@ -1108,6 +1113,9 @@ function CriteriaPage() {
         query: query.trim(),
         city,
         max_price: Number(maxPrice) || 0,
+        min_price: Number(minPrice) || 0,
+        max_hours: Number(maxHours) || 0,
+        with_photo: withPhoto ? 1 : 0,
         min_discount: mode === 'deal' ? minDiscount : 0,
         mode,
       })
@@ -1196,6 +1204,28 @@ function CriteriaPage() {
           {cities.map((c) => <option key={c.value} value={c.label} />)}
         </datalist>
 
+        <div className="field-label-row">Цена, ₽</div>
+        <div className="auction-sort">
+          <input className="input" type="number" inputMode="numeric" placeholder="от"
+            value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+          <input className="input" type="number" inputMode="numeric" placeholder="до"
+            value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
+        </div>
+
+        <div className="field-label-row">Свежесть объявления</div>
+        <div className="auction-sort">
+          {[[0, 'любая'], [1, 'за час'], [3, 'за 3 часа'], [24, 'за сутки']].map(([v, label]) => (
+            <button key={v} type="button" className={maxHours === v ? 'is-active' : ''}
+              onClick={() => setMaxHours(v)}>{label}</button>
+          ))}
+        </div>
+
+        <div className="field-label-row">Дополнительно</div>
+        <div className="auction-sort">
+          <button type="button" className={withPhoto ? 'is-active' : ''}
+            onClick={() => setWithPhoto(!withPhoto)}>Только с фото</button>
+        </div>
+
         <div className="field-label-row">Что присылать</div>
         <div className="segmented">
           <button type="button" className={mode === 'any' ? 'is-active' : ''}
@@ -1242,7 +1272,10 @@ function CriteriaPage() {
                 {c.ready
                   ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ (${c.sample_size} шт)`
                   : `собираем статистику: ${c.sample_size} из 5`}
-                {c.max_price ? ` · не дороже ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
+                {c.min_price ? ` · от ${Number(c.min_price).toLocaleString('ru-RU')} ₽` : ''}
+                {c.max_price ? ` · до ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
+                {c.max_hours ? ` · за ${c.max_hours} ч` : ''}
+                {c.with_photo ? ' · с фото' : ''}
               </span>
             </div>
             <button type="button" className="ghost-btn" onClick={() => remove(c.id)}>Убрать</button>
