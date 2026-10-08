@@ -1061,7 +1061,7 @@ const BID_STATE_LABELS = {
   lost: { text: 'Проиграна', tone: 'is-muted' },
 }
 
-/* «Что ловить» — критерии, по которым бот ищет дешёвое на Авито.
+/* «Поиск лотов» — критерии, по которым бот ищет дешёвое на Авито.
  * Раньше их можно было задать ТОЛЬКО командой /hunt в боте: в приложении
  * входа не было вовсе, поэтому человек его и не находил. */
 function CriteriaPage() {
@@ -1149,7 +1149,7 @@ function CriteriaPage() {
   return (
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" />} />
-      <div className="page-title">Что ловить</div>
+      <div className="page-title">Поиск лотов</div>
       <p className="sub-copy">
         Напишите, что искать на Авито. Бот будет присылать подходящие объявления,
         а когда наберётся статистика — покажет, сколько на них заработать.
@@ -1323,7 +1323,7 @@ function FindingsView() {
       {loading ? <div className="muted-line">Ищем выгодные предложения…</div> : null}
       {!loading && !error && !items.length ? (
         needCriteria ? (
-          <EmptyBlock text="Сначала скажите, что искать — нажмите «Что ловить?» выше. Тогда здесь появятся свежие объявления дешевле рынка." />
+          <EmptyBlock text="Сначала скажите, что искать — нажмите «Поиск лотов?» выше. Тогда здесь появятся свежие объявления дешевле рынка." />
         ) : (
           <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
         )
@@ -1938,7 +1938,7 @@ function FeedPage() {
           <Link to="/hunt" className="hunt-cta">
             <span className="hunt-cta-icon"><Icon name="search" /></span>
             <span className="hunt-cta-text">
-              <strong>Что ловить?</strong>
+              <strong>Поиск лотов?</strong>
               <span>Настроим поиск дешёвых лотов под вас</span>
             </span>
             <span className="hunt-cta-arrow"><Icon name="back" /></span>
