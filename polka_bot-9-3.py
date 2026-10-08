@@ -17996,6 +17996,41 @@ def query_word_variants(word: str) -> tuple:
     return tuple(dict.fromkeys((key,) + tuple(variants)))
 
 
+def _query_words_required(query: str) -> list:
+    """Какие слова запроса обязательны, а какие — просто уточнение.
+
+    Раньше требовались ВСЕ слова. Из-за этого критерий вида «Ботинки зимние
+    Salomon 39 размер» не находил НИКОГДА: на Авито не бывает заголовков,
+    где есть все пять слов сразу. Человек вводил запрос и получал тишину.
+
+    Обязательными оставляем самые различающие слова: самое длинное (обычно
+    бренд — «salomon», «iphone») и первое с цифрами (обычно модель или
+    размер). Остальные слова считаются уточнением и не мешают.
+    """
+    words = [w for w in re.split(r'\s+', str(query or '').lower())
+             if len(w) >= 2 and w not in HUNT_STOP_WORDS]
+    if not words:
+        return []
+    # Бренд важнее длинного слова: в «Ботинки зимние Salomon 39 размер»
+    # самое длинное — «ботинки», но различает товар именно «salomon».
+    # Бренды почти всегда латиницей, поэтому её и предпочитаем.
+    def is_brand(word: str) -> bool:
+        letters = [c for c in word if c.isalpha()]
+        if not letters:
+            return False
+        ascii_letters = [c for c in letters if c.isascii()]
+        return len(ascii_letters) >= len(letters) * 0.7
+
+    brands = [w for w in words if is_brand(w)]
+    base = brands[0] if brands else max(words, key=len)
+    required = [base]
+    for w in words:
+        if any(ch.isdigit() for ch in w) and w != base:
+            required.append(w)
+            break
+    return required
+
+
 def _criterion_where(crit: Dict, active_only: bool = True):
     """SQL-условие отбора под критерий.
 
@@ -18020,7 +18055,7 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     if max_price > 0:
         where.append("price <= ?")
         params.append(max_price)
-    for word in re.split(r'\s+', str(crit.get('query') or '').lower()):
+    for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
         if not variants:
             continue
@@ -18177,7 +18212,7 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     if max_price and price > max_price:
         return None
     title = str(ad.get('title') or '').lower()
-    for word in re.split(r'\s+', str(crit.get('query') or '').lower()):
+    for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
         if not variants:
             continue
