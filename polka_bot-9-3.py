@@ -196,12 +196,15 @@ PAW_PAYMENT_URL    = "https://www.payanyway.ru/assistant.htm"
 PAW_SBP_UNIT_ID    = "1098"
 
 # ── Photoroom API (удаление фона) ────────────────────────────────────────────
-PHOTOROOM_API_KEY = os.environ.get("PHOTOROOM_API_KEY", "sk_pr_polka_0e3e35be1beb758b64a12c3df00ad949b886149d")
+# ВНИМАНИЕ: ключи НЕ хранятся в коде. Раньше здесь лежали боевые ключи как
+# запасные значения — они попали в историю git. Задавайте их только через
+# переменные окружения Amvera.
+PHOTOROOM_API_KEY = os.environ.get("PHOTOROOM_API_KEY", "")
 
 # ── LLM — Yandex AI Studio (OpenAI-совместимый API) ───────────────────────────
-HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "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")
+HF_API_TOKEN = os.environ.get("HF_API_TOKEN", "")
 YANDEX_FOLDER_ID = os.environ.get("YANDEX_FOLDER_ID", "b1gntsv2j2rsmaiaun8o")
-YANDEX_API_KEY   = os.environ.get("YANDEX_API_KEY", "AQVNxcJ6mFOEYd56JOQqGRQBapXKrexDvX0WTzpV")
+YANDEX_API_KEY   = os.environ.get("YANDEX_API_KEY", "")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", YANDEX_API_KEY)
 LLM_URL     = os.environ.get("LLM_URL", "https://ai.api.cloud.yandex.net/v1/chat/completions")
 LLM_MODEL   = os.environ.get("LLM_MODEL", f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite")
