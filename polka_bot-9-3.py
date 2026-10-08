@@ -17391,6 +17391,50 @@ def _install_log_buffer():
         return False
 
 
+async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/diag/avito — доступен ли Авито С САМОГО СЕРВЕРА.
+
+    Ключевой вопрос архитектуры: если с сервера Amvera Авито открывается,
+    сбор можно вести прямо здесь — без GitHub, расписаний и токенов,
+    а значит без перебоев. Если нет — нужен внешний запуск.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    got = request.query.get('token', '') or request.headers.get('X-Ingest-Token', '')
+    if not expected or not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+
+    out: Dict = {}
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+    if path not in sys.path:
+        sys.path.insert(0, path)
+    try:
+        import collect as collector
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'stage': 'import', 'error': str(e)[:200]})
+
+    url = 'https://www.avito.ru/all/telefony?s=104'
+    out['url'] = url
+    try:
+        html = await asyncio.to_thread(collector.fetch, url)
+        out['ok'] = True
+        out['bytes'] = len(html or '')
+        try:
+            items = collector.parse_page(html) or []
+            out['cards'] = len(items)
+        except Exception as e:
+            out['cards_error'] = str(e)[:200]
+        try:
+            out['profile'] = getattr(collector, '_WORKING_PROFILE', None)
+        except Exception:
+            pass
+    except Exception as e:
+        out['ok'] = False
+        out['stage'] = 'fetch'
+        out['error'] = str(e)[:300]
+        out['error_type'] = type(e).__name__
+    return _miniapp_json(out)
+
+
 async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/diag?token=... — состояние приложения одним ответом.
 
@@ -24622,6 +24666,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)
     app.router.add_get('/api/diag', api_diag)
+    app.router.add_get('/api/diag/avito', api_diag_avito)
     app.router.add_get('/api/auctions', api_miniapp_auctions)
     app.router.add_get('/api/my-bids', api_miniapp_my_bids)
     app.router.add_get('/api/ads/{ad_id}/bids', api_miniapp_ad_bids)
