@@ -22,7 +22,7 @@ on:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -43,4 +43,7 @@ jobs:
         env:
           POLKA_SERVER: ${{ secrets.POLKA_SERVER }}
           POLKA_INGEST_TOKEN: ${{ secrets.POLKA_INGEST_TOKEN }}
+          # Шесть категорий за прогон: при медленном Авито 16 не укладываются
+          # в лимит времени GitHub. Каждый прогон берёт следующие по кругу.
+          POLKA_MAX_CATEGORIES: '6'
         run: python collect.py
