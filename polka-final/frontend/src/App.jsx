@@ -1345,9 +1345,6 @@ function CriteriaPage() {
         <div className="grid-two">
           <input className="text-input glass-card" value={city}
             onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
-          <input className="text-input glass-card" value={maxPrice} inputMode="numeric"
-            onChange={(e) => setMaxPrice(e.target.value.replace(/[^0-9]/g, ''))}
-            placeholder="Не дороже, ₽" />
         </div>
         <datalist id="hunt-cities">
           {cities.map((c) => <option key={c.value} value={c.label} />)}
