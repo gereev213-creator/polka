@@ -217,6 +217,10 @@ VISION_MODEL = os.environ.get("VISION_MODEL", f"gpt://{YANDEX_FOLDER_ID}/gemma-3
 # («Access denied»), поэтому запрос идёт через прослойку Cloudflare.
 # Свой адрес можно задать переменной GROQ_URL.
 GROQ_URL     = os.environ.get("GROQ_URL", "https://polka.gereev213.workers.dev/openai/v1/chat/completions")
+# Если адрес задали без пути (например, только адрес прослойки) — дописываем
+# его сами. Иначе запрос уходит в корень сайта и получает ошибку Cloudflare.
+if 'chat/completions' not in GROQ_URL:
+    GROQ_URL = GROQ_URL.rstrip('/') + '/openai/v1/chat/completions'
 GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
