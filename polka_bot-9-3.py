@@ -7815,6 +7815,8 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [_wbtn("Находки",      "/?tab=findings"),
          _wbtn("Барахолка",    "/?tab=board")],
         [_wbtn("Поиск лотов",  "/hunt")],
+        # Чат-подбор: ИИ спрашивает и собирает критерий кнопками
+        [_mbtn("Подбор в чате", "podbor_start")],
     ]
 
     cursor = db.conn.cursor()
@@ -19662,6 +19664,21 @@ def _hc_price_kb():
     return InlineKeyboardMarkup(rows)
 
 
+async def podbor_start_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Подбор в чате» — объясняет, как начать."""
+    query = update.callback_query
+    await safe_answer(query)
+    try:
+        await query.message.reply_text(
+            "Подбор в чате\n\n"
+            "Напишите одной строкой, что искать:\n"
+            "<code>/podbor ботинки timberland</code>\n\n"
+            "Дальше я спрошу размер и цену кнопками — и соберу критерий.",
+            parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.warning(f"podbor_start: {e}")
+
+
 async def podbor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ /podbor ботинки timberland — чат-подбор: ИИ спрашивает, вы отвечаете. """
     user = update.effective_user
@@ -25439,6 +25456,7 @@ def main():
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("podbor",  podbor_command))
     application.add_handler(CallbackQueryHandler(hunt_chat_callback, pattern="^hc:"))
+    application.add_handler(CallbackQueryHandler(podbor_start_button, pattern="^podbor_start$"))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
