@@ -1072,6 +1072,8 @@ function CriteriaPage() {
   const [items, setItems] = useState([])
   const [cities, setCities] = useState([])
   const [query, setQuery] = useState('')
+  // Категория для ручного поиска: сужает выдачу на самом Авито
+  const [huntCategory, setHuntCategory] = useState('')
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
@@ -1186,6 +1188,7 @@ function CriteriaPage() {
         query: query.trim(),
         city,
         max_price: Number(maxPrice) || 0,
+        category: huntCategory || '',
         min_price: Number(minPrice) || 0,
         max_hours: Number(maxHours) || 0,
         with_photo: withPhoto ? 1 : 0,
@@ -1226,6 +1229,18 @@ function CriteriaPage() {
       <div className="chat-tabs">
         <button type="button" className="chat-tab" onClick={() => navigate('/hunt')}>ИИ-поиск</button>
         <button type="button" className="chat-tab is-active">Вручную</button>
+      </div>
+
+      {/* Категория: то, чего не хватало ручному поиску */}
+      <div className="field-label-row">Категория</div>
+      <div className="auction-sort">
+        {['', 'Электроника', 'Одежда, обувь, аксессуары', 'Транспорт', 'Недвижимость', 'Другое'].map((cat) => (
+          <button key={cat || 'all'} type="button"
+            className={huntCategory === cat ? 'is-active' : ''}
+            onClick={() => setHuntCategory(cat)}>
+            {cat || 'любая'}
+          </button>
+        ))}
       </div>
       <div className="page-title">Поиск лотов</div>
 
