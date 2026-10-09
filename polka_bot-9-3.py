@@ -19134,8 +19134,22 @@ async def notify_hunt_matches(ad_ids: List[int]):
                     InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
                 ]])
             try:
-                await app.bot.send_message(chat_id=user_id, text=text,
-                                           parse_mode=ParseMode.HTML, reply_markup=kb)
+                # Сначала пробуем отправить С ФОТО: объявление продаёт картинка,
+                # и перекуп решает по ней за секунду. Если Авито не отдаст
+                # изображение — отправляем текстом, как раньше.
+                _photo_sent = False
+                try:
+                    _ph = json.loads(str(ad.get('photos') or '[]'))
+                    if isinstance(_ph, list) and _ph and str(_ph[0]).startswith('http'):
+                        await app.bot.send_photo(chat_id=user_id, photo=str(_ph[0]),
+                                                 caption=text, parse_mode=ParseMode.HTML,
+                                                 reply_markup=kb)
+                        _photo_sent = True
+                except Exception as _pe:
+                    logger.warning(f'hunt photo: {_pe}')
+                if not _photo_sent:
+                    await app.bot.send_message(chat_id=user_id, text=text,
+                                               parse_mode=ParseMode.HTML, reply_markup=kb)
                 _hunt_note_send(sent=1)
                 try:
                     db.mark_search_notification_sent(user_id, ad['id'])
