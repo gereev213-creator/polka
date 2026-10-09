@@ -18149,7 +18149,9 @@ COLLECTOR_ENABLED = not _DISABLED_BY_ENV
 COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '2')
 # 15 минут вместо 5: Авито начинает ограничивать при частых запросах,
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '3600'))
+# Раз в 5 минут. Лот на Авито живёт минуты: перекуп должен успеть
+# позвонить первым, поэтому час ожидания бессмыслен.
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '300'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 
@@ -18245,8 +18247,24 @@ async def _collector_inline_loop():
             cfg = {
                 'server': f"http://127.0.0.1:{WEBAPP_PORT}",
                 'token': token,
-                'targets': collector.default_targets(),
             }
+            # Цели: сначала страницы ПО КРИТЕРИЯМ — категория, цена и
+            # сортировка по дате, то есть фильтрует сам Авито. Именно они
+            # дают перекупу то, что он ищет, и именно их надо обходить
+            # часто. Плюс пара общих категорий — на случай находок, о
+            # которых человек не догадался.
+            crit_targets = []
+            try:
+                crit_targets = collector.targets_from_criteria(cfg['server'], cfg['token'])
+            except Exception as e:
+                logger.warning(f"цели по критериям: {e}")
+            try:
+                base_targets = collector.default_targets()
+            except Exception:
+                base_targets = []
+            cfg['targets'] = crit_targets + base_targets[:2]
+            logger.info(f"Сбор: целей по критериям {len(crit_targets)}, "
+                        f"общих {len(cfg['targets']) - len(crit_targets)}")
             # Отметка «сбор идёт». Снимается в finally ниже. Останется
             # только если процесс умер ВО ВРЕМЯ сбора — это и есть признак
             # настоящего падения, в отличие от обычного перезапуска
