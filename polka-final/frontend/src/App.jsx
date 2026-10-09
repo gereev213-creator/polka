@@ -1355,9 +1355,9 @@ function CriteriaPage() {
 
         <div className={`field-label-row is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
           onClick={() => toggleSec('price')}>
-          <span>Цена, ₽{maxPrice || minPrice
+          <span className="toggle-left"><Icon name="filter" /><span>Цена, ₽{maxPrice || minPrice
             ? ` · ${minPrice ? 'от ' + Number(minPrice).toLocaleString('ru-RU') + ' ' : ''}${maxPrice ? 'до ' + Number(maxPrice).toLocaleString('ru-RU') + ' ₽' : ''}`
-            : ''}</span> <span className="toggle-mark">›</span>
+            : ''}</span></span> <span className="toggle-mark">›</span>
         </div>
         {openSec === 'price' ? (
           <>
@@ -1372,9 +1372,9 @@ function CriteriaPage() {
 
         <div className={`field-label-row is-toggle ${openSec === 'fresh' ? 'is-open' : ''}`}
           onClick={() => toggleSec('fresh')}>
-          <span>Свежесть{maxHours
+          <span className="toggle-left"><Icon name="clock" /><span>Свежесть{maxHours
             ? ` · ${maxHours === 1 ? 'за час' : 'за ' + maxHours + ' ч'}`
-            : ' · любая'}</span> <span className="toggle-mark">›</span>
+            : ' · любая'}</span></span> <span className="toggle-mark">›</span>
         </div>
         {openSec === 'fresh' ? (
           <>
@@ -1389,7 +1389,7 @@ function CriteriaPage() {
 
         <div className={`field-label-row is-toggle ${openSec === 'more' ? 'is-open' : ''}`}
           onClick={() => toggleSec('more')}>
-          <span>Дополнительно{withPhoto ? ' · с фото' : ''}</span> <span className="toggle-mark">›</span>
+          <span className="toggle-left"><Icon name="image" /><span>Дополнительно{withPhoto ? ' · с фото' : ''}</span></span> <span className="toggle-mark">›</span>
         </div>
         {openSec === 'more' ? (
           <>

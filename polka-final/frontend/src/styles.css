@@ -3194,3 +3194,32 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   font-size: 14px;
 }
 .chat-crit-x:active { transform: scale(.94); }
+
+/* ── Плашки фильтров: карточки с иконкой и значением ───────────────────── */
+.field-label-row.is-toggle {
+  padding: 14px 16px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.field-label-row.is-toggle.is-open {
+  border-color: var(--accent);
+}
+.toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.toggle-left .icon-svg {
+  width: 18px;
+  height: 18px;
+  fill: var(--accent);
+  flex: 0 0 18px;
+}
+.field-label-row.is-toggle .toggle-mark {
+  font-size: 17px;
+  color: var(--text-secondary);
+}
