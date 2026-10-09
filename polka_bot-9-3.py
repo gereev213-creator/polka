@@ -600,6 +600,10 @@ def install_token_filter():
 install_token_filter()
 logger = logging.getLogger(__name__)
 
+# Последняя ошибка обращения к ИИ. Нужна, чтобы объяснить человеку причину
+# на экране, а не оставлять «ИИ не ответил» без подробностей.
+_LLM_LAST_ERROR: Dict = {'text': '', 'http': 0}
+
 # Функция для получения московского времени
 def get_moscow_time():
     """Возвращает текущее время в московском часовом поясе"""
@@ -1163,6 +1167,16 @@ async def _llm_completion(
             except Exception as e:
                 last_error = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
                 logger.warning(f"LLM {url} error (attempt {attempt+1}): {last_error}")
+                try:
+                    _txt = str(last_error or '')
+                    _code = 0
+                    for _c in ('403', '401', '429', '400', '500', '502', '503'):
+                        if f'HTTP {_c}' in _txt:
+                            _code = int(_c); break
+                    _LLM_LAST_ERROR['text'] = _txt[:300]
+                    _LLM_LAST_ERROR['http'] = _code
+                except Exception:
+                    pass
             if attempt < 2:
                 await asyncio.sleep(2)
     logger.error(f"LLM все попытки исчерпаны ({len(providers)} провайдер(ов)): {last_error}")
@@ -17579,6 +17593,27 @@ def _hunt_ai_prompt(user_text: str) -> str:
     )
 
 
+def _llm_error_human() -> str:
+    """Понятное объяснение, почему ИИ не ответил."""
+    code = int(_LLM_LAST_ERROR.get('http') or 0)
+    text = str(_LLM_LAST_ERROR.get('text') or '')
+    if code == 403:
+        if 'resource-manager' in text or 'PermissionDenied' in text:
+            return ('ИИ отказал: у ключа нет прав на этот каталог Yandex (403). '
+                    'Выдайте сервисному аккаунту роль ai.languageModels.user '
+                    'или укажите верный YANDEX_FOLDER_ID')
+        return 'ИИ отказал в доступе (403): проверьте права ключа'
+    if code == 401:
+        return 'ИИ не принял ключ (401): проверьте YANDEX_API_KEY'
+    if code == 429:
+        return 'ИИ перегружен или исчерпан лимит (429): попробуйте позже'
+    if code >= 500:
+        return f'ИИ недоступен на своей стороне ({code}): попробуйте позже'
+    if text:
+        return f'ИИ не ответил: {text[:150]}'
+    return 'ИИ не ответил — попробуйте ещё раз'
+
+
 def _ai_json_from_text(raw: str) -> Dict:
     """Достаёт JSON из ответа модели: она любит обернуть его в ```."""
     if not raw:
@@ -17617,10 +17652,11 @@ async def ai_parse_hunt(user_text: str) -> Dict:
         )
     except Exception as e:
         logger.warning(f"ai_parse_hunt: {e}")
-        return {'ok': False, 'error': f'ИИ не ответил: {str(e)[:120]}'}
+        return {'ok': False, 'error': _llm_error_human()}
     data = _ai_json_from_text(raw)
     if not data:
-        return {'ok': False, 'error': 'ИИ вернул непонятный ответ'}
+        return {'ok': False, 'error': _llm_error_human()
+                if _LLM_LAST_ERROR.get('text') else 'ИИ вернул непонятный ответ'}
 
     def _int(key: str, lo: int = 0, hi: int = 100_000_000) -> int:
         try:
