@@ -19113,12 +19113,12 @@ async def notify_hunt_matches(ad_ids: List[int]):
             elif not any_mode:
                 continue
             lines = [
-                ("<b>Дешевле рынка</b>" if diff
-                 else "<b>Подходит под критерий</b>"),
+                ("🔥 <b>Нашёл дешевле обычного</b>" if diff
+                 else "🔎 <b>Подходит под ваш запрос</b>"),
                 "",
                 f"<b>{str(ad.get('title'))[:70]}</b>",
                 "",
-                f"Цена: <b>{_money(ad['price'])} ₽</b>",
+                f"<b>{_money(ad['price'])} ₽</b>",
             ]
             if diff:
                 lines.append(f"Обычная цена: {_money(median)} ₽")
