@@ -18632,6 +18632,9 @@ def _query_words_required(query: str) -> list:
         return w
 
     words = [stem(w) for w in words]
+    # Одинаковые слова считаем один раз: «куртка мальчик 158 158» требовало
+    # число 158 ДВА раза, и выборка всегда выходила пустой.
+    words = list(dict.fromkeys(words))
     # Перечисленные числа (3 и больше) — это альтернативы, а не требования
     alts = _query_alt_numbers(query)
     if alts:

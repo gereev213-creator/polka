@@ -95,7 +95,12 @@ export default function HuntChat() {
   const answerFirst = (value) => {
     if (!draft) return
     const next = { ...draft, step: 'price' }
-    if (value) next.query = `${next.query} ${value}`
+    // Дописываем только то, чего в запросе ещё нет. Иначе ИИ вернул
+    // «куртка мальчик 158», человек тапнул размер 158 — и получалось
+    // «куртка мальчик 158 158», что не находило ничего.
+    const word = String(value || '').trim()
+    const parts = String(next.query || '').split(/\s+/).filter(Boolean)
+    if (word && !parts.includes(word)) next.query = [...parts, word].join(' ')
     setDraft(next)
     say('me', value || 'любой')
     say('ai', `${next.query}. До какой цены?`)
