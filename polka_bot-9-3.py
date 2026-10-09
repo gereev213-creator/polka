@@ -17440,8 +17440,14 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception as e:
         return _miniapp_json({'ok': False, 'stage': 'import', 'error': str(e)[:200]})
 
-    url = 'https://www.avito.ru/all/telefony?s=104'
+    # Можно передать любую страницу Авито — инструмент для проверки
+    # точных запросов: категория, цена, размер, сортировка по дате.
+    url = str(request.query.get('url') or 'https://www.avito.ru/all/telefony?s=104')
+    if 'avito.ru' not in url:
+        return _miniapp_json({'ok': False, 'error': 'только avito.ru'})
     out['url'] = url
+    # Что именно требовать в заголовке — для проверки точности фильтра
+    need = [w.lower() for w in str(request.query.get('need') or '').split() if w.strip()]
     try:
         html = await asyncio.to_thread(collector.fetch, url)
         out['ok'] = True
@@ -17449,6 +17455,28 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
         try:
             items = collector.parse_page(html) or []
             out['cards'] = len(items)
+            sample = []
+            matched = 0
+            for it in items:
+                title = str(it.get('title') or '')
+                low = title.lower()
+                if need:
+                    ok = True
+                    for w in need:
+                        if w.isdigit():
+                            if not re.search(r'(?<![0-9])' + re.escape(w) + r'(?![0-9])', low):
+                                ok = False
+                                break
+                        elif w not in low:
+                            ok = False
+                            break
+                    if not ok:
+                        continue
+                    matched += 1
+                sample.append({'title': title[:78], 'price': it.get('price')})
+            out['need'] = need
+            out['matched'] = matched if need else len(items)
+            out['sample'] = sample[:18]
         except Exception as e:
             out['cards_error'] = str(e)[:200]
         try:
