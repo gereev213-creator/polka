@@ -19121,8 +19121,8 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 f"<b>{_money(ad['price'])} ₽</b>",
             ]
             if diff:
-                lines.append(f"Обычная цена: {_money(median)} ₽")
-                lines.append(f"Дешевле на <b>{_money(diff)} ₽</b> ({int(round(diff * 100.0 / median))}%)")
+                lines.append(f"Обычно такие стоят {_money(median)} ₽")
+                lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
             lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
             text = "\n".join(lines)
