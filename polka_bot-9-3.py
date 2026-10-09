@@ -19678,7 +19678,7 @@ def hunt_report(user_id: int) -> str:
     col = collector_status()
     if col.get('alive'):
         mins = col.get('minutes') or 0
-        lines.append(f" Сборщик на связи — был {mins} мин назад")
+        lines.append(f"Проверял Авито {mins} мин назад")
     elif col.get('minutes') is None:
         lines.append(" Сборщик ещё не выходил на связь.")
         lines.append("   Запустите его на компьютере: <code>./start-local.sh</code>")
@@ -19693,7 +19693,7 @@ def hunt_report(user_id: int) -> str:
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka' "
                     "AND parsed_at >= ?", ((get_moscow_time() - timedelta(hours=24)).isoformat(),))
         today = _row_get(cur.fetchone(), 'n', 0)
-        lines.append(f" Находок в базе: <b>{total}</b> (за сутки {today})")
+        lines.append(f"В базе <b>{total}</b> объявлений, из них за сутки {today}")
     except Exception as e:
         logger.warning(f"hunt report counts: {e}")
     lines.append("")
@@ -19724,14 +19724,14 @@ def hunt_report(user_id: int) -> str:
         except Exception:
             pass
         mark = "" if fresh else ""
-        lines.append(f"{mark} <b>{c['query']}</b> — подходит {matches}, из них свежих {fresh}")
+        lines.append(f"{mark} <b>{c['query']}</b> — нашлось {matches}, свежих {fresh}")
         if not fresh:
             if matches:
                 lines.append("   свежих нет: подходящие есть, но старше суток")
             else:
-                lines.append("   пока пусто — ждём, чтобы сборщик принёс такие объявления")
+                lines.append("   Пока пусто. Как появится — пришлю сразу.")
     lines.append("")
-    lines.append(f"Всего отправлено вам: {sent}")
+    lines.append(f"Отправлено вам находок: <b>{sent}</b>")
     return "\n".join(lines)
 
 
