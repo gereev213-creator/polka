@@ -19647,6 +19647,38 @@ def _hc_escape(text: str) -> str:
     return _html.escape(str(text or ''))
 
 
+# Что спрашивать в зависимости от товара. Перекуп для обуви называет
+# размер, для телефона — память, для машины — год. Один общий вопрос
+# «что уточнить?» тут не работает: у каждого товара своё главное.
+HC_FIRST_QUESTION = {
+    'odezhda_obuv_aksessuary': (['39', '40', '41', '42', '43', '44', '45', '46'],
+                                'Какой размер?', 'любой размер'),
+    'telefony': (['64', '128', '256', '512'], 'Сколько памяти?', 'любая память'),
+    'planshety_i_elektronnye_knigi': (['32', '64', '128', '256'],
+                                      'Сколько памяти?', 'любая память'),
+    'noutbuki': (['8', '16', '32'], 'Сколько оперативной памяти?', 'любая'),
+    'nastolnye_kompyutery': (['8', '16', '32'], 'Сколько оперативной памяти?', 'любая'),
+    'avtomobili': (['2010', '2014', '2018', '2021'], 'Какой год или новее?', 'любой год'),
+}
+
+
+def _hc_first_question(category: str):
+    """Вопрос и варианты для категории. Если не знаем — пропускаем."""
+    return HC_FIRST_QUESTION.get(str(category or '').strip())
+
+
+def _hc_first_kb(options: list, skip_label: str):
+    rows, row = [], []
+    for opt in options:
+        row.append(InlineKeyboardButton(opt, callback_data=f'hc:first:{opt}'))
+        if len(row) == 4:
+            rows.append(row); row = []
+    if row:
+        rows.append(row)
+    rows.append([InlineKeyboardButton(skip_label, callback_data='hc:first:')])
+    return InlineKeyboardMarkup(rows)
+
+
 def _hc_size_kb():
     rows = [[InlineKeyboardButton(s, callback_data=f'hc:size:{s}')
              for s in ('39', '40', '41', '42')],
@@ -19703,10 +19735,19 @@ async def podbor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'max_price': int(parsed.get('max_price') or 0),
         'category': parsed.get('category') or '',
     }
-    await msg.edit_text(
-        f"Ищу: <b>{_hc_escape(_HUNT_CHAT[int(user.id)]['query'])}</b>\n\n"
-        f"<b>Какой размер?</b>\n<i>Если размер не важен — «любой»</i>",
-        parse_mode=ParseMode.HTML, reply_markup=_hc_size_kb())
+    question = _hc_first_question(parsed.get('category'))
+    if question:
+        options, title, skip_label = question
+        await msg.edit_text(
+            f"Ищу: <b>{_hc_escape(_HUNT_CHAT[int(user.id)]['query'])}</b>\n\n"
+            f"<b>{title}</b>",
+            parse_mode=ParseMode.HTML, reply_markup=_hc_first_kb(options, skip_label))
+    else:
+        # Категория незнакома — не выдумываем вопрос, сразу цена
+        await msg.edit_text(
+            f"Ищу: <b>{_hc_escape(_HUNT_CHAT[int(user.id)]['query'])}</b>\n\n"
+            f"<b>До какой цены?</b>",
+            parse_mode=ParseMode.HTML, reply_markup=_hc_price_kb())
 
 
 async def hunt_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19726,7 +19767,7 @@ async def hunt_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     field = parts[1] if len(parts) > 1 else ''
     value = parts[2] if len(parts) > 2 else ''
 
-    if field == 'size':
+    if field in ('first', 'size'):
         if value:
             state['query'] = f"{state['query']} {value}"
         _HUNT_CHAT[user_id] = state
