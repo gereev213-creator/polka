@@ -18848,9 +18848,11 @@ async def notify_hunt_matches(ad_ids: List[int]):
     отправить одно и то же дважды.
     """
     if not ad_ids:
+        _hunt_note_send(error='пустой список объявлений')
         return 0
     app = _get_bot_app()
     if not app:
+        _hunt_note_send(error='нет доступа к боту (app is None)')
         return 0
     cursor = db.conn.cursor()
     try:
@@ -19286,7 +19288,7 @@ def cleanup_findings() -> Dict:
 
 
 # Диагностика отправки: сколько досылка отправила и что мешало
-_HUNT_SEND_STATS = {'last_run': '', 'sent': 0, 'errors': 0, 'last_error': ''}
+_HUNT_SEND_STATS = {'last_run': '', 'sent': 0, 'errors': 0, 'last_error': '', 'last_ids': 0, 'criteria': 0}
 
 
 def _hunt_note_send(sent: int = 0, error: str = ''):
@@ -19316,11 +19318,13 @@ async def _hunt_catchup_loop():
             cur = db.conn.cursor()
             cur.execute("SELECT DISTINCT user_id FROM hunt_criteria WHERE active=1")
             rows = cur.fetchall()
+            _HUNT_SEND_STATS['criteria'] = len(rows)
             sent_total = 0
             for row in rows:
                 try:
                     for crit in get_user_criteria(int(row['user_id'])):
                         ids = fresh_ids_for_criterion(crit, limit=30)
+                        _HUNT_SEND_STATS['last_ids'] = len(ids)
                         if ids:
                             sent_total += await notify_hunt_matches(ids)
                 except Exception as e:
