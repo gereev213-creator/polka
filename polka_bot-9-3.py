@@ -213,7 +213,10 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
 LLM_URL     = os.environ.get("LLM_URL", "https://ai.api.cloud.yandex.net/v1/chat/completions")
 LLM_MODEL   = os.environ.get("LLM_MODEL", f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite")
 VISION_MODEL = os.environ.get("VISION_MODEL", f"gpt://{YANDEX_FOLDER_ID}/gemma-3-27b-it/latest")
-GROQ_URL     = os.environ.get("GROQ_URL", "https://api.groq.com/openai/v1/chat/completions")
+# Адрес Groq. Напрямую с российского сервера он отвечает 403
+# («Access denied»), поэтому запрос идёт через прослойку Cloudflare.
+# Свой адрес можно задать переменной GROQ_URL.
+GROQ_URL     = os.environ.get("GROQ_URL", "https://polka.gereev213.workers.dev/openai/v1/chat/completions")
 GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
