@@ -19061,7 +19061,9 @@ def _hunt_verdict_prompt(ad: Dict) -> str:
         "Ты помогаешь перекупу оценить объявление с Авито.\n\n"
         f"Заголовок: «{str(ad.get('title') or '')[:120]}»\n"
         f"Цена: {ad.get('price') or 0} ₽\n"
-        f"Город: {ad.get('city') or '—'}\n\n"
+        f"Город: {ad.get('city') or '—'}\n"
+        + (f"Описание: «{str(ad.get('description') or '')[:500]}»\n" if ad.get('description') else "")
+        + "\n"
         "Ответь ОДНОЙ строкой до 80 символов строго по шаблону:\n"
         "ОЦЕНКА — причина\n"
         "Где ОЦЕНКА — одно из: «похоже на оригинал», «похоже на реплику», "
@@ -19071,10 +19073,74 @@ def _hunt_verdict_prompt(ad: Dict) -> str:
     )
 
 
+async def fetch_ad_description(ad: Dict) -> str:
+    """Забирает описание со страницы объявления.
+
+    Заголовок говорит мало: «Timberland 43». А в описании — «копия», «носил
+    год», «коробка, чек» — то, по чему перекуп и решает. Открываем страницу
+    только для кандидатов, прошедших фильтры, и не чаще лимита.
+    """
+    url = str(ad.get('source_url') or '')
+    if not url.startswith('http'):
+        return ''
+    html = ''
+    try:
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+        if path not in sys.path:
+            sys.path.insert(0, path)
+        import collect as collector
+        html = await asyncio.to_thread(collector.fetch, url)
+    except Exception as e:
+        logger.warning(f"fetch description: {str(e)[:100]}")
+        return ''
+    if not html:
+        return ''
+    text = ''
+    # 1. JSON-LD: на странице объявления там лежит полный текст описания
+    try:
+        m = re.search(r'"description"\s*:\s*"(.{20,4000}?)"\s*[,}]', html, re.S)
+        if m:
+            text = m.group(1)
+    except Exception:
+        text = ''
+    # 2. Запасной путь — блок описания по разметке Авито
+    if not text:
+        try:
+            m = re.search(r'item-description[^>]*>(.{20,4000}?)</div>', html, re.S)
+            if m:
+                text = m.group(1)
+        except Exception:
+            text = ''
+    if not text:
+        return ''
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = (text.replace('\\n', ' ').replace('\\"', '"')
+                .replace('\\u002F', '/').replace('\\u003C', '<'))
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text[:600]
+
+
 async def ai_judge_ad(ad: Dict) -> str:
     """Возвращает строку-вердикт или пустую строку. Никогда не мешает отправке."""
     if not (LLM_API_KEY or GROQ_API_KEY):
         return ''
+    # Описание сильно повышает точность: в заголовке «Timberland 43»,
+    # а в описании — «копия» или «коробка, чек». Тянем один раз и сохраняем.
+    try:
+        if not str(ad.get('description') or '').strip() and ad.get('source_url'):
+            desc = await fetch_ad_description(ad)
+            if desc:
+                ad = dict(ad)
+                ad['description'] = desc
+                try:
+                    db.conn.execute("UPDATE ads SET description=? WHERE id=?",
+                                    (desc, int(ad['id'])))
+                    db.conn.commit()
+                except Exception as _de:
+                    logger.warning(f"description save: {_de}")
+    except Exception as _fe:
+        logger.warning(f"description step: {_fe}")
+
     try:
         raw = await _llm_completion(
             messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad)}],
