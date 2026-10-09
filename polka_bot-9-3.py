@@ -221,7 +221,14 @@ GROQ_URL     = os.environ.get("GROQ_URL", "https://polka.gereev213.workers.dev/o
 # его сами. Иначе запрос уходит в корень сайта и получает ошибку Cloudflare.
 if 'chat/completions' not in GROQ_URL:
     GROQ_URL = GROQ_URL.rstrip('/') + '/openai/v1/chat/completions'
-GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
+# Groq регулярно убирает модели: llama-3.3-70b-versatile они отключили, и
+# запрос падал с «model does not exist». Поэтому пробуем список по очереди —
+# какая-нибудь из актуальных ответит.
+GROQ_MODELS  = [m.strip() for m in os.environ.get(
+    "GROQ_MODELS",
+    "openai/gpt-oss-120b,llama-3.1-8b-instant,qwen/qwen3-32b,meta-llama/llama-4-scout-17b-16e-instruct,llama-3.3-70b-versatile"
+).split(",") if m.strip()]
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.mail.ru")
@@ -1191,7 +1198,10 @@ async def _llm_completion(
     # аккаунта нет прав на каталог (403). Вернуть можно переменной
     # USE_YANDEX_AI=1 — тогда он снова станет запасным.
     if GROQ_API_KEY:
-        providers.append((GROQ_URL, GROQ_API_KEY, GROQ_MODEL, "openai"))
+        # По одной записи на модель: если Groq скажет «модели нет»,
+        # цикл ниже автоматически возьмёт следующую.
+        for _gm in (GROQ_MODELS or [GROQ_MODEL]):
+            providers.append((GROQ_URL, GROQ_API_KEY, _gm, "openai"))
     if os.environ.get('USE_YANDEX_AI', '') != '1':
         providers = [p for p in providers if 'yandex' not in str(p[0]).lower()]
     last_error = ""
