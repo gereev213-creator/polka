@@ -17762,6 +17762,7 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
                 'отправлено_всего': sent,
             })
         out['criteria_report'] = report
+        out['hunt_send'] = dict(_HUNT_SEND_STATS)
         out['limits'] = {'fresh_hours': HUNT_FRESH_HOURS,
                          'digest_after': HUNT_DIGEST_AFTER,
                          'min_discount': HUNT_MIN_DISCOUNT}
@@ -18942,6 +18943,7 @@ async def notify_hunt_matches(ad_ids: List[int]):
             try:
                 await app.bot.send_message(chat_id=user_id, text=text,
                                            parse_mode=ParseMode.HTML, reply_markup=kb)
+                _hunt_note_send(sent=1)
                 try:
                     db.mark_search_notification_sent(user_id, ad['id'])
                 except Exception:
@@ -19283,6 +19285,21 @@ def cleanup_findings() -> Dict:
     return {'removed': removed, 'keep_days': HUNT_KEEP_DAYS}
 
 
+# Диагностика отправки: сколько досылка отправила и что мешало
+_HUNT_SEND_STATS = {'last_run': '', 'sent': 0, 'errors': 0, 'last_error': ''}
+
+
+def _hunt_note_send(sent: int = 0, error: str = ''):
+    try:
+        _HUNT_SEND_STATS['last_run'] = get_moscow_time().isoformat()[:19]
+        _HUNT_SEND_STATS['sent'] += int(sent or 0)
+        if error:
+            _HUNT_SEND_STATS['errors'] += 1
+            _HUNT_SEND_STATS['last_error'] = str(error)[:200]
+    except Exception:
+        pass
+
+
 async def _hunt_catchup_loop():
     """Досылает то, что подходит под критерии, но ещё не отправлено.
 
@@ -19293,7 +19310,7 @@ async def _hunt_catchup_loop():
 
     Работает раз в 10 минут и добирает всё, что подходит и ещё не ушло.
     """
-    await asyncio.sleep(240)
+    await asyncio.sleep(60)
     while True:
         try:
             cur = db.conn.cursor()
@@ -19308,11 +19325,13 @@ async def _hunt_catchup_loop():
                             sent_total += await notify_hunt_matches(ids)
                 except Exception as e:
                     logger.warning(f"hunt catchup по критерию: {e}")
+            _hunt_note_send(sent=sent_total)
             if sent_total:
                 logger.info(f"Досылка находок: отправлено {sent_total}")
         except Exception as e:
+            _hunt_note_send(error=str(e))
             logger.warning(f"hunt catchup loop: {e}")
-        await asyncio.sleep(600)
+        await asyncio.sleep(120)
 
 
 async def _findings_cleanup_loop():
