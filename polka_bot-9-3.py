@@ -7879,8 +7879,6 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [_wbtn("Находки",      "/?tab=findings"),
          _wbtn("Барахолка",    "/?tab=board")],
         [_wbtn("Поиск лотов",  "/hunt")],
-        # Чат-подбор: ИИ спрашивает и собирает критерий кнопками
-        [_mbtn("Подбор в чате", "podbor_start")],
     ]
 
     cursor = db.conn.cursor()
@@ -25583,9 +25581,6 @@ def main():
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
-    application.add_handler(CommandHandler("podbor",  podbor_command))
-    application.add_handler(CallbackQueryHandler(hunt_chat_callback, pattern="^hc:"))
-    application.add_handler(CallbackQueryHandler(podbor_start_button, pattern="^podbor_start$"))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
