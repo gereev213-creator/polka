@@ -18582,9 +18582,16 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         variants = query_word_variants(word)
         if not variants:
             continue
-        # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
-        where.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?" for _ in variants) + ")")
-        params.extend(f"%{v}%" for v in variants)
+        # Число (размер, память, год) ищем ТОЛЬКО отдельным словом: иначе
+        # «43» находило «435», «1430» и «2021-43» — из-за этого по критерию
+        # «Ботинки Timberland 43» приходил случайный товар.
+        if str(word).isdigit():
+            where.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
+            params.append(f"*[!0-9]{word}[!0-9]*")
+        else:
+            # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
+            where.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?" for _ in variants) + ")")
+            params.extend(f"%{v}%" for v in variants)
     # Аксессуары не участвуют и в медиане. Иначе по критерию «Айфон» медиана
     # считалась вместе с кабелями и чехлами (5 000 ₽), настоящие телефоны за
     # 40 000 ₽ отсекались как «дорогие», а кабель за 490 ₽ выглядел находкой.
@@ -18748,7 +18755,13 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
         if photos in ('', '[]', 'null'):
             return None
     title = str(ad.get('title') or '').lower()
+    padded = ' ' + title + ' '
     for word in _query_words_required(crit.get('query')):
+        # Числа сверяем как отдельные слова, а не как часть строки
+        if str(word).isdigit():
+            if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', title):
+                return None
+            continue
         variants = query_word_variants(word)
         if not variants:
             continue
