@@ -1151,8 +1151,13 @@ async def _llm_completion(
     providers = []
     if LLM_API_KEY:
         providers.append((LLM_URL, LLM_API_KEY, LLM_MODEL, "openmodel" if LLM_API_KEY.startswith("om-") else "openai"))
+    # Работаем через Groq. Яндекс отключён: его ключ есть, но у сервисного
+    # аккаунта нет прав на каталог (403). Вернуть можно переменной
+    # USE_YANDEX_AI=1 — тогда он снова станет запасным.
     if GROQ_API_KEY:
         providers.append((GROQ_URL, GROQ_API_KEY, GROQ_MODEL, "openai"))
+    if os.environ.get('USE_YANDEX_AI', '') != '1':
+        providers = [p for p in providers if 'yandex' not in str(p[0]).lower()]
     last_error = ""
     for url, api_key, model, fmt in providers:
         for attempt in range(3):
