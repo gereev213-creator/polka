@@ -1136,6 +1136,31 @@ def _llm_request_sync(
         if system:
             messages = [{"role": "system", "content": system}] + messages
         payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
+    # curl_cffi с подписью Safari. Cloudflare на workers.dev блокирует
+    # запросы с подписью Python (ошибка 1010): у urllib узнаваемый отпечаток
+    # TLS, и заголовки тут не помогают. Ровно этим же способом сборщик
+    # обходит защиту Авито — библиотека уже стоит на сервере.
+    try:
+        from curl_cffi import requests as _cffi
+    except Exception:
+        _cffi = None
+    if _cffi is not None:
+        try:
+            resp = _cffi.post(url, headers=headers, json=payload,
+                              impersonate="safari", timeout=90)
+            if resp.status_code >= 400:
+                raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+            body = resp.json()
+        except Exception as exc:
+            raise RuntimeError(str(exc)[:400])
+        if fmt == "openmodel":
+            for block in body.get("content", []):
+                if block.get("type") == "text":
+                    return block["text"].strip()
+            return None
+        return body.get("choices", [{}])[0].get("message", {}).get("content", "").strip() or None
+
+    # Запасной путь, если curl_cffi недоступен
     data = json.dumps(payload).encode()
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
