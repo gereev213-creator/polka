@@ -18830,7 +18830,10 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
     в ленте и не понимал, почему бот молчит.
     """
     try:
-        where, params = _criterion_where(crit)
+        # active_only=False: находки с Авито — не объявления доски, и их
+        # status не равен 'active'. С фильтром статуса выборка выходила
+        # ПУСТОЙ при 41 подходящем объявлении — рассылка молчала.
+        where, params = _criterion_where(crit, active_only=False)
         sql = ("SELECT id FROM ads WHERE " + str(where) +
                " ORDER BY COALESCE(parsed_at, created_at) DESC LIMIT ?")
         cur = db.conn.cursor()
