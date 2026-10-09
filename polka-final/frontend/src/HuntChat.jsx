@@ -162,15 +162,6 @@ export default function HuntChat() {
       <div className="chat-list" ref={listRef}>
         {empty ? (
           <div className="chat-start">
-            <div className="chat-robot">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <rect x="12" y="18" width="40" height="30" rx="12" fill="var(--accent)" />
-                <circle cx="25" cy="33" r="4" fill="#fff" />
-                <circle cx="39" cy="33" r="4" fill="#fff" />
-                <rect x="30" y="8" width="4" height="8" rx="2" fill="var(--accent)" />
-                <circle cx="32" cy="7" r="4" fill="var(--accent-soft, #8FB4FF)" />
-              </svg>
-            </div>
             <div className="chat-hello">Привет! Я помогу найти лучшие лоты</div>
             <div className="chat-hello-sub">Напиши, что ищешь — я сам подберу и применю фильтры.</div>
             <div className="chat-examples">
