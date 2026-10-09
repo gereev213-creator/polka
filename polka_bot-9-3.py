@@ -17558,6 +17558,15 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
 # ── Скрытые лоты ────────────────────────────────────────────────────────────
 # Человек посмотрел объявление и понял: не то. Просил убрать его из ленты и
 # из чата. Запоминаем это, чтобы лот не возвращался при следующем сборе.
+def ensure_verdict_column():
+    """Колонка для оценки ИИ: оригинал, реплика или нужно проверить."""
+    try:
+        db.conn.execute("ALTER TABLE ads ADD COLUMN ai_verdict TEXT DEFAULT ''")
+        db.conn.commit()
+    except Exception:
+        pass  # колонка уже есть
+
+
 def ensure_hidden_table():
     try:
         db.conn.execute("""
@@ -19173,6 +19182,13 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 _ai_left -= 1
                 _verdict = await ai_judge_ad(ad)
                 if _verdict:
+                    # Запоминаем оценку: её увидит лента находок
+                    try:
+                        db.conn.execute("UPDATE ads SET ai_verdict=? WHERE id=?",
+                                        (_verdict, int(ad['id'])))
+                        db.conn.commit()
+                    except Exception as _ve:
+                        logger.warning(f'ai_verdict save: {_ve}')
                     lines.insert(1, f"<i>{_verdict}</i>")
                     lines.insert(2, "")
                 else:
@@ -26068,6 +26084,7 @@ def main():
         _install_log_buffer()
         ensure_filter_columns()
         ensure_hidden_table()
+        ensure_verdict_column()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

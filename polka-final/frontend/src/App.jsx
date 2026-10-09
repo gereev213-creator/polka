@@ -343,6 +343,9 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         </button>
       </div>
       <div className="product-info">
+        {item.ai_verdict ? (
+          <div className="verdict-line">{item.ai_verdict}</div>
+        ) : null}
         <div className="product-title">{item.title}</div>
         <div className="product-city">{item.city}</div>
         <div className="product-bottom">
