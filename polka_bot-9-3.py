@@ -18546,10 +18546,12 @@ def _query_words_required(query: str) -> list:
     brands = [w for w in words if is_brand(w)]
     base = brands[0] if brands else max(words, key=len)
     required = [base]
+    # Все числа обязательны, если их меньше трёх: «iPhone 15 pro 256» —
+    # это и модель, и объём памяти сразу. Раньше бралось только первое
+    # число, и память не проверялась вовсе.
     for w in words:
         if any(ch.isdigit() for ch in w) and w != base:
             required.append(w)
-            break
     return required
 
 
