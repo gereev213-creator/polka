@@ -17884,6 +17884,7 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
             })
         out['criteria_report'] = report
         out['hunt_send'] = dict(_HUNT_SEND_STATS)
+        out['ai_calls'] = dict(_HUNT_AI_CALLS)
         out['limits'] = {'fresh_hours': HUNT_FRESH_HOURS,
                          'digest_after': HUNT_DIGEST_AFTER,
                          'min_discount': HUNT_MIN_DISCOUNT}
@@ -19035,6 +19036,46 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
         return []
 
 
+# ── Оценка объявления ИИ ────────────────────────────────────────────────────
+# ИИ смотрит заголовок, цену и город и говорит, похоже ли на оригинал.
+# Работает ТОЛЬКО для кандидатов, прошедших дешёвые фильтры, и не больше
+# нескольких оценок за проход: иначе бесплатный лимит Groq сгорит за сутки.
+HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '5'))
+_HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
+
+
+def _hunt_verdict_prompt(ad: Dict) -> str:
+    return (
+        "Ты помогаешь перекупу оценить объявление с Авито.\n\n"
+        f"Заголовок: «{str(ad.get('title') or '')[:120]}»\n"
+        f"Цена: {ad.get('price') or 0} ₽\n"
+        f"Город: {ad.get('city') or '—'}\n\n"
+        "Ответь ОДНОЙ строкой до 80 символов строго по шаблону:\n"
+        "ОЦЕНКА — причина\n"
+        "Где ОЦЕНКА — одно из: «похоже на оригинал», «похоже на реплику», "
+        "«нужно проверить». Причина — конкретная: цена, слова в заголовке, состояние.\n"
+        "Слова-признаки реплики: копия, реплика, 1:1, люкс, аналог, качество ААА.\n"
+        "Без приветствий, без пояснений, только одна строка."
+    )
+
+
+async def ai_judge_ad(ad: Dict) -> str:
+    """Возвращает строку-вердикт или пустую строку. Никогда не мешает отправке."""
+    if not (LLM_API_KEY or GROQ_API_KEY):
+        return ''
+    try:
+        raw = await _llm_completion(
+            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad)}],
+            max_tokens=90, temperature=0.2)
+        line = str(raw or '').strip().split('\n')[0].strip()[:110]
+        _HUNT_AI_CALLS['count'] += 1
+        return line
+    except Exception as e:
+        _HUNT_AI_CALLS['errors'] += 1
+        logger.warning(f"ai_judge_ad: {str(e)[:120]}")
+        return ''
+
+
 async def notify_hunt_matches(ad_ids: List[int]):
     """Рассылает находки тем, чьи критерии они удовлетворяют.
 
@@ -19072,6 +19113,7 @@ async def notify_hunt_matches(ad_ids: List[int]):
         if len(items) > HUNT_DIGEST_AFTER:
             sent += await _send_hunt_digest(crit, items)
             continue
+        _ai_left = HUNT_AI_VERDICT_PER_PASS
         for ad, crit, discount in items:
             user_id = int(crit['user_id'])
             try:
@@ -19125,6 +19167,16 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
             lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
+            # Вердикт ИИ — перед текстом, но не вместо него.
+            # Если модель недоступна, сообщение уходит как раньше.
+            if _ai_left > 0:
+                _ai_left -= 1
+                _verdict = await ai_judge_ad(ad)
+                if _verdict:
+                    lines.insert(1, f"<i>{_verdict}</i>")
+                    lines.insert(2, "")
+                else:
+                    _HUNT_AI_CALLS['skipped'] += 1
             text = "\n".join(lines)
             kb = None
             if ad.get('source_url'):
