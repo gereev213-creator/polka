@@ -18490,6 +18490,21 @@ def query_word_variants(word: str) -> tuple:
     return tuple(dict.fromkeys((key,) + tuple(variants)))
 
 
+def _query_alt_numbers(query: str) -> list:
+    """Числа-альтернативы из запроса: «39 40 41 42 43 44» — любой из них.
+
+    Если чисел три и больше, человек перечислил варианты (размеры, объёмы),
+    и подходит ЛЮБОЕ из них. Раньше бралось только первое, поэтому список
+    размеров не находил ничего, а запрос без размера присылал все подряд —
+    это и выглядело как случайные объявления.
+    """
+    words = [w.strip('.,!?()"\'') for w in str(query or '').lower().split()]
+    nums = [w for w in words if w.isdigit()]
+    if len(nums) < 3:
+        return []
+    return nums
+
+
 def _query_words_required(query: str) -> list:
     """Какие слова запроса обязательны, а какие — просто уточнение.
 
@@ -18524,6 +18539,10 @@ def _query_words_required(query: str) -> list:
         return w
 
     words = [stem(w) for w in words]
+    # Перечисленные числа (3 и больше) — это альтернативы, а не требования
+    alts = _query_alt_numbers(query)
+    if alts:
+        words = [w for w in words if w not in alts]
     brands = [w for w in words if is_brand(w)]
     base = brands[0] if brands else max(words, key=len)
     required = [base]
@@ -18606,6 +18625,13 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         where.append("city = ?")
         params.append(crit['city'])
     _apply_criterion_filters(where, params, crit)
+    alts = _query_alt_numbers(crit.get('query'))
+    if alts:
+        parts = []
+        for num in alts:
+            parts.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
+            params.append(f"*[!0-9]{num}[!0-9]*")
+        where.append("(" + " OR ".join(parts) + ")")
     for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
         if not variants:
@@ -18783,6 +18809,9 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
         if photos in ('', '[]', 'null'):
             return None
     title = str(ad.get('title') or '').lower()
+    alts = _query_alt_numbers(crit.get('query'))
+    if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', title) for n in alts):
+        return None
     padded = ' ' + title + ' '
     for word in _query_words_required(crit.get('query')):
         # Числа сверяем как отдельные слова, а не как часть строки
