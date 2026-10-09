@@ -1128,19 +1128,11 @@ def _llm_request_sync(
             payload["system"] = system
         payload["messages"] = [m for m in messages if m.get("role") != "system"]
     else:
-        # Заголовки как у настоящего браузера: Cloudflare на workers.dev
-        # блокирует запросы с подписью Python (ошибка 1010). Плюс путь —
-        # POST в корень сайта Cloudflare тоже режет.
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                           "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"),
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "ru-RU,ru;q=0.9,en;q=0.8",
-            "Origin": "https://polka.gereev213.workers.dev",
-            "Referer": "https://polka.gereev213.workers.dev/",
-        }
+        # Заголовки простые, без браузерного User-Agent. Проверено:
+        # с подписью Safari Cloudflare на workers.dev начинает проверку и
+        # запрос зависает, а обычный запрос проходит и доходит до Groq.
+        # Ошибка 1010 была из-за POST в корень сайта — путь дописывается выше.
+        headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
         if system:
             messages = [{"role": "system", "content": system}] + messages
         payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
