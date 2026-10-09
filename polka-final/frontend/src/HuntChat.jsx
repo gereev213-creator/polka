@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api from './api'
-import Icon from './Icon'
+import { api } from './api'
 
 // ── Поиск лотов в виде чата ────────────────────────────────────────────────
 // Человек пишет фразу, ИИ разбирает её и задаёт уточняющие вопросы —
@@ -191,7 +190,9 @@ export default function HuntChat() {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send() }} />
           <button type="button" className="chat-send" disabled={busy || !text.trim()} onClick={send}>
-            <Icon name="send" />
+            <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true">
+              <path d="M3 20l18-8L3 4v6l12 2-12 2z" />
+            </svg>
           </button>
         </div>
       )}

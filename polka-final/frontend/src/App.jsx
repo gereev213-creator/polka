@@ -10,6 +10,7 @@ import {
   useParams,
 } from 'react-router-dom'
 import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
+import HuntChat from './HuntChat'
 import { api, resolveAssetUrl } from './api'
 
 const AppContext = createContext(null)
