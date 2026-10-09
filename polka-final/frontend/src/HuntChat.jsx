@@ -51,6 +51,15 @@ export default function HuntChat() {
     const value = text.trim()
     if (!value || busy) return
     setText('')
+    // Если диалог уже идёт — это ОТВЕТ на заданный вопрос, а не новая фраза.
+    // Раньше любой текст уходил на разбор к ИИ, и человек попадал в цикл:
+    // писал «до 1500», а бот заново спрашивал цену.
+    if (draft && draft.step === 'first') { answerFirst(value); return }
+    if (draft && draft.step === 'price') {
+      const digits = (value.match(/\d+/g) || []).map(Number)
+      answerPrice(digits.length ? Math.max(...digits) : 0)
+      return
+    }
     say('me', value)
     setBusy(true)
     try {
