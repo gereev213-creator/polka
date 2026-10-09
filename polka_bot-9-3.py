@@ -18840,6 +18840,12 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
         cur.execute(sql, (*params, int(limit)))
         return [int(r['id']) for r in cur.fetchall()]
     except Exception as e:
+        # Ошибку выборки показываем в диагностике: раньше она глоталась,
+        # и рассылка молча возвращала ноль при 47 подходящих объявлениях.
+        try:
+            _hunt_note_send(error=f'выборка: {e}')
+        except Exception:
+            pass
         logger.warning(f"fresh_ids_for_criterion: {e}")
         return []
 
