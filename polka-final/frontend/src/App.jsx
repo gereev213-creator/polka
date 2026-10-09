@@ -1227,7 +1227,7 @@ function CriteriaPage() {
           <div className="ai-hero-icon"><Icon name="sparkles" /></div>
           <div className="ai-hero-body">
             <div className="ai-hero-title">Умный подбор</div>
-            <div className="ai-hero-sub">Напишите, что ищете — разложу на фильтры</div>
+            <div className="ai-hero-sub">Напишите, что ищете</div>
           </div>
           <div className="ai-hero-arrow">›</div>
         </div>
@@ -1274,9 +1274,7 @@ function CriteriaPage() {
                 ИИ: {aiFollowUp} Желаете что-то добавить? Допишите в поле выше
                 и нажмите «Разобрать на фильтры» ещё раз.
               </div>
-            ) : (
-              <div className="sub-copy">Любой фильтр можно изменить ниже вручную</div>
-            )}
+            ) : null}
           </>
         ) : null}
         <button type="button" className="cta-primary is-wide mt-12"
@@ -1289,7 +1287,7 @@ function CriteriaPage() {
             <div className="ai-modal">
               <div className="ai-modal-icon"><Icon name="sparkles" /></div>
               <div className="ai-modal-title">AI анализирует ваш запрос</div>
-              <div className="ai-modal-sub">Разложу текст на фильтры и заполню их автоматически</div>
+              <div className="ai-modal-sub">Разложу на фильтры</div>
               {aiText ? (
                 <div className="ai-result">
                   <span>«{aiText}»</span>
@@ -1357,18 +1355,7 @@ function CriteriaPage() {
           {cities.map((c) => <option key={c.value} value={c.label} />)}
         </datalist>
 
-        {activeChips.length ? (
-          <>
-            <div className="field-label-row">Уточнить</div>
-            <div className="auction-sort">
-              {activeChips.map((word) => (
-                <button key={word} type="button"
-                  className={query.split(/\s+/).includes(word) ? 'is-active' : ''}
-                  onClick={() => toggleChip(word)}>{word}</button>
-              ))}
-            </div>
-          </>
-        ) : null}
+
 
         <div className={`field-label-row is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
           onClick={() => toggleSec('price')}>
@@ -1417,7 +1404,7 @@ function CriteriaPage() {
           </>
         ) : null}
 
-        <div className="field-label-row">Что присылать</div>
+        
         <div className="segmented">
           <button type="button" className={mode === 'any' ? 'is-active' : ''}
             onClick={() => setMode('any')}>Любые подходящие</button>
