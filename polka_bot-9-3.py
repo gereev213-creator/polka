@@ -227,7 +227,7 @@ GROQ_MODEL   = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 # какая-нибудь из актуальных ответит.
 GROQ_MODELS  = [m.strip() for m in os.environ.get(
     "GROQ_MODELS",
-    "openai/gpt-oss-120b,llama-3.1-8b-instant,qwen/qwen3-32b,meta-llama/llama-4-scout-17b-16e-instruct,llama-3.3-70b-versatile"
+    "openai/gpt-oss-120b,llama-3.1-8b-instant,qwen/qwen3-32b"
 ).split(",") if m.strip()]
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
@@ -1206,7 +1206,9 @@ async def _llm_completion(
         providers = [p for p in providers if 'yandex' not in str(p[0]).lower()]
     last_error = ""
     for url, api_key, model, fmt in providers:
-        for attempt in range(3):
+        # Две попытки вместо трёх: при переборе моделей три попытки
+        # на каждую сжигали бесплатный лимит за считанные минуты.
+        for attempt in range(2):
             try:
                 result = await asyncio.to_thread(
                     _llm_request_sync, url, api_key, model, fmt,
@@ -19052,7 +19054,7 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
 # ИИ смотрит заголовок, цену и город и говорит, похоже ли на оригинал.
 # Работает ТОЛЬКО для кандидатов, прошедших дешёвые фильтры, и не больше
 # нескольких оценок за проход: иначе бесплатный лимит Groq сгорит за сутки.
-HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '5'))
+HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
