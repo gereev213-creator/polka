@@ -2999,3 +2999,95 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   transition: transform .18s ease;
 }
 .field-label-row.is-toggle.is-open .toggle-mark { transform: rotate(90deg); }
+
+/* ── Поиск лотов как чат ───────────────────────────────────────────────── */
+.chat-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 150px);
+}
+.chat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.chat-manual {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.chat-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
+}
+.chat-row { display: flex; }
+.chat-row.is-me { justify-content: flex-end; }
+.chat-bubble {
+  max-width: 82%;
+  padding: 12px 15px;
+  border-radius: 20px 20px 20px 6px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 14.5px;
+  line-height: 1.4;
+}
+.chat-bubble.is-me {
+  border-radius: 20px 20px 6px 20px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.chat-bubble.is-typing { color: var(--text-secondary); font-style: normal; }
+.chat-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 2px 0 6px;
+}
+.chat-chip {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 14px;
+}
+.chat-chip:active { transform: scale(.96); }
+.chat-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 10px;
+}
+.chat-input .text-input { flex: 1; min-width: 0; }
+.chat-send {
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-send .icon-svg { width: 20px; height: 20px; fill: #fff; }
+.chat-send:disabled { opacity: .45; }
+.chat-summary {
+  padding: 16px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.chat-summary-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.chat-summary-line { font-size: 16px; font-weight: 700; }
+.chat-summary-line.muted { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-top: 2px; }
+.chat-summary-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; }

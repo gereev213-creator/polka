@@ -3793,7 +3793,8 @@ function Layout() {
         <Route path="/edit/:id" element={<EditAdPage />} />
         <Route path="/my" element={<MyAdsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
-        <Route path="/hunt" element={<CriteriaPage />} />
+        <Route path="/hunt" element={<HuntChat />} />
+        <Route path="/hunt/manual" element={<CriteriaPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/chats" element={<ChatsPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
