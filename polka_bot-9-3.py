@@ -19324,23 +19324,26 @@ async def _hunt_catchup_loop():
     await asyncio.sleep(60)
     while True:
         try:
+            # Берём критерии НАПРЯМУЮ из таблицы: get_user_criteria мог
+            # возвращать пусто, и досылка молча ничего не делала.
             cur = db.conn.cursor()
-            cur.execute("SELECT DISTINCT user_id FROM hunt_criteria WHERE active=1")
-            rows = cur.fetchall()
-            _HUNT_SEND_STATS['criteria'] = len(rows)
+            cur.execute("SELECT id, user_id, query, COALESCE(category,'') AS category, "
+                        "COALESCE(city,'') AS city, COALESCE(min_price,0) AS min_price, "
+                        "COALESCE(max_price,0) AS max_price, COALESCE(max_hours,0) AS max_hours, "
+                        "COALESCE(with_photo,0) AS with_photo, COALESCE(mode,'any') AS mode "
+                        "FROM hunt_criteria WHERE active=1")
+            crits = [dict(r) for r in cur.fetchall()]
+            _HUNT_SEND_STATS['criteria'] = len(crits)
             sent_total = 0
-            for row in rows:
-                try:
-                    for crit in get_user_criteria(int(row['user_id'])):
-                        ids = fresh_ids_for_criterion(crit, limit=30)
-                        _HUNT_SEND_STATS['last_ids'] = len(ids)
-                        if ids:
-                            sent_total += await notify_hunt_matches(ids)
-                except Exception as e:
-                    logger.warning(f"hunt catchup по критерию: {e}")
+            total_ids = 0
+            for crit in crits:
+                ids = fresh_ids_for_criterion(crit, limit=30)
+                total_ids += len(ids)
+                if ids:
+                    sent_total += await notify_hunt_matches(ids)
+            _HUNT_SEND_STATS['last_ids'] = total_ids
+            logger.info(f"Досылка: критериев {len(crits)}, подходит {total_ids}, отправлено {sent_total}")
             _hunt_note_send(sent=sent_total)
-            if sent_total:
-                logger.info(f"Досылка находок: отправлено {sent_total}")
         except Exception as e:
             _hunt_note_send(error=str(e))
             logger.warning(f"hunt catchup loop: {e}")
