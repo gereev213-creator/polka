@@ -3223,3 +3223,13 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   font-size: 17px;
   color: var(--text-secondary);
 }
+
+/* Умный подбор убран из ручной формы: ИИ живёт на своей вкладке (чат).
+   Блок скрыт целиком, чтобы не путал и не занимал место. */
+.ai-card { display: none; }
+
+/* Иконки в плашках — обычные, серые, без цветных «эмодзи» */
+.toggle-left .icon-svg {
+  fill: var(--text-secondary);
+  opacity: .8;
+}
