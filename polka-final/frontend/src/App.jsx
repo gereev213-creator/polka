@@ -1104,6 +1104,7 @@ function CriteriaPage() {
   const [aiNote, setAiNote] = useState('')
   // Что ИИ разобрал: показываем чипами, чтобы было видно и можно было убрать
   const [aiParsed, setAiParsed] = useState(null)
+  const [aiFollowUp, setAiFollowUp] = useState('')
   // Какой раздел фильтров раскрыт. Свёрнутые фильтры продолжают работать:
   // их значения хранятся в состоянии, а не в разметке.
   const [openSec, setOpenSec] = useState('')
@@ -1131,6 +1132,7 @@ function CriteriaPage() {
         city: d.city || '',
         hours: d.max_hours ? `за ${d.max_hours} ч` : '',
       })
+      setAiFollowUp(String(d.follow_up || '').trim())
       setAiNote('Распознал запрос')
     } catch (e) {
       setAiNote('Ошибка связи с сервером')
@@ -1267,7 +1269,14 @@ function CriteriaPage() {
                 </button>
               ) : null}
             </div>
-            <div className="sub-copy">Любой фильтр можно изменить ниже вручную</div>
+            {aiFollowUp ? (
+              <div className="sub-copy">
+                ИИ: {aiFollowUp} Желаете что-то добавить? Допишите в поле выше
+                и нажмите «Разобрать на фильтры» ещё раз.
+              </div>
+            ) : (
+              <div className="sub-copy">Любой фильтр можно изменить ниже вручную</div>
+            )}
           </>
         ) : null}
         <button type="button" className="cta-primary is-wide mt-12"

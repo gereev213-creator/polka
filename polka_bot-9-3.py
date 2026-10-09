@@ -17559,7 +17559,8 @@ def _hunt_ai_prompt(user_text: str) -> str:
         '  "max_price": 0,\n'
         '  "max_hours": 0,\n'
         '  "city": "",\n'
-        '  "mode": "any"\n'
+        '  "mode": "any",\n'
+        '  "follow_up": "один короткий вопрос, что ещё стоит уточнить"\n'
         "}\n\n"
         "Категории Авито, только из этого списка: " + ", ".join(HUNT_AI_CATEGORIES) + "\n\n"
         "Правила:\n"
@@ -17569,6 +17570,9 @@ def _hunt_ai_prompt(user_text: str) -> str:
         "— max_hours: 1 для «за час», 3 для «за пару часов», 24 для «за сутки», иначе 0.\n"
         "— city — название города из фразы, иначе пустая строка.\n"
         "— mode: \"deal\", если просят только выгодные; иначе \"any\".\n"
+        "— follow_up: один короткий вопрос своими словами о том, чего в запросе НЕ ХВАТАЕТ. "
+        "Для обуви это размер, для телефона — объём памяти, для машины — год. "
+        "Если всё главное уже сказано, верни пустую строку.\n"
         "— Если фраза непонятна, верни в query исходные слова и нули в остальном."
     )
 
@@ -17638,6 +17642,7 @@ async def ai_parse_hunt(user_text: str) -> Dict:
         'max_hours': max_hours,
         'city': str(data.get('city') or '')[:60].strip(),
         'mode': 'deal' if str(data.get('mode') or '') == 'deal' else 'any',
+        'follow_up': str(data.get('follow_up') or '')[:120].strip(),
     }
 
 
