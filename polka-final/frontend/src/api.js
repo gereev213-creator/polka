@@ -35,10 +35,26 @@ function buildHeaders(extraHeaders = {}) {
 }
 
 async function request(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: buildHeaders(options.headers || {}),
-    ...options,
-  })
+  // Ограничение по времени. Без него запрос к ИИ мог висеть бесконечно:
+  // на экране оставался залипший «AI анализирует ваш запрос», и человек
+  // не понимал, ждать ему или нет.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 30000)
+  let response
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: buildHeaders(options.headers || {}),
+      signal: controller.signal,
+      ...options,
+    })
+  } catch (err) {
+    if (err && err.name === 'AbortError') {
+      throw new Error('Сервер не ответил вовремя — попробуйте ещё раз')
+    }
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
 
   if (!response.ok) {
     let code = `http_${response.status}`
