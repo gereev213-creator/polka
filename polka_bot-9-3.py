@@ -214,7 +214,7 @@ LLM_URL     = os.environ.get("LLM_URL", "https://ai.api.cloud.yandex.net/v1/chat
 LLM_MODEL   = os.environ.get("LLM_MODEL", f"gpt://{YANDEX_FOLDER_ID}/yandexgpt-lite")
 VISION_MODEL = os.environ.get("VISION_MODEL", f"gpt://{YANDEX_FOLDER_ID}/gemma-3-27b-it/latest")
 GROQ_URL     = os.environ.get("GROQ_URL", "https://api.groq.com/openai/v1/chat/completions")
-GROQ_MODEL   = os.environ.get("GROQ_MODEL", "mixtral-8x7b-32768")
+GROQ_MODEL   = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
 SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.mail.ru")
