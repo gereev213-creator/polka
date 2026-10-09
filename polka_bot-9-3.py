@@ -18751,15 +18751,14 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
         return None
 
     if (crit.get('mode') or 'any') == 'any':
-        # Рынка не знаем — шлём: иначе будет тишина, а человек ждёт.
-        if not median:
+        # «Любые подходящие» — присылаем КАЖДОЕ совпадение, даже если оно
+        # не дешевле рынка. Раньше здесь стоял отсев «дороже медианы —
+        # пропускаем», и в чат не уходило НИЧЕГО: подходило 60 объявлений,
+        # отправлено 0. В ленте при этом они были — человек видел варианты
+        # и не понимал, почему бот молчит.
+        if not median or price >= median:
             return 0
-        if price >= median:
-            return None
         discount = int(round((median - price) * 100.0 / median))
-        # Даже в «любых» нужна осмысленная выгода: минус 2% — не находка
-        if discount < HUNT_MIN_DISCOUNT:
-            return None
         return discount
 
     if not median or price >= median:
