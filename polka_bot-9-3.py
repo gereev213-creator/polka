@@ -19630,6 +19630,126 @@ def hunt_report(user_id: int) -> str:
     return "\n".join(lines)
 
 
+# ── Чат-подбор ──────────────────────────────────────────────────────────────
+# ИИ разбирает фразу, дальше спрашиваем кнопками — размер, цена. Человек
+# отвечает тапом, критерий собирается точно, без угадывания.
+#
+# Отвечаем ТОЛЬКО кнопками: перехватывать текст в боте нельзя — там уже
+# есть сценарии размещения объявления и переписка, и общий обработчик
+# текста их бы сломал.
+_HUNT_CHAT: Dict[int, Dict] = {}
+
+
+def _hc_escape(text: str) -> str:
+    import html as _html
+    return _html.escape(str(text or ''))
+
+
+def _hc_size_kb():
+    rows = [[InlineKeyboardButton(s, callback_data=f'hc:size:{s}')
+             for s in ('39', '40', '41', '42')],
+            [InlineKeyboardButton(s, callback_data=f'hc:size:{s}')
+             for s in ('43', '44', '45', '46')],
+            [InlineKeyboardButton('любой размер', callback_data='hc:size:')]]
+    return InlineKeyboardMarkup(rows)
+
+
+def _hc_price_kb():
+    rows = [[InlineKeyboardButton('до 5 000', callback_data='hc:price:5000'),
+             InlineKeyboardButton('до 10 000', callback_data='hc:price:10000')],
+            [InlineKeyboardButton('до 20 000', callback_data='hc:price:20000'),
+             InlineKeyboardButton('без ограничения', callback_data='hc:price:')]]
+    return InlineKeyboardMarkup(rows)
+
+
+async def podbor_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /podbor ботинки timberland — чат-подбор: ИИ спрашивает, вы отвечаете. """
+    user = update.effective_user
+    text = ' '.join(context.args or []).strip()
+    if not text:
+        await update.message.reply_text(
+            "Напишите, что искать, одной строкой:\n"
+            "<code>/podbor ботинки timberland</code>",
+            parse_mode=ParseMode.HTML)
+        return
+    msg = await update.message.reply_text("Разбираю запрос…")
+    try:
+        parsed = await ai_parse_hunt(text)
+    except Exception as e:
+        await msg.edit_text(f"Не получилось разобрать: {str(e)[:80]}")
+        return
+    if not parsed.get('ok'):
+        await msg.edit_text(parsed.get('error') or 'Не получилось разобрать запрос')
+        return
+    _HUNT_CHAT[int(user.id)] = {
+        'query': parsed.get('query') or text,
+        'max_price': int(parsed.get('max_price') or 0),
+        'category': parsed.get('category') or '',
+    }
+    await msg.edit_text(
+        f"Ищу: <b>{_hc_escape(_HUNT_CHAT[int(user.id)]['query'])}</b>\n\n"
+        f"<b>Какой размер?</b>\n<i>Если размер не важен — «любой»</i>",
+        parse_mode=ParseMode.HTML, reply_markup=_hc_size_kb())
+
+
+async def hunt_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ответы в чат-подборе: только кнопки."""
+    query = update.callback_query
+    await safe_answer(query)
+    user_id = int(update.effective_user.id)
+    state = _HUNT_CHAT.get(user_id)
+    if not state:
+        try:
+            await query.message.reply_text("Начните заново: <code>/podbor запрос</code>",
+                                           parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+        return
+    parts = str(query.data or '').split(':', 2)
+    field = parts[1] if len(parts) > 1 else ''
+    value = parts[2] if len(parts) > 2 else ''
+
+    if field == 'size':
+        if value:
+            state['query'] = f"{state['query']} {value}"
+        _HUNT_CHAT[user_id] = state
+        try:
+            await query.message.edit_text(
+                f"<b>{_hc_escape(state['query'])}</b>\n\n<b>До какой цены?</b>",
+                parse_mode=ParseMode.HTML, reply_markup=_hc_price_kb())
+        except Exception:
+            pass
+        return
+
+    if field == 'price':
+        if value:
+            try:
+                state['max_price'] = int(value)
+            except Exception:
+                pass
+        created = None
+        try:
+            created = add_criterion(user_id, state['query'], max_price=state.get('max_price') or 0)
+        except Exception as e:
+            logger.warning(f"podbor add_criterion: {e}")
+        _HUNT_CHAT.pop(user_id, None)
+        if not created:
+            try:
+                await query.message.edit_text("Такой критерий уже есть — ничего не менял.")
+            except Exception:
+                pass
+            return
+        price_line = (f"до {state['max_price']:,} ₽".replace(',', ' ')
+                      if state.get('max_price') else "без ограничения по цене")
+        try:
+            await query.message.edit_text(
+                f"Готово. Ищу:\n\n<b>{_hc_escape(state['query'])}</b>\n{price_line}\n\n"
+                f"Пришлю, как только появится подходящее — обычно в течение 5 минут.",
+                parse_mode=ParseMode.HTML)
+        except Exception:
+            pass
+
+
 async def hunt_show_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Кнопка «Что нашлось» — тот же отчёт, что даёт команда /hunt.
 
@@ -25317,6 +25437,8 @@ def main():
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
+    application.add_handler(CommandHandler("podbor",  podbor_command))
+    application.add_handler(CallbackQueryHandler(hunt_chat_callback, pattern="^hc:"))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
