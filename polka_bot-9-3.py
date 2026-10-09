@@ -18728,7 +18728,7 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         parts = []
         for num in alts:
             parts.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
-            params.append(f"*[!0-9]{num}[!0-9]*")
+            params.append(f"*[^0-9]{num}[^0-9]*")
         where.append("(" + " OR ".join(parts) + ")")
     for word in _query_words_required(crit.get('query')):
         variants = query_word_variants(word)
@@ -18739,7 +18739,7 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         # «Ботинки Timberland 43» приходил случайный товар.
         if str(word).isdigit():
             where.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
-            params.append(f"*[!0-9]{word}[!0-9]*")
+            params.append(f"*[^0-9]{word}[^0-9]*")
         else:
             # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
             where.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?" for _ in variants) + ")")
