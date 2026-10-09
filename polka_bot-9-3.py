@@ -19337,6 +19337,37 @@ def get_user_criteria(user_id: int) -> List[Dict]:
     return [dict(r) for r in cursor.fetchall()]
 
 
+# Категории Авито (латиницей) → названия, как они хранятся у объявлений.
+# ИИ возвращает слаг, а в базе категория русская: без перевода критерий,
+# созданный через чат, не находил НИЧЕГО — «telefony» не равно «Электроника».
+CATEGORY_NAMES = {
+    'telefony': 'Электроника',
+    'noutbuki': 'Электроника',
+    'planshety_i_elektronnye_knigi': 'Электроника',
+    'nastolnye_kompyutery': 'Электроника',
+    'igry_pristavki_i_programmy': 'Электроника',
+    'audio_i_video': 'Электроника',
+    'bytovaya_tehnika': 'Электроника',
+    'tovary_dlya_kompyutera': 'Электроника',
+    'odezhda_obuv_aksessuary': 'Одежда, обувь, аксессуары',
+    'hobbi_i_otdyh': 'Хобби и отдых',
+    'avtomobili': 'Транспорт',
+    'kvartiry': 'Недвижимость',
+    'rabota': 'Работа и подработка',
+    'velosipedy': 'Другое',
+    'muzykalnye_instrumenty': 'Другое',
+    'krasota_i_zdorove': 'Другое',
+}
+
+
+def normalize_category(value: str) -> str:
+    """Латиницу из ИИ переводит в название категории, как у объявлений."""
+    text = str(value or '').strip()
+    if not text:
+        return ''
+    return CATEGORY_NAMES.get(text.lower(), text)
+
+
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
@@ -19345,6 +19376,7 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
         return None
+    category = normalize_category(category)
     cursor = db.conn.cursor()
     # Сравниваем в Python: LOWER() в SQLite не понимает кириллицу, из-за чего
     # «Пуховик» и «пуховик» считались разными критериями.
