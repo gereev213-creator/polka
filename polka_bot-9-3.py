@@ -25968,7 +25968,13 @@ async def api_root(request: aiohttp_web.Request) -> aiohttp_web.Response:
     dist = os.environ.get("FRONTEND_DIST", "")
     index = os.path.join(dist, 'index.html') if dist else ''
     if index and os.path.isfile(index):
-        return aiohttp_web.FileResponse(index)
+        # Страницу НЕ кешируем: в ней ссылки на файлы сборки, и после
+        # деплоя человек видел бы старую версию. Файлы сборки кешируются
+        # спокойно — у них хеш в имени.
+        resp = aiohttp_web.FileResponse(index)
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
     return await api_health(request)
 
 
