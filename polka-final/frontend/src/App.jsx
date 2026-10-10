@@ -1074,6 +1074,8 @@ function CriteriaPage() {
   const [query, setQuery] = useState('')
   // Категория для ручного поиска: сужает выдачу на самом Авито
   const [huntCategory, setHuntCategory] = useState('')
+  // Состояние товара — как фильтр на Авито: новое или б/у
+  const [huntCondition, setHuntCondition] = useState('')
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
@@ -1189,6 +1191,7 @@ function CriteriaPage() {
         city,
         max_price: Number(maxPrice) || 0,
         category: huntCategory || '',
+        condition: huntCondition || '',
         min_price: Number(minPrice) || 0,
         max_hours: Number(maxHours) || 0,
         with_photo: withPhoto ? 1 : 0,
@@ -1239,6 +1242,17 @@ function CriteriaPage() {
             className={huntCategory === cat ? 'is-active' : ''}
             onClick={() => setHuntCategory(cat)}>
             {cat || 'любая'}
+          </button>
+        ))}
+      </div>
+
+      <div className="field-label-row">Состояние</div>
+      <div className="auction-sort">
+        {[['', 'любое'], ['new', 'только новое'], ['used', 'только б/у']].map(([val, label]) => (
+          <button key={val || 'any'} type="button"
+            className={huntCondition === val ? 'is-active' : ''}
+            onClick={() => setHuntCondition(val)}>
+            {label}
           </button>
         ))}
       </div>
