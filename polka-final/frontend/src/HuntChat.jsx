@@ -271,11 +271,11 @@ export default function HuntChat() {
     if (!value || busy) return
     setText('')
     say('me', value)
-    // Отдаём модели ВАШИ СОБСТВЕННЫЕ фразы, весь диалог целиком — это и есть
-    // история. Раньше уходил её же разбор («куртка зимняя для мальчика»),
-    // в котором терялось «158 см» — и она спрашивала рост повторно.
-    const mine = messages.filter((m) => m.from === 'me').map((m) => m.text)
-    const said = [...mine, value].join('; ')
+    // Отдаём ВЕСЬ диалог: и ваши фразы, и ответы модели. Без её собственных
+    // реплик она не видит, что уже спрашивала, и повторяет вопрос ДОСЛОВНО.
+    const dialog = messages.slice(-8).map((m) =>
+      (m.from === 'me' ? 'Человек: ' : 'Ты: ') + m.text)
+    const said = [...dialog, 'Человек: ' + value].join('\n')
     parse(said, false)
   }
 
