@@ -177,7 +177,7 @@ export default function HuntChat() {
       next.step = 'mileage'
       say('ai', MILEAGE_STEP.title)
     } else {
-      say('ai', 'До какой цены?')
+      askModel(next, 'До какой цены?')
     }
   }
 
@@ -188,7 +188,7 @@ export default function HuntChat() {
     if (pct) next.req = `${next.req || ''}${next.req ? ', ' : ''}АКБ от ${pct}%`
     setDraft(next)
     say('me', pct ? `от ${pct}%` : 'любая')
-    say('ai', 'Вскрывался или менялись детали?')
+    askModel(next, 'Вскрывался или менялись детали?')
   }
 
   const answerWear = (value) => {
@@ -197,7 +197,7 @@ export default function HuntChat() {
     if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}состояние: ${value}`
     setDraft(next)
     say('me', value || 'любое')
-    say('ai', 'До какой цены?')
+    askModel(next, 'До какой цены?')
   }
 
   const answerMileage = (value) => {
@@ -207,7 +207,7 @@ export default function HuntChat() {
     if (km) next.req = `${next.req || ''}${next.req ? ', ' : ''}пробег до ${km} тыс. км`
     setDraft(next)
     say('me', km ? `до ${km} тыс.` : 'любой')
-    say('ai', 'До какой цены?')
+    askModel(next, 'До какой цены?')
   }
 
   const answerOpened = (value) => {
@@ -216,7 +216,7 @@ export default function HuntChat() {
     if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}не вскрывался`
     setDraft(next)
     say('me', value || 'без разницы')
-    say('ai', 'До какой цены?')
+    askModel(next, 'До какой цены?')
   }
 
   const answerPrice = (value) => {
@@ -226,6 +226,26 @@ export default function HuntChat() {
     const label = PRICES.find((p) => p.value === (Number(value) || 0))
     say('me', label ? label.label : 'без ограничения')
     say('ai', 'Готово — проверьте и нажмите «Найти лоты»')
+  }
+
+  // Спрашиваем МОДЕЛЬ, что сказать дальше — вместо моей заготовки.
+  // Если она не ответит за 8 секунд, показываем заготовку: чат не должен молчать.
+  const askModel = (d, fallback) => {
+    const summary = [d.query, d.req, d.max_price ? `до ${d.max_price} рублей` : '']
+      .filter(Boolean).join(', ')
+    let answered = false
+    const guard = setTimeout(() => {
+      if (!answered) { answered = true; say('ai', fallback) }
+    }, 8000)
+    const finish = (txt) => {
+      if (answered) return
+      answered = true
+      clearTimeout(guard)
+      say('ai', txt)
+    }
+    api.parseHunt(summary)
+      .then((p) => finish(p && p.ok && p.reply ? p.reply : fallback))
+      .catch(() => finish(fallback))
   }
 
   const send = () => {
