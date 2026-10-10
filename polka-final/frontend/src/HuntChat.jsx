@@ -321,7 +321,17 @@ export default function HuntChat() {
         {draft && draft.step === 'done' ? (
           <div className="chat-summary">
             <div className="chat-summary-title">Буду искать</div>
-            <div className="chat-summary-line">{draft.query}</div>
+            {/* Формулировку можно поправить руками: ИИ разбирает фразу
+                приблизительно, а точность здесь важнее всего. */}
+            <input
+              className="text-input chat-summary-input"
+              value={draft.query}
+              onChange={(e) => setDraft({ ...draft, query: e.target.value })}
+              placeholder="Что искать в заголовках"
+            />
+            <div className="chat-summary-hint">
+              Ищем эти слова в названии. Модель пишите латиницей: «iPhone 15 Pro», «Camry»
+            </div>
             <div className="chat-summary-line muted">
               {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'без ограничения по цене'}
             </div>
