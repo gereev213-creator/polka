@@ -3287,3 +3287,22 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 .auction-sort button {
   background: color-mix(in srgb, var(--surface) 90%, transparent);
 }
+
+/* ── Карточки товаров — в той же стеклянной стилистике ─────────────────── */
+.product-card {
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  box-shadow: 0 10px 26px rgba(17, 24, 39, .10);
+  border-radius: 22px;
+  overflow: hidden;
+}
+
+/* Кнопка «+» в нижней панели: белую обводку убрал — она смотрелась чужой.
+   Вместо неё синее свечение, как у основных кнопок приложения. */
+.dock-create {
+  border: none;
+  outline: none;
+  box-shadow: 0 8px 20px rgba(47, 107, 255, .42);
+}
