@@ -109,6 +109,14 @@ export default function HuntChat() {
         category: parsed.category || '',
         step: 'first',
       }
+      // Модель решила, что данных уже достаточно: не задаём вопросы вовсе,
+      // а сразу показываем итог. Это и есть «ведёт диалог сам».
+      if (parsed.ready) {
+        next.step = 'done'
+        setDraft(next)
+        say('ai', parsed.reply || `Понял: ${next.query}. Проверьте и нажмите «Найти лоты»`)
+        return
+      }
       const question = FIRST_QUESTION[next.category]
       if (question) {
         setDraft(next)
