@@ -18691,6 +18691,29 @@ def query_word_variants(word: str) -> tuple:
     return tuple(dict.fromkeys((key,) + tuple(variants)))
 
 
+
+# Русские написания моделей. Продавец может написать «Айфон 15 Про» —
+# латинского «pro» в заголовке нет, и объявление терялось. Добавляем
+# русские варианты к тем, что уже умеет query_word_variants.
+QUALIFIER_RU = {
+    'pro': ['про'], 'max': ['макс'], 'plus': ['плюс'], 'ultra': ['ультра'],
+    'mini': ['мини'], 'air': ['аир', 'эйр'], 'lite': ['лайт'], 'note': ['ноут'],
+    'se': ['се'], 'fe': ['фэ'], 'neo': ['нео'], 'fold': ['фолд'], 'flip': ['флип'],
+    'gt': ['гт'], 'xr': ['хр'], 'xs': ['хс'],
+}
+
+_query_word_variants_orig = query_word_variants
+
+
+def query_word_variants(word):
+    """Варианты написания слова: латиница из критерия и русское написание."""
+    out = list(_query_word_variants_orig(word))
+    for extra in QUALIFIER_RU.get(str(word or '').strip().lower(), []):
+        if extra not in out:
+            out.append(extra)
+    return out
+
+
 def _query_alt_numbers(query: str) -> list:
     """Числа-альтернативы из запроса: «39 40 41 42 43 44» — любой из них.
 
