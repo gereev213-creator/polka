@@ -17568,6 +17568,14 @@ def ensure_verdict_column():
     except Exception:
         pass  # колонка уже есть
 
+    try:
+        # Требования перекупа словами: «АКБ от 85%, не вскрывался».
+        # ИИ сверяет с ними описание и отсеивает неподходящее.
+        db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN requirements TEXT DEFAULT ''")
+        db.conn.commit()
+    except Exception:
+        pass  # колонка уже есть
+
 
 def ensure_hidden_table():
     try:
@@ -19106,7 +19114,13 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
-def _hunt_verdict_prompt(ad: Dict, query: str = '') -> str:
+def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '') -> str:
+    # Отдельной строкой, а не через «+»: соседние строки в Python склеиваются
+    # неявно, и вставка «+ (...)» рвёт эту цепочку — я на этом уже дважды падал.
+    req_line = (
+        f"Требования покупателя: {requirements}. Если объявление им НЕ отвечает "
+        f"(АКБ ниже нужного, вскрывался) — начни ответ словом «мимо».\n"
+    ) if requirements else ""
     return (
         "Ты помогаешь перекупу оценить объявление с Авито.\n\n"
         f"Заголовок: «{str(ad.get('title') or '')[:120]}»\n"
@@ -19115,6 +19129,7 @@ def _hunt_verdict_prompt(ad: Dict, query: str = '') -> str:
         + (f"Описание: «{str(ad.get('description') or '')[:500]}»\n" if ad.get('description') else "")
         + "\n"
         "Сверь объявление с тем, что искал покупатель: «{query}».\n"
+        f"{req_line}"
         "Проверь ЖЁСТКО, по заголовку И описанию:\n"
         "— размер или объём подходит?\n"
         "— состояние: новое, б/у или требует ремонта?\n"
@@ -19206,7 +19221,7 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
 
     try:
         raw = await _llm_completion(
-            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''))}],
+            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''), str(crit.get('requirements') or ''))}],
             max_tokens=90, temperature=0.2)
         parts = [p.strip() for p in str(raw or '').strip().split('\n') if p.strip()]
         if not parts:
@@ -19512,7 +19527,7 @@ def normalize_category(value: str) -> str:
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
-                  mode: str = 'any') -> Optional[int]:
+                  mode: str = 'any', requirements: str = '') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -19528,12 +19543,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             return None
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
-                                   min_price, max_hours, with_photo,
+                                   min_price, max_hours, with_photo, requirements,
                                    active, created_at, mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     ''', (user_id, query, category or '', city or '', int(max_price or 0),
           max(0, min(int(min_discount or 0), 90)),
           int(min_price or 0), int(max_hours or 0), int(with_photo or 0),
+          str(requirements or '')[:400],
           get_moscow_time().isoformat(),
           'deal' if str(mode) == 'deal' else 'any'))
     db.conn.commit()
@@ -19612,6 +19628,7 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             viewer_id,
             raw_query,
             category=str((body or {}).get('category') or ''),
+        requirements=str((body or {}).get('requirements') or ''),
             city=str((body or {}).get('city') or ''),
             max_price=int((body or {}).get('max_price') or 0),
             min_price=int((body or {}).get('min_price') or 0),
