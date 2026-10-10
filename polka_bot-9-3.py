@@ -18161,6 +18161,10 @@ HUNT_ACCESSORY_WORDS = (
     # Основы слов, а не отдельные падежи: «удовлетворительн» покрывает
     # «удовлетворительное», «удовлетворительном», «удовлетворительная».
     'удовлетворительн', 'неудовлетворительн', 'на ремонт', 'нужен ремонт', 'требует ремонта',
+    # Магазины: перекупы ищут у частников, а магазины торгуют репликами.
+    # Их выдают названия латиницей и слова shop/store/stock.
+    'shop', 'store', 'stock', 'sale', 'магазин', 'официальный дилер',
+    'оптовый', 'оптовая', 'салон', 'бутик', 'торговый дом', 'интернет-магазин',
     'после ремонта', 'восстановлен', 'битый', 'битые', 'разбитый', 'разбитые',
     'не включается', 'не заряжается', 'нет изображения', 'дефект', 'дефекты',
     # Реплики и опт: перекуп ищет оригинал у частника, а не палёнку партией.
@@ -19069,7 +19073,7 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
-def _hunt_verdict_prompt(ad: Dict) -> str:
+def _hunt_verdict_prompt(ad: Dict, query: str = '') -> str:
     return (
         "Ты помогаешь перекупу оценить объявление с Авито.\n\n"
         f"Заголовок: «{str(ad.get('title') or '')[:120]}»\n"
@@ -19077,8 +19081,16 @@ def _hunt_verdict_prompt(ad: Dict) -> str:
         f"Город: {ad.get('city') or '—'}\n"
         + (f"Описание: «{str(ad.get('description') or '')[:500]}»\n" if ad.get('description') else "")
         + "\n"
+        "Сверь объявление с тем, что искал покупатель: «{query}».\n"
+        "Проверь ЖЁСТКО, по заголовку И описанию:\n"
+        "— размер или объём подходит?\n"
+        "— состояние: новое, б/у или требует ремонта?\n"
+        "— оригинал или копия?\n"
+        "— продавец частник или магазин (магазины пишут латиницей: shop, store, stock)?\n\n"
         "Ответь ОДНОЙ строкой до 80 символов строго по шаблону:\n"
-        "ОЦЕНКА — причина\n"
+        "Если объявление НЕ подходит — начни строку словом «мимо» и укажи причину.\n"
+        "Если подходит — ОЦЕНКА и причина, где ОЦЕНКА: «похоже на оригинал», "
+        "«похоже на реплику» или «нужно проверить».\n"
         "Где ОЦЕНКА — одно из: «похоже на оригинал», «похоже на реплику», "
         "«нужно проверить». Причина — конкретная: цена, слова в заголовке, состояние.\n"
         "Слова-признаки реплики: копия, реплика, 1:1, люкс, аналог, качество ААА.\n"
@@ -19133,7 +19145,7 @@ async def fetch_ad_description(ad: Dict) -> str:
     return text[:600]
 
 
-async def ai_judge_ad(ad: Dict) -> str:
+async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
     """Возвращает строку-вердикт или пустую строку. Никогда не мешает отправке."""
     if not (LLM_API_KEY or GROQ_API_KEY):
         return ''
@@ -19156,7 +19168,7 @@ async def ai_judge_ad(ad: Dict) -> str:
 
     try:
         raw = await _llm_completion(
-            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad)}],
+            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''))}],
             max_tokens=90, temperature=0.2)
         line = str(raw or '').strip().split('\n')[0].strip()[:110]
         _HUNT_AI_CALLS['count'] += 1
@@ -19262,7 +19274,13 @@ async def notify_hunt_matches(ad_ids: List[int]):
             # Если модель недоступна, сообщение уходит как раньше.
             if _ai_left > 0:
                 _ai_left -= 1
-                _verdict = await ai_judge_ad(ad)
+                _verdict = await ai_judge_ad(ad, crit)
+                if _verdict and str(_verdict).strip().lower().startswith('мимо'):
+                    # ИИ сверил описание и критерий — товар не тот.
+                    # Перекупу такое не нужно: не отправляем и считаем.
+                    _HUNT_AI_CALLS['rejected'] = _HUNT_AI_CALLS.get('rejected', 0) + 1
+                    logger.info(f"ИИ отклонил: {str(_verdict)[:90]}")
+                    continue
                 if _verdict:
                     # Запоминаем оценку: её увидит лента находок
                     try:
