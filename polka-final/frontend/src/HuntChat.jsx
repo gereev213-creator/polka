@@ -106,11 +106,11 @@ export default function HuntChat() {
       const question = FIRST_QUESTION[next.category]
       if (question) {
         setDraft(next)
-        say('ai', `Понял: ${next.query}. ${question.title}`)
+        say('ai', parsed.reply || `Понял: ${next.query}. ${question.title}`)
       } else {
         next.step = 'price'
         setDraft(next)
-        say('ai', `Понял: ${next.query}. До какой цены?`)
+        say('ai', parsed.reply || `Понял: ${next.query}. До какой цены?`)
       }
     } catch (e) {
       say('ai', (e && e.message) || 'Ошибка связи с сервером')

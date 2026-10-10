@@ -17643,6 +17643,9 @@ def _hunt_ai_prompt(user_text: str) -> str:
         "{\n"
         '  "query": "2-4 СЛОВА о самом товаре (тип, бренд, модель) — НЕ число",\n'
         "— Бренд и модель пиши ЛАТИНИЦЕЙ, как на Авито: «iPhone 15 Pro», "
+        "— Поле \"reply\" — ОДНА живая фраза человеку: что понял и что хочешь "
+        "уточнить. Пиши как продавец продавцу, без канцелярита: "
+        "«Записал: iPhone 15 Pro 256. Аккумулятор от скольки процентов?»\n"
         "«Toyota Camry», «Nike Air Max». Фильтр ищет эти слова прямо в заголовке, "
         "а продавцы пишут латиницей. Русское «айфон 15 про» не найдёт ничего.\n"
         '  "category": "одна категория Авито из списка ниже или пустая строка",\n'
@@ -17718,7 +17721,8 @@ async def ai_parse_hunt(user_text: str) -> Dict:
     """Разбирает фразу в фильтры. Возвращает готовый набор для критерия."""
     user_text = str(user_text or "").strip()
     if not user_text:
-        return {'ok': False, 'error': 'Пустой запрос'}
+        return {
+        'reply': str((data or {}).get('reply') or '')[:300],'ok': False, 'error': 'Пустой запрос'}
     if not (LLM_API_KEY or GROQ_API_KEY):
         return {'ok': False, 'need_key': True,
                 'error': 'ИИ не настроен: добавьте YANDEX_API_KEY в переменные Amvera'}
