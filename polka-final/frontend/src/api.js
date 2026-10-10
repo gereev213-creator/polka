@@ -272,6 +272,10 @@ export const api = {
   // ИИ разбирает фразу словами в те же фильтры, что задаются руками
   parseHunt: (text) => request('/api/hunt/ai',
     { method: 'POST', body: JSON.stringify({ text }) }),
+  // Проверка критерия ДО сохранения: сколько объявлений подойдёт сейчас.
+  // Видно, не слишком ли узкий запрос — иначе человек ждёт тишины.
+  checkHunt: (draft) => request('/api/hunt/check',
+    { method: 'POST', body: JSON.stringify(draft) }),
   hideFinding: (adId) => request('/api/findings/hide',
     { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
   getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),

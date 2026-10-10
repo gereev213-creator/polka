@@ -58,6 +58,7 @@ export default function HuntChat() {
   const [busy, setBusy] = useState(false)
   const [draft, setDraft] = useState(null)
   const [criteria, setCriteria] = useState([])
+  const [preview, setPreview] = useState(null)
 
   const loadCriteria = () => {
     api.getCriteria().then((d) => setCriteria((d && (d.items || d.criteria)) || [])).catch(() => {})
@@ -67,6 +68,19 @@ export default function HuntChat() {
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, draft])
+
+  // Считаем совпадения ДО сохранения критерия: человек видит цифру и может
+  // подкрутить запрос, если он слишком узкий или слишком широкий.
+  useEffect(() => {
+    if (!draft || draft.step !== 'done') { setPreview(null); return }
+    const t = setTimeout(() => {
+      api.checkHunt({
+        query: draft.query, category: draft.category,
+        max_price: draft.max_price, min_price: draft.min_price,
+      }).then((d) => setPreview(d)).catch(() => setPreview(null))
+    }, 500)
+    return () => clearTimeout(t)
+  }, [draft && draft.step, draft && draft.query, draft && draft.max_price])
 
   const say = (from, value) => setMessages((prev) => [...prev, { from, text: value }])
 
@@ -332,6 +346,13 @@ export default function HuntChat() {
             <div className="chat-summary-hint">
               Ищем эти слова в названии. Модель пишите латиницей: «iPhone 15 Pro», «Camry»
             </div>
+            {preview && preview.ok ? (
+              <div className="chat-summary-count">
+                {preview.total > 0
+                  ? `Сейчас подойдёт ${preview.total}, из них свежих ${preview.fresh}`
+                  : 'Сейчас таких нет — пришлю, как появятся'}
+              </div>
+            ) : null}
             <div className="chat-summary-line muted">
               {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'без ограничения по цене'}
             </div>
