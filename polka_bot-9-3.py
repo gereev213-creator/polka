@@ -18715,6 +18715,11 @@ def _query_words_required(query: str) -> list:
     for w in words:
         if any(ch.isdigit() for ch in w) and w != base:
             required.append(w)
+    # Уточнители модели обязательны. Без них под критерий «iPhone 15 pro»
+    # проходил обычный iPhone 15 — другой товар и вдвое другая цена.
+    for _qw in words:
+        if _qw in HUNT_MODEL_QUALIFIERS and _qw not in required:
+            required.append(_qw)
     return required
 
 
