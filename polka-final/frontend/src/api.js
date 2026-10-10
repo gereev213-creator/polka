@@ -39,7 +39,9 @@ async function request(path, options = {}) {
   // на экране оставался залипший «AI анализирует ваш запрос», и человек
   // не понимал, ждать ему или нет.
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 30000)
+  // 75 секунд: модель отвечает за 5-15 с, а в диалоге запросов
+  // несколько — на 30 секундах начались обрывы.
+  const timer = setTimeout(() => controller.abort(), 75000)
   let response
   try {
     response = await fetch(`${API_BASE}${path}`, {

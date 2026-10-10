@@ -74,6 +74,7 @@ export default function HuntChat() {
   // а не мой список шагов.
   useEffect(() => {
     if (!draft || draft.step === 'done' || !draft.query) return
+    if (busy) return          // предыдущий запрос ещё в работе — не наслаиваем
     const summary = [draft.query, draft.req,
       draft.max_price ? `до ${draft.max_price} рублей` : ''].filter(Boolean).join(', ')
     if (summary.length < 10) return
@@ -86,7 +87,7 @@ export default function HuntChat() {
       }).catch(() => {})
     }, 400)
     return () => { alive = false; clearTimeout(t) }
-  }, [draft && draft.step, draft && draft.req, draft && draft.max_price])
+  }, [draft && draft.step, draft && draft.req, draft && draft.max_price, busy])
 
   // Считаем совпадения ДО сохранения критерия: человек видит цифру и может
   // подкрутить запрос, если он слишком узкий или слишком широкий.
