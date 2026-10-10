@@ -17760,7 +17760,14 @@ async def ai_parse_hunt(user_text: str) -> Dict:
     return {
         'ok': True,
         'source_text': user_text,
-        'query': str(data.get('query') or user_text)[:120].strip(),
+        # Пустой query оставляем пустым: если человек поздоровался, модель
+        # возвращает "" и придумывать товар из «привет» нельзя.
+        'query': str(data.get('query') if data.get('query') is not None
+                     else user_text)[:120].strip(),
+        # Живая фраза модели человеку
+        'reply': str(data.get('reply') or '')[:300].strip(),
+        # Модель решила, что данных для поиска уже достаточно
+        'ready': bool(data.get('ready')),
         'category': category,
         'min_price': _int('min_price'),
         'max_price': _int('max_price'),
