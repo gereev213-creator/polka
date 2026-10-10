@@ -19133,13 +19133,28 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
-def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '') -> str:
+def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '',
+                         category: str = '') -> str:
     # Отдельной строкой, а не через «+»: соседние строки в Python склеиваются
     # неявно, и вставка «+ (...)» рвёт эту цепочку — я на этом уже дважды падал.
     req_line = (
         f"Требования покупателя: {requirements}. Если объявление им НЕ отвечает "
         f"(АКБ ниже нужного, вскрывался) — начни ответ словом «мимо».\n"
     ) if requirements else ""
+    # Телефоны все оригинальные — про оригинальность писать бессмысленно.
+    # Там важно другое: память, батарея, циклы, вскрытие, сколы.
+    _cat = str(category or '').lower()
+    if 'электрон' in _cat or 'телефон' in _cat:
+        cat_line = ("Это ЭЛЕКТРОНИКА. Про оригинальность не пиши — она подразумевается. "
+                    "Сверь ХАРАКТЕРИСТИКИ: совпадает ли память, какой процент АКБ, "
+                    "сколько циклов, есть ли сколы, вскрывался ли, менялись ли детали.\n")
+    elif any(w in _cat for w in ('одежд', 'обувь', 'аксессуар')):
+        cat_line = ("Это ОДЕЖДА И ОБУВЬ. Проверь оригинальность: «копия», «реплика», "
+                    "«1:1», «люкс качество» — значит мимо. Смотри размер и износ.\n")
+    elif 'транспорт' in _cat or 'авто' in _cat:
+        cat_line = "Это ТРАНСПОРТ. Смотри год, пробег, состояние кузова и коробки.\n"
+    else:
+        cat_line = "Проверь, соответствует ли товар запросу: характеристики и состояние.\n"
     return (
         "Ты помогаешь перекупу оценить объявление с Авито.\n\n"
         f"Заголовок: «{str(ad.get('title') or '')[:120]}»\n"
@@ -19149,6 +19164,7 @@ def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '') -> s
         + "\n"
         "Сверь объявление с тем, что искал покупатель: «{query}».\n"
         f"{req_line}"
+        f"{cat_line}"
         "Проверь ЖЁСТКО, по заголовку И описанию:\n"
         "— размер или объём подходит?\n"
         "— состояние: новое, б/у или требует ремонта?\n"
@@ -19246,7 +19262,7 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
 
     try:
         raw = await _llm_completion(
-            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''), str(crit.get('requirements') or ''))}],
+            messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''), str(crit.get('requirements') or ''), str(crit.get('category') or ''))}],
             max_tokens=90, temperature=0.2)
         parts = [p.strip() for p in str(raw or '').strip().split('\n') if p.strip()]
         if not parts:
