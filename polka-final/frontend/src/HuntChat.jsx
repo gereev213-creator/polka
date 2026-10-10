@@ -106,7 +106,10 @@ export default function HuntChat() {
       const question = FIRST_QUESTION[next.category]
       if (question) {
         setDraft(next)
-        say('ai', parsed.reply || `Понял: ${next.query}. ${question.title}`)
+        const live = parsed.reply || (parsed.follow_up
+          ? `Понял: ${next.query}. ${parsed.follow_up}`
+          : '')
+        say('ai', live || `Понял: ${next.query}. ${question.title}`)
       } else {
         next.step = 'price'
         setDraft(next)
