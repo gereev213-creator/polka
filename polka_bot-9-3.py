@@ -17761,6 +17761,44 @@ async def ai_parse_hunt(user_text: str) -> Dict:
     }
 
 
+async def api_hunt_check(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/check — сколько объявлений подойдёт под черновик критерия.
+
+    Нужно, чтобы человек видел цифры ДО сохранения: слишком узкий запрос —
+    тишина и непонятно почему, слишком широкий — мусор в находках.
+    """
+    viewer = await _miniapp_viewer(request)
+    if not viewer:
+        return aiohttp_web.json_response({'ok': False, 'error': 'нужна авторизация'}, status=403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    crit = {
+        'query': str((body or {}).get('query') or '').strip(),
+        'category': normalize_category(str((body or {}).get('category') or '')),
+        'max_price': int((body or {}).get('max_price') or 0),
+        'min_price': int((body or {}).get('min_price') or 0),
+        'condition': str((body or {}).get('condition') or ''),
+        'with_photo': int((body or {}).get('with_photo') or 0),
+        'max_hours': int((body or {}).get('max_hours') or 0),
+    }
+    if not crit['query']:
+        return aiohttp_web.json_response({'ok': False, 'error': 'пустой запрос'})
+    try:
+        where, params = _criterion_where(crit, active_only=True)
+        cur = db.conn.cursor()
+        cur.execute('SELECT COUNT(*) AS n FROM ads WHERE ' + str(where), tuple(params))
+        total = int(cur.fetchone()['n'])
+        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE " + str(where)
+                    + " AND parsed_at >= datetime('now', '-1 day')", tuple(params))
+        fresh = int(cur.fetchone()['n'])
+        logger.info(f'Проверка критерия «{crit["query"][:40]}»: подходит {total}, свежих {fresh}')
+        return aiohttp_web.json_response({'ok': True, 'total': total, 'fresh': fresh})
+    except Exception as e:
+        logger.warning(f'hunt check: {e}')
+        return aiohttp_web.json_response({'ok': False, 'error': 'не удалось посчитать'})
+
 async def api_hunt_ai(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/hunt/ai — разобрать фразу словами в фильтры поиска.
 
@@ -25820,6 +25858,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/findings', api_miniapp_findings)
     app.router.add_post('/api/findings/hide', api_findings_hide)
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
+    app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
     app.router.add_get('/api/auctions', api_miniapp_auctions)
