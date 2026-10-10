@@ -3350,3 +3350,17 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   width: auto;
   box-sizing: border-box;
 }
+
+/* ── Возврат нижней панели на место ────────────────────────────────────── */
+/* Панель центрируется через left:50% + transform:translateX(-50%).
+   Мои попытки сдвинуть её отступами (margin, left/right) это ломали:
+   панель уезжала влево или вправо. Возвращаю исходное позиционирование
+   и оставляю только стеклянный фон. */
+.dock {
+  left: 50%;
+  right: auto;
+  width: calc(100% - 32px);
+  max-width: 400px;
+  margin: 0;
+  transform: translateX(-50%);
+}
