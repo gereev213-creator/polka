@@ -25989,7 +25989,14 @@ async def api_miniapp_spa(request: aiohttp_web.Request) -> aiohttp_web.Response:
         return aiohttp_web.FileResponse(path)
     index = os.path.join(dist, 'index.html')
     if os.path.isfile(index):
-        return aiohttp_web.FileResponse(index)
+        # Страницу НЕ кешируем: в ней ссылки на файлы сборки. Если её
+        # закешировать, после деплоя человек видит старую версию — и любые
+        # правки «не доезжают». Файлы сборки кешируются спокойно: у них
+        # хеш в имени, они не меняются.
+        resp = aiohttp_web.FileResponse(index)
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        resp.headers['Pragma'] = 'no-cache'
+        return resp
     return aiohttp_web.Response(text="Mini App frontend not deployed", status=404)
 
 def main():
