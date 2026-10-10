@@ -18432,7 +18432,21 @@ async def _collector_inline_loop():
             # настоящего падения, в отличие от обычного перезапуска
             # при деплое.
             _setting_set('collector_pass_running', '1')
-            sent = await asyncio.to_thread(collector.run_once, cfg)
+            # collect.py завершает себя кодом 3, когда Авито отдаёт 429.
+            # SystemExit, поднятый в отдельном потоке, убивает ВЕСЬ процесс:
+            # бот падал, перезапускался, снова получал 429 и падал опять.
+            # Ловим здесь и превращаем в обычную паузу.
+            try:
+                sent = await asyncio.to_thread(collector.run_once, cfg)
+            except SystemExit as _se:
+                logger.warning(
+                    f"Авито ограничил запросы (код выхода {_se.code}) — "
+                    f"пауза, чтобы не усугублять")
+                sent = 0
+            except BaseException as _be:
+                logger.warning(
+                    f"Сбор прерван: {type(_be).__name__}: {str(_be)[:140]}")
+                sent = 0
             # Освобождаем память сразу после прохода: страницы Авито весят
             # по 2,5 МБ, и на слабом тарифе они копились до перезапуска
             try:
