@@ -3392,3 +3392,101 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 /* Кнопки убраны: диалог ведёт модель, человек пишет свободно.
    Варианты ответа больше не подсказываем — только поле ввода. */
 .chat-replies { display: none; }
+
+/* ── Чат как в GPT: переделка под мессенджер ───────────────────────────── */
+/* Было: пузыри с обеих сторон, рамки, плашки-карточки — отсюда ощущение
+   формы, а не разговора. Как в ChatGPT: ответ ИИ — обычный текст на фоне,
+   реплика человека — пузырь справа. */
+
+.chat-list {
+  padding: 18px 16px 10px;
+  background: var(--bg);
+}
+
+.chat-row {
+  display: flex;
+  margin-bottom: 16px;
+}
+.chat-row.is-me { justify-content: flex-end; }
+
+/* Ответ ИИ: никаких рамок и фона — просто текст, крупный и читаемый */
+.chat-bubble {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  max-width: 100%;
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+/* Реплика человека: аккуратный пузырь справа, как в мессенджерах */
+.chat-bubble.is-me {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 20px 20px 6px 20px;
+  padding: 11px 15px;
+  max-width: 78%;
+  font-size: 15.5px;
+  line-height: 1.4;
+  box-shadow: 0 4px 14px rgba(47, 107, 255, .22);
+}
+
+/* «Разбираю…» — приглушённо, как системная строка */
+.chat-bubble.is-typing {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-style: italic;
+}
+
+/* Стартовый экран: приветствие по центру, без карточек */
+.chat-start { padding: 40px 12px 10px; }
+.chat-hello {
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin-bottom: 10px;
+}
+.chat-hello-sub { font-size: 14.5px; line-height: 1.5; }
+.chat-examples { gap: 9px; margin-top: 4px; }
+.chat-example {
+  padding: 12px 16px;
+  font-size: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* Итоговая плашка — единственная «карточка» в чате, и та лёгкая */
+.chat-summary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 18px;
+  margin-top: 8px;
+}
+.chat-summary-title { font-size: 13px; color: var(--text-secondary); font-weight: 500; margin-bottom: 8px; }
+
+/* Поле ввода: скруглённое, приподнятое, с круглой кнопкой отправки */
+.chat-input {
+  padding: 10px 14px 14px;
+  gap: 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+.chat-input .text-input {
+  border-radius: 22px;
+  padding: 12px 18px;
+  font-size: 15.5px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.chat-send {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex: 0 0 46px;
+  box-shadow: 0 6px 16px rgba(47, 107, 255, .3);
+}
