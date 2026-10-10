@@ -19130,6 +19130,10 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
 # Работает ТОЛЬКО для кандидатов, прошедших дешёвые фильтры, и не больше
 # нескольких оценок за проход: иначе бесплатный лимит Groq сгорит за сутки.
 HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
+# Загрузка описания со страницы объявления. По умолчанию ВЫКЛЮЧЕНА:
+# Авито отдаёт 439, страницы по 2.5 МБ уходят впустую, а лимит запросов
+# тратится — из-за этого вставал весь сбор. Включать осознанно.
+HUNT_DESCRIPTION_FETCH = os.environ.get('HUNT_DESCRIPTION_FETCH', '0') == '1'
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
@@ -19246,7 +19250,9 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
     # Описание сильно повышает точность: в заголовке «Timberland 43»,
     # а в описании — «копия» или «коробка, чек». Тянем один раз и сохраняем.
     try:
-        if not str(ad.get('description') or '').strip() and ad.get('source_url'):
+        if (HUNT_DESCRIPTION_FETCH
+                and not str(ad.get('description') or '').strip()
+                and ad.get('source_url')):
             desc = await fetch_ad_description(ad)
             if desc:
                 ad = dict(ad)
