@@ -271,15 +271,12 @@ export default function HuntChat() {
     if (!value || busy) return
     setText('')
     say('me', value)
-    // Никаких шагов и кнопок: собираем всё сказанное и отдаём модели.
-    // Она сама решает, что уже понятно, а что спросить дальше.
-    const full = [
-      draft && draft.query,
-      draft && draft.req,
-      draft && draft.max_price ? `до ${draft.max_price} рублей` : '',
-      value,
-    ].filter(Boolean).join(', ')
-    parse(full, false)
+    // Отдаём модели ВАШИ СОБСТВЕННЫЕ фразы, весь диалог целиком — это и есть
+    // история. Раньше уходил её же разбор («куртка зимняя для мальчика»),
+    // в котором терялось «158 см» — и она спрашивала рост повторно.
+    const mine = messages.filter((m) => m.from === 'me').map((m) => m.text)
+    const said = [...mine, value].join('; ')
+    parse(said, false)
   }
 
   const create = async () => {
