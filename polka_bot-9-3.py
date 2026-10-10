@@ -17772,7 +17772,7 @@ async def api_hunt_check(request: aiohttp_web.Request) -> aiohttp_web.Response:
     Нужно, чтобы человек видел цифры ДО сохранения: слишком узкий запрос —
     тишина и непонятно почему, слишком широкий — мусор в находках.
     """
-    viewer = await _miniapp_viewer(request)
+    viewer = _miniapp_viewer(request)   # функция синхронная — await ломал запрос
     if not viewer:
         return aiohttp_web.json_response({'ok': False, 'error': 'нужна авторизация'}, status=403)
     try:
