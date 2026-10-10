@@ -1228,6 +1228,7 @@ function CriteriaPage() {
   return (
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" />} />
+      <div className="page-title">Поиск лотов</div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
       <div className="chat-tabs">
         <button type="button" className="chat-tab"
@@ -1257,7 +1258,6 @@ function CriteriaPage() {
           </button>
         ))}
       </div>
-      <div className="page-title">Поиск лотов</div>
 
       {/* Умный подбор: главный способ задать поиск. Написал словами —
           ИИ разложил на фильтры, они появились ниже. */}
