@@ -96,6 +96,12 @@ export default function HuntChat() {
         say('ai', (parsed && parsed.error) || 'Не получилось разобрать запрос')
         return
       }
+      // Модель поняла, что это не про товар: поздоровались или спросили.
+      // Раньше на «Привет» она спрашивала цену — выглядело абсурдно.
+      if (!String(parsed.query || '').trim()) {
+        say('ai', parsed.reply || 'Напишите, что ищете — подберу фильтры сам')
+        return
+      }
       const next = {
         query: parsed.query || phrase,
         max_price: Number(parsed.max_price) || 0,
