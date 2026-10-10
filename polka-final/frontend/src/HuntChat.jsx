@@ -17,6 +17,15 @@ const FIRST_QUESTION = {
   avtomobili: { title: 'Какой год или новее?', options: ['2010', '2014', '2018', '2021'], skip: 'любой' },
 }
 
+// Телефонам мало памяти: перекупу важны батарея и вскрытие.
+// Спрашиваем после памяти, до цены.
+const PHONE_STEPS = {
+  battery: { title: 'АКБ от скольки процентов?', options: ['80', '85', '90'], skip: 'любая' },
+  opened: { title: 'Вскрывался или менялись детали?', options: ['не вскрывался'], skip: 'без разницы' },
+}
+
+const PHONE_CATEGORIES = ['telefony', 'planshety_i_elektronnye_knigi']
+
 const PRICES = [
   { label: 'до 5 000', value: 5000 },
   { label: 'до 10 000', value: 10000 },
@@ -92,6 +101,31 @@ export default function HuntChat() {
     if (word && !parts.includes(word)) next.query = [...parts, word].join(' ')
     setDraft(next)
     say('me', word || 'любой')
+    // Телефонам задаём ещё два вопроса: батарея и вскрытие
+    if (PHONE_CATEGORIES.includes(next.category)) {
+      next.step = 'battery'
+      say('ai', 'АКБ от скольки процентов?')
+    } else {
+      say('ai', 'До какой цены?')
+    }
+  }
+
+  const answerBattery = (value) => {
+    if (!draft) return
+    const next = { ...draft, step: 'opened' }
+    const pct = String(value || '').replace(/[^0-9]/g, '')
+    if (pct) next.req = `${next.req || ''}${next.req ? ', ' : ''}АКБ от ${pct}%`
+    setDraft(next)
+    say('me', pct ? `от ${pct}%` : 'любая')
+    say('ai', 'Вскрывался или менялись детали?')
+  }
+
+  const answerOpened = (value) => {
+    if (!draft) return
+    const next = { ...draft, step: 'price' }
+    if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}не вскрывался`
+    setDraft(next)
+    say('me', value || 'без разницы')
     say('ai', 'До какой цены?')
   }
 
@@ -110,6 +144,8 @@ export default function HuntChat() {
     setText('')
     // Если идёт диалог — это ОТВЕТ на вопрос, а не новая фраза
     if (draft && draft.step === 'first') return answerFirst(value)
+    if (draft && draft.step === 'battery') return answerBattery(value)
+    if (draft && draft.step === 'opened') return answerOpened(value)
     if (draft && draft.step === 'price') {
       const digits = (value.match(/\d+/g) || []).map(Number)
       return answerPrice(digits.length ? Math.max(...digits) : 0)
@@ -127,6 +163,9 @@ export default function HuntChat() {
         max_price: draft.max_price,
         min_price: draft.min_price,
         mode: 'any',
+        // Требования словами: «АКБ от 85%, не вскрывался». ИИ сверит с ними
+        // описание и отсеет то, что не подходит.
+        requirements: draft.req || '',
       })
       say('ai', 'Критерий создан. Пришлю, как только появится подходящее.')
       setDraft(null)
@@ -193,6 +232,21 @@ export default function HuntChat() {
           </div>
         ) : null}
 
+        {draft && (draft.step === 'battery' || draft.step === 'opened') ? (
+          <div className="chat-replies">
+            {PHONE_STEPS[draft.step].options.map((opt) => (
+              <button key={opt} type="button" className="chat-chip"
+                onClick={() => (draft.step === 'battery' ? answerBattery(opt) : answerOpened(opt))}>
+                {opt}
+              </button>
+            ))}
+            <button type="button" className="chat-chip"
+              onClick={() => (draft.step === 'battery' ? answerBattery('') : answerOpened(''))}>
+              {PHONE_STEPS[draft.step].skip}
+            </button>
+          </div>
+        ) : null}
+
         {draft && draft.step === 'price' ? (
           <div className="chat-replies">
             {PRICES.map((p) => (
@@ -212,6 +266,7 @@ export default function HuntChat() {
             <div className="chat-summary-line muted">
               {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'без ограничения по цене'}
             </div>
+            {draft.req ? <div className="chat-summary-line muted">{draft.req}</div> : null}
             <div className="chat-summary-actions">
               <button type="button" className="cta-primary is-wide" disabled={busy} onClick={create}>
                 {busy ? 'Создаю…' : 'Найти лоты'}
