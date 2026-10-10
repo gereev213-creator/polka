@@ -19123,8 +19123,13 @@ def _hunt_verdict_prompt(ad: Dict, query: str = '') -> str:
         "«похоже на реплику» или «нужно проверить».\n"
         "Где ОЦЕНКА — одно из: «похоже на оригинал», «похоже на реплику», "
         "«нужно проверить». Причина — конкретная: цена, слова в заголовке, состояние.\n"
-        "Слова-признаки реплики: копия, реплика, 1:1, люкс, аналог, качество ААА.\n"
-        "Без приветствий, без пояснений, только одна строка."
+        "Слова-признаки реплики: копия, реплика, 1:1, люкс, аналог, качество ААА.\n\n"
+        "ВТОРАЯ строка — только факты о состоянии, если они написаны в объявлении.\n"
+        "Вытаскивай цифрами: «АКБ 87%, 340 циклов, не вскрывался, без сколов, "
+        "коробка есть, экран менялся».\n"
+        "Для телефонов важно: процент батареи, циклы, сколы, вскрытие, замены.\n"
+        "Пиши только то, что реально есть в тексте. Если фактов нет — вторую строку не пиши.\n"
+        "Без приветствий, без пояснений."
     )
 
 
@@ -19200,9 +19205,14 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
         raw = await _llm_completion(
             messages=[{'role': 'user', 'content': _hunt_verdict_prompt(ad, str(crit.get('query') or ''))}],
             max_tokens=90, temperature=0.2)
-        line = str(raw or '').strip().split('\n')[0].strip()[:110]
+        parts = [p.strip() for p in str(raw or '').strip().split('\n') if p.strip()]
+        if not parts:
+            return ''
+        verdict = parts[0][:110]
+        # Вторая строка — факты о состоянии: АКБ, циклы, сколы, замены
+        facts = parts[1][:160] if len(parts) > 1 else ''
         _HUNT_AI_CALLS['count'] += 1
-        return line
+        return verdict + (('\n' + facts) if facts else '')
     except Exception as e:
         _HUNT_AI_CALLS['errors'] += 1
         logger.warning(f"ai_judge_ad: {str(e)[:120]}")
