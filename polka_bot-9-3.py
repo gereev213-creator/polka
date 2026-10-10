@@ -1,5 +1,10 @@
 import os
 import logging
+
+# httpx печатает полные адреса запросов, а в них токен бота.
+# Гасим эти логгеры: секрет не утекает и шума вдвое меньше.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 import json
 import sqlite3
 import asyncio
