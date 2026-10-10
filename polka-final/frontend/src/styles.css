@@ -3306,3 +3306,36 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   outline: none;
   box-shadow: 0 8px 20px rgba(47, 107, 255, .42);
 }
+
+/* ── Исправление после стекла ──────────────────────────────────────────── */
+
+/* Рамка прибавлялась к ширине карточки, и правая колонка вылезала за экран.
+   box-sizing: border-box считает рамку ВНУТРИ ширины. */
+.product-card,
+.chat-crit-card,
+.field-label-row.is-toggle,
+.chat-tabs,
+.chat-summary,
+.ai-card {
+  box-sizing: border-box;
+}
+
+/* Плашка цены: не переносится и растёт под содержимое.
+   «3 990 ₽» раньше ломалось на две строки. */
+.product-price,
+.result-price,
+.deal-badge {
+  white-space: nowrap;
+  width: auto;
+  min-width: 0;
+  padding-left: 18px;
+  padding-right: 18px;
+  box-sizing: border-box;
+}
+
+/* Кнопка «+» в нижней панели: плотный акцентный фон без обводки */
+.dock-create {
+  background: var(--accent);
+  border: none;
+  outline: none;
+}
