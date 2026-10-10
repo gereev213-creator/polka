@@ -105,10 +105,10 @@ export default function HuntChat() {
   const say = (from, value) => setMessages((prev) => [...prev, { from, text: value }])
 
   // Разбор фразы словами
-  const parse = async (value) => {
+  const parse = async (value, showMe = true) => {
     const phrase = String(value || '').trim()
     if (!phrase || busy) return
-    say('me', phrase)
+    if (showMe) say('me', phrase)
     setBusy(true)
     try {
       const parsed = await api.parseHunt(phrase)
@@ -270,17 +270,16 @@ export default function HuntChat() {
     const value = text.trim()
     if (!value || busy) return
     setText('')
-    // Если идёт диалог — это ОТВЕТ на вопрос, а не новая фраза
-    if (draft && draft.step === 'first') return answerFirst(value)
-    if (draft && draft.step === 'battery') return answerBattery(value)
-    if (draft && draft.step === 'opened') return answerOpened(value)
-    if (draft && draft.step === 'wear') return answerWear(value)
-    if (draft && draft.step === 'mileage') return answerMileage(value)
-    if (draft && draft.step === 'price') {
-      const digits = (value.match(/\d+/g) || []).map(Number)
-      return answerPrice(digits.length ? Math.max(...digits) : 0)
-    }
-    parse(value)
+    say('me', value)
+    // Никаких шагов и кнопок: собираем всё сказанное и отдаём модели.
+    // Она сама решает, что уже понятно, а что спросить дальше.
+    const full = [
+      draft && draft.query,
+      draft && draft.req,
+      draft && draft.max_price ? `до ${draft.max_price} рублей` : '',
+      value,
+    ].filter(Boolean).join(', ')
+    parse(full, false)
   }
 
   const create = async () => {

@@ -3388,3 +3388,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   padding: 10px 14px;
   margin-bottom: 10px;
 }
+
+/* Кнопки убраны: диалог ведёт модель, человек пишет свободно.
+   Варианты ответа больше не подсказываем — только поле ввода. */
+.chat-replies { display: none; }
