@@ -127,6 +127,8 @@ export default function HuntChat() {
         max_price: Number(parsed.max_price) || 0,
         min_price: Number(parsed.min_price) || 0,
         category: parsed.category || '',
+        // Варианты ответа предложила модель — покажем их кнопками
+        options: Array.isArray(parsed.options) ? parsed.options : [],
         step: 'first',
       }
       // Модель решила, что данных уже достаточно: не задаём вопросы вовсе,
@@ -217,6 +219,22 @@ export default function HuntChat() {
     setDraft(next)
     say('me', value || 'без разницы')
     askModel(next, 'До какой цены?')
+  }
+
+  // Нажатие кнопки: вариант мог предложить ИИ — ведём его тем же путём,
+  // что и ввод текстом. Раньше каждая кнопка знала свой шаг.
+  const answerWith = (value) => {
+    const step = draft && draft.step
+    if (step === 'first') return answerFirst(value)
+    if (step === 'battery') return answerBattery(value)
+    if (step === 'opened') return answerOpened(value)
+    if (step === 'wear') return answerWear(value)
+    if (step === 'mileage') return answerMileage(value)
+    if (step === 'price') {
+      const d = (String(value).match(/\d+/g) || []).map(Number)
+      return answerPrice(d.length ? Math.max(...d) : 0)
+    }
+    return parse(value)
   }
 
   const answerPrice = (value) => {
@@ -356,6 +374,15 @@ export default function HuntChat() {
               onClick={() => (draft.step === 'battery' ? answerBattery('') : answerOpened(''))}>
               {PHONE_STEPS[draft.step].skip}
             </button>
+          </div>
+        ) : null}
+
+        {draft && draft.options && draft.options.length ? (
+          <div className="chat-replies">
+            {draft.options.map((opt) => (
+              <button key={opt} type="button" className="chat-chip"
+                onClick={() => answerWith(opt)}>{opt}</button>
+            ))}
           </div>
         ) : null}
 
