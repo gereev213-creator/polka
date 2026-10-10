@@ -3241,3 +3241,49 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   color: var(--accent);
   margin-bottom: 4px;
 }
+
+/* ── Стеклянные плавающие плашки ───────────────────────────────────────── */
+/* Полупрозрачный фон + размытие того, что под ним, + мягкая тень.
+   Так выглядят панели в новых браузерах: элемент «парит» над содержимым.
+   Используем переменные темы через color-mix, чтобы работало и в тёмной. */
+.chat-tabs,
+.field-label-row.is-toggle,
+.chat-crit-card,
+.chat-summary,
+.ai-card,
+.dock {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  box-shadow: 0 10px 30px rgba(17, 24, 39, .10);
+}
+
+/* Нижняя панель — самая «плавающая»: приподнята и скруглена сильнее */
+.dock {
+  border-radius: 28px;
+  margin: 0 10px 10px;
+  box-shadow: 0 14px 34px rgba(17, 24, 39, .18);
+}
+
+/* Активная плашка вкладки — плотнее, чтобы читалась поверх размытия */
+.chat-tab.is-active {
+  background: var(--accent);
+  box-shadow: 0 6px 16px rgba(47, 107, 255, .35);
+}
+
+/* Плашки фильтров чуть плотнее: в них текст, а не иконки */
+.field-label-row.is-toggle {
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+/* Карточки критериев — так же, как плашки фильтров */
+.chat-crit-card {
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
+}
+
+/* Кнопки-чипы остаются читаемыми: лёгкая подложка вместо прозрачности */
+.chat-chip,
+.auction-sort button {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+}
