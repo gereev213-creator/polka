@@ -227,7 +227,7 @@ GROQ_MODEL   = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 # какая-нибудь из актуальных ответит.
 GROQ_MODELS  = [m.strip() for m in os.environ.get(
     "GROQ_MODELS",
-    "llama-3.1-8b-instant,openai/gpt-oss-120b"
+    "openai/gpt-oss-120b,openai/gpt-oss-20b"
 ).split(",") if m.strip()]
 
 # ── SMTP для верификации по email ─────────────────────────────────────────────
