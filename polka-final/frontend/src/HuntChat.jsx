@@ -69,6 +69,25 @@ export default function HuntChat() {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
   }, [messages, draft])
 
+  // Модель проверяет после КАЖДОГО ответа: хватает ли данных, чтобы искать.
+  // Если хватает — оставшиеся вопросы пропускаем. Так диалог ведёт она,
+  // а не мой список шагов.
+  useEffect(() => {
+    if (!draft || draft.step === 'done' || !draft.query) return
+    const summary = [draft.query, draft.req,
+      draft.max_price ? `до ${draft.max_price} рублей` : ''].filter(Boolean).join(', ')
+    if (summary.length < 10) return
+    let alive = true
+    const t = setTimeout(() => {
+      api.parseHunt(summary).then((p) => {
+        if (!alive || !p || !p.ok || !p.ready) return
+        setDraft({ ...draft, step: 'done', max_price: p.max_price || draft.max_price })
+        say('ai', p.reply || 'Данных достаточно — проверьте и нажмите «Найти лоты»')
+      }).catch(() => {})
+    }, 400)
+    return () => { alive = false; clearTimeout(t) }
+  }, [draft && draft.step, draft && draft.req, draft && draft.max_price])
+
   // Считаем совпадения ДО сохранения критерия: человек видит цифру и может
   // подкрутить запрос, если он слишком узкий или слишком широкий.
   useEffect(() => {
