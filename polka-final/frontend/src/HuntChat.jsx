@@ -26,6 +26,19 @@ const PHONE_STEPS = {
 
 const PHONE_CATEGORIES = ['telefony', 'planshety_i_elektronnye_knigi']
 
+// Обуви и одежде важно состояние, машине — пробег.
+const CLOTHES_STEP = {
+  title: 'Состояние вещи?',
+  options: ['новое', 'хорошее', 'с износом'],
+  skip: 'любое',
+}
+const MILEAGE_STEP = {
+  title: 'Пробег до скольки тысяч километров?',
+  options: ['50', '100', '150', '200'],
+  skip: 'любой',
+}
+const CLOTHES_CATEGORIES = ['odezhda_obuv_aksessuary']
+
 const PRICES = [
   { label: 'до 5 000', value: 5000 },
   { label: 'до 10 000', value: 10000 },
@@ -101,10 +114,17 @@ export default function HuntChat() {
     if (word && !parts.includes(word)) next.query = [...parts, word].join(' ')
     setDraft(next)
     say('me', word || 'любой')
-    // Телефонам задаём ещё два вопроса: батарея и вскрытие
+    // Второй вопрос зависит от категории: у техники батарея, у вещей состояние,
+    // у машины пробег. Перекупу нужны детали, а не одно название.
     if (PHONE_CATEGORIES.includes(next.category)) {
       next.step = 'battery'
       say('ai', 'АКБ от скольки процентов?')
+    } else if (CLOTHES_CATEGORIES.includes(next.category)) {
+      next.step = 'wear'
+      say('ai', CLOTHES_STEP.title)
+    } else if (next.category === 'avtomobili') {
+      next.step = 'mileage'
+      say('ai', MILEAGE_STEP.title)
     } else {
       say('ai', 'До какой цены?')
     }
@@ -118,6 +138,25 @@ export default function HuntChat() {
     setDraft(next)
     say('me', pct ? `от ${pct}%` : 'любая')
     say('ai', 'Вскрывался или менялись детали?')
+  }
+
+  const answerWear = (value) => {
+    if (!draft) return
+    const next = { ...draft, step: 'price' }
+    if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}состояние: ${value}`
+    setDraft(next)
+    say('me', value || 'любое')
+    say('ai', 'До какой цены?')
+  }
+
+  const answerMileage = (value) => {
+    if (!draft) return
+    const next = { ...draft, step: 'price' }
+    const km = String(value || '').replace(/[^0-9]/g, '')
+    if (km) next.req = `${next.req || ''}${next.req ? ', ' : ''}пробег до ${km} тыс. км`
+    setDraft(next)
+    say('me', km ? `до ${km} тыс.` : 'любой')
+    say('ai', 'До какой цены?')
   }
 
   const answerOpened = (value) => {
@@ -146,6 +185,8 @@ export default function HuntChat() {
     if (draft && draft.step === 'first') return answerFirst(value)
     if (draft && draft.step === 'battery') return answerBattery(value)
     if (draft && draft.step === 'opened') return answerOpened(value)
+    if (draft && draft.step === 'wear') return answerWear(value)
+    if (draft && draft.step === 'mileage') return answerMileage(value)
     if (draft && draft.step === 'price') {
       const digits = (value.match(/\d+/g) || []).map(Number)
       return answerPrice(digits.length ? Math.max(...digits) : 0)
@@ -244,6 +285,24 @@ export default function HuntChat() {
               onClick={() => (draft.step === 'battery' ? answerBattery('') : answerOpened(''))}>
               {PHONE_STEPS[draft.step].skip}
             </button>
+          </div>
+        ) : null}
+
+        {draft && draft.step === 'wear' ? (
+          <div className="chat-replies">
+            {CLOTHES_STEP.options.map((opt) => (
+              <button key={opt} type="button" className="chat-chip" onClick={() => answerWear(opt)}>{opt}</button>
+            ))}
+            <button type="button" className="chat-chip" onClick={() => answerWear('')}>{CLOTHES_STEP.skip}</button>
+          </div>
+        ) : null}
+
+        {draft && draft.step === 'mileage' ? (
+          <div className="chat-replies">
+            {MILEAGE_STEP.options.map((opt) => (
+              <button key={opt} type="button" className="chat-chip" onClick={() => answerMileage(opt)}>{`до ${opt} тыс.`}</button>
+            ))}
+            <button type="button" className="chat-chip" onClick={() => answerMileage('')}>{MILEAGE_STEP.skip}</button>
           </div>
         ) : null}
 
