@@ -18700,6 +18700,25 @@ def ensure_filter_columns():
             pass
 
 
+# Признаки состояния в заголовке. «Новое» на Авито — это отдельный фильтр,
+# поэтому и у нас он есть: слова о состоянии продавцы пишут в названии.
+HUNT_NEW_MARKERS = ('новый', 'новое', 'новые', 'новая', 'с новья', 'не ношен',
+                    'не использовал', 'с бирками', 'запечатан', 'в упаковке')
+HUNT_USED_MARKERS = ('б/у', 'бу ', 'потёрт', 'потерт', 'царапин', 'износ',
+                     'ношен', 'замен', 'ремонт', 'дефект', 'удовлетворительн', 'битый')
+
+
+def _condition_ok(condition: str, text: str) -> bool:
+    """Подходит ли объявление по состоянию."""
+    cond = str(condition or '').strip().lower()
+    low = str(text or '').lower()
+    if cond == 'new':
+        return not any(m in low for m in HUNT_USED_MARKERS)
+    if cond == 'used':
+        return not any(m in low for m in HUNT_NEW_MARKERS)
+    return True
+
+
 def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str = ""):
     """Добавляет в SQL условия фильтров критерия.
 
@@ -18724,6 +18743,15 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     if max_hours > 0:
         where.append(f"COALESCE({col('published_hours_ago')}, 0) <= ?")
         params.append(max_hours)
+    cond = str(crit.get('condition') or '').strip().lower()
+    if cond == 'new':
+        for bad in HUNT_USED_MARKERS:
+            where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+            params.append(f"%{bad}%")
+    elif cond == 'used':
+        for bad in HUNT_NEW_MARKERS:
+            where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+            params.append(f"%{bad}%")
     if int(crit.get('with_photo') or 0):
         where.append(f"COALESCE({col('photos')}, '') NOT IN ('', '[]')")
     # Фильтра «только частные» пока нет: тип продавца Авито отдаёт не в
@@ -18937,6 +18965,8 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
         if photos in ('', '[]', 'null'):
             return None
     title = str(ad.get('title') or '').lower()
+    if not _condition_ok(crit.get('condition'), title):
+        return None
     alts = _query_alt_numbers(crit.get('query'))
     if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', title) for n in alts):
         return None
@@ -19418,6 +19448,7 @@ def _criterion_public(crit: Dict) -> Dict:
         'min_price': crit.get('min_price') or 0,
         'max_hours': crit.get('max_hours') or 0,
         'with_photo': crit.get('with_photo') or 0,
+        'condition': crit.get('condition') or '',
         'min_discount': crit.get('min_discount') or 15,
         'median_price': crit.get('median_price'),
         'sample_size': crit.get('sample_size') or 0,
