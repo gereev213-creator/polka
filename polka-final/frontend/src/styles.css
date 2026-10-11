@@ -3714,3 +3714,138 @@ button:active,
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   РЕДИЗАЙН ПО ТЗ: Apple-clean. Единый источник правды — переменные.
+   Значения задаются СУЩЕСТВУЮЩИМ именам (--bg, --surface, --text…), поэтому
+   весь интерфейс меняется без правки разметки ни в одном файле.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* canvas & surface */
+  --bg: #F5F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #E8E8ED;
+  --border: rgba(60, 60, 67, 0.12);
+  --hairline: rgba(60, 60, 67, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-glass-strong: rgba(255, 255, 255, 0.85);
+
+  /* text */
+  --text: #1D1D1F;
+  --ink: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #8E8E93;
+
+  /* accent и CTA */
+  --accent: #0071E3;
+  --accent-hover: #0063C8;
+  --cta-bg: #1D1D1F;
+  --cta-text: #FFFFFF;
+
+  /* semantics */
+  --success: #34C759;
+  --warning: #FF9F0A;
+  --danger: #FF3B30;
+
+  /* формы: только три радиуса + pill */
+  --radius: 12px;
+  --radius-btn: 14px;
+  --radius-panel: 20px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* тени: не тяжелее разрешённой */
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --soft: 0 1px 2px rgba(0, 0, 0, .04);
+
+  /* Градиентное кольцо историй убрано: по ТЗ градиентов быть не должно */
+  --ring: #0071E3;
+}
+
+/* Тёмная тема — по ТЗ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1C1C1E;
+    --surface-2: #2C2C2E;
+    --border: rgba(84, 84, 88, 0.36);
+    --hairline: rgba(84, 84, 88, 0.36);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --bg-glass: rgba(28, 28, 30, 0.72);
+    --bg-glass-strong: rgba(28, 28, 30, 0.85);
+    --text: #F5F5F7;
+    --ink: #F5F5F7;
+    --text-secondary: #98989D;
+    --text-tertiary: #8E8E93;
+    --cta-bg: #F5F5F7;
+    --cta-text: #1D1D1F;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+    --soft: 0 1px 2px rgba(0, 0, 0, .30);
+  }
+}
+
+/* ── Состояния элементов (раздел 7 ТЗ) ─────────────────────────────────── */
+button, a, [role="button"], input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, 0.6);
+  outline-offset: 2px;
+}
+button:disabled, [aria-disabled="true"] {
+  opacity: .4;
+  pointer-events: none;
+}
+button:active, a:active {
+  transform: scale(0.98);
+  transition: transform 110ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ── Типографика (раздел 4 ТЗ) ─────────────────────────────────────────── */
+html, body, #root {
+  font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+.page-title {
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+@media (max-width: 360px) {
+  .page-title { font-size: 26px; line-height: 32px; }
+}
+/* Контент: не шире 520 px, по центру на широких экранах */
+#root { max-width: 520px; margin: 0 auto; }
+
+/* ── Стекло ровно в трёх точках (раздел 6 ТЗ) ──────────────────────────── */
+/* Всё остальное, что раньше было «стеклянным», становится плоским. */
+.chat-tabs, .chat-crit-card, .chat-summary, .ai-card, .field-label-row.is-toggle,
+.product-card, .chat-example {
+  background: var(--surface);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+}
+.dock, .chat-header, .chat-input {
+  background: var(--bg-glass);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-top: 0.5px solid var(--hairline);
+  border-bottom: none;
+  box-shadow: none;
+}
