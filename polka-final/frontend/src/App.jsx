@@ -336,7 +336,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         {/* Выгода относительно медианы по категории — то, ради чего подписчик
             и открывает ленту, а не «свежесть публикации» */}
         {Number(item.discount_percent) >= 15 ? (
-          <span className="deal-badge">−{Math.round(item.discount_percent)}%</span>
+          <span className="deal-badge">ниже рынка</span>
         ) : null}
         <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}>
           <Icon name="heart" />
@@ -350,6 +350,9 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         <div className="product-city">{item.city}</div>
         <div className="product-bottom">
           <div className="product-price">{priceText(item)}</div>
+          {Number(item.discount_percent) >= 15 ? (
+            <div className="product-deal">дешевле обычного на {Math.round(item.discount_percent)}%</div>
+          ) : null}
           {item.source_url ? (
             /* Находка с Авито: стрелка ведёт на исходное объявление */
             <button className="product-action" type="button"
