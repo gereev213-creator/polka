@@ -4015,3 +4015,43 @@ html, body, #root {
     .topbar { background: rgba(28, 28, 30, 0.94); }
   }
 }
+
+/* ── ТЗ 1: safe-area и отступ под нижнюю полосу ─────────────────────────── */
+/* Док занимает 80 px снизу (16 отступ + 64 высота), но контент этого не
+   учитывал — последняя строка уходила под панель. Плюс env() для выреза
+   и полосы жестов iPhone: без него док липнет к полосе «домой». */
+
+.screen {
+  box-sizing: border-box;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  /* 96 = 64 высота дока + 16 его отступ + 16 воздуха */
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+  padding-left: calc(16px + env(safe-area-inset-left));
+  padding-right: calc(16px + env(safe-area-inset-right));
+}
+/* Контент не шире 520 px — по ТЗ 1, с центрированием на широких экранах */
+@media (min-width: 560px) {
+  .screen { max-width: 520px; margin: 0 auto; }
+}
+
+/* Шапка: сдвигаем вниз на высоту выреза, чтобы её не срезало */
+.topbar {
+  padding-top: env(safe-area-inset-top);
+  height: calc(48px + env(safe-area-inset-top));
+  box-sizing: border-box;
+}
+
+/* Док: поднимаем над полосой жестов iPhone */
+.dock {
+  bottom: calc(16px + env(safe-area-inset-bottom));
+}
+
+/* Чат: поле ввода тоже не должно упираться в полосу жестов */
+.chat-input {
+  padding-bottom: calc(14px + env(safe-area-inset-bottom));
+}
+
+/* Фиксированная нижняя полоса — по ТЗ 5.6 */
+.bottom-bar {
+  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
+}
