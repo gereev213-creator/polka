@@ -3659,3 +3659,38 @@ button:active,
   transform: translateX(100%);
   animation: pill-from-left .32s cubic-bezier(.2, .8, .3, 1) both;
 }
+
+/* ── Исправление: заголовки групп перекрывались плашками ───────────────── */
+/* «Категория» и «Состояние» стояли под кнопками — текст налезал друг на
+   друга. Даём заголовку своё место и поднимаем его над плашками. */
+.field-label-row {
+  display: block;
+  position: relative;
+  z-index: 2;
+  margin: 16px 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.35;
+  background: transparent;
+}
+/* У плашек-переключателей (Цена, Свежесть, Дополнительно) отступ другой:
+   они сами карточки, и заголовок у них внутри */
+.field-label-row.is-toggle {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Плашки-варианты: ровный ряд с переносами и воздухом снизу */
+.auction-sort {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.auction-sort button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
