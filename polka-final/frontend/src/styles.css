@@ -4209,3 +4209,40 @@ html, body, #root {
   background: var(--surface);
   border: 1px solid var(--border);
 }
+
+/* ── Пузыри чата: окончательно ─────────────────────────────────────────── */
+/* Ответ ИИ — обычный текст на фоне, реплика человека — синий пузырь справа.
+   Прежнее правило с белой карточкой перебивало моё, поэтому ставим жёстко:
+   иначе чат выглядит как форма с карточками, а не как переписка. */
+.chat-bubble {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  max-width: 100% !important;
+  font-size: 15.5px !important;
+  line-height: 1.5 !important;
+  color: var(--text) !important;
+}
+.chat-bubble.is-me {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border-radius: 20px 20px 6px 20px !important;
+  padding: 11px 15px !important;
+  max-width: 78% !important;
+  font-size: 15.5px !important;
+  line-height: 1.4 !important;
+}
+/* Системная строка «Разбираю…» */
+.chat-bubble.is-typing {
+  color: var(--text-secondary) !important;
+  font-size: 14px !important;
+}
+/* Строки: ИИ слева, человек справа, с воздухом между сообщениями */
+.chat-row {
+  display: flex !important;
+  margin-bottom: 16px !important;
+  background: transparent !important;
+}
+.chat-row.is-me { justify-content: flex-end !important; }
