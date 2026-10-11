@@ -4135,3 +4135,23 @@ html, body, #root {
   flex: 0 0 44px !important;
   margin-left: auto !important;
 }
+
+/* ── Шапка чата: тот же вид, что на вкладке «Вручную» ──────────────────── */
+/* Было: кнопка «назад» и заголовок в одну строку — самодельный хедер,
+   который отличался от остальных экранов. Приводим к общему виду:
+   кнопка своей строкой, крупный заголовок под ней. */
+.chat-header {
+  display: block;
+  margin-bottom: 0;
+}
+.chat-back {
+  display: flex;
+  margin-bottom: 12px;
+}
+.chat-header-title {
+  margin: 0 0 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
