@@ -4114,3 +4114,24 @@ html, body, #root {
   margin-left: auto !important;   /* стрелка прижата вправо */
   flex: 0 0 auto;
 }
+
+/* ── Карточка: стрелка не должна съезжать на вторую строку ─────────────── */
+/* Цена «2 000 ₽» шире, чем «599 ₽», и стрелка не влезала — переносилась.
+   Уменьшаем отступы цены, а подпись выгоды держим одной короткой строкой. */
+.product-bottom .product-price {
+  padding-left: 14px !important;
+  padding-right: 14px !important;
+  font-size: 14px;
+}
+.product-deal {
+  font-size: 13px !important;      /* минимум по ТЗ — 13 px */
+  line-height: 18px !important;
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Стрелка зафиксирована в правом краю и не участвует в переносе */
+.product-bottom .product-action {
+  flex: 0 0 44px !important;
+  margin-left: auto !important;
+}

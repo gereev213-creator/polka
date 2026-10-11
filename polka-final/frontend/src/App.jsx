@@ -370,7 +370,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         <div className="product-bottom">
           <div className="product-price">{priceText(item)}</div>
           {Number(item.discount_percent) >= 15 ? (
-            <div className="product-deal">дешевле обычного на {Math.round(item.discount_percent)}%</div>
+            <div className="product-deal">дешевле на {Math.round(item.discount_percent)}%</div>
           ) : null}
           {item.source_url ? (
             /* Находка с Авито: стрелка ведёт на исходное объявление */
