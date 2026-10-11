@@ -18915,26 +18915,30 @@ def _condition_ok(condition: str, text: str) -> bool:
 
 
 def _requirement_excludes(requirements: str) -> list:
-    """Требования словами → что скрипт может проверить по заголовку.
+    """Требования словами → что скрипт может проверить.
 
-    Человек пишет «хорошее состояние», «только новое», «не вскрывался» —
-    раньше это просто хранилось и НЕ проверялось. Теперь скрипт понимает
-    такие слова и отсеивает по ним. То, чего в заголовке нет (АКБ, комплект),
-    проверить нечем — такие требования пропускаем, отбор они не ломают.
+    ВАЖНО: берём ПОЛНЫЕ фразы, а не короткие основы. «вскрывал» находился
+    внутри «НЕ вскрывался», «царапин» — внутри «без царапин»: здоровые
+    объявления отсеивались. Полные фразы такой ошибки не дают.
     """
     text = str(requirements or '').lower()
     out: List[str] = []
     if any(w in text for w in ('новое', 'новый', 'новые', 'не ношен')):
         out += list(HUNT_USED_MARKERS)
     if any(w in text for w in ('хорошее', 'хороший', 'без износа', 'целое', 'целый')):
-        out += ['битый', 'разбит', 'на запчасти', 'требует ремонта', 'не работает',
-                'дефект', 'царапин', 'скол', 'потёрт', 'потерт', 'износ',
-                'вскрывал', 'замен', 'восстановлен',
-                # «менялся экран», «меняли батарею» — основа «менял» ловит падежи
-                'менял', 'переклеен', 'ремонтировал', 'был в ремонте']
+        out += [
+            'требует ремонта', 'на запчасти', 'не работает', 'нужен ремонт',
+            'был в ремонте', 'после ремонта', 'восстановлен',
+            'есть царапины', 'в царапинах', 'есть сколы', 'со сколами',
+            'есть потёртости', 'потертости', 'есть износ', 'сильно б/у',
+            'менялся экран', 'меняли экран', 'замена экрана', 'переклеен',
+            'разбит', 'битый', 'дефект', 'трещин',
+        ]
     if 'не вскрывал' in text:
-        out += ['вскрывал', 'менялся экран', 'замена экрана', 'менял экран', 'разбор']
+        out += ['разбирался', 'вскрытие было', 'вскрывали', 'менялся экран',
+                'замена экрана', 'переклеен']
     return list(dict.fromkeys(out))
+
 
 
 def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str = ""):
@@ -18964,16 +18968,16 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     # Требования словами из чата: «хорошее состояние», «только новое»,
     # «не вскрывался» — превращаем в отсев по заголовку.
     for bad in _requirement_excludes(crit.get('requirements')):
-        where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+        where.append(f"(COALESCE({col('title_lower')}, {col('title')}, '') || ' ' || COALESCE({col('description')}, '')) NOT LIKE ?")
         params.append(f"%{bad}%")
     cond = str(crit.get('condition') or '').strip().lower()
     if cond == 'new':
         for bad in HUNT_USED_MARKERS:
-            where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+            where.append(f"(COALESCE({col('title_lower')}, {col('title')}, '') || ' ' || COALESCE({col('description')}, '')) NOT LIKE ?")
             params.append(f"%{bad}%")
     elif cond == 'used':
         for bad in HUNT_NEW_MARKERS:
-            where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+            where.append(f"(COALESCE({col('title_lower')}, {col('title')}, '') || ' ' || COALESCE({col('description')}, '')) NOT LIKE ?")
             params.append(f"%{bad}%")
     if int(crit.get('with_photo') or 0):
         where.append(f"COALESCE({col('photos')}, '') NOT IN ('', '[]')")
@@ -19620,6 +19624,26 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
             lines.append("")
             lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
+            # Описание со страницы нужно СКРИПТУ, а не ИИ: состояние, цвет,
+            # «требуется ремонт» написаны в тексте объявления, а не в заголовке.
+            # Грузим не больше 5 в час — иначе Авито отвечает 439 и встаёт сбор.
+            if (not str(ad.get('description') or '').strip()
+                    and ad.get('source_url') and _desc_budget_ok()):
+                _desc = await fetch_ad_description(ad)
+                if _desc:
+                    try:
+                        db.conn.execute("UPDATE ads SET description=? WHERE id=?",
+                                        (_desc, int(ad['id'])))
+                        db.conn.commit()
+                    except Exception as _de:
+                        logger.warning(f"desc save: {_de}")
+                    ad = dict(ad)
+                    ad['description'] = _desc
+                    # Если описание противоречит критерию — не отправляем
+                    if not _condition_ok(crit.get('condition'), _desc):
+                        logger.info(f"Отсеяно по описанию: {str(ad.get('title'))[:50]}")
+                        continue
+
             # Вердикт ИИ — перед текстом, но не вместо него.
             # Если модель недоступна, сообщение уходит как раньше.
             if _ai_left > 0:
