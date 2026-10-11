@@ -17517,12 +17517,25 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     if 'avito.ru' not in url:
         return _miniapp_json({'ok': False, 'error': 'только avito.ru'})
     out['url'] = url
+    # raw=1 — вернуть кусок настоящей разметки карточки. Нужно, чтобы
+    # разбирать продавца и описание по РЕАЛЬНОМУ HTML, а не по догадкам.
+    want_raw = str(request.query.get('raw') or '') == '1'
     # Что именно требовать в заголовке — для проверки точности фильтра
     need = [w.lower() for w in str(request.query.get('need') or '').split() if w.strip()]
     try:
         html = await asyncio.to_thread(collector.fetch, url)
         out['ok'] = True
         out['bytes'] = len(html or '')
+        if want_raw:
+            # Кусок от первой карточки до следующей — в нём продавец и ссылки
+            parts = str(html or '').split('data-marker="item"')
+            chunk = parts[1][:6000] if len(parts) > 1 else ''
+            # вырезаем теги стилей и скриптов, оставляем смысловую разметку
+            out['raw'] = chunk
+            out['seller_words'] = sorted({w for w in
+                ('Компания', 'Частное лицо', 'seller', 'продавец', 'shop', 'store')
+                if w.lower() in chunk.lower()})
+            return _miniapp_json(out)
         try:
             items = collector.parse_page(html) or []
             out['cards'] = len(items)
