@@ -330,6 +330,16 @@ export default function HuntChat() {
 
   return (
     <div className="chat-wrap">
+      {/* Такая же шапка, как на вкладке «Вручную»: раньше в чате её не было,
+          и экран выглядел обрубленным сверху. */}
+      <div className="chat-header">
+        <button type="button" className="chat-back" onClick={() => navigate('/')} aria-label="Назад">
+          <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true">
+            <path d="M15 4l-8 8 8 8" />
+          </svg>
+        </button>
+        <div className="page-title chat-header-title">Поиск лотов</div>
+      </div>
       <div className="chat-tabs">
         <button type="button" className="chat-tab is-active">ИИ-поиск</button>
         <button type="button" className="chat-tab" onClick={() => navigate('/hunt/manual')}>Вручную</button>
