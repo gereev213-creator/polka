@@ -1517,7 +1517,7 @@ function CriteriaPage() {
                 {' · '}
                 {c.ready
                   ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ (${c.sample_size} шт)`
-                  : `собираем статистику: ${c.sample_size} из 5`}
+                  : `ищем подходящие`}
                 {c.min_price ? ` · от ${Number(c.min_price).toLocaleString('ru-RU')} ₽` : ''}
                 {c.max_price ? ` · до ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
                 {c.max_hours ? ` · за ${c.max_hours} ч` : ''}
