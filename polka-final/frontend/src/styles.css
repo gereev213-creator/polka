@@ -3968,3 +3968,50 @@ html, body, #root {
   justify-content: center;
   padding: 0;
 }
+
+/* ── ТЗ 5.1: sticky glass header ───────────────────────────────────────── */
+/* Шапка прилипает к верху и просвечивает содержимое: saturate(180%) + blur(20px).
+   Это одна из трёх разрешённых точек стекла. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  height: 48px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: var(--bg-glass);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid transparent;
+  transition: background-color .18s ease, border-color .18s ease;
+}
+/* По ТЗ тень отсутствует, а волосяная линия появляется только после скролла */
+.topbar.is-scrolled {
+  background: var(--bg-glass-strong);
+  border-bottom-color: var(--hairline);
+}
+/* Название приложения в центре — по ТЗ 4: 13/18, вес 500, tracking +0.3 */
+.topbar-center {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-tertiary);
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Если backdrop-filter не поддержан — плотный фон, чтобы текст не «плыл» */
+@supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+  .topbar { background: rgba(255, 255, 255, 0.92); }
+}
+@media (prefers-color-scheme: dark) {
+  @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+    .topbar { background: rgba(28, 28, 30, 0.94); }
+  }
+}
