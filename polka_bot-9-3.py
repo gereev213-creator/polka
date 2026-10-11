@@ -18885,6 +18885,17 @@ def _query_words_required(query: str) -> list:
             required.append(_qw)
     # Повторы убираем: «15» попадало в список дважды
     required = list(dict.fromkeys(required))
+    # Слова-ТИПЫ товара обязательны: «чехол», «камера», «аккумулятор»,
+    # «запчасти». Без этого под критерий «чехол для iPhone 12» проходили
+    # сами айфоны, камеры и запчасти — все, где есть «iphone 12».
+    _type_words = set(HUNT_ACCESSORY_WORDS) | set(HUNT_TITLE_START_JUNK)
+    for _w in words:
+        if _w in _type_words and _w not in required:
+            required.append(_w)
+    # И числа: «12» из «чехол для 12 айфона» тоже обязательно
+    for _w in re.findall(r'\d+', str(query or '')):
+        if _w not in required:
+            required.append(_w)
     return required
 
 
