@@ -4155,3 +4155,28 @@ html, body, #root {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ── Шапка: убираем белую полосу и обрезку логотипа ────────────────────── */
+/* Было: стекло с белым фоном сразу — на серо-белом фоне canvas это читалось
+   как отдельная белая полоса. В iOS шапка прозрачна наверху и «застекляется»
+   только при прокрутке — так и делаем.
+
+   Плюс по ТЗ 3.8 высоту текстовых блоков задавать нельзя: жёсткие 48 px
+   обрезали логотип сверху. Меняем на min-height. */
+.topbar {
+  background: transparent;
+  min-height: calc(48px + env(safe-area-inset-top));
+  height: auto;
+  align-items: center;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: 4px;
+}
+/* Стекло появляется ТОЛЬКО когда контент уходит под шапку */
+.topbar.is-scrolled {
+  background: var(--bg-glass);
+  border-bottom: 0.5px solid var(--hairline);
+}
+/* Логотип и иконки внутри шапки не сжимаются и не обрезаются */
+.topbar-side { flex: 0 0 auto; }
+.topbar-center { flex: 1 1 auto; }
+.topbar img, .topbar svg { flex: 0 0 auto; max-height: 32px; }
