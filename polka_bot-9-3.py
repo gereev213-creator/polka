@@ -19810,6 +19810,16 @@ async def notify_hunt_matches(ad_ids: List[int]):
                         logger.warning(f"desc save: {_de}")
                     ad = dict(ad)
                     ad['description'] = _desc
+                    ad['seller_type'] = _sinfo.get('seller_type', '')
+                    ad['seller_name'] = _sinfo.get('seller_name', '')
+                    # ПЕРЕПРОВЕРКА ПОЛНЫМ СОСТАВОМ. До этой строки отбор шёл
+                    # по одному заголовку — и реплики с магазинами проходили
+                    # именно поэтому. Теперь есть описание и данные продавца,
+                    # и объявление проверяется заново, уже по-настоящему.
+                    if match_findings_for_user(crit, ad) is None:
+                        logger.info(
+                            f"Отсеяно по описанию/продавцу: {str(ad.get('title'))[:50]}")
+                        continue
                     # Если описание противоречит критерию — не отправляем
                     if not _condition_ok(crit.get('condition'), _desc):
                         logger.info(f"Отсеяно по описанию: {str(ad.get('title'))[:50]}")
