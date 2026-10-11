@@ -3473,7 +3473,13 @@ function ChatPage() {
         const lastId = messages.length ? messages[messages.length - 1].id : 0
         const data = await api.pollChat(chatId, lastId)
         if (data.messages?.length) {
-          setMessages((prev) => [...prev, ...data.messages])
+          // Дубли: два опроса подряд берут один и тот же lastId и приносят
+          // одни и те же сообщения. Добавляем только те, которых ещё нет.
+          setMessages((prev) => {
+            const known = new Set(prev.map((m) => m.id))
+            const fresh = data.messages.filter((m) => !known.has(m.id))
+            return fresh.length ? [...prev, ...fresh] : prev
+          })
         }
       } catch {
         // ignore poll errors
