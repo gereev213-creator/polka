@@ -3535,3 +3535,85 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 }
 .chat-back:active { transform: scale(.94); }
 .chat-header-title { margin: 0; }
+
+/* ── Плавные нажатия и переходы ────────────────────────────────────────── */
+/* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
+   Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
+   лёгкое сжатие: палец чувствует, что нажал. */
+
+button,
+.dock-create,
+.chat-tab,
+.chat-chip,
+.chat-example,
+.chat-back,
+.save-btn,
+.cta-primary,
+.ghost-btn,
+.product-card,
+.chat-crit-card,
+.chat-crit-x,
+.field-label-row.is-toggle,
+.auction-sort button {
+  transition:
+    transform .14s cubic-bezier(.2, .8, .3, 1),
+    background-color .18s ease,
+    border-color .18s ease,
+    box-shadow .18s ease,
+    color .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Нажатие: сжатие до 94% — ощущается как живая кнопка */
+button:active,
+.chat-chip:active,
+.chat-example:active,
+.save-btn:active,
+.chat-crit-x:active,
+.dock-create:active,
+.chat-back:active {
+  transform: scale(.94);
+}
+
+/* Крупные элементы сжимаются меньше — иначе прыгают */
+.product-card:active,
+.chat-crit-card:active,
+.field-label-row.is-toggle:active {
+  transform: scale(.985);
+}
+
+/* Вкладки: активная плашка переезжает с мягким переходом цвета и тени */
+.chat-tab {
+  transition:
+    background-color .24s cubic-bezier(.2, .8, .3, 1),
+    color .24s ease,
+    box-shadow .24s ease,
+    transform .14s ease;
+}
+.chat-tab:active { transform: scale(.97); }
+.chat-tab.is-active { box-shadow: 0 6px 16px rgba(47, 107, 255, .32); }
+
+/* Поля ввода: мягкое появление рамки при фокусе */
+.chat-input .text-input,
+.text-input,
+.input {
+  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+}
+.chat-input .text-input:focus,
+.text-input:focus,
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
+  outline: none;
+}
+
+/* Пузырь сообщения появляется плавно — чат оживает */
+@keyframes chat-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
+.chat-row { animation: chat-in .22s cubic-bezier(.2, .8, .3, 1); }
+
+/* Кнопка отправки: заметнее при готовности к отправке */
+.chat-send { transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease; }
+.chat-send:not(:disabled):active { transform: scale(.9); }
