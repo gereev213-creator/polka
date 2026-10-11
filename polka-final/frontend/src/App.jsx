@@ -1106,6 +1106,11 @@ function CriteriaPage() {
   const [huntCategory, setHuntCategory] = useState('')
   // Состояние товара — как фильтр на Авито: новое или б/у
   const [huntCondition, setHuntCondition] = useState('')
+  // Оригинал или реплика — важно во всех категориях, не только в одежде
+  const [huntOriginal, setHuntOriginal] = useState('')
+  // Магазин или частник: люди хотят объявления с рук, а не из магазина.
+  // Магазины пишут себя латиницей (shop, store, opt), их и отсеиваем.
+  const [huntSeller, setHuntSeller] = useState('')
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
@@ -1222,6 +1227,13 @@ function CriteriaPage() {
         max_price: Number(maxPrice) || 0,
         category: huntCategory || '',
         condition: huntCondition || '',
+        // Требования словами: скрипт разбирает их и отсеивает реплики
+        // и магазины. Работает по всем категориям.
+        requirements: [
+          huntOriginal === 'original' ? 'только оригинал' : '',
+          huntOriginal === 'replica' ? 'можно реплику' : '',
+          huntSeller === 'private' ? 'не магазин, только с рук' : '',
+        ].filter(Boolean).join(', '),
         min_price: Number(minPrice) || 0,
         max_hours: Number(maxHours) || 0,
         with_photo: withPhoto ? 1 : 0,
@@ -1372,6 +1384,28 @@ function CriteriaPage() {
           <button key={val || 'any'} type="button"
             className={huntCondition === val ? 'is-active' : ''}
             onClick={() => setHuntCondition(val)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="field-label-row">Товар</div>
+      <div className="auction-sort">
+        {[['', 'не важно'], ['original', 'только оригинал'], ['replica', 'можно реплику']].map(([val, label]) => (
+          <button key={val || 'any'} type="button"
+            className={huntOriginal === val ? 'is-active' : ''}
+            onClick={() => setHuntOriginal(val)}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="field-label-row">Продавец</div>
+      <div className="auction-sort">
+        {[['', 'любой'], ['private', 'только частники']].map(([val, label]) => (
+          <button key={val || 'any'} type="button"
+            className={huntSeller === val ? 'is-active' : ''}
+            onClick={() => setHuntSeller(val)}>
             {label}
           </button>
         ))}
