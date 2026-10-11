@@ -4080,3 +4080,37 @@ html, body, #root {
   color: var(--text-secondary);
   max-width: 300px;
 }
+
+/* ── Карточка находки: окончательное исправление наложений ─────────────── */
+/* В исходном правиле .product-bottom был space-between, но НЕ было flex-wrap,
+   поэтому подпись выгоды не переносилась и налезала на цену. Ставим жёстко:
+   цена — своя ячейка, подпись — отдельная строка, стрелка — справа. */
+.product-bottom {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 8px !important;
+  row-gap: 4px !important;
+}
+.product-bottom .product-price {
+  flex: 0 0 auto !important;
+  order: 1;
+  margin: 0 !important;
+}
+.product-deal {
+  flex: 1 1 100% !important;
+  order: 3;
+  margin: 0 !important;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.product-bottom .product-action {
+  order: 2;
+  margin-left: auto !important;   /* стрелка прижата вправо */
+  flex: 0 0 auto;
+}
