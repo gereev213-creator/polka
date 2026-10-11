@@ -1486,7 +1486,7 @@ function CriteriaPage() {
           </p>
         ) : (
           <>
-            <div className="field-label-row">Присылать, если дешевле на</div>
+            <div className="field-label-row">Присылать, если дешевле обычного на</div>
             <div className="auction-sort">
               {[10, 15, 25].map((d) => (
                 <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
