@@ -122,8 +122,18 @@ export default function HuntChat() {
         say('ai', parsed.reply || 'Напишите, что ищете — подберу фильтры сам')
         return
       }
+      // Требования от модели («только оригинал», «не магазин») плюс то, что
+      // человек уже ответил в диалоге. Скрипт их разбирает и отсеивает мусор,
+      // поэтому важно не потерять сказанное раньше.
+      const reqParts = [String(parsed.requirements || ''), String((draft && draft.req) || '')]
+        .join(',')
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+      const reqMerged = Array.from(new Set(reqParts)).join(', ').slice(0, 400)
       const next = {
         query: parsed.query || phrase,
+        req: reqMerged,
         max_price: Number(parsed.max_price) || 0,
         min_price: Number(parsed.min_price) || 0,
         category: parsed.category || '',
