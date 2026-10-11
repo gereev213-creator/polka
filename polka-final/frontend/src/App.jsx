@@ -3499,14 +3499,21 @@ function ChatPage() {
     setText('')
     try {
       await api.sendMessage(chatId, value)
+      // Ничего не рисуем вручную: сообщение придёт опросом. Раньше здесь
+      // добавлялась копия с id = Date.now(), а потом приезжало настоящее,
+      // с другим id — отсюда и были дубли по два раза.
       const data = await api.pollChat(chatId, messages.length ? messages[messages.length - 1].id : 0)
       if (data.messages?.length) {
-        setMessages((prev) => [...prev, ...data.messages])
-      } else {
-        setMessages((prev) => [...prev, { id: Date.now(), sender_id: viewerId, text: value }])
+        setMessages((prev) => {
+          const known = new Set(prev.map((m) => m.id))
+          return [...prev, ...data.messages.filter((m) => !known.has(m.id))]
+        })
       }
     } catch {
-      setMessages((prev) => [...prev, { id: Date.now(), sender_id: viewerId, text: value }])
+      // Не показываем сообщение, которого нет на сервере: человек будет
+      // думать, что отправил, а собеседник ничего не получит.
+      setText(value)
+      setError('Сообщение не отправилось — проверьте связь')
     }
   }
 
