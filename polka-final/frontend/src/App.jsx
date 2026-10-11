@@ -3406,7 +3406,8 @@ function ChatsPage() {
             <div className="avatar" />
             <div className="chat-meta">
               <strong>{chat.user}</strong>
-              <span>{chat.last_text || chat.ad_title}</span>
+              <span className="chat-ad">{(chat.ad_title || 'Объявление').slice(0, 42)}</span>
+              <span className="chat-last">{chat.last_text || 'Сообщений пока нет'}</span>
             </div>
             <div className="product-city">{shortTime(chat.time)}</div>
           </Link>

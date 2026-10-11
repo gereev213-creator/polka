@@ -3694,3 +3694,23 @@ button:active,
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* ── Список чатов: видно, о каком объявлении разговор ──────────────────── */
+/* Было: одна подпись, и в ней то название объявления, то последнее
+   сообщение — непонятно, о чём переписка. Как на Авито: сначала товар. */
+.chat-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chat-ad {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-last {
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
