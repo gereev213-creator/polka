@@ -17527,14 +17527,23 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
         out['ok'] = True
         out['bytes'] = len(html or '')
         if want_raw:
-            # Кусок от первой карточки до следующей — в нём продавец и ссылки
-            parts = str(html or '').split('data-marker="item"')
-            chunk = parts[1][:6000] if len(parts) > 1 else ''
-            # вырезаем теги стилей и скриптов, оставляем смысловую разметку
-            out['raw'] = chunk
-            out['seller_words'] = sorted({w for w in
-                ('Компания', 'Частное лицо', 'seller', 'продавец', 'shop', 'store')
-                if w.lower() in chunk.lower()})
+            # Считаем маркеры ПО ВСЕЙ странице: нужно понять, есть ли в выдаче
+            # описание и характеристики, или они только на странице объявления.
+            page = str(html or '').lower()
+            out['marks'] = {m: page.count(m.lower()) for m in (
+                'description', 'item-description', 'additionalproperty',
+                'состояние', 'цвет', 'аккумулятор', 'itemprop="description"',
+                'data-marker="item-description"', 'iva-item-description')}
+            # Что реально извлекает парсер из карточки — по составу полей
+            out['parsed_keys'] = []
+            try:
+                _items = collector.parse_page(html) or []
+                if _items:
+                    out['parsed_keys'] = sorted(_items[0].keys())
+                    out['parsed_sample'] = {k: str(_items[0].get(k))[:90]
+                                            for k in list(_items[0].keys())[:12]}
+            except Exception as _e:
+                out['parsed_error'] = str(_e)[:120]
             return _miniapp_json(out)
         try:
             items = collector.parse_page(html) or []
