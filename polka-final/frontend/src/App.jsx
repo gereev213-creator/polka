@@ -1249,27 +1249,6 @@ function CriteriaPage() {
       </div>
 
       {/* Категория: то, чего не хватало ручному поиску */}
-      <div className="field-label-row">Категория</div>
-      <div className="auction-sort">
-        {['', 'Электроника', 'Одежда, обувь, аксессуары', 'Транспорт', 'Недвижимость', 'Другое'].map((cat) => (
-          <button key={cat || 'all'} type="button"
-            className={huntCategory === cat ? 'is-active' : ''}
-            onClick={() => setHuntCategory(cat)}>
-            {cat || 'любая'}
-          </button>
-        ))}
-      </div>
-
-      <div className="field-label-row">Состояние</div>
-      <div className="auction-sort">
-        {[['', 'любое'], ['new', 'только новое'], ['used', 'только б/у']].map(([val, label]) => (
-          <button key={val || 'any'} type="button"
-            className={huntCondition === val ? 'is-active' : ''}
-            onClick={() => setHuntCondition(val)}>
-            {label}
-          </button>
-        ))}
-      </div>
 
       {/* Умный подбор: главный способ задать поиск. Написал словами —
           ИИ разложил на фильтры, они появились ниже. */}
@@ -1354,6 +1333,29 @@ function CriteriaPage() {
 
       <p className="sub-copy">
         Напишите, что искать на Авито — бот пришлёт подходящие объявления.</p>
+
+      {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает */}
+      <div className="field-label-row">Категория</div>
+      <div className="auction-sort">
+        {['', 'Электроника', 'Одежда, обувь, аксессуары', 'Транспорт', 'Недвижимость', 'Другое'].map((cat) => (
+          <button key={cat || 'all'} type="button"
+            className={huntCategory === cat ? 'is-active' : ''}
+            onClick={() => setHuntCategory(cat)}>
+            {cat || 'любая'}
+          </button>
+        ))}
+      </div>
+
+      <div className="field-label-row">Состояние</div>
+      <div className="auction-sort">
+        {[['', 'любое'], ['new', 'только новое'], ['used', 'только б/у']].map(([val, label]) => (
+          <button key={val || 'any'} type="button"
+            className={huntCondition === val ? 'is-active' : ''}
+            onClick={() => setHuntCondition(val)}>
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Жёлтое предупреждение — только когда это ДЕЙСТВИТЕЛЬНО проблема.
           Сразу после запуска сборщик ещё не успел отметиться, и пугать
