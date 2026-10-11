@@ -3941,3 +3941,30 @@ html, body, #root {
    ничего не даёт. Скрываем целиком — и «Сборщик на связи», и «Собираем
    первые объявления»: обе рисуются одним классом. */
 .collector-ok { display: none; }
+
+/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
+/* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
+   это требование доступности, а не вкусовщина. */
+.chat-chip, .auction-sort button, .chat-tab, .chat-example,
+.save-btn, .chat-crit-x, .chat-back, .chat-send,
+.icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+/* Таблетки-варианты: высоту держим, но не растягиваем по ширине */
+.chat-chip, .auction-sort button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+/* Круглые кнопки: ровный круг 44 px */
+.chat-send, .chat-back, .save-btn, .chat-crit-x, .icon-btn, .mic-btn {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
