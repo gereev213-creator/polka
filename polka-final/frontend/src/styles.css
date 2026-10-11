@@ -3617,3 +3617,45 @@ button:active,
 /* Кнопка отправки: заметнее при готовности к отправке */
 .chat-send { transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease; }
 .chat-send:not(:disabled):active { transform: scale(.9); }
+
+/* ── Скользящая плашка вкладок ─────────────────────────────────────────── */
+/* Было: активная вкладка просто перекрашивалась. Теперь под ней едет
+   плашка — и въезжает в позицию, а не появляется рывком. */
+.chat-tabs { position: relative; }
+.chat-tabs-pill {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  bottom: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--accent);
+  z-index: 0;
+}
+/* Вкладки — поверх плашки, фон у них прозрачный */
+.chat-tabs .chat-tab {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+.chat-tabs .chat-tab.is-active {
+  background: transparent;
+  color: #fff;
+}
+
+/* Чат: активна левая вкладка — плашка въезжает СПРАВА */
+@keyframes pill-from-right {
+  from { transform: translateX(100%); opacity: .5; }
+  to   { transform: none; opacity: 1; }
+}
+.chat-tabs-pill { animation: pill-from-right .32s cubic-bezier(.2, .8, .3, 1) both; }
+
+/* Ручной: активна правая — плашка въезжает СЛЕВА и встаёт справа */
+@keyframes pill-from-left {
+  from { transform: none; opacity: .5; }
+  to   { transform: translateX(100%); opacity: 1; }
+}
+.chat-tabs.is-second .chat-tabs-pill {
+  transform: translateX(100%);
+  animation: pill-from-left .32s cubic-bezier(.2, .8, .3, 1) both;
+}

@@ -341,6 +341,9 @@ export default function HuntChat() {
         <div className="page-title chat-header-title">Поиск лотов</div>
       </div>
       <div className="chat-tabs">
+        {/* Плашка-указатель: въезжает в позицию активной вкладки,
+            а не появляется рывком */}
+        <span className="chat-tabs-pill" aria-hidden="true" />
         <button type="button" className="chat-tab is-active">ИИ-поиск</button>
         <button type="button" className="chat-tab" onClick={() => navigate('/hunt/manual')}>Вручную</button>
       </div>

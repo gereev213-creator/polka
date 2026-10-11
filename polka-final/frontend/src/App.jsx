@@ -1240,7 +1240,9 @@ function CriteriaPage() {
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Поиск лотов</div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
-      <div className="chat-tabs">
+      <div className="chat-tabs is-second">
+        {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
+        <span className="chat-tabs-pill" aria-hidden="true" />
         <button type="button" className="chat-tab"
           onClick={() => { window.location.hash = '#/hunt' }}>ИИ-поиск</button>
         <button type="button" className="chat-tab is-active">Вручную</button>
