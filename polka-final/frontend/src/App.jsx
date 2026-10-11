@@ -1111,6 +1111,9 @@ function CriteriaPage() {
   // Магазин или частник: люди хотят объявления с рук, а не из магазина.
   // Магазины пишут себя латиницей (shop, store, opt), их и отсеиваем.
   const [huntSeller, setHuntSeller] = useState('')
+  // Требования словами — то же, что ИИ пишет в критерий: «размер 43»,
+  // «АКБ от 85%», «не вскрывался». Скрипт разбирает их и отсеивает.
+  const [huntNotes, setHuntNotes] = useState('')
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
@@ -1233,6 +1236,7 @@ function CriteriaPage() {
           huntOriginal === 'original' ? 'только оригинал' : '',
           huntOriginal === 'replica' ? 'можно реплику' : '',
           huntSeller === 'private' ? 'не магазин, только с рук' : '',
+          huntNotes.trim(),
         ].filter(Boolean).join(', '),
         min_price: Number(minPrice) || 0,
         max_hours: Number(maxHours) || 0,
@@ -1410,6 +1414,17 @@ function CriteriaPage() {
           </button>
         ))}
       </div>
+
+      <div className="field-label-row">Требования словами</div>
+      <input
+        className="text-input glass-card"
+        value={huntNotes}
+        onChange={(e) => setHuntNotes(e.target.value)}
+        placeholder="размер 43, чёрный, АКБ от 85%, не вскрывался"
+      />
+      <p style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-tertiary)', margin: '8px 0 0' }}>
+        Скрипт понимает: «оригинал», «не магазин», «хорошее состояние», «не вскрывался», «только новое»
+      </p>
 
       {/* Жёлтое предупреждение — только когда это ДЕЙСТВИТЕЛЬНО проблема.
           Сразу после запуска сборщик ещё не успел отметиться, и пугать
