@@ -18980,7 +18980,15 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     # Заголовок, который НАЧИНАЕТСЯ с мусорного слова, — это не товар:
     # коробка, аккумулятор, чехол, стекло. Законные объявления («iPhone 15 Pro,
     # аккумулятор 91%») начинаются с модели и под отсев не попадают.
+    # ВАЖНО: отсев зависит от критерия. Для одного «чехол» — мусор, для
+    # другого — сам товар. Если человек ИЩЕТ это слово, не отсеиваем его:
+    # иначе выкинем именно то, что нужно. Пользователей много, запросы
+    # повторяются — общий список мусора тут не годится.
+    _q_ask = str(crit.get('query') or '').lower()
     for bad in HUNT_TITLE_START_JUNK:
+        # Если человек ИЩЕТ это слово — оно не мусор для него.
+        if bad in str(crit.get('query') or '').lower():
+            continue
         where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
         params.append(f"{bad}%")
 
@@ -19052,6 +19060,11 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     # считалась вместе с кабелями и чехлами (5 000 ₽), настоящие телефоны за
     # 40 000 ₽ отсекались как «дорогие», а кабель за 490 ₽ выглядел находкой.
     for bad in HUNT_ACCESSORY_WORDS:
+        # То же правило: если человек ИЩЕТ это слово, оно не мусор.
+        # «чехол» — аксессуар для одного критерия и товар для другого.
+        # Если человек ИЩЕТ это слово — оно не мусор для него.
+        if bad in str(crit.get('query') or '').lower():
+            continue
         where.append("COALESCE(title_lower, title) NOT LIKE ?")
         params.append(f"%{bad}%")
     return ' AND '.join(where), params
