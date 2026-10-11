@@ -377,7 +377,7 @@ input, textarea, select { font-family: inherit; }
 /* ── Страница товара ─────────────────────────────────────────────────── */
 .detail-hero {
   position: relative;
-  border-radius: 28px;
+  border-radius: 20px;
   overflow: hidden;
   background: var(--surface-2);
   border: 1px solid var(--border);
@@ -577,7 +577,7 @@ input, textarea, select { font-family: inherit; }
 .cta-primary,
 .cta-dark {
   height: 54px;
-  border-radius: 27px;
+  border-radius: 20px;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -.01em;
@@ -701,7 +701,7 @@ input, textarea, select { font-family: inherit; }
  * поверх. Нет картинки — блока нет вообще. */
 .feed-banner {
   position: relative;
-  border-radius: 24px;
+  border-radius: 20px;
   overflow: hidden;
   margin: 14px 0 16px;
   background: var(--surface-2);
@@ -758,7 +758,7 @@ input, textarea, select { font-family: inherit; }
 .feed-skeleton { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 .skeleton-banner {
   height: 168px;
-  border-radius: 26px;
+  border-radius: 20px;
 }
 .skeleton-row {
   display: grid;
@@ -862,7 +862,7 @@ input, textarea, select { font-family: inherit; }
   width: calc(100% - 32px);
   max-width: 400px;
   height: 64px;
-  border-radius: 32px;
+  border-radius: 20px;
   background: rgba(22,22,29,.85);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -963,7 +963,7 @@ input, textarea, select { font-family: inherit; }
 .bubble {
   max-width: 75%;
   padding: 10px 14px;
-  border-radius: 18px;
+  border-radius: 14px;
   margin-bottom: 8px;
   font-size: 14px;
   line-height: 1.4;
@@ -1071,7 +1071,7 @@ input, textarea, select { font-family: inherit; }
   justify-content: space-between;
   min-height: 104px;
   padding: 13px 14px;
-  border-radius: 22px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   background: var(--surface);
   text-align: left;
@@ -1131,7 +1131,7 @@ input, textarea, select { font-family: inherit; }
   position: relative;
   display: block;
   margin-top: 16px;
-  border-radius: 26px;
+  border-radius: 20px;
   overflow: hidden;
   background: var(--surface-2);
   min-height: 208px;
@@ -1222,7 +1222,7 @@ input, textarea, select { font-family: inherit; }
   gap: 12px;
   margin-top: 14px;
   padding: 13px 15px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--soft);
@@ -1348,7 +1348,7 @@ input, textarea, select { font-family: inherit; }
   align-items: center;
   gap: 12px;
   padding: 10px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--soft);
@@ -1359,7 +1359,7 @@ input, textarea, select { font-family: inherit; }
 .result-thumb {
   width: 74px;
   height: 74px;
-  border-radius: 18px;
+  border-radius: 14px;
   overflow: hidden;
   background: var(--surface-2);
   flex-shrink: 0;
@@ -1433,7 +1433,7 @@ input, textarea, select { font-family: inherit; }
 .photo-search-btn {
   width: 52px;
   height: 52px;
-  border-radius: 18px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
@@ -1575,7 +1575,7 @@ input, textarea, select { font-family: inherit; }
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--soft);
@@ -1717,7 +1717,7 @@ video.bubble-media-img {
 .chat-input-wrap .chat-input {
   margin: 0 16px;
   padding: 8px 10px 8px 14px;
-  border-radius: 22px;
+  border-radius: 20px;
   border: 1px solid var(--border);
   box-shadow: var(--soft);
 }
@@ -1874,13 +1874,13 @@ video.bubble-media-img {
   flex-direction: column;
   gap: 8px;
   padding: 8px;
-  border-radius: 18px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--soft);
 }
 .upload-card .product-media {
-  border-radius: 13px;
+  border-radius: 14px;
   overflow: hidden;
 }
 .upload-card .tool-row { margin-top: 0; }
@@ -1895,7 +1895,7 @@ video.bubble-media-img {
   gap: 7px;
   min-height: 148px;
   padding: 18px 14px;
-  border-radius: 22px;
+  border-radius: 20px;
   border: 1.5px dashed rgba(47,107,255,.45);
   background:
     radial-gradient(circle at 50% 0%, rgba(47,107,255,.10), transparent 72%),
@@ -1942,7 +1942,7 @@ video.bubble-media-img {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--soft);
@@ -1950,7 +1950,7 @@ video.bubble-media-img {
 .preview-media {
   width: 62px;
   height: 62px;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
   flex-shrink: 0;
   background: var(--surface-2);
@@ -1974,7 +1974,7 @@ video.bubble-media-img {
   display: block;
   height: 130px;
   padding: 13px;
-  border-radius: 22px;
+  border-radius: 20px;
   /* Один цвет на все категории — без индивидуальных оттенков */
   background: var(--surface-2);
   overflow: hidden;
@@ -2353,7 +2353,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   width: 88px;
   height: 88px;
   flex: 0 0 auto;
-  border-radius: 16px;
+  border-radius: 14px;
   overflow: hidden;
 }
 .auction-body {
@@ -2456,7 +2456,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   width: 100%;
   max-width: 430px;
   background: var(--bg);
-  border-radius: 26px 26px 0 0;
+  border-radius: 20px 26px 0 0;
   padding: 10px 18px calc(20px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
@@ -2643,7 +2643,7 @@ select.text-input {
   gap: 10px;
   width: 100%;
   padding: 10px 12px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: rgba(255,255,255,.16);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255,255,255,.22);
@@ -2839,7 +2839,7 @@ input.input,
 textarea.input {
   width: 100%;
   padding: 13px 16px;
-  border-radius: 16px;
+  border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
@@ -2868,7 +2868,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 /* Карточка ИИ-разбора: «опишите словами» */
 .ai-card {
   padding: 15px 16px 16px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
@@ -2892,7 +2892,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   align-items: center;
   gap: 13px;
   padding: 16px 18px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: linear-gradient(135deg, var(--accent), #4C7DFF);
   color: #fff;
   border: none;
@@ -2924,7 +2924,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   align-items: center;
   gap: 10px;
   padding: 13px 16px;
-  border-radius: 18px;
+  border-radius: 14px;
   background: rgba(34, 197, 94, .1);
   border: 1px solid rgba(34, 197, 94, .35);
   font-size: 13.5px;
@@ -2949,7 +2949,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   width: 100%;
   max-width: 380px;
   background: var(--surface);
-  border-radius: 26px;
+  border-radius: 20px;
   padding: 26px 22px 22px;
   text-align: center;
 }
@@ -3083,7 +3083,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 .chat-send:disabled { opacity: .45; }
 .chat-summary {
   padding: 16px;
-  border-radius: 22px;
+  border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
@@ -3261,7 +3261,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 
 /* Нижняя панель — самая «плавающая»: приподнята и скруглена сильнее */
 .dock {
-  border-radius: 28px;
+  border-radius: 20px;
   margin: 0 10px 10px;
   box-shadow: 0 14px 34px rgba(17, 24, 39, .18);
 }
@@ -3295,7 +3295,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   -webkit-backdrop-filter: blur(18px) saturate(150%);
   border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
   box-shadow: 0 10px 26px rgba(17, 24, 39, .10);
-  border-radius: 22px;
+  border-radius: 20px;
   overflow: hidden;
 }
 
@@ -3477,7 +3477,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   border-top: 1px solid var(--border);
 }
 .chat-input .text-input {
-  border-radius: 22px;
+  border-radius: 20px;
   padding: 12px 18px;
   font-size: 15.5px;
   background: var(--surface);
