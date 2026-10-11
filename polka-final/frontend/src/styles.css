@@ -4055,3 +4055,28 @@ html, body, #root {
 .bottom-bar {
   padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
 }
+
+/* ── ТЗ 5.5: пустое состояние ──────────────────────────────────────────── */
+/* Иконка 28 px, текст 17/22, воздуха 32/24. Без карточки-подложки:
+   пустое состояние — это подсказка, а не ещё один контейнер. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 32px 24px;
+  gap: 16px;
+}
+.empty-state .icon-svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--text-tertiary);
+  opacity: .9;
+}
+.empty-state p {
+  margin: 0;
+  font-size: 17px;
+  line-height: 22px;
+  color: var(--text-secondary);
+  max-width: 300px;
+}

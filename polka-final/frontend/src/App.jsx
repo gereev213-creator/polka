@@ -408,8 +408,16 @@ function ErrorBlock({ text = 'Не удалось загрузить данны�
   )
 }
 
-function EmptyBlock({ text = 'Пока пусто.' }) {
-  return <div className="checkout-box glass-card mt-14"><p>{text}</p></div>
+// Пустое состояние по ТЗ 5.5: иконка 28 px, текст 17/22, воздуха 32/24.
+// Было просто карточкой с текстом — без иконки и без объяснения, что тут
+// появится, поэтому выглядело как заглушка.
+function EmptyBlock({ text = 'Здесь пока пусто' }) {
+  return (
+    <div className="empty-state">
+      <Icon name="search" />
+      <p>{text}</p>
+    </div>
+  )
 }
 
 function AppProvider({ children }) {
