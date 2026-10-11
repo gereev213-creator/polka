@@ -17535,6 +17535,16 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
                 'состояние', 'цвет', 'аккумулятор', 'itemprop="description"',
                 'data-marker="item-description"', 'iva-item-description')}
             # Что реально извлекает парсер из карточки — по составу полей
+            # Показываем, как именно выглядит описание в разметке —
+            # чтобы научить парсер его забирать.
+            try:
+                import re as _re
+                _m = _re.search(r'.{120}description.{200}', page, _re.S)
+                out['desc_context'] = _m.group(0) if _m else ''
+                _m2 = _re.search(r'.{80}аккумулятор.{120}', page, _re.S)
+                out['acc_context'] = _m2.group(0) if _m2 else ''
+            except Exception:
+                pass
             out['parsed_keys'] = []
             try:
                 _items = collector.parse_page(html) or []
