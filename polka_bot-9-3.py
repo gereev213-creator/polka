@@ -19330,6 +19330,22 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
 
     # Аксессуары и мусор отсекаем: «кабель для iPhone» — не айфон
     low_title = str(ad.get('title') or '').lower()
+    # Требования словами: «только оригинал», «не магазин, только с рук»,
+    # «хорошее состояние», «не вскрывался». Раньше их проверяла ТОЛЬКО лента,
+    # а отправка в Телеграм — нет: поэтому реплики и магазины приходили.
+    _req_low = str(crit.get('requirements') or '').lower()
+    _low_all = (str(ad.get('title') or '') + ' ' + str(ad.get('description') or '')).lower()
+    for _bad in _requirement_excludes(crit.get('requirements')):
+        if _bad in _low_all:
+            return None
+    # Магазин по данным страницы: тип продавца и ник надёжнее слова в заголовке
+    if any(w in _req_low for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+        if str(ad.get('seller_type') or '') == 'company':
+            return None
+        _sn = str(ad.get('seller_name') or '').lower()
+        if _sn and any(w in _sn for w in HUNT_SHOP_MARKERS):
+            return None
+
     for bad in HUNT_ACCESSORY_WORDS:
         if bad in low_title:
             return None
@@ -20279,11 +20295,16 @@ async def _hunt_catchup_loop():
                                 "ORDER BY id DESC LIMIT 1")
                     _qrow = _qc.fetchone()
                     if _qrow:
-                        _qtxt = await fetch_ad_description({'id': _qrow['id'],
-                                                            'source_url': _qrow['source_url']})
+                        _qinfo: Dict = {}
+                        _qtxt = await fetch_ad_description(
+                            {'id': _qrow['id'], 'source_url': _qrow['source_url']}, _qinfo)
                         if _qtxt:
-                            db.conn.execute('UPDATE ads SET description=? WHERE id=?',
-                                            (_qtxt, int(_qrow['id'])))
+                            db.conn.execute(
+                                'UPDATE ads SET description=?, seller_type=?, '
+                                'seller_name=?, seller_ads=? WHERE id=?',
+                                (_qtxt, _qinfo.get('seller_type', ''),
+                                 _qinfo.get('seller_name', ''),
+                                 int(_qinfo.get('seller_ads') or 0), int(_qrow['id'])))
                             db.conn.commit()
                             logger.info(f'Описание в очередь: объявление {int(_qrow["id"])}')
             except Exception as _qe:
