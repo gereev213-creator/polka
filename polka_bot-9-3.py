@@ -17524,6 +17524,9 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     need = [w.lower() for w in str(request.query.get('need') or '').split() if w.strip()]
     try:
         html = await asyncio.to_thread(collector.fetch, url)
+        _seller = _parse_seller(html)
+        if out is not None and (_seller.get('seller_type') or _seller.get('seller_name')):
+            out.update(_seller)
         out['ok'] = True
         out['bytes'] = len(html or '')
         if want_raw:
@@ -17612,6 +17615,16 @@ def ensure_verdict_column():
         db.conn.commit()
     except Exception:
         pass  # колонка уже есть
+
+    # Продавец со страницы: тип (Компания/Частник), ник, число объявлений.
+    for _col, _decl in (('seller_type', "TEXT DEFAULT ''"),
+                        ('seller_name', "TEXT DEFAULT ''"),
+                        ('seller_ads', 'INTEGER DEFAULT 0')):
+        try:
+            db.conn.execute(f"ALTER TABLE ads ADD COLUMN {_col} {_decl}")
+            db.conn.commit()
+        except Exception:
+            pass  # колонка уже есть
 
 
 def ensure_hidden_table():
@@ -19036,6 +19049,16 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     # иначе выкинем именно то, что нужно. Пользователей много, запросы
     # повторяются — общий список мусора тут не годится.
     _q_ask = str(crit.get('query') or '').lower()
+    # Магазин по данным СТРАНИЦЫ: тип продавца и его ник надёжнее слова
+    # «shop» в заголовке. Работает для тех, чью страницу открыли; у прочих
+    # поле пустое, и они проходят.
+    _req = str(crit.get('requirements') or '').lower()
+    if any(w in _req for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+        where.append(f"COALESCE({col('seller_type')}, '') != 'company'")
+        for _bad in HUNT_SHOP_MARKERS:
+            where.append(f"COALESCE({col('seller_name')}, '') NOT LIKE ?")
+            params.append(f"%{_bad}%")
+
     # Магазины: латиница shop/store/opt и русские «магазин», «салон», «опт».
     # Для всех категорий — люди хотят объявления с рук, а не из магазина.
     for bad in HUNT_SHOP_MARKERS:
@@ -19518,7 +19541,38 @@ def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '',
     )
 
 
-async def fetch_ad_description(ad: Dict) -> str:
+def _parse_seller(html: str) -> Dict:
+    """Продавец со страницы объявления: тип, ник, сколько всего объявлений.
+
+    В выдаче Авито продавца НЕТ, а бейдж «Компания» рисуется скриптом уже
+    в браузере. На самой странице он есть. Помечаем «company» только при
+    явных признаках: лучше без данных, чем выкинуть хорошее объявление.
+    """
+    out: Dict = {'seller_type': '', 'seller_name': '', 'seller_ads': 0}
+    raw = str(html or '')
+    low = raw.lower()
+    if not low:
+        return out
+    if 'частное лицо' in low:
+        out['seller_type'] = 'private'
+    if '/brands/' in low:
+        out['seller_type'] = 'company'
+    m = re.search(r'data-marker="seller-info/name"[^>]*>([^<]{2,60})<', raw)
+    if m:
+        out['seller_name'] = re.sub(r'\s+', ' ', m.group(1)).strip()
+    m = re.search(r'(\d[\d\s]{0,7})\s*объявлен', low)
+    if m:
+        try:
+            out['seller_ads'] = int(re.sub(r'\D', '', m.group(1)) or 0)
+        except Exception:
+            out['seller_ads'] = 0
+    nm = str(out['seller_name']).lower()
+    if out['seller_type'] != 'company' and any(w in nm for w in HUNT_SHOP_MARKERS):
+        out['seller_type'] = 'company'
+    return out
+
+
+async def fetch_ad_description(ad: Dict, out: Dict = None) -> str:
     """Забирает описание со страницы объявления.
 
     Заголовок говорит мало: «Timberland 43». А в описании — «копия», «носил
@@ -19725,11 +19779,16 @@ async def notify_hunt_matches(ad_ids: List[int]):
             # (для остальных) лимит соблюдает — она фоновая.
             if (not str(ad.get('description') or '').strip()
                     and ad.get('source_url')):
-                _desc = await fetch_ad_description(ad)
+                _sinfo: Dict = {}
+                _desc = await fetch_ad_description(ad, _sinfo)
                 if _desc:
                     try:
-                        db.conn.execute("UPDATE ads SET description=? WHERE id=?",
-                                        (_desc, int(ad['id'])))
+                        db.conn.execute(
+                            "UPDATE ads SET description=?, seller_type=?, seller_name=?, "
+                            "seller_ads=? WHERE id=?",
+                            (_desc, _sinfo.get('seller_type', ''),
+                             _sinfo.get('seller_name', ''), int(_sinfo.get('seller_ads') or 0),
+                             int(ad['id'])))
                         db.conn.commit()
                     except Exception as _de:
                         logger.warning(f"desc save: {_de}")
