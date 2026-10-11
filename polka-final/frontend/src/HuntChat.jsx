@@ -351,8 +351,8 @@ export default function HuntChat() {
       <div className="chat-list" ref={listRef}>
         {empty ? (
           <div className="chat-start">
-            <div className="chat-hello">Привет! Я помогу найти лучшие лоты</div>
-            <div className="chat-hello-sub">Напиши, что ищешь — я сам подберу и применю фильтры.</div>
+            <div className="chat-hello">Найду дешёвые лоты по твоим условиям</div>
+            <div className="chat-hello-sub">Напиши словами — подберу фильтры сам</div>
             <div className="chat-examples">
               {EXAMPLES.map((ex) => (
                 <button key={ex} type="button" className="chat-example" onClick={() => parse(ex)}>
