@@ -20155,6 +20155,28 @@ async def _hunt_catchup_loop():
             _HUNT_SEND_STATS['criteria'] = len(crits)
             sent_total = 0
             total_ids = 0
+            # ── Очередь описаний ──────────────────────────────────────────────
+            # Грузим описания не только для отправляемых, а для ВСЕХ, кто прошёл
+            # фильтр: иначе характеристики видны у единиц, а остальные — только
+            # по заголовку. По одному за проход, темп безопасный (см. счётчик).
+            try:
+                if _desc_budget_ok():
+                    _qc = db.conn.cursor()
+                    _qc.execute("SELECT id, source_url FROM ads WHERE status='active' "
+                                "AND source_url LIKE 'http%' AND COALESCE(description,'')='' "
+                                "ORDER BY id DESC LIMIT 1")
+                    _qrow = _qc.fetchone()
+                    if _qrow:
+                        _qtxt = await fetch_ad_description({'id': _qrow['id'],
+                                                            'source_url': _qrow['source_url']})
+                        if _qtxt:
+                            db.conn.execute('UPDATE ads SET description=? WHERE id=?',
+                                            (_qtxt, int(_qrow['id'])))
+                            db.conn.commit()
+                            logger.info(f'Описание в очередь: объявление {int(_qrow["id"])}')
+            except Exception as _qe:
+                logger.warning(f'desc queue: {_qe}')
+
             for crit in crits:
                 ids = fresh_ids_for_criterion(crit, limit=30)
                 total_ids += len(ids)
