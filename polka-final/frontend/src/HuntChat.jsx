@@ -139,6 +139,17 @@ export default function HuntChat() {
         say('ai', parsed.reply || `Понял: ${next.query}. Проверьте и нажмите «Найти лоты»`)
         return
       }
+      // Защита от зацикливания: модель иногда отвечает ТЕМ ЖЕ вопросом, хотя
+      // человек уже ответил («Любой»). Для неё запрос не изменился — и она
+      // повторяет. Тогда считаем, что данных достаточно, и показываем итог.
+      const lastAi = [...messages].reverse().find((mm) => mm.from === 'ai')
+      if (lastAi && String(parsed.reply || '').trim() === lastAi.text.trim()) {
+        next.step = 'done'
+        setDraft(next)
+        say('ai', 'Понял, без ограничений. Проверьте и нажмите «Найти лоты»')
+        return
+      }
+
       const question = FIRST_QUESTION[next.category]
       if (question) {
         setDraft(next)
