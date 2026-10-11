@@ -4180,3 +4180,32 @@ html, body, #root {
 .topbar-side { flex: 0 0 auto; }
 .topbar-center { flex: 1 1 auto; }
 .topbar img, .topbar svg { flex: 0 0 auto; max-height: 32px; }
+
+/* ── Шапка без поддержки blur: без белой полосы ────────────────────────── */
+/* Запасной вариант с плотным белым фоном срабатывал ВСЕГДА: в Telegram
+   backdrop-filter не поддержан, и шапка читалась как белая полоса.
+   Правильно: наверху прозрачно, при прокрутке — плотный фон. */
+@supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+  .topbar { background: transparent; }
+  .topbar.is-scrolled {
+    background: rgba(255, 255, 255, 0.94);
+    border-bottom: 0.5px solid var(--hairline);
+  }
+}
+@media (prefers-color-scheme: dark) {
+  @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
+    .topbar.is-scrolled { background: rgba(28, 28, 30, 0.96); }
+  }
+}
+
+/* ── Кнопка «назад»: одна форма на всех экранах ────────────────────────── */
+/* В чате была круглая, на остальных — квадрат 12 px. Приводим к общей:
+   те же 40×40 и радиус 12, что у .icon-btn. */
+.chat-back {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
