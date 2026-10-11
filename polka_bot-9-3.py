@@ -19279,7 +19279,31 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '3'))
 # Загрузка описания со страницы объявления. По умолчанию ВЫКЛЮЧЕНА:
 # Авито отдаёт 439, страницы по 2.5 МБ уходят впустую, а лимит запросов
 # тратится — из-за этого вставал весь сбор. Включать осознанно.
-HUNT_DESCRIPTION_FETCH = os.environ.get('HUNT_DESCRIPTION_FETCH', '0') == '1'
+# Описания грузим, но ЖЁСТКО ограниченно: не больше 5 в час.
+# Прошлая попытка грузила 5 за проход (каждые 5 минут) — это 150 МБ в час,
+# Авито ответил 439 и встал весь сбор. Поэтому счётчик в настройках.
+DESC_FETCH_PER_HOUR = int(os.environ.get('HUNT_DESC_PER_HOUR', '5'))
+
+
+def _desc_budget_ok() -> bool:
+    """Можно ли сейчас загрузить ещё одно описание."""
+    try:
+        now = int(_time.time())
+        window = int(_setting_get('desc_window', '0') or 0)
+        used = int(_setting_get('desc_used', '0') or 0)
+        if now - window >= 3600:
+            _setting_set('desc_window', str(now))
+            _setting_set('desc_used', '0')
+            return True
+        if used < DESC_FETCH_PER_HOUR:
+            _setting_set('desc_used', str(used + 1))
+            return True
+        return False
+    except Exception as e:
+        # Ошибку трактуем как ЗАПРЕТ, а не как разрешение: если счётчик
+        # недоступен, лучше не грузить описание вовсе, чем уйти в бан Авито.
+        logger.warning(f"desc budget: {e}")
+        return False
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
@@ -19402,9 +19426,9 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
     # Описание сильно повышает точность: в заголовке «Timberland 43»,
     # а в описании — «копия» или «коробка, чек». Тянем один раз и сохраняем.
     try:
-        if (HUNT_DESCRIPTION_FETCH
-                and not str(ad.get('description') or '').strip()
-                and ad.get('source_url')):
+        if (not str(ad.get('description') or '').strip()
+                and ad.get('source_url')
+                and _desc_budget_ok()):
             desc = await fetch_ad_description(ad)
             if desc:
                 ad = dict(ad)
