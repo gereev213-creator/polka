@@ -18895,6 +18895,29 @@ def _condition_ok(condition: str, text: str) -> bool:
     return True
 
 
+def _requirement_excludes(requirements: str) -> list:
+    """Требования словами → что скрипт может проверить по заголовку.
+
+    Человек пишет «хорошее состояние», «только новое», «не вскрывался» —
+    раньше это просто хранилось и НЕ проверялось. Теперь скрипт понимает
+    такие слова и отсеивает по ним. То, чего в заголовке нет (АКБ, комплект),
+    проверить нечем — такие требования пропускаем, отбор они не ломают.
+    """
+    text = str(requirements or '').lower()
+    out: List[str] = []
+    if any(w in text for w in ('новое', 'новый', 'новые', 'не ношен')):
+        out += list(HUNT_USED_MARKERS)
+    if any(w in text for w in ('хорошее', 'хороший', 'без износа', 'целое', 'целый')):
+        out += ['битый', 'разбит', 'на запчасти', 'требует ремонта', 'не работает',
+                'дефект', 'царапин', 'скол', 'потёрт', 'потерт', 'износ',
+                'вскрывал', 'замен', 'восстановлен',
+                # «менялся экран», «меняли батарею» — основа «менял» ловит падежи
+                'менял', 'переклеен', 'ремонтировал', 'был в ремонте']
+    if 'не вскрывал' in text:
+        out += ['вскрывал', 'менялся экран', 'замена экрана', 'менял экран', 'разбор']
+    return list(dict.fromkeys(out))
+
+
 def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str = ""):
     """Добавляет в SQL условия фильтров критерия.
 
@@ -18919,6 +18942,11 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     if max_hours > 0:
         where.append(f"COALESCE({col('published_hours_ago')}, 0) <= ?")
         params.append(max_hours)
+    # Требования словами из чата: «хорошее состояние», «только новое»,
+    # «не вскрывался» — превращаем в отсев по заголовку.
+    for bad in _requirement_excludes(crit.get('requirements')):
+        where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
+        params.append(f"%{bad}%")
     cond = str(crit.get('condition') or '').strip().lower()
     if cond == 'new':
         for bad in HUNT_USED_MARKERS:
