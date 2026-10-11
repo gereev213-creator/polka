@@ -347,7 +347,14 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
           <div className="verdict-line">{item.ai_verdict}</div>
         ) : null}
         <div className="product-title">{item.title}</div>
-        <div className="product-city">{item.city}</div>
+        <div className="product-city">
+          {item.city}
+          {Number(item.published_hours_ago) > 0
+            ? (Number(item.published_hours_ago) < 24
+              ? ` · ${Math.round(Number(item.published_hours_ago))} ч назад`
+              : ` · ${Math.round(Number(item.published_hours_ago) / 24)} дн назад`)
+            : ' · только что'}
+        </div>
         <div className="product-bottom">
           <div className="product-price">{priceText(item)}</div>
           {Number(item.discount_percent) >= 15 ? (
