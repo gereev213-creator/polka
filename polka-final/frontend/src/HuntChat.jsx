@@ -471,6 +471,12 @@ export default function HuntChat() {
               {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'без ограничения по цене'}
             </div>
             {draft.req ? <div className="chat-summary-line muted">{draft.req}</div> : null}
+            {/оригинал|реплик/i.test(draft.req || '') ? (
+              <div className="hint-note">
+                Оригинал не проверяем: убираем только то, где продавец сам признал
+                реплику. Молчит — значит пройдёт. Смотрите фото и цену.
+              </div>
+            ) : null}
             <div className="chat-summary-actions">
               <button type="button" className="cta-primary is-wide" disabled={busy} onClick={create}>
                 {busy ? 'Создаю…' : 'Найти лоты'}

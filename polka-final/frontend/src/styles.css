@@ -4270,3 +4270,13 @@ html, body, #root {
   border: none !important;
   box-shadow: none !important;
 }
+
+/* Пояснение о том, что фильтр может ошибаться. Честность важнее, чем
+   ощущение «всё точно»: человек должен знать, что подлинность не проверяется. */
+.hint-note {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-tertiary);
+  text-align: left;
+}
