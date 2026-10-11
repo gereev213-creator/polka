@@ -4246,3 +4246,27 @@ html, body, #root {
   background: transparent !important;
 }
 .chat-row.is-me { justify-content: flex-end !important; }
+
+/* ── Стрелка «открыть на Авито»: всегда в одном месте ──────────────────── */
+/* Было: у «53 ₽» стрелка в строке, у «2 000 ₽» — съезжала под цену, потому
+   что цена шире. Прибиваем её к правому нижнему углу карточки: положение
+   больше не зависит от длины цены. */
+.product-card { position: relative; }
+.product-bottom .product-action {
+  position: absolute !important;
+  right: 12px !important;
+  bottom: 12px !important;
+  flex: none !important;
+  margin: 0 !important;
+}
+/* Подпись выгоды не залезает под стрелку */
+.product-deal { padding-right: 54px !important; }
+
+/* ── Кнопка «назад»: без белого квадрата ───────────────────────────────── */
+/* Белая плашка вокруг стрелки выделялась на фоне — по ТЗ такого быть не
+   должно. Оставляем только сам значок, как в iOS. */
+.chat-back, .icon-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
