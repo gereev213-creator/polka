@@ -111,3 +111,14 @@
   padding: var(--space-3) var(--space-4); border-radius: var(--radius-pill);
   font: 500 var(--fs-cap)/var(--lh-cap) var(--font); box-shadow: var(--shadow-soft);
 }
+
+/* Дополнения системы компонентов */
+.btn-sm { min-height: 36px; padding: 0 var(--space-4); font-size: var(--fs-cap); }
+.btn-spinner {
+  width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: btn-spin .7s linear infinite;
+}
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+.list-row-title { font: 500 var(--fs-body)/var(--lh-body) var(--font); color: var(--text); }
+.list-row-sub { font: 400 var(--fs-cap)/var(--lh-cap) var(--font); color: var(--text-secondary); }
