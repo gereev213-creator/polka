@@ -19,6 +19,13 @@ import { ErrorState } from './components/ErrorState'
 // Сегмент-переключатель из дизайн-системы: та же разметка .segmented,
 // но с ролью tablist и одним источником стилей (этап 1).
 import { SegmentedControl } from './components/SegmentedControl'
+// Общие компоненты дизайн-системы: подключаются на экранах поиска лотов
+// (этап 3b) вместо самодельных .auction-sort / .cta-primary / .ghost-btn.
+import { Button } from './components/Button'
+import { Card } from './components/Card'
+import { Chip } from './components/Chip'
+import { Badge } from './components/Badge'
+import { ListRow } from './components/ListRow'
 
 import { Icon } from './components/Icon'
 import { IconButton } from './components/IconButton'
@@ -51,8 +58,8 @@ function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
 }
 
-function Screen({ children, padded = true }) {
-  return <div className={`screen ${padded ? 'padded' : ''}`}>{children}</div>
+function Screen({ children, padded = true, className = '' }) {
+  return <div className={`screen ${padded ? 'padded' : ''} ${className}`.trim()}>{children}</div>
 }
 
 
@@ -1207,7 +1214,7 @@ function CriteriaPage() {
   }
 
   return (
-    <Screen>
+    <Screen className="hunt-screen">
       <TopBar left={<IconButton icon="back" to="/" />} />
       <div className="page-title">Поиск лотов</div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
@@ -1305,37 +1312,35 @@ function CriteriaPage() {
       <p className="sub-copy">
         Напишите, что искать на Авито — бот пришлёт подходящие объявления.</p>
 
-      {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает */}
+      {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает.
+          Плашки — общий Chip из дизайн-системы: один компонент на все фильтры. */}
       <div className="field-label-row">Категория</div>
-      <div className="auction-sort">
+      <div className="chip-row">
         {['', 'Электроника', 'Одежда, обувь, аксессуары', 'Транспорт', 'Недвижимость', 'Другое'].map((cat) => (
-          <button key={cat || 'all'} type="button"
-            className={huntCategory === cat ? 'is-active' : ''}
+          <Chip key={cat || 'all'} active={huntCategory === cat}
             onClick={() => setHuntCategory(cat)}>
             {cat || 'любая'}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="field-label-row">Состояние</div>
-      <div className="auction-sort">
+      <div className="chip-row">
         {[['', 'любое'], ['new', 'только новое'], ['used', 'только б/у']].map(([val, label]) => (
-          <button key={val || 'any'} type="button"
-            className={huntCondition === val ? 'is-active' : ''}
+          <Chip key={val || 'any'} active={huntCondition === val}
             onClick={() => setHuntCondition(val)}>
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="field-label-row">Товар</div>
-      <div className="auction-sort">
+      <div className="chip-row">
         {[['', 'не важно'], ['original', 'только оригинал'], ['replica', 'можно реплику']].map(([val, label]) => (
-          <button key={val || 'any'} type="button"
-            className={huntOriginal === val ? 'is-active' : ''}
+          <Chip key={val || 'any'} active={huntOriginal === val}
             onClick={() => setHuntOriginal(val)}>
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
@@ -1346,24 +1351,23 @@ function CriteriaPage() {
       </p>
 
       <div className="field-label-row">Продавец</div>
-      <div className="auction-sort">
+      <div className="chip-row">
         {[['', 'любой'], ['private', 'только частники']].map(([val, label]) => (
-          <button key={val || 'any'} type="button"
-            className={huntSeller === val ? 'is-active' : ''}
+          <Chip key={val || 'any'} active={huntSeller === val}
             onClick={() => setHuntSeller(val)}>
             {label}
-          </button>
+          </Chip>
         ))}
       </div>
 
       <div className="field-label-row">Требования словами</div>
       <input
-        className="text-input glass-card"
+        className="input"
         value={huntNotes}
         onChange={(e) => setHuntNotes(e.target.value)}
         placeholder="размер 43, чёрный, АКБ от 85%, не вскрывался"
       />
-      <p style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-tertiary)', margin: '8px 0 0' }}>
+      <p className="hint-note">
         Скрипт понимает: «оригинал», «не магазин», «хорошее состояние», «не вскрывался», «только новое»
       </p>
 
@@ -1402,73 +1406,84 @@ function CriteriaPage() {
       ) : null}
 
       <div className="form-stack">
-        <input className="text-input glass-card" value={query}
+        <input className="input" value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Что искать — например «iphone 13»" />
-        <div className="grid-two">
-          <input className="text-input glass-card" value={city}
-            onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
-        </div>
+        {/* Город — на всю ширину строки: раньше он стоял в .grid-two и занимал
+            половину ширины без причины. */}
+        <input className="input" value={city}
+          onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
         <datalist id="hunt-cities">
           {cities.map((c) => <option key={c.value} value={c.label} />)}
         </datalist>
 
+        {/* «Цена / Свежесть / Дополнительно» — один и тот же раскрывающийся
+            ListRow из дизайн-системы, а не три самодельные строки. Значения
+            свёрнутых фильтров видны в заголовке, состояние не теряется. */}
+        <div className="hunt-toggles">
+          <ListRow
+            className={`is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
+            left={<Icon name="filter" />}
+            title={`Цена, ₽${maxPrice || minPrice
+              ? ` · ${minPrice ? 'от ' + Number(minPrice).toLocaleString('ru-RU') + ' ' : ''}${maxPrice ? 'до ' + Number(maxPrice).toLocaleString('ru-RU') + ' ₽' : ''}`
+              : ''}`}
+            right={<span className="toggle-mark">›</span>}
+            onClick={() => toggleSec('price')}
+            aria-expanded={openSec === 'price'}
+          />
+          {openSec === 'price' ? (
+            <div className="price-pair">
+              <input className="input" type="number" inputMode="numeric" placeholder="от"
+                value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
+              <input className="input" type="number" inputMode="numeric" placeholder="до"
+                value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
+            </div>
+          ) : null}
 
+          <ListRow
+            className={`is-toggle ${openSec === 'fresh' ? 'is-open' : ''}`}
+            left={<Icon name="clock" />}
+            title={`Свежесть${maxHours
+              ? ` · ${maxHours === 1 ? 'за час' : 'за ' + maxHours + ' ч'}`
+              : ' · любая'}`}
+            right={<span className="toggle-mark">›</span>}
+            onClick={() => toggleSec('fresh')}
+            aria-expanded={openSec === 'fresh'}
+          />
+          {openSec === 'fresh' ? (
+            <div className="chip-row">
+              {[[0, 'любая'], [1, 'за час'], [3, 'за 3 часа'], [24, 'за сутки']].map(([v, label]) => (
+                <Chip key={v} active={maxHours === v} onClick={() => setMaxHours(v)}>{label}</Chip>
+              ))}
+            </div>
+          ) : null}
 
-        <div className={`field-label-row is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
-          onClick={() => toggleSec('price')}>
-          <span className="toggle-left"><Icon name="filter" /><span>Цена, ₽{maxPrice || minPrice
-            ? ` · ${minPrice ? 'от ' + Number(minPrice).toLocaleString('ru-RU') + ' ' : ''}${maxPrice ? 'до ' + Number(maxPrice).toLocaleString('ru-RU') + ' ₽' : ''}`
-            : ''}</span></span> <span className="toggle-mark">›</span>
+          <ListRow
+            className={`is-toggle ${openSec === 'more' ? 'is-open' : ''}`}
+            left={<Icon name="image" />}
+            title={`Дополнительно${withPhoto ? ' · с фото' : ''}`}
+            right={<span className="toggle-mark">›</span>}
+            onClick={() => toggleSec('more')}
+            aria-expanded={openSec === 'more'}
+          />
+          {openSec === 'more' ? (
+            <div className="chip-row">
+              <Chip active={withPhoto} onClick={() => setWithPhoto(!withPhoto)}>Только с фото</Chip>
+            </div>
+          ) : null}
         </div>
-        {openSec === 'price' ? (
-          <>
-        <div className="price-pair">
-          <input className="input" type="number" inputMode="numeric" placeholder="от"
-            value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
-          <input className="input" type="number" inputMode="numeric" placeholder="до"
-            value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
-        </div>
-          </>
-        ) : null}
-
-        <div className={`field-label-row is-toggle ${openSec === 'fresh' ? 'is-open' : ''}`}
-          onClick={() => toggleSec('fresh')}>
-          <span className="toggle-left"><Icon name="clock" /><span>Свежесть{maxHours
-            ? ` · ${maxHours === 1 ? 'за час' : 'за ' + maxHours + ' ч'}`
-            : ' · любая'}</span></span> <span className="toggle-mark">›</span>
-        </div>
-        {openSec === 'fresh' ? (
-          <>
-        <div className="auction-sort">
-          {[[0, 'любая'], [1, 'за час'], [3, 'за 3 часа'], [24, 'за сутки']].map(([v, label]) => (
-            <button key={v} type="button" className={maxHours === v ? 'is-active' : ''}
-              onClick={() => setMaxHours(v)}>{label}</button>
-          ))}
-        </div>
-          </>
-        ) : null}
-
-        <div className={`field-label-row is-toggle ${openSec === 'more' ? 'is-open' : ''}`}
-          onClick={() => toggleSec('more')}>
-          <span className="toggle-left"><Icon name="image" /><span>Дополнительно{withPhoto ? ' · с фото' : ''}</span></span> <span className="toggle-mark">›</span>
-        </div>
-        {openSec === 'more' ? (
-          <>
-        <div className="auction-sort">
-          <button type="button" className={withPhoto ? 'is-active' : ''}
-            onClick={() => setWithPhoto(!withPhoto)}>Только с фото</button>
-        </div>
-          </>
-        ) : null}
 
         
-        <div className="segmented">
-          <button type="button" className={mode === 'any' ? 'is-active' : ''}
-            onClick={() => setMode('any')}>Любые подходящие</button>
-          <button type="button" className={mode === 'deal' ? 'is-active' : ''}
-            onClick={() => setMode('deal')}>Только выгодные</button>
-        </div>
+        {/* Режим отбора — общий SegmentedControl (роль tablist) вместо
+            самодельных кнопок. Стоит в потоке формы и к доку не прижат. */}
+        <SegmentedControl
+          value={mode}
+          onChange={setMode}
+          options={[
+            { value: 'any', label: 'Любые подходящие' },
+            { value: 'deal', label: 'Только выгодные' },
+          ]}
+        />
         {mode === 'any' ? (
           <p className="sub-copy">
             Пришлём сразу, как только появится подходящее — ждать статистики не нужно.
@@ -1477,45 +1492,52 @@ function CriteriaPage() {
         ) : (
           <>
             <div className="field-label-row">Присылать, если дешевле обычного на</div>
-            <div className="auction-sort">
+            <div className="chip-row">
               {[10, 15, 25].map((d) => (
-                <button key={d} type="button" className={minDiscount === d ? 'is-active' : ''}
-                  onClick={() => setMinDiscount(d)}>−{d}%</button>
+                <Chip key={d} active={minDiscount === d} onClick={() => setMinDiscount(d)}>−{d}%</Chip>
               ))}
             </div>
           </>
         )}
 
         {error ? <div className="status-line error">{error}</div> : null}
-        <button type="button" className="cta-primary is-wide" disabled={busy} onClick={add}>
+        <Button variant="primary" wide disabled={busy} onClick={add}>
           {busy ? 'Добавляем…' : 'Найти лоты'}
-        </button>
+        </Button>
       </div>
 
       <div className="section-head"><strong>Мои критерии</strong><span>{items.length}</span></div>
-      {loading ? <div className="muted-line">Загружаем…</div> : null}
+      {/* Загрузка — skeleton, а не строка «Загружаем…»: видно, что список
+          появится, и он не «прыгает» по высоте, когда придёт ответ. */}
+      {loading ? <Skeleton text="Загружаем критерии" rows={2} /> : null}
       {!loading && !items.length ? (
         <EmptyBlock text="Пока ничего не ловим. Добавьте первый критерий — поле выше." />
       ) : null}
       <div className="list-stack">
         {items.map((c) => (
-          <div key={c.id} className="setting-row glass-card">
+          <Card key={c.id} pad className="hunt-crit">
             <div className="hunt-row">
               <strong>{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
-              <span>
-                {c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}
-                {' · '}
+              <span className="hunt-crit-status">
                 {c.ready
-                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ (${c.sample_size} шт)`
-                  : `ищем подходящие`}
-                {c.min_price ? ` · от ${Number(c.min_price).toLocaleString('ru-RU')} ₽` : ''}
-                {c.max_price ? ` · до ${Number(c.max_price).toLocaleString('ru-RU')} ₽` : ''}
-                {c.max_hours ? ` · за ${c.max_hours} ч` : ''}
-                {c.with_photo ? ' · с фото' : ''}
+                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ · ${c.sample_size} шт`
+                  : 'ищем подходящие'}
               </span>
+              {/* Параметры критерия — чипами: длинная серая строка в 2–3
+                  строки не читалась, а так видно цену, свежесть и режим. */}
+              <div className="hunt-crit-chips">
+                <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>
+                {c.min_price ? <Badge>от {Number(c.min_price).toLocaleString('ru-RU')} ₽</Badge> : null}
+                {c.max_price ? <Badge>до {Number(c.max_price).toLocaleString('ru-RU')} ₽</Badge> : null}
+                {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
+                {c.with_photo ? <Badge>с фото</Badge> : null}
+              </div>
             </div>
-            <button type="button" className="ghost-btn" onClick={() => remove(c.id)}>Убрать</button>
-          </div>
+            <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
+              onClick={() => remove(c.id)}>
+              <Icon name="trash" />
+            </button>
+          </Card>
         ))}
       </div>
     </Screen>

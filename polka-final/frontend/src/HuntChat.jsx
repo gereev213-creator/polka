@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from './api'
+import { Button } from './components/Button'
 
 // ── Поиск лотов: чат с ИИ ──────────────────────────────────────────────────
 // Два способа в одном экране, переключатель сверху. Здесь — ИИ-поиск:
@@ -363,6 +364,7 @@ export default function HuntChat() {
           <div className="chat-start">
             <div className="chat-hello">Найду дешёвые лоты по твоим условиям</div>
             <div className="chat-hello-sub">Напиши словами — подберу фильтры сам</div>
+            <div className="chat-examples-label">Например</div>
             <div className="chat-examples">
               {EXAMPLES.map((ex) => (
                 <button key={ex} type="button" className="chat-example" onClick={() => parse(ex)}>
@@ -444,7 +446,19 @@ export default function HuntChat() {
           </div>
         ) : null}
 
-        {busy ? <div className="chat-row"><div className="chat-bubble is-typing">Разбираю…</div></div> : null}
+        {/* Пока модель разбирает фразу — живой индикатор вместо серой строки:
+            видно, что запрос ушёл и ответ будет. Класс .chat-bubble.is-typing
+            оставлен: он был в разметке и задаёт цвет и размер системной строки. */}
+        {busy ? (
+          <div className="chat-row" role="status">
+            <div className="chat-bubble is-typing">
+              <span className="chat-typing-dot" aria-hidden="true" />
+              <span className="chat-typing-dot" aria-hidden="true" />
+              <span className="chat-typing-dot" aria-hidden="true" />
+              <span className="chat-typing-text">Разбираю…</span>
+            </div>
+          </div>
+        ) : null}
 
         {draft && draft.step === 'done' ? (
           <div className="chat-summary">
@@ -478,10 +492,10 @@ export default function HuntChat() {
               </div>
             ) : null}
             <div className="chat-summary-actions">
-              <button type="button" className="cta-primary is-wide" disabled={busy} onClick={create}>
+              <Button variant="primary" wide disabled={busy} onClick={create}>
                 {busy ? 'Создаю…' : 'Найти лоты'}
-              </button>
-              <button type="button" className="ghost-btn" onClick={restart}>Заново</button>
+              </Button>
+              <Button variant="ghost" onClick={restart}>Заново</Button>
             </div>
           </div>
         ) : null}
@@ -492,7 +506,8 @@ export default function HuntChat() {
           <input className="text-input" value={text} placeholder="Напиши, что ищешь…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send() }} />
-          <button type="button" className="chat-send" disabled={busy || !text.trim()} onClick={send}>
+          <button type="button" className="chat-send" aria-label="Отправить"
+            disabled={busy || !text.trim()} onClick={send}>
             <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true">
               <path d="M3 20l18-8L3 4v6l12 2-12 2z" />
             </svg>
@@ -514,7 +529,8 @@ export default function HuntChat() {
                   {c.max_price ? ` · до ${money(c.max_price)} ₽` : ''}
                 </div>
               </div>
-              <button type="button" className="chat-crit-x" onClick={() => remove(c.id)}>✕</button>
+              <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
+                onClick={() => remove(c.id)}>✕</button>
             </div>
           ))}
         </div>
