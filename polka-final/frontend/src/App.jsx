@@ -17,46 +17,15 @@ import { Skeleton } from './components/Skeleton'
 import { EmptyState } from './components/EmptyState'
 import { ErrorState } from './components/ErrorState'
 
+import { Icon } from './components/Icon'
+import { IconButton } from './components/IconButton'
+import { TopBar } from './components/TopBar'
+import { BottomNav } from './components/BottomNav'
+
 const AppContext = createContext(null)
 
-const iconPaths = {
-  // Стрелка «открыть на сайте»: ведёт на исходное объявление Авито
-  arrowUpRight: 'M7 17L17 7M17 7H8M17 7v9',
-  home: [<path key="1" d="M3 10.5 12 3l9 7.5" />, <path key="2" d="M5 9.5V21h14V9.5" />, <path key="3" d="M9.5 21v-6h5v6" />],
-  search: [<circle key="1" cx="10.5" cy="10.5" r="6.5" />, <path key="2" d="m21 21-5.8-5.8" />],
-  plus: [<path key="1" d="M12 4v16" />, <path key="2" d="M4 12h16" />],
-  bookmark: [<path key="1" d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1Z" />],
-  user: [<circle key="1" cx="12" cy="7.5" r="4" />, <path key="2" d="M4.5 20.5c1.2-3.8 4-5.5 7.5-5.5s6.3 1.7 7.5 5.5" />],
-  menu: [<path key="1" d="M4 6.5h16" />, <path key="2" d="M4 12h16" />, <path key="3" d="M4 17.5h16" />],
-  back: [<path key="1" d="M14.5 4.5 7 12l7.5 7.5" />],
-  heart: [<path key="1" d="M12 20.5S3.5 15.3 3.5 9.8A4.6 4.6 0 0 1 8.1 5.2c1.6 0 3 .8 3.9 2a4.6 4.6 0 0 1 3.9-2 4.6 4.6 0 0 1 4.6 4.6c0 5.5-8.5 10.7-8.5 10.7Z" />],
-  share: [<path key="1" d="M14 4.5h5.5V10" />, <path key="2" d="m9.5 14.5 10-10" />, <path key="3" d="M19 13.5V19a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 19V7.5A1.5 1.5 0 0 1 6 6h5.5" />],
-  filter: [<path key="1" d="M4 6.5h16" />, <path key="2" d="M7 12h10" />, <path key="3" d="M10 17.5h4" />],
-  camera: [<path key="1" d="M3 8.5h3.5l1.8-2.5h7.4l1.8 2.5H21v11H3v-11Z" />, <circle key="2" cx="12" cy="13.5" r="3.8" />],
-  send: [<path key="1" d="m3.5 11.5 17-7-4.5 15.5-4.8-5.7-7.7-2.8Z" />, <path key="2" d="m11.2 14.2 4.3-4.3" />],
-  chat: [<path key="1" d="M21 11.5a8.5 8.5 0 0 1-12.4 7.5L3 21l2-5.6A8.5 8.5 0 1 1 21 11.5Z" />],
-  shield: [<path key="1" d="M12 2.5 20 6v6c0 5-3.4 8.4-8 9.5C7.4 20.4 4 17 4 12V6l8-3.5Z" />, <path key="2" d="m8.8 11.8 2.2 2.2 4.2-4.2" />],
-  crown: [<path key="1" d="m3 8 4 3.5L12 5l5 6.5L21 8l-1.5 10h-15L3 8Z" />, <path key="2" d="M5 21h14" />],
-  image: [<rect key="1" x="3" y="5" width="18" height="14" rx="2.5" />, <circle key="2" cx="8.5" cy="10" r="1.8" />, <path key="3" d="m21 15.5-4.5-4.5L7 20.5" />],
-  sparkles: [<path key="1" d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3Z" />, <path key="2" d="M19 15l.9 2.1 2.1.9-2.1.9L19 21l-.9-2.1-2.1-.9 2.1-.9L19 15Z" />, <path key="3" d="M5 16l.7 1.8 1.8.7-1.8.7L5 21l-.7-1.8-1.8-.7 1.8-.7L5 16Z" />],
-  logout: [<path key="1" d="M14 4H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h7" />, <path key="2" d="m17 8 4 4-4 4" />, <path key="3" d="M21 12H10" />],
-  star: [<path key="1" d="m12 3.4 2.7 5.5 6 .87-4.35 4.24 1.03 5.99L12 17.2l-5.38 2.83 1.03-5.99L3.3 9.77l6-.87L12 3.4Z" />],
-  pin: [<path key="1" d="M12 21.5s7-6 7-11.4A7 7 0 1 0 5 10.1c0 5.4 7 11.4 7 11.4Z" />, <circle key="2" cx="12" cy="10" r="2.6" />],
-  truck: [<path key="1" d="M2.5 7h10.5v9.5H2.5z" />, <path key="2" d="M13 10.5h4.4l3.1 3.4v2.6H13z" />, <circle key="3" cx="6.8" cy="18.4" r="1.9" />, <circle key="4" cx="16.8" cy="18.4" r="1.9" />],
-  ruler: [<path key="1" d="M3.2 15.6 15.6 3.2 20.8 8.4 8.4 20.8z" />, <path key="2" d="m7.2 11.6 2 2M10.2 8.6l2 2M13.2 5.6l2 2" />],
-  clock: [<circle key="1" cx="12" cy="12" r="8.5" />, <path key="2" d="M12 7.5V12l3.2 2" />],
-  check: [<path key="1" d="m4.8 12.6 4.9 4.9L19.2 6.9" />],
-  /* Молоток аукциона: головка ромбом, рукоять и подставка */
-  gavel: [
-    <path key="1" d="M12.8 2.8 21.2 11.2" />,
-    <path key="2" d="M9.8 5.8 18.2 14.2" />,
-    <path key="3" d="M12.8 2.8 9.8 5.8" />,
-    <path key="4" d="M21.2 11.2 18.2 14.2" />,
-    <path key="5" d="M11.5 13.5 4.2 20.6" />,
-    <path key="6" d="M2.6 21.4h8.2" />,
-  ],
-  mic: [<rect key="1" x="9" y="3" width="6" height="11" rx="3" />, <path key="2" d="M5.5 11.5a6.5 6.5 0 0 0 13 0" />, <path key="3" d="M12 18v3" />],
-}
+
+
 
 const STATUS_LABELS = {
   active: 'Активные',
@@ -73,13 +42,7 @@ function useApp() {
   return useContext(AppContext)
 }
 
-function Icon({ name, className = '' }) {
-  return (
-    <svg className={`icon-svg ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {iconPaths[name]}
-    </svg>
-  )
-}
+
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -89,45 +52,9 @@ function Screen({ children, padded = true }) {
   return <div className={`screen ${padded ? 'padded' : ''}`}>{children}</div>
 }
 
-function TopBar({ left, center, right }) {
-  // ТЗ 5.1: тени у шапки нет, а волосяная линия появляется только после
-  // скролла — поэтому следим за прокруткой здесь, в самой шапке.
-  const [scrolled, setScrolled] = useState(false)
-  useEffect(() => {
-    const onScroll = () => {
-      const y = window.scrollY || document.documentElement.scrollTop || 0
-      setScrolled(y > 8)
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    onScroll()
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
-  return (
-    <div className={'topbar' + (scrolled ? ' is-scrolled' : '')}>
-      <div className="topbar-side">{left}</div>
-      <div className="topbar-center">{center}</div>
-      <div className="topbar-side topbar-side--right">{right}</div>
-    </div>
-  )
-}
 
-function IconButton({ icon, to, active = false, onClick }) {
-  const className = `icon-btn ${active ? 'is-active' : ''}`.trim()
 
-  if (to) {
-    return (
-      <Link to={to} className={className}>
-        <Icon name={icon} />
-      </Link>
-    )
-  }
 
-  return (
-    <button className={className} type="button" onClick={onClick}>
-      <Icon name={icon} />
-    </button>
-  )
-}
 
 function MediaPlaceholder({ label = 'фото', tall = false, imageUrl = '' }) {
   if (imageUrl) {
@@ -3940,41 +3867,7 @@ function Layout() {
   )
 }
 
-function BottomNav() {
-  const location = useLocation()
-  // Пять ОДНОРОДНЫХ пунктов, как в Avito: раньше было четыре подписанных
-  // плюс кнопка и отдельный градиентный аватар — вместе шесть элементов,
-  // и док выглядел перегруженным. Поиск убран: он и так крупным полем
-  // в ленте. Профиль стал обычным пунктом вместо «пузыря».
-  const items = [
-    { icon: 'home', to: '/', label: 'Главная' },
-    { icon: 'bookmark', to: '/favorites', label: 'Избранное' },
-    { icon: 'chat', to: '/chats', label: 'Сообщения' },
-    { icon: 'user', to: '/profile', label: 'Профиль' },
-  ]
 
-  const renderItem = (item) => (
-    <NavLink
-      key={item.to}
-      to={item.to}
-      end
-      className={({ isActive }) => `dock-item ${isActive ? 'active' : ''}`}
-    >
-      <span className="dock-icon"><Icon name={item.icon} /></span>
-      <span className="dock-label">{item.label}</span>
-    </NavLink>
-  )
-
-  return (
-    <nav className="dock">
-      {items.slice(0, 2).map(renderItem)}
-      <NavLink to="/create" className="dock-create" aria-label="Разместить объявление">
-        <Icon name="plus" />
-      </NavLink>
-      {items.slice(2).map(renderItem)}
-    </nav>
-  )
-}
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
