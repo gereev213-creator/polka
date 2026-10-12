@@ -2431,20 +2431,16 @@ function SearchPage() {
       ) : null}
       <div className="section-head"><strong>{loading ? 'Ищем…' : 'Результаты'}</strong><span>{results.length}</span></div>
       {error ? <ErrorBlock text={error} /> : null}
-      {!loading && !error && results.length === 0 ? <EmptyBlock text="Ничего не найдено. Попробуйте изменить запрос." /> : null}
-      <div className="list-stack">
+      {!loading && !error && results.length === 0 ? (
+        <EmptyState text="Ничего не найдено. Попробуйте изменить запрос." icon={<Icon name="search" />} />
+      ) : null}
+      {/* Результаты — та же сетка и та же карточка, что на главной: .feed-grid
+          даёт колонки 2/3/4–5, а .feed-screen включает стили карточки лота из
+          feed.css. Без этой области пришлось бы дублировать ~10 правил, часть
+          из которых перебивает legacy только через !important. */}
+      <div className="grid-two feed-grid feed-screen">
         {results.map((item) => (
-          <Link to={`/listing/${item.id}`} key={item.id} className="result-row glass-card">
-            <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
-            <div>
-              <div className="product-price result-price">{priceText(item)}</div>
-              <div className="row-title">{item.title}</div>
-              <div className="product-city">{item.city}</div>
-            </div>
-            <button className={`save-btn inline ${favoriteIds.includes(item.id) ? 'is-on' : ''}`} type="button" onClick={(e) => { e.preventDefault(); toggleFavorite(item.id) }}>
-              <Icon name="heart" />
-            </button>
-          </Link>
+          <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)} onToggleFavorite={toggleFavorite} />
         ))}
       </div>
     </Screen>
@@ -2618,267 +2614,271 @@ function ListingPage() {
     )
   }
 
+  /* Цена — крупно и сразу под галереей. Раньше её вообще не было видно:
+     значение лежало только в скрытых плашках на фото (.hero-pins.is-hidden),
+     а сами плашки закрывали товар и дублировали текст ниже — они убраны. */
+  const priceValue = isAuction
+    ? `${Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽`
+    : priceText(item)
+  const priceLabel = isAuction ? (item.bids_count ? 'Текущая ставка' : 'Стартовая цена') : 'Цена'
+
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} right={<div className="top-actions"><IconButton icon="heart" active={favoriteIds.includes(listingId)} onClick={() => toggleFavorite(listingId)} /><IconButton icon="share" onClick={handleShare} /></div>} />
-      <div className="detail-hero">
-        {/* Свайпаемая лента фото: нативный горизонтальный скролл + scroll-snap */}
-        <div className="detail-gallery" ref={galleryRef} onScroll={handleGalleryScroll}>
-          {photos.length ? (
-            photos.map((url, idx) => (
-              <div className="detail-slide" key={`${url}-${idx}`}>
-                <MediaPlaceholder label="фотографии товара" tall imageUrl={url} />
-              </div>
-            ))
-          ) : (
-            <div className="detail-slide">
-              <MediaPlaceholder label="фотографии товара" tall />
-            </div>
-          )}
-        </div>
-
-        {/* Плавающие плашки-«якоря» поверх фото — ключевая деталь референса.
-            Они информационные, кликов не подразумевают, поэтому не <button>. */}
-        {/* Плашки на фото убраны: цена, город и состояние дублировали то,
-            что и так написано ниже, и закрывали сам товар. */}
-        <div className="hero-pins is-hidden" aria-hidden="true">
-          <div className="hero-pin" style={{ top: '11%' }}>
-            <span className="hero-pin-anchor" />
-            <span className="hero-pin-pill">
-              <span className="hero-pin-label">{isAuction ? 'Ставка' : 'Цена'}</span>
-              <span className="hero-pin-value">{priceText(item)}</span>
-            </span>
-            <span className="hero-pin-arrow"><Icon name="back" /></span>
-          </div>
-          {item.city ? (
-            <div className="hero-pin" style={{ top: '42%' }}>
-              <span className="hero-pin-anchor" />
-              <span className="hero-pin-pill">
-                <span className="hero-pin-label">Город</span>
-                <span className="hero-pin-value">{item.city}</span>
-              </span>
-              <span className="hero-pin-arrow"><Icon name="back" /></span>
-            </div>
-          ) : null}
-          {item.condition ? (
-            <div className="hero-pin" style={{ top: '73%' }}>
-              <span className="hero-pin-anchor" />
-              <span className="hero-pin-pill">
-                <span className="hero-pin-label">Состояние</span>
-                <span className="hero-pin-value">{item.condition}</span>
-              </span>
-              <span className="hero-pin-arrow"><Icon name="back" /></span>
-            </div>
-          ) : null}
-        </div>
-
-        {photos.length > 1 ? (
-          <>
-            <div className="detail-dots">
-              {photos.map((url, idx) => (
-                <button key={idx} type="button" aria-label={`Фото ${idx + 1}`}
-                  className={`detail-dot ${photoIndex === idx ? 'is-active' : ''}`}
-                  onClick={() => goToPhoto(idx)} />
-              ))}
-            </div>
-            <div className="detail-counter">{photoIndex + 1} / {photos.length}</div>
-          </>
-        ) : null}
-      </div>
-
-      <div className="detail-head">
-        <div className="listing-title">{item.title}</div>
-        {item.seller?.rating ? (
-          <div className="rating-row">
-            <Icon name="star" />
-            {Number(item.seller.rating).toFixed(1)}
-            <span>· {item.seller.reviews_count} отзывов</span>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Аукционный блок — сразу под заголовком: здесь важнее всего
-          текущая ставка и сколько осталось времени */}
-      {isAuction ? (
-        <div className="auction-panel glass-card">
-          <div className="auction-panel-top">
-            <div className="auction-panel-main">
-              <span className="auction-panel-label">
-                {item.bids_count ? 'Текущая ставка' : 'Стартовая цена'}
-              </span>
-              <strong className="auction-panel-price">
-                {Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽
-              </strong>
-              <span className="auction-panel-sub">
-                {item.bids_count
-                  ? `${item.bids_count} ${item.bids_count === 1 ? 'ставка' : item.bids_count < 5 ? 'ставки' : 'ставок'} · шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`
-                  : `шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`}
-              </span>
-            </div>
-            <div className="auction-panel-timer">
-              <span className="auction-panel-label">{item.time_left > 0 ? 'До конца' : 'Статус'}</span>
-              <Countdown seconds={item.time_left} className="auction-timer big"
-                doneText={item.winner_id ? 'Завершён' : 'Без ставок'} />
-            </div>
-          </div>
-
-          {item.buy_now_price && item.time_left > 0 ? (
-            <div className="auction-buynow">
-              <Icon name="sparkles" />
-              Можно забрать сразу за {Number(item.buy_now_price).toLocaleString('ru-RU')} ₽
-            </div>
-          ) : null}
-          {item.status === 'ended' && item.is_winner ? (
-            <div className="auction-result is-ok">
-              <Icon name="check" /> Вы выиграли этот лот. Напишите продавцу, чтобы договориться.
-            </div>
-          ) : null}
-          {isOwner && item.bids_count ? (
-            <button type="button" className="auction-history-toggle"
-              onClick={() => { setBidsOpen((v) => !v); if (!bidsOpen) loadBids() }}>
-              {bidsOpen ? 'Скрыть ставки' : `Показать ставки (${item.bids_count})`}
-            </button>
-          ) : null}
-          {bidsOpen ? (
-            <div className="auction-history">
-              {bidList.length ? bidList.map((b, i) => (
-                <div className="auction-history-row" key={`${b.created_at}-${i}`}>
-                  <span>{b.is_me ? 'Ваша ставка' : b.name}</span>
-                  <b>{Number(b.amount).toLocaleString('ru-RU')} ₽</b>
+      {/* В шапке остаётся только «назад»: сердечко и шер переехали в липкую
+          панель внизу, поэтому кнопкам больше нечего делить по выравниванию. */}
+      <TopBar left={<IconButton icon="back" to="/" />} />
+      <div className="listing-page">
+        <div className="detail-hero">
+          {/* Свайпаемая лента фото: нативный горизонтальный скролл + scroll-snap.
+              Слайды ровно по ширине экрана, а min-height у .detail-hero держит
+              высоту кадра — иначе свайп и подсчёт кадра ломаются. */}
+          <div className="detail-gallery" ref={galleryRef} onScroll={handleGalleryScroll}>
+            {photos.length ? (
+              photos.map((url, idx) => (
+                <div className="detail-slide" key={`${url}-${idx}`}>
+                  <MediaPlaceholder label="фотографии товара" tall imageUrl={url} />
                 </div>
-              )) : <div className="muted-line">Ставок пока нет.</div>}
+              ))
+            ) : (
+              <div className="detail-slide">
+                <MediaPlaceholder label="фотографии товара" tall />
+              </div>
+            )}
+          </div>
+
+          {photos.length > 1 ? (
+            <>
+              <div className="detail-dots">
+                {photos.map((url, idx) => (
+                  <button key={idx} type="button" aria-label={`Фото ${idx + 1}`}
+                    className={`detail-dot ${photoIndex === idx ? 'is-active' : ''}`}
+                    onClick={() => goToPhoto(idx)} />
+                ))}
+              </div>
+              <div className="detail-counter">{photoIndex + 1} / {photos.length}</div>
+            </>
+          ) : null}
+        </div>
+
+        {priceValue ? (
+          <div className="detail-price-block">
+            <span className="detail-price-label">{priceLabel}</span>
+            <div className="detail-price">{priceValue}</div>
+          </div>
+        ) : null}
+
+        <div className="detail-head">
+          <div className="listing-title">{item.title}</div>
+          {item.seller?.rating ? (
+            <div className="rating-row">
+              <Icon name="star" />
+              {Number(item.seller.rating).toFixed(1)}
+              <span>· {item.seller.reviews_count} отзывов</span>
             </div>
           ) : null}
         </div>
-      ) : null}
 
-      {/* Чипы-характеристики — как Weather / Temp / Event в референсе */}
-      <div className="spec-chips">
-        {item.condition ? (
-          <span className="spec-chip">
-            <Icon name="shield" /><span className="spec-chip-label">Состояние</span><span className="spec-chip-value">{item.condition}</span>
-          </span>
-        ) : null}
-        {item.city ? (
-          <span className="spec-chip">
-            <Icon name="pin" /><span className="spec-chip-label">{isFinding ? 'Объявление с Авито' : 'Город'}</span><span className="spec-chip-value">{item.city}</span>
-          </span>
-        ) : null}
-        {item.delivery ? (
-          <span className="spec-chip">
-            <Icon name="truck" /><span className="spec-chip-label">Доставка</span><span className="spec-chip-value">{item.delivery}</span>
-          </span>
-        ) : null}
-        {item.size ? (
-          <span className="spec-chip">
-            <Icon name="ruler" /><span className="spec-chip-label">Размер</span><span className="spec-chip-value">{item.size}</span>
-          </span>
-        ) : null}
-        {!isFinding ? (
-          <span className="spec-chip">
-            <Icon name="clock" /><span className="spec-chip-label">Просмотры</span><span className="spec-chip-value">{item.views || 0}</span>
-          </span>
-        ) : null}
-      </div>
+        {/* Аукционный блок — сразу под заголовком: здесь важнее всего
+            текущая ставка и сколько осталось времени */}
+        {isAuction ? (
+          <div className="auction-panel glass-card">
+            <div className="auction-panel-top">
+              <div className="auction-panel-main">
+                <span className="auction-panel-label">
+                  {item.bids_count ? 'Текущая ставка' : 'Стартовая цена'}
+                </span>
+                <strong className="auction-panel-price">
+                  {Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽
+                </strong>
+                <span className="auction-panel-sub">
+                  {item.bids_count
+                    ? `${item.bids_count} ${item.bids_count === 1 ? 'ставка' : item.bids_count < 5 ? 'ставки' : 'ставок'} · шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`
+                    : `шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`}
+                </span>
+              </div>
+              <div className="auction-panel-timer">
+                <span className="auction-panel-label">{item.time_left > 0 ? 'До конца' : 'Статус'}</span>
+                <Countdown seconds={item.time_left} className="auction-timer big"
+                  doneText={item.winner_id ? 'Завершён' : 'Без ставок'} />
+              </div>
+            </div>
 
-      <div className="copy-block glass-card mt-12">
-        <strong>Описание</strong>
-        <p>{item.description || 'Без описания.'}</p>
-      </div>
-
-      {/* Нижний ряд — как «AR View» + «Schedule for Event» в референсе */}
-      <div className="detail-actions">
-        {isOwner ? (
-          <>
-            <Link to={`/edit/${item.id}`} className="cta-primary">
-              <Icon name="menu" />
-              Редактировать
-            </Link>
-            <button className="cta-dark" type="button" onClick={handleDelete}>
-              {actionLoading === 'delete' ? '…' : 'Удалить'}
-            </button>
-            {item.status === 'active' ? (
-              <button className="cta-round" type="button" onClick={handleSold} aria-label="Отметить проданным">
-                {actionLoading === 'sold' ? '…' : <Icon name="check" />}
+            {item.buy_now_price && item.time_left > 0 ? (
+              <div className="auction-buynow">
+                <Icon name="sparkles" />
+                Можно забрать сразу за {Number(item.buy_now_price).toLocaleString('ru-RU')} ₽
+              </div>
+            ) : null}
+            {item.status === 'ended' && item.is_winner ? (
+              <div className="auction-result is-ok">
+                <Icon name="check" /> Вы выиграли этот лот. Напишите продавцу, чтобы договориться.
+              </div>
+            ) : null}
+            {isOwner && item.bids_count ? (
+              <button type="button" className="auction-history-toggle"
+                onClick={() => { setBidsOpen((v) => !v); if (!bidsOpen) loadBids() }}>
+                {bidsOpen ? 'Скрыть ставки' : `Показать ставки (${item.bids_count})`}
               </button>
             ) : null}
-          </>
-        ) : (
-          <>
-            {isAuction && item.time_left > 0 ? (
-              <button className="cta-primary" type="button" onClick={() => setBidOpen(true)}>
-                <Icon name="gavel" />
-                Сделать ставку
+            {bidsOpen ? (
+              <div className="auction-history">
+                {bidList.length ? bidList.map((b, i) => (
+                  <div className="auction-history-row" key={`${b.created_at}-${i}`}>
+                    <span>{b.is_me ? 'Ваша ставка' : b.name}</span>
+                    <b>{Number(b.amount).toLocaleString('ru-RU')} ₽</b>
+                  </div>
+                )) : <div className="muted-line">Ставок пока нет.</div>}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Чипы-характеристики — как Weather / Temp / Event в референсе */}
+        <div className="spec-chips">
+          {item.condition ? (
+            <span className="spec-chip">
+              <Icon name="shield" /><span className="spec-chip-label">Состояние</span><span className="spec-chip-value">{item.condition}</span>
+            </span>
+          ) : null}
+          {item.city ? (
+            <span className="spec-chip">
+              <Icon name="pin" /><span className="spec-chip-label">{isFinding ? 'Объявление с Авито' : 'Город'}</span><span className="spec-chip-value">{item.city}</span>
+            </span>
+          ) : null}
+          {item.delivery ? (
+            <span className="spec-chip">
+              <Icon name="truck" /><span className="spec-chip-label">Доставка</span><span className="spec-chip-value">{item.delivery}</span>
+            </span>
+          ) : null}
+          {item.size ? (
+            <span className="spec-chip">
+              <Icon name="ruler" /><span className="spec-chip-label">Размер</span><span className="spec-chip-value">{item.size}</span>
+            </span>
+          ) : null}
+          {!isFinding ? (
+            <span className="spec-chip">
+              <Icon name="clock" /><span className="spec-chip-label">Просмотры</span><span className="spec-chip-value">{item.views || 0}</span>
+            </span>
+          ) : null}
+        </div>
+
+        {/* Пустое описание больше не занимает экран: блока «Без описания» нет */}
+        {String(item.description || '').trim() ? (
+          <div className="copy-block glass-card mt-12">
+            <strong>Описание</strong>
+            <p>{item.description}</p>
+          </div>
+        ) : null}
+
+        {/* Продавец: аватар, имя, статус. Раньше аватар был пустым кружком */}
+        {!isFinding ? (
+          <div className="seller-card glass-card mt-12">
+            <div className="avatar">{(item.seller?.name || 'П')[0]?.toUpperCase()}</div>
+            <div className="seller-meta">
+              <strong>{item.seller?.name || 'Продавец'}</strong>
+              <span>{item.seller?.verified ? 'Проверен' : 'Профиль продавца'} · {item.favorites_count || 0} в избранном</span>
+            </div>
+          </div>
+        ) : null}
+
+        {isOwner ? (
+          <div className="setting-row glass-card mt-12">
+            <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>
+          </div>
+        ) : null}
+
+        {/* «Удалить» — спокойной danger-строкой в конце страницы и только
+            у своих лотов: у чужого объявления кнопки удаления нет. */}
+        {isOwner ? (
+          <button type="button" className="danger-text-btn mt-12" onClick={handleDelete}>
+            {actionLoading === 'delete' ? '…' : 'Удалить'}
+          </button>
+        ) : null}
+        {isFinding ? (
+          <button type="button" className="danger-text-btn mt-12"
+            onClick={async () => {
+              try {
+                await api.hideFinding(item.id)
+                window.history.back()
+              } catch (e) {
+                setError('Не удалось убрать лот')
+              }
+            }}>Удалить лот из находок</button>
+        ) : null}
+
+        {/* Липкая нижняя панель действий: главный сценарий всегда под рукой,
+            снизу учтён safe-area. Позиционирование — sticky, поэтому панель
+            остаётся в колонке контента и на десктопе, а не растягивается. */}
+        <div className="detail-bar">
+          {isOwner ? (
+            <>
+              <Link to={`/edit/${item.id}`} className="cta-primary">
+                <Icon name="menu" />
+                Редактировать
+              </Link>
+              {item.status === 'active' ? (
+                <button className="cta-round" type="button" onClick={handleSold} aria-label="Отметить проданным">
+                  {actionLoading === 'sold' ? '…' : <Icon name="check" />}
+                </button>
+              ) : null}
+              {/* Шер своего лота остаётся доступным: он был в шапке, а шапку
+                  мы разгрузили — переносим действие в панель. */}
+              <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
+                <Icon name="share" />
               </button>
-            ) : (
-              isFinding ? (
-                <button className="cta-primary" type="button"
-                  onClick={() => {
-                    const tg = window.Telegram?.WebApp
-                    if (tg?.openLink) tg.openLink(item.source_url)
-                    else window.open(item.source_url, '_blank', 'noopener')
-                  }}>
-                  <Icon name="send" />
-                  Открыть
+            </>
+          ) : (
+            <>
+              {isAuction && item.time_left > 0 ? (
+                <button className="cta-primary" type="button" onClick={() => setBidOpen(true)}>
+                  <Icon name="gavel" />
+                  Сделать ставку
                 </button>
               ) : (
-                <button className="cta-primary" type="button" onClick={handleStartChat}>
-                  <Icon name="chat" />
-                  {chatLoading ? 'Открываем…' : 'Написать'}
+                isFinding ? (
+                  <button className="cta-primary" type="button"
+                    onClick={() => {
+                      const tg = window.Telegram?.WebApp
+                      if (tg?.openLink) tg.openLink(item.source_url)
+                      else window.open(item.source_url, '_blank', 'noopener')
+                    }}>
+                    <Icon name="send" />
+                    Открыть
+                  </button>
+                ) : (
+                  <button className="cta-primary" type="button" onClick={handleStartChat}>
+                    <Icon name="chat" />
+                    {chatLoading ? 'Открываем…' : 'Написать'}
+                  </button>
+                )
+              )}
+              {isAuction && item.time_left > 0 && item.buy_now_price ? (
+                <button className="cta-dark" type="button" onClick={handleBuyNow}
+                  disabled={actionLoading === 'buy'}>
+                  {actionLoading === 'buy' ? '…' : 'Купить'}
                 </button>
-              )
-            )}
-            {isAuction && item.time_left > 0 && item.buy_now_price ? (
-              <button className="cta-dark" type="button" onClick={handleBuyNow}
-                disabled={actionLoading === 'buy'}>
-                {actionLoading === 'buy' ? '…' : 'Купить'}
+              ) : null}
+              <button
+                className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
+                type="button"
+                onClick={() => toggleFavorite(listingId)}
+                aria-label="В избранное"
+              >
+                <Icon name="heart" />
               </button>
-            ) : null}
-            <button
-              className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
-              type="button"
-              onClick={() => toggleFavorite(listingId)}
-              aria-label="В избранное"
-            >
-              <Icon name="heart" />
-            </button>
-            <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
-              <Icon name="share" />
-            </button>
-            {isAuction && item.time_left > 0 ? (
-              <button className="cta-round" type="button" onClick={handleStartChat}
-                aria-label="Написать продавцу">
-                <Icon name="chat" />
+              <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
+                <Icon name="share" />
               </button>
-            ) : null}
-          </>
-        )}
-      </div>
-      {!isFinding ? (
-      <div className="seller-card glass-card mt-12">
-        <div className="avatar" />
-        <div className="seller-meta">
-          <strong>{item.seller?.name || 'Продавец'}</strong>
-          <span>{item.seller?.verified ? 'Проверен' : 'Профиль продавца'} · {item.favorites_count || 0} в избранном</span>
+              {isAuction && item.time_left > 0 ? (
+                <button className="cta-round" type="button" onClick={handleStartChat}
+                  aria-label="Написать продавцу">
+                  <Icon name="chat" />
+                </button>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
-      ) : null}
-      {isFinding ? (
-        <button type="button" className="ghost-btn mt-12"
-          onClick={async () => {
-            try {
-              await api.hideFinding(item.id)
-              window.history.back()
-            } catch (e) {
-              setError('Не удалось убрать лот')
-            }
-          }}>Удалить лот из находок</button>
-      ) : null}
-      {isOwner ? (
-        <div className="setting-row glass-card mt-12">
-          <span>Статус: {STATUS_LABELS[item.status] || item.status}</span>
-        </div>
-      ) : null}
       {bidOpen && isAuction ? (
         <BidSheet
           item={item}
@@ -3770,26 +3770,36 @@ function FavoritesPage() {
 
   return (
     <Screen>
-      <TopBar left={<Logo />} right={<IconButton icon="bookmark" active />} />
-      <div className="page-title">Избранное</div>
-      {loading ? <LoadingBlock /> : null}
-      {error ? <ErrorBlock text={error} onRetry={load} /> : null}
-      {!loading && !error && items.length === 0 ? <EmptyBlock text="Вы пока ничего не сохранили." /> : null}
-      <div className="list-stack mt-14">
-        {items.map((item) => (
-          <div key={item.id} className="favorite-row glass-card"
-            style={{ cursor: 'pointer' }}
-            onClick={() => { window.location.hash = `#/listing/${item.id}` }}>
-            <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
-            <div>
-              <div className="product-price result-price">{priceText(item)}</div>
-              <div className="row-title">{item.title}</div>
-              <div className="product-city">{item.city}</div>
+      {/* Иконка-закладка из шапки убрана: она дублировала заголовок
+          «Избранное» и ничего не делала. */}
+      <TopBar left={<Logo />} />
+      <div className="favorites-page">
+        <div className="page-title">Избранное</div>
+        {loading ? <LoadingBlock /> : null}
+        {error ? <ErrorBlock text={error} onRetry={load} /> : null}
+        {!loading && !error && items.length === 0 ? (
+          <EmptyState text="Вы пока ничего не сохранили." icon={<Icon name="heart" />} />
+        ) : null}
+        <div className="list-stack mt-14">
+          {items.map((item) => (
+            <div key={item.id} className="favorite-row glass-card"
+              style={{ cursor: 'pointer' }}
+              onClick={() => { window.location.hash = `#/listing/${item.id}` }}>
+              <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
+              <div>
+                <div className="product-price result-price">{priceText(item)}</div>
+                <div className="row-title">{item.title}</div>
+                <div className="product-city">{item.city}</div>
+              </div>
+              {/* Вместо красной «×» — спокойная ghost-кнопка с корзиной:
+                  удаление из избранного не должно выглядеть как тревога. */}
+              <button className="favorite-remove" type="button" aria-label="Убрать из избранного"
+                onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id) }}>
+                <Icon name="trash" />
+              </button>
             </div>
-            <button className="trash-btn" type="button"
-              onClick={(e) => { e.stopPropagation(); toggleFavorite(item.id) }}>×</button>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </Screen>
   )

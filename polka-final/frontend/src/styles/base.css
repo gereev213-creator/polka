@@ -118,9 +118,9 @@ button:disabled, [aria-disabled="true"] {
    давали ~192px пустоты. Оставляем только на .screen. */
 .app-frame { padding-bottom: 0; }
 
-/* 4. ТЁМНАЯ ТЕМА. В styles.css остались два рабочих @media
-   (prefers-color-scheme: dark), которые делали шапку тёмной. Гасим их
-   здесь: наши правила идут позже и с той же специфичностью. */
+/* 4. ТЁМНАЯ ТЕМА. В styles.css остались два рабочих медиазапроса по цветовой
+   схеме системы, которые делали шапку тёмной. Гасим их здесь: наши правила
+   идут позже и с той же специфичностью. */
 .topbar { background: transparent; }
 .topbar.is-scrolled { background: var(--bg-glass-strong); }
 
