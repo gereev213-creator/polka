@@ -1,23 +1,4 @@
-:root {
-  --bg: #F4F5F8;
-  --surface: #FFFFFF;
-  --surface-2: #F1F2F5;
-  --border: #ECEDF1;
-  --text: #0B0B0F;
-  --text-secondary: #8A8F98;
-  --accent: #2F6BFF;
-  --accent-hover: #1E56E8;
-  --ink: #17171A;
-  --success: #22C55E;
-  --warning: #F59E0B;
-  --danger: #EF4444;
-  --radius: 20px;
-  --radius-lg: 28px;
-  --shadow: 0 6px 24px rgba(17,24,39,.07);
-  --soft: 0 2px 10px rgba(17,24,39,.05);
-  /* Градиентное кольцо историй — как в референсе (янтарь → розовый → фиолет) */
-  --ring: conic-gradient(from 210deg, #F59E0B, #EC4899, #8B5CF6, #3B82F6, #F59E0B);
-}
+
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -29,12 +10,7 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
-body {
-  background:
-    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(59,130,246,.15), transparent),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139,92,246,.1), transparent),
-    var(--bg);
-}
+
 
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
@@ -3720,72 +3696,10 @@ button:active,
    Значения задаются СУЩЕСТВУЮЩИМ именам (--bg, --surface, --text…), поэтому
    весь интерфейс меняется без правки разметки ни в одном файле.
    ══════════════════════════════════════════════════════════════════════════ */
-:root {
-  /* canvas & surface */
-  --bg: #F5F5F7;
-  --surface: #FFFFFF;
-  --surface-2: #E8E8ED;
-  --border: rgba(60, 60, 67, 0.12);
-  --hairline: rgba(60, 60, 67, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --bg-glass: rgba(255, 255, 255, 0.72);
-  --bg-glass-strong: rgba(255, 255, 255, 0.85);
 
-  /* text */
-  --text: #1D1D1F;
-  --ink: #1D1D1F;
-  --text-secondary: #6E6E73;
-  --text-tertiary: #8E8E93;
-
-  /* accent и CTA */
-  --accent: #0071E3;
-  --accent-hover: #0063C8;
-  --cta-bg: #1D1D1F;
-  --cta-text: #FFFFFF;
-
-  /* semantics */
-  --success: #34C759;
-  --warning: #FF9F0A;
-  --danger: #FF3B30;
-
-  /* формы: только три радиуса + pill */
-  --radius: 12px;
-  --radius-btn: 14px;
-  --radius-panel: 20px;
-  --radius-lg: 20px;
-  --radius-pill: 999px;
-
-  /* тени: не тяжелее разрешённой */
-  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
-  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
-  --soft: 0 1px 2px rgba(0, 0, 0, .04);
-
-  /* Градиентное кольцо историй убрано: по ТЗ градиентов быть не должно */
-  --ring: #0071E3;
-}
 
 /* Тёмная тема — по ТЗ */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #000000;
-    --surface: #1C1C1E;
-    --surface-2: #2C2C2E;
-    --border: rgba(84, 84, 88, 0.36);
-    --hairline: rgba(84, 84, 88, 0.36);
-    --glass-border: rgba(255, 255, 255, 0.10);
-    --bg-glass: rgba(28, 28, 30, 0.72);
-    --bg-glass-strong: rgba(28, 28, 30, 0.85);
-    --text: #F5F5F7;
-    --ink: #F5F5F7;
-    --text-secondary: #98989D;
-    --text-tertiary: #8E8E93;
-    --cta-bg: #F5F5F7;
-    --cta-text: #1D1D1F;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
-    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
-    --soft: 0 1px 2px rgba(0, 0, 0, .30);
-  }
-}
+
 
 /* ── Состояния элементов (раздел 7 ТЗ) ─────────────────────────────────── */
 button, a, [role="button"], input, textarea, select {
