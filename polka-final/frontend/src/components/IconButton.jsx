@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Icon } from './Icon'
 
-export function IconButton({ icon, to, active = false, onClick }) {
+export function IconButton({ icon, to, active = false, onClick, label = '', ...rest }) {
   const className = `icon-btn ${active ? 'is-active' : ''}`.trim()
 
   if (to) {
@@ -13,7 +13,7 @@ export function IconButton({ icon, to, active = false, onClick }) {
   }
 
   return (
-    <button className={className} type="button" onClick={onClick}>
+    <button className={className} type="button" onClick={onClick} aria-label={label || undefined}>
       <Icon name={icon} />
     </button>
   )

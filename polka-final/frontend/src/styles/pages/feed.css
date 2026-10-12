@@ -1,0 +1,235 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — ЭТАП 2: ГЛАВНАЯ (сегмент «Находки / Барахолка», лента, карточка
+   лота, истории, категории, баннер, состояния).
+   Подключается ПОСЛЕ components.css, поэтому спокойно переопределяет
+   legacy-правила styles.css без !important (единственное исключение —
+   свойства, которые в styles.css помечены !important: их можно перебить
+   только таким же !important, сами старые правила не трогаем — это этап 5).
+   Значения — через токены из styles/tokens.css.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Контейнер ленты ───────────────────────────────────────────────────
+   .app-frame уже центрирует контент и держит боковые поля (base.css), но
+   legacy-правила styles.css режут #root до 520 px и .screen до 520 px —
+   в такие рамки 4–5 колонок на десктопе не влезают. Ослабляем их только
+   для главной: остальные экраны по-прежнему ограничены .screen. */
+#root:has(.feed-screen) { max-width: none; }
+/* Без :has() (старые WebView) — мягкий фолбэк: расширяем только на десктопе */
+@supports not selector(:has(*)) {
+  @media (min-width: 1024px) {
+    #root { max-width: none; }
+  }
+}
+/* .screen.padded задаёт те же 16 px, что и .app-frame, поэтому на главной
+   отступы удваивались — контент и шапка встают по одной линии. */
+.screen.feed-screen {
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
+}
+.feed-screen .topbar { padding-left: 0; padding-right: 0; }
+
+/* ── 2. Сетка ленты: 2 / 3 / 4–5 колонок ─────────────────────────────────
+   .feed-grid добавляется к .grid-two (старый класс не удаляем): он задаёт
+   два столбца, здесь раскладываем по брейкпоинтам 768 / 1024 / 1280. */
+.feed-grid,
+.feed-screen .sk-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.feed-screen .sk-grid { padding: 0; }
+@media (min-width: 768px) {
+  .feed-grid,
+  .feed-screen .sk-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-4);
+  }
+}
+@media (min-width: 1024px) {
+  .feed-grid,
+  .feed-screen .sk-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .feed-grid,
+  .feed-screen .sk-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+
+/* ── 3. Карточка лота ──────────────────────────────────────────────────── */
+
+/* Равные по высоте карточки в строке: цена прижата к низу */
+.feed-screen .product-card { display: flex; flex-direction: column; }
+.feed-screen .product-card .product-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+}
+
+/* Фото 4:3, object-fit: cover, плейсхолдер по центру (ТЗ этап 2) */
+.feed-screen .product-media { aspect-ratio: 4 / 3; }
+.feed-screen .product-media .media-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* «ниже рынка» — левый верхний угол, сердечко — правый верхний:
+   физически не пересекаются (62 px справа всегда свободны под кнопку 44 px) */
+.feed-screen .product-card .deal-badge {
+  top: var(--space-2);
+  left: var(--space-2);
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: -.02em;
+  max-width: calc(100% - 62px);
+}
+.feed-screen .product-card .save-btn {
+  top: var(--space-2);
+  right: var(--space-2);
+  background: var(--bg-glass-strong);
+  box-shadow: var(--soft);
+}
+
+/* Кнопка перехода к лоту: светлая круглая кнопка со стрелкой на фото.
+   Раньше это был чёрный квадрат с «самолётиком» в нижней строке карточки. */
+.feed-screen .product-card .product-action {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  z-index: 2;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-glass-strong);
+  color: var(--accent);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--soft);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Цена — крупным текстом под фото, без синей пилюли */
+.feed-screen .product-bottom {
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+.feed-screen .product-bottom .product-price {
+  padding: 0 !important;          /* перебиваем legacy padding с !important */
+  background: none;
+  border-radius: 0;
+  color: var(--text);
+  font-size: var(--fs-sub);       /* 17 px */
+  line-height: var(--lh-sub);
+  font-weight: 700;
+  letter-spacing: -.02em;
+}
+
+/* Заголовок ровно в две строки — строки сетки не «пляшут» */
+.feed-screen .product-card .product-title { min-height: 2.7em; }
+
+/* Подпись выгоды: кнопка уехала на фото, поэтому место под неё больше не
+   резервируем — текст «дешевле на 27%» перестаёт обрезаться */
+.feed-screen .product-deal {
+  padding-right: 0 !important;
+  font-size: 12px !important;
+  line-height: 16px !important;
+}
+
+/* Метка-вердикт ИИ: тот же ритм, что и остальная мета */
+.feed-screen .product-card .verdict-line { margin-bottom: var(--space-1); }
+
+/* ── 4. Горизонтальные ленты: scroll-snap и видимый край следующего ────── */
+.stories-row,
+.category-cards {
+  scroll-snap-type: x proximity;
+  overscroll-behavior-x: contain;
+  max-width: 100%;
+  padding-right: var(--space-2);
+}
+.stories-row > *,
+.category-cards > * { scroll-snap-align: start; }
+@media (prefers-reduced-motion: reduce) {
+  .stories-row,
+  .category-cards { scroll-snap-type: none; }
+}
+
+/* ── 5. Истории: кольца сохранены, приведены к токенам темы ───────────── */
+.feed-screen .story-avatar { border-color: var(--surface); }
+.feed-screen .story-ring.is-own .story-avatar { background: var(--surface); }
+.feed-screen .story-add { border-color: var(--surface); box-shadow: var(--soft); }
+.feed-screen .story-badge { border-color: var(--surface); }
+.feed-screen .stories-head { font-size: var(--fs-cap); }
+
+/* ── 6. Категории: текст слева сверху, иллюстрация справа снизу ──────────
+   Фон — светлый градиент от акцента к поверхности вместо серой плашки;
+   иллюстрация ограничена по размеру, чтобы не наезжать на подпись. */
+.category-cards .cat-tile {
+  flex: 0 0 146px;
+  height: 108px;
+  padding: var(--space-3);
+  background: linear-gradient(155deg,
+    color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%,
+    var(--surface) 62%);
+  border: 1px solid var(--border);
+}
+.category-cards .cat-tile::after {
+  background: linear-gradient(100deg,
+    color-mix(in srgb, var(--accent) 12%, var(--surface)) 34%,
+    transparent 72%);
+}
+.category-cards .cat-tile-label {
+  max-width: 66%;
+  font-size: 13px;
+  line-height: 1.16;
+}
+.category-cards .cat-tile-art {
+  width: 78px;
+  height: 66px;
+}
+.category-cards .cat-tile.is-selected {
+  background: linear-gradient(155deg,
+    color-mix(in srgb, var(--accent) 22%, var(--surface)) 0%,
+    var(--surface) 68%);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  box-shadow: var(--soft);
+}
+
+/* ── 7. Баннер-карусель: индикаторы крупнее (ТЗ этап 2) ────────────────── */
+.feed-screen .feed-banner-dots {
+  right: var(--space-4);
+  bottom: var(--space-3);
+  gap: var(--space-2);
+}
+.feed-screen .feed-banner-dot {
+  width: 8px;
+  height: 8px;
+  background: rgba(255, 255, 255, .55);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, .14);
+}
+.feed-screen .feed-banner-dot.is-active {
+  width: 20px;
+  border-radius: var(--radius-pill);
+  background: #fff;
+}
+
+/* ── 8. Пояснение про барахолку: компактная карточка вместо серого блока ─ */
+.feed-screen .board-note {
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+.feed-screen .board-note span { font-size: 12.5px; }
+
+/* ── 9. Скелетон ленты ─────────────────────────────────────────────────── */
+.feed-screen .feed-skeleton { margin-top: var(--space-3); }
+.feed-screen .skeleton-banner { border-radius: var(--radius-panel); }
+
+/* ── 10. Секции и переходы ленты ───────────────────────────────────────── */
+.feed-screen .section-head { margin: var(--space-5) 0 var(--space-3); }
+.feed-screen .hunt-cta { border-radius: var(--radius-panel); }
+.feed-screen .search-input { border-radius: var(--radius-panel); }

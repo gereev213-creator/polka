@@ -25,13 +25,11 @@ export function initTelegramMiniApp() {
   return tg
 }
 
-// Цвета берём из темы Telegram, а не зашитыми числами: значения из
-// themeParams прокидываем в CSS-переменные --tg-theme-*, а colorScheme
-// сообщаем токенам через data-атрибут, чтобы тема Telegram имела
-// приоритет над системной.
+// Цвета берём из нашей палитры: тёмная тема убрана по решению заказчика,
+// приложение всегда светлое. Значения themeParams всё равно прокидываем
+// в CSS как --tg-theme-* — ими пользуются компоненты, если понадобится.
 function applyTelegramTheme(tg) {
   const p = tg.themeParams || {}
-  const dark = tg.colorScheme === 'dark'
   const root = document.documentElement
 
   const map = {
@@ -48,11 +46,13 @@ function applyTelegramTheme(tg) {
     if (map[key]) root.style.setProperty(key, map[key])
   })
 
-  root.dataset.tgTheme = dark ? 'dark' : 'light'
+  // Приложение всегда светлое: тёмная тема убрана по решению заказчика.
+  root.dataset.tgTheme = 'light'
 
-  // Фолбэк — значения нашей палитры, если Telegram цвет не прислал.
-  tg.setHeaderColor?.(p.header_bg_color || (dark ? '#1C1C1E' : '#F5F5F7'))
-  tg.setBackgroundColor?.(p.bg_color || (dark ? '#000000' : '#F5F5F7'))
+  // Цвета шапки и фона — из нашей палитры. Цвета Telegram не подставляем:
+  // в тёмном Telegram они сделали бы шапку тёмной при светлом приложении.
+  tg.setHeaderColor?.('#F5F5F7')
+  tg.setBackgroundColor?.('#F5F5F7')
 }
 
 export function getInitData() {

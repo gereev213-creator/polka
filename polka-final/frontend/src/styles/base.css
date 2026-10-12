@@ -97,3 +97,33 @@ button:disabled, [aria-disabled="true"] {
     transition: none !important;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ИСПРАВЛЕНИЯ ПО АУДИТУ. Файл подключён последним, поэтому эти правила
+   перебивают legacy из styles.css без !important и без его правки.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1. АДАПТИВНОСТЬ. В styles.css остались #root{max-width:520px} и
+   .screen{max-width:520px} — они зажимали контейнер, и брейкпоинты из
+   .app-frame не работали (ID-селектор сильнее класса). Снимаем зажим. */
+#root { max-width: none; }
+.screen, .screen.padded { max-width: none; }
+
+/* 2. 100dvh. .chat-screen{height:100vh} и .chat-wrap{calc(100vh - 150px)}
+   при клавиатуре ломали чат и ИИ-поиск. Перекрываем на dvh. */
+.chat-screen { height: 100dvh; }
+.chat-wrap { min-height: calc(100dvh - 150px); }
+
+/* 3. ОТСТУП ПОД ДОК БЫЛ УДВОЕН: .app-frame (base.css) + .screen (base.css)
+   давали ~192px пустоты. Оставляем только на .screen. */
+.app-frame { padding-bottom: 0; }
+
+/* 4. ТЁМНАЯ ТЕМА. В styles.css остались два рабочих @media
+   (prefers-color-scheme: dark), которые делали шапку тёмной. Гасим их
+   здесь: наши правила идут позже и с той же специфичностью. */
+.topbar { background: transparent; }
+.topbar.is-scrolled { background: var(--bg-glass-strong); }
+
+/* 5. ЗОНЫ НАЖАТИЯ. По ТЗ не меньше 44px; аудит нашёл 38/36/26px. */
+.segmented button { min-height: 44px; }
+.attach-btn, .tool-btn, .back-to-top { min-height: 44px; min-width: 44px; }

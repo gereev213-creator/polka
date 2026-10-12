@@ -3682,11 +3682,7 @@ html, body, #root {
 @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
   .topbar { background: rgba(255, 255, 255, 0.92); }
 }
-@media (prefers-color-scheme: dark) {
-  @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
-    .topbar { background: rgba(28, 28, 30, 0.94); }
-  }
-}
+
 
 /* ── ТЗ 1: safe-area и отступ под нижнюю полосу ─────────────────────────── */
 /* Док занимает 80 px снизу (16 отступ + 64 высота), но контент этого не
@@ -3854,11 +3850,7 @@ html, body, #root {
     border-bottom: 0.5px solid var(--hairline);
   }
 }
-@media (prefers-color-scheme: dark) {
-  @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
-    .topbar.is-scrolled { background: rgba(28, 28, 30, 0.96); }
-  }
-}
+
 
 /* ── Кнопка «назад»: одна форма на всех экранах ────────────────────────── */
 /* В чате была круглая, на остальных — квадрат 12 px. Приводим к общей:

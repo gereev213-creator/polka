@@ -16,6 +16,9 @@ import { api, resolveAssetUrl } from './api'
 import { Skeleton } from './components/Skeleton'
 import { EmptyState } from './components/EmptyState'
 import { ErrorState } from './components/ErrorState'
+// Сегмент-переключатель из дизайн-системы: та же разметка .segmented,
+// но с ролью tablist и одним источником стилей (этап 1).
+import { SegmentedControl } from './components/SegmentedControl'
 
 import { Icon } from './components/Icon'
 import { IconButton } from './components/IconButton'
@@ -281,9 +284,34 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         {Number(item.discount_percent) >= 15 ? (
           <span className="deal-badge">ниже рынка</span>
         ) : null}
-        <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}>
+        <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}
+          aria-label={favorite ? 'Убрать из избранного' : 'В избранное'}>
           <Icon name="heart" />
         </button>
+        {/* Кнопка перехода к лоту живёт на фото, а не в нижней строке: раньше
+            она была абсолютной в правом нижнем углу карточки, наезжала на
+            подпись выгоды и заставляла обрезать её («дешевле н…»). */}
+        {item.source_url ? (
+          /* Находка с Авито: понятная стрелка «открыть на сайте» вместо
+             чёрного «самолётика» — тот же переход, но читаемый. */
+          <button className="product-action" type="button"
+            aria-label="Открыть объявление на Авито"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              const tg = window.Telegram?.WebApp
+              if (tg?.openLink) tg.openLink(item.source_url)
+              else window.open(item.source_url, '_blank', 'noopener')
+            }}>
+            <Icon name="arrowUpRight" />
+          </button>
+        ) : (
+          <button className="product-action" type="button"
+            aria-label={favorite ? 'Убрать из избранного' : 'В избранное'}
+            onClick={handleFavorite}>
+            <Icon name="chat" />
+          </button>
+        )}
       </div>
       <div className="product-info">
         {item.ai_verdict ? (
@@ -306,23 +334,6 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
           {Number(item.discount_percent) >= 15 ? (
             <div className="product-deal">дешевле на {Math.round(item.discount_percent)}%</div>
           ) : null}
-          {item.source_url ? (
-            /* Находка с Авито: стрелка ведёт на исходное объявление */
-            <button className="product-action" type="button"
-              onClick={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                const tg = window.Telegram?.WebApp
-                if (tg?.openLink) tg.openLink(item.source_url)
-                else window.open(item.source_url, '_blank', 'noopener')
-              }}>
-              <Icon name="send" />
-            </button>
-          ) : (
-            <button className="product-action" type="button" onClick={handleFavorite}>
-              <Icon name="chat" />
-            </button>
-          )}
         </div>
       </div>
     </Link>
@@ -1553,7 +1564,7 @@ function FindingsView() {
           <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
         )
       ) : null}
-      <div className="grid-two">
+      <div className="grid-two feed-grid">
         {items.map((item) => (
           <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)}
             onToggleFavorite={toggleFavorite} />
@@ -2114,56 +2125,51 @@ function FeedPage() {
 
   if (!mounted) {
     return (
-      <Screen>
+      // .feed-screen вместо <Screen>: ленте нужен собственный, более широкий
+      // контейнер под сетки 3/4–5 колонок (см. styles/pages/feed.css).
+      <div className="screen padded feed-screen">
         <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
         <div className="feed-skeleton">
           <div className="skeleton-banner" />
-          <div className="skeleton-row">
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-          </div>
+          <Skeleton variant="grid" />
         </div>
-      </Screen>
+      </div>
     )
   }
 
   if (loading && items.length === 0) {
     return (
-      <Screen>
+      <div className="screen padded feed-screen">
         <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
         <div className="feed-skeleton">
           <div className="skeleton-banner" />
-          <div className="skeleton-row">
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-          </div>
-          <div className="skeleton-row">
-            <div className="skeleton-card" />
-            <div className="skeleton-card" />
-          </div>
+          <Skeleton variant="grid" />
         </div>
-      </Screen>
+      </div>
     )
   }
 
   if (error && items.length === 0) {
     return (
-      <Screen>
+      <div className="screen padded feed-screen">
         <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
         <ErrorBlock text="Не удалось загрузить ленту. Проверь подключение к интернету." onRetry={() => load(activeCategory, 0, false)} />
-      </Screen>
+      </div>
     )
   }
 
   return (
-    <Screen>
+    <div className="screen padded feed-screen">
       <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-      <div className="segmented feed-switch">
-        <button type="button" className={feedTab === 'deals' ? 'is-active' : ''}
-          onClick={() => setFeedTab('deals')}>Находки</button>
-        <button type="button" className={feedTab === 'ads' ? 'is-active' : ''}
-          onClick={() => setFeedTab('ads')}>Барахолка</button>
-      </div>
+      <SegmentedControl
+        className="feed-switch"
+        value={feedTab}
+        onChange={setFeedTab}
+        options={[
+          { value: 'deals', label: 'Находки' },
+          { value: 'ads', label: 'Барахолка' },
+        ]}
+      />
       {feedTab === 'deals' ? (
         <>
           <Link to="/hunt" className="hunt-cta">
@@ -2188,6 +2194,9 @@ function FeedPage() {
         </span>
         <Link to="/create" className="cta-primary">Выставить товар</Link>
       </div>
+      {/* Истории продавцов — часть барахолки (кольца-аватары, StoryViewer).
+          Компонент был определён, но на главной не рендерился вообще. */}
+      <StoriesRow />
       <FeedBanner />
       <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
       <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
@@ -2195,17 +2204,15 @@ function FeedPage() {
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Объявлений пока нет." /> : null}
-      <div className="grid-two">
-        {items.slice(0, 2).map((item) => (
+      {/* Одна сетка на всю ленту: раньше её разрезал блок «Последние
+          объявления», и вторая половина карточек оставалась двухколоночной
+          на любом экране — адаптивные 3/4–5 колонок не работали. */}
+      <div className="grid-two feed-grid">
+        {items.map((item) => (
           <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)} onToggleFavorite={toggleFavorite} />
         ))}
       </div>
       <LastNews items={items} />
-      <div className="grid-two mt-12">
-        {items.slice(2).map((item) => (
-          <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)} onToggleFavorite={toggleFavorite} />
-        ))}
-      </div>
       <div ref={loadMoreRef} />
       {loadingMore ? <div className="section-head"><strong>Загружаем ещё…</strong></div> : null}
       {hasMore && !loadingMore ? <div className="mt-12"><button className="ghost-btn wide" onClick={() => load(activeCategory, items.length, true)}>Показать ещё</button></div> : null}
@@ -2216,7 +2223,7 @@ function FeedPage() {
       ) : null}
         </>
       )}
-    </Screen>
+    </div>
   )
 }
 
