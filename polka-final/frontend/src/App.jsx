@@ -13,6 +13,10 @@ import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
 import HuntChat from './HuntChat'
 import { api, resolveAssetUrl } from './api'
 
+import { Skeleton } from './components/Skeleton'
+import { EmptyState } from './components/EmptyState'
+import { ErrorState } from './components/ErrorState'
+
 const AppContext = createContext(null)
 
 const iconPaths = {
@@ -396,28 +400,18 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
 }
 
 function LoadingBlock({ text = 'Загрузка…' }) {
-  return <div className="checkout-box glass-card mt-14"><strong>{text}</strong></div>
+  return <Skeleton text={text} />
 }
 
 function ErrorBlock({ text = 'Не удалось загрузить данные.', onRetry }) {
-  return (
-    <div className="checkout-box glass-card mt-14">
-      <strong>{text}</strong>
-      {onRetry ? <div className="mt-12"><button className="ghost-btn wide" onClick={onRetry}>Повторить</button></div> : null}
-    </div>
-  )
+  return <ErrorState text={text} onRetry={onRetry} />
 }
 
 // Пустое состояние по ТЗ 5.5: иконка 28 px, текст 17/22, воздуха 32/24.
 // Было просто карточкой с текстом — без иконки и без объяснения, что тут
 // появится, поэтому выглядело как заглушка.
 function EmptyBlock({ text = 'Здесь пока пусто' }) {
-  return (
-    <div className="empty-state">
-      <Icon name="search" />
-      <p>{text}</p>
-    </div>
-  )
+  return <EmptyState text={text} icon={<Icon name="search" />} />
 }
 
 function AppProvider({ children }) {

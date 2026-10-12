@@ -1,0 +1,113 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — общие компоненты. ЭТАП 1. Значения — только через токены.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Skeleton ───────────────────────────────────────────────────────────── */
+.sk-stack { display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-4) 0; }
+.sk-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); padding: var(--space-4) 0; }
+@keyframes sk-shimmer { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
+.sk-line, .sk-box {
+  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface) 50%, var(--surface-2) 100%);
+  background-size: 640px 100%;
+  animation: sk-shimmer 1.4s linear infinite;
+  border-radius: var(--radius);
+}
+.sk-line { height: 14px; }
+.sk-line--short { width: 60%; }
+.sk-box { aspect-ratio: 4 / 3; width: 100%; border-radius: var(--radius-btn); }
+.sk-card { display: flex; flex-direction: column; gap: var(--space-2); }
+
+/* ── EmptyState ─────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: var(--space-8) var(--space-6); gap: var(--space-4);
+}
+.empty-state .icon-svg { width: 28px; height: 28px; fill: var(--text-tertiary); opacity: .9; }
+.empty-state p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-secondary); max-width: 300px; }
+
+/* ── ErrorState ─────────────────────────────────────────────────────────── */
+.error-state {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  padding: var(--space-8) var(--space-6); gap: var(--space-4);
+}
+.error-state p { margin: 0; font-size: var(--fs-body); line-height: var(--lh-body); color: var(--text-secondary); max-width: 300px; }
+
+/* ── Кнопки: единая система вместо разнобоя ─────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: 44px; padding: 0 var(--space-5);
+  font: 500 var(--fs-body)/var(--lh-body) var(--font);
+  border: none; border-radius: var(--radius-btn);
+  background: var(--surface); color: var(--text);
+  transition: background-color var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.btn:active { transform: scale(.98); }
+.btn-primary { background: var(--accent); color: #fff; font-weight: 600; }
+.btn-dark { background: var(--cta-bg); color: var(--cta-text); font-weight: 600; min-height: 52px; border-radius: var(--radius-pill); }
+.btn-ghost { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-wide { width: 100%; }
+
+/* ── Chip ───────────────────────────────────────────────────────────────── */
+.chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--space-1);
+  min-height: 44px; padding: 0 var(--space-4);
+  font: 500 var(--fs-cap)/var(--lh-cap) var(--font);
+  color: var(--text-secondary); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-pill);
+}
+.chip.is-active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Card, Badge, Avatar, ListRow, Segmented ────────────────────────────── */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
+.card-pad { padding: var(--space-4); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  padding: 4px 10px; border-radius: var(--radius-pill);
+  font: 600 11.5px/16px var(--font); white-space: nowrap;
+}
+.badge-success { background: var(--success); color: #fff; }
+.badge-warning { background: var(--warning); color: #1D1D1F; }
+.badge-danger { background: var(--danger); color: #fff; }
+.badge-muted { background: var(--surface-2); color: var(--text-secondary); }
+
+.avatar {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto;
+  width: 40px; height: 40px; border-radius: var(--radius-pill);
+  background: var(--surface-2); color: var(--text-secondary);
+  font: 600 var(--fs-cap)/1 var(--font); overflow: hidden;
+}
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.avatar-sm { width: 32px; height: 32px; }
+.avatar-lg { width: 56px; height: 56px; }
+
+.list-row {
+  display: flex; align-items: center; gap: var(--space-3);
+  min-height: 56px; padding: var(--space-3) 0;
+  border-bottom: .5px solid var(--hairline);
+}
+.list-row:last-child { border-bottom: none; }
+.list-row-body { min-width: 0; flex: 1 1 auto; }
+
+.segmented { display: flex; gap: var(--space-1); padding: 4px; background: var(--surface-2); border-radius: var(--radius-pill); }
+.segmented button {
+  flex: 1 1 0; min-height: 40px; border: none; background: transparent;
+  color: var(--text-secondary); font: 500 var(--fs-cap)/var(--lh-cap) var(--font);
+  border-radius: var(--radius-pill);
+}
+.segmented button.is-active { background: var(--surface); color: var(--text); font-weight: 600; }
+
+/* ── BottomSheet и Toast ────────────────────────────────────────────────── */
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-sheet);
+  background: var(--surface); border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+  padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  box-shadow: var(--shadow-soft);
+}
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(var(--dock-space) + var(--space-2)); z-index: var(--z-toast);
+  background: var(--cta-bg); color: var(--cta-text);
+  padding: var(--space-3) var(--space-4); border-radius: var(--radius-pill);
+  font: 500 var(--fs-cap)/var(--lh-cap) var(--font); box-shadow: var(--shadow-soft);
+}
