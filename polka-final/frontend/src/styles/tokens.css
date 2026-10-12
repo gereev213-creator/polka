@@ -1,0 +1,154 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — токены дизайн-системы. ЭТАП 1.
+   Единственный источник правды: значения берутся отсюда, а не из «магических
+   чисел» в правилах. Подключается ПОСЛЕ styles.css, поэтому переопределяет
+   старый :root и работает как замена ему.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* canvas & surface */
+  --bg: #F5F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #E8E8ED;
+  --border: rgba(60, 60, 67, 0.12);
+  --hairline: rgba(60, 60, 67, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-glass-strong: rgba(255, 255, 255, 0.85);
+
+  /* text */
+  --text: #1D1D1F;
+  --ink: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #8E8E93;
+
+  /* accent & CTA */
+  --accent: #0071E3;
+  --accent-hover: #0063C8;
+  --cta-bg: #1D1D1F;
+  --cta-text: #FFFFFF;
+
+  /* semantics */
+  --success: #34C759;
+  --warning: #FF9F0A;
+  --danger: #FF3B30;
+
+  /* радиусы: три значения + pill */
+  --radius: 12px;
+  --radius-btn: 14px;
+  --radius-panel: 20px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* тени: тяжелее 0 8px 24px rgba(0,0,0,.06) не использовать */
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --soft: 0 1px 2px rgba(0, 0, 0, .04);
+
+  /* кольцо историй: градиент убран по ТЗ */
+  --ring: #0071E3;
+
+  /* шкала отступов: в ТЗ задана перечислением 4/8/12/16/20/24/32 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* геометрия страницы и нижнего дока */
+  --page-pad: 16px;
+  --topbar-h: 48px;
+  --dock-h: 64px;
+  --dock-offset: 16px;
+  /* 64 док + 16 его отступ + 16 воздуха + вырез снизу */
+  --dock-space: calc(var(--dock-h) + var(--dock-offset) + var(--space-4) + env(safe-area-inset-bottom));
+
+  /* типографика */
+  --font: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
+  --fs-h1: 30px;   --lh-h1: 36px;
+  --fs-h1-s: 26px; --lh-h1-s: 32px;
+  --fs-sub: 17px;  --lh-sub: 24px;
+  --fs-body: 17px; --lh-body: 22px;
+  --fs-cap: 13px;  --lh-cap: 18px;
+
+  /* z-index */
+  --z-topbar: 50;
+  --z-dock: 100;
+  --z-sheet: 200;
+  --z-toast: 300;
+
+  /* анимации: 150–250 мс */
+  --dur-fast: 150ms;
+  --dur: 200ms;
+  --dur-slow: 250ms;
+  --ease: cubic-bezier(.2, .8, .3, 1);
+}
+
+/* ── Тёмная тема ──────────────────────────────────────────────────────────
+   Акцент и семантика не переопределяются — остаются как в светлой. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --surface: #1C1C1E;
+    --surface-2: #2C2C2E;
+    --border: rgba(84, 84, 88, 0.36);
+    --hairline: rgba(84, 84, 88, 0.36);
+    --glass-border: rgba(255, 255, 255, 0.10);
+    --bg-glass: rgba(28, 28, 30, 0.72);
+    --bg-glass-strong: rgba(28, 28, 30, 0.85);
+    --text: #F5F5F7;
+    --ink: #F5F5F7;
+    --text-secondary: #98989D;
+    --text-tertiary: #8E8E93;
+    --cta-bg: #F5F5F7;
+    --cta-text: #1D1D1F;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+    --soft: 0 1px 2px rgba(0, 0, 0, .30);
+  }
+}
+
+/* ── Тема Telegram ────────────────────────────────────────────────────────
+   colorScheme из WebApp имеет приоритет над системной темой: атрибут
+   ставит telegram.js. Специфичность :root[data-tg-theme] выше, чем :root. */
+:root[data-tg-theme="light"] {
+  --bg: #F5F5F7;
+  --surface: #FFFFFF;
+  --surface-2: #E8E8ED;
+  --border: rgba(60, 60, 67, 0.12);
+  --hairline: rgba(60, 60, 67, 0.12);
+  --glass-border: rgba(255, 255, 255, 0.6);
+  --bg-glass: rgba(255, 255, 255, 0.72);
+  --bg-glass-strong: rgba(255, 255, 255, 0.85);
+  --text: #1D1D1F;
+  --ink: #1D1D1F;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #8E8E93;
+  --cta-bg: #1D1D1F;
+  --cta-text: #FFFFFF;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .04), 0 8px 24px rgba(0, 0, 0, .06);
+  --soft: 0 1px 2px rgba(0, 0, 0, .04);
+}
+
+:root[data-tg-theme="dark"] {
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --surface-2: #2C2C2E;
+  --border: rgba(84, 84, 88, 0.36);
+  --hairline: rgba(84, 84, 88, 0.36);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --bg-glass: rgba(28, 28, 30, 0.72);
+  --bg-glass-strong: rgba(28, 28, 30, 0.85);
+  --text: #F5F5F7;
+  --ink: #F5F5F7;
+  --text-secondary: #98989D;
+  --text-tertiary: #8E8E93;
+  --cta-bg: #F5F5F7;
+  --cta-text: #1D1D1F;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+  --shadow-soft: 0 1px 2px rgba(0, 0, 0, .30), 0 8px 24px rgba(0, 0, 0, .40);
+  --soft: 0 1px 2px rgba(0, 0, 0, .30);
+}

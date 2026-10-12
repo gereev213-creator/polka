@@ -1,0 +1,99 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — база. ЭТАП 1: reset, 100dvh, safe-area, единый контейнер, доступность.
+   Подключается после styles.css и переопределяет legacy-правила.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root {
+  /* 100dvh вместо 100vh: при адресной строке и клавиатуре высота не скачет */
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  /* Градиенты убраны по ТЗ — плоский фон */
+  background: var(--bg);
+  overflow-x: hidden;
+}
+
+/* ── Единый контейнер страницы ────────────────────────────────────────────
+   Вместо .app-frame { max-width: 430px }: mobile-first, центрирование,
+   единые боковые поля с учётом вырезов. Ширину под сетки 3/4–5 колонок
+   расширим на этапе 2, когда появятся сами сетки. */
+.app-frame {
+  max-width: 100%;
+  margin: 0 auto;
+  padding-left: calc(var(--page-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--page-pad) + env(safe-area-inset-right));
+  padding-bottom: var(--dock-space);
+}
+.app-shell { min-height: 100dvh; }
+
+@media (min-width: 480px) { .app-frame { max-width: 520px; } }
+@media (min-width: 768px) { .app-frame { max-width: 640px; } }
+@media (min-width: 1024px) { .app-frame { max-width: 720px; } }
+@media (min-width: 1280px) { .app-frame { max-width: 800px; } }
+
+/* ── Экран: единые поля, safe-area, место под док ─────────────────────────
+   .screen.padded раньше перебивал отступ под док (padding: 16px), поэтому
+   правило пишем для обоих селекторов. */
+.screen,
+.screen.padded {
+  padding-top: calc(var(--space-4) + env(safe-area-inset-top));
+  padding-bottom: var(--dock-space);
+  padding-left: calc(var(--page-pad) + env(safe-area-inset-left));
+  padding-right: calc(var(--page-pad) + env(safe-area-inset-right));
+}
+
+/* ── Шапка и док ──────────────────────────────────────────────────────────
+   Через токены: z-index и высоты больше не «магические числа». */
+.topbar {
+  z-index: var(--z-topbar);
+  padding-top: env(safe-area-inset-top);
+  min-height: calc(var(--topbar-h) + env(safe-area-inset-top));
+}
+.dock {
+  z-index: var(--z-dock);
+  bottom: calc(var(--dock-offset) + env(safe-area-inset-bottom));
+}
+/* Чат: компенсируем вырез снизу, иначе поле ввода упирается в полосу жестов */
+.chat-input { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
+.bottom-bar { padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom)); }
+
+/* ── Доступность ────────────────────────────────────────────────────────── */
+button, a, [role="button"], input, textarea, select {
+  -webkit-tap-highlight-color: transparent;
+}
+button:focus-visible, a:focus-visible,
+input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid rgba(0, 113, 227, .6);
+  outline-offset: 2px;
+}
+button:disabled, [aria-disabled="true"] {
+  opacity: .4;
+  pointer-events: none;
+}
+
+/* Зоны нажатия: не меньше 44 px. Круглые кнопки — ровно 44×44. */
+.icon-btn, .chat-back, .chat-send, .save-btn, .chat-crit-x, .mic-btn {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+}
+.chat-chip, .auction-sort button, .chat-tab, .chat-example,
+.send-btn, .ghost-btn, .cta-round {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
