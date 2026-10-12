@@ -127,3 +127,14 @@ button:disabled, [aria-disabled="true"] {
 /* 5. ЗОНЫ НАЖАТИЯ. По ТЗ не меньше 44px; аудит нашёл 38/36/26px. */
 .segmented button { min-height: 44px; }
 .attach-btn, .tool-btn, .back-to-top { min-height: 44px; min-width: 44px; }
+
+/* 6. КОНТРАСТ ПО АУДИТУ. Требование ТЗ — WCAG AA (обычный текст ≥ 4.5:1).
+   Было: .topbar-center 2.99:1, .bubble-time 2.83:1, .chat-summary-count 4.10:1.
+   Поднимаем до --text-secondary (#6E6E73 → 5.0:1 на #F5F5F7, 5.3:1 на #FFF).
+   Цвета, которые зависят от фона элемента (плашки, таймер аукциона),
+   здесь не трогаю: там нужно решение по каждому элементу. */
+.topbar-center,
+.bubble-time,
+.chat-summary-count {
+  color: var(--text-secondary);
+}
