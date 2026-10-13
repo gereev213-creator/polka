@@ -18,6 +18,7 @@ SRC = open(BOT, encoding='utf-8').read()
 TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_description',
           'evaluate_ad', '_condition_ok', '_query_alt_numbers', '_query_words_required',
           'query_word_variants', '_requirement_excludes', 'HUNT_ACCESSORY_WORDS',
+          'HUNT_JUNK_ANYWHERE', 'HUNT_JUNK_START', 'HUNT_CONDITION_WORDS', 'HUNT_NEGATION_WORDS', 'HUNT_MEDIAN_EXCLUDE_WORDS', 'HUNT_RE_JUNK_ANYWHERE', 'HUNT_RE_JUNK_START', 'HUNT_RE_CONDITION', 'HUNT_RE_NEGATION', 'HUNT_RE_SHOP', 'HUNT_RE_SHOP_MATCH', '_hunt_word_pattern', '_hunt_asked_stems', '_hunt_marker_asked', 'hunt_junk_word', 'hunt_junk_start_word', 'hunt_condition_word', 'hunt_shop_in_name',
           'HUNT_REPLICA_MARKERS', 'HUNT_SHOP_MARKERS', 'HUNT_NEW_MARKERS', 'HUNT_USED_MARKERS',
           'HUNT_STOP_WORDS', 'QUERY_SYNONYMS', 'QUALIFIER_RU',
           'HUNT_MODEL_QUALIFIERS', 'HUNT_TITLE_START_JUNK',
@@ -143,7 +144,10 @@ assert run(ad(price=50000), crit(max_price=30000)).reason == 'price_too_high'
 assert run(ad(price=1000), crit(min_price=5000)).reason == 'price_too_low'
 assert run(ad(photos='[]'), crit(with_photo=1)).reason == 'no_photo'
 assert run(ad(title='iPhone 13 б/у'), crit(condition='new')).reason == 'condition_new_used'
-assert run(ad(title='iPhone 13, чехол в подарок'), crit()).reason == 'accessory'
+# D2: мусор ищем по границам слов и только в начале заголовка, поэтому
+# «iPhone 13, чехол в подарок» — нормальное объявление, а «Чехол для iPhone 13» — нет
+assert run(ad(title='Чехол для iPhone 13'), crit()).reason == 'accessory'
+assert run(ad(title='iPhone 13, чехол в подарок'), crit()).ok
 assert run(ad(title='iPhone 14 128'), crit()).reason == 'title_words'
 # число сверяется как отдельное слово: «43» не должно находить «143»
 assert run(ad(title='Ботинки Timberland 143'), crit(query='ботинки 43')).reason == 'title_words'

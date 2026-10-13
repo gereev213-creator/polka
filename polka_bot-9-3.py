@@ -8988,7 +8988,8 @@ async def handle_search_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
                     combined.append(ad)
                     seen_ids.add(ad["id"])
             for row in db.conn.execute(
-                "SELECT * FROM ads WHERE status='active' AND (title LIKE ? OR description LIKE ?) LIMIT 10",
+                "SELECT * FROM ads WHERE status='active' "
+                "AND (title_lower LIKE ? OR description_lower LIKE ?) LIMIT 10",
                 (f'%{tag}%', f'%{tag}%')
             ):
                 ad = dict(row)
@@ -17219,7 +17220,7 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     а значит без перебоев. Если нет — нужен внешний запуск.
     """
     expected = os.environ.get('INGEST_TOKEN', '')
-    got = request.query.get('token', '') or request.headers.get('X-Ingest-Token', '')
+    got = _ingest_token_ok(request)
     if not expected or not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
 
@@ -17367,6 +17368,38 @@ def ensure_hunt_matches():
         db.conn.commit()
     except Exception as e:
         logger.error(f"ensure_hunt_matches: {e}")
+
+
+def ensure_description_lower(limit: int = 500) -> int:
+    """Колонка description_lower и заполнение старых строк.
+
+    SQLite не умеет LOWER() для кириллицы, поэтому фильтр «не магазин» в SQL
+    работал как попало. Теперь у каждой строки есть готовое нижнее описание,
+    а старые строки догоняем в Python порциями (без блокировки старта).
+    """
+    cursor = db.conn.cursor()
+    if 'description_lower' not in {r['name'] for r in cursor.execute(
+            "PRAGMA table_info(ads)").fetchall()}:
+        try:
+            cursor.execute("ALTER TABLE ads ADD COLUMN description_lower TEXT DEFAULT ''")
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f"description_lower: {e}")
+    filled = 0
+    try:
+        cursor.execute("SELECT id, description FROM ads "
+                       "WHERE COALESCE(description,'') <> '' "
+                       "AND COALESCE(description_lower,'') = '' LIMIT ?", (int(limit),))
+        rows = cursor.fetchall()
+        for row in rows:
+            cursor.execute("UPDATE ads SET description_lower=? WHERE id=?",
+                           (str(row['description']).lower(), int(row['id'])))
+            filled += 1
+        if filled:
+            db.conn.commit()
+    except Exception as e:
+        logger.warning(f"description_lower fill: {e}")
+    return filled
 
 
 def ensure_desc_columns():
@@ -17758,7 +17791,7 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     Токен тот же, что у сборщика (INGEST_TOKEN): посторонним не отдаём.
     """
     expected = os.environ.get('INGEST_TOKEN', '')
-    got = request.query.get('token', '') or request.headers.get('X-Ingest-Token', '')
+    got = _ingest_token_ok(request)
     if not expected or not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
 
@@ -18049,6 +18082,19 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
     return stats
 
 
+def _ingest_token_ok(request) -> str:
+    """Токен сборщика: только заголовок X-Ingest-Token (этап D9).
+
+    В query (?token=) он попадал в логи прокси, в историю и в реферреры —
+    поэтому по умолчанию query-токен не принимается. На переходный период
+    старый способ включается флагом ALLOW_QUERY_TOKEN=1.
+    """
+    got = request.headers.get('X-Ingest-Token', '')
+    if not got and os.environ.get('ALLOW_QUERY_TOKEN', '0') == '1':
+        got = request.query.get('token', '')
+    return str(got or '')
+
+
 async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/ingest — приём находок от сборщика (запускается у вас локально).
 
@@ -18058,7 +18104,7 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     expected = os.environ.get('INGEST_TOKEN', '')
     if not expected:
         return _miniapp_err('ingest_disabled', 503)
-    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    got = _ingest_token_ok(request)
     if not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
     try:
@@ -18144,47 +18190,162 @@ HUNT_SHOP_MARKERS = (
 )
 
 
-HUNT_TITLE_START_JUNK = (
-    'коробка', 'коробки', 'упаковка', 'аккумулятор', 'акб', 'батарея',
-    'чехол', 'чехлы', 'стекло', 'плёнка', 'пленка', 'кабель', 'шнур',
-    'зарядка', 'зарядное', 'адаптер', 'переходник', 'держатель', 'подставка',
-    'запчасти', 'плата', 'матрица', 'дисплей', 'экран', 'крышка', 'кнопка',
-    'макет', 'муляж', 'пустой', 'бокс', 'лоток', 'поддон', 'сумка',
+
+
+# ── Стоп-слова: два списка и границы слов (этап D2) ──────────────────────────
+# Раньше это были подстроки: «чип» находился в «чипсы», «опт» — в «Оптика» и
+# «Optima», «ремонт» — в «не было ремонта», «книга» — в «электронная книга».
+# Здоровые объявления отсеивались молча, и в чат не приходило ничего.
+# Звёздочка на конце — основа слова: разрешаем окончания («дефект*» ловит
+# «дефектов» и «дефекты», «разбит*» — «разбитый»).
+#
+# Список 1. Мусор ВЕЗДЕ: сам товар — аксессуар, запчасть или реплика.
+HUNT_JUNK_ANYWHERE = (
+    # Мусор в любом месте заголовка: подделка или товар «на запчасти».
+    # Аксессуары сюда НЕ входят: «iPhone 13 + чехол» — нормальное объявление
+    # (поэтому они в списке ниже, где проверяется начало заголовка).
+    'реплик*', 'копия', 'копию', '1:1', 'люкс', 'аналог*', 'качество ааа',
+    'на запчасти', 'не оригинал', 'муляж*',
+)
+# Список 2. Мусор только В НАЧАЛЕ заголовка: «Чехол для iPhone» — мусор,
+# «iPhone 13 + чехол» — нормальное объявление (аксессуар в подарок).
+HUNT_JUNK_START = (
+    # Мусор только в НАЧАЛЕ заголовка: «Чехол для iPhone» — мусор,
+    # «iPhone 13 + чехол» — нормальное объявление (аксессуар в подарок).
+    'чехол*', 'бампер*', 'стекло', 'защитное стекло', 'защитные стекл*', 'плёнк*',
+    'пленк*', 'подложк*', 'кабель', 'кабеля', 'шнур', 'провод*', 'переходник*',
+    'запчаст*', 'плата', 'платы', 'плату', 'платой', 'материнская плата', 'донор*',
+    'шлейф*', 'дисплей*', 'матрица', 'матрицу', 'инструкция', 'наклейк*', 'макет*',
+    'коробка', 'коробки', 'упаковка', 'аккумулятор*', 'акб', 'батарея', 'батарейка',
+    'зарядка', 'зарядное устройство', 'адаптер*', 'держатель*', 'подставк*',
+    'крепление', 'ремешок', 'браслет*', 'сумка', 'бокс', 'лоток', 'поддон',
+    'кнопка', 'кнопки', 'крышк*', 'книга', 'книги', 'книжка', 'журнал', 'постер',
+    'повербанк', 'павербанк', 'powerbank', 'брелок', 'корпус', 'корпуса',
+    'инструмент*', 'запчасть',
+)
+# Список 3. Признаки состояния и продавца. Сами по себе не приговор: «не было
+# ремонта», «без дефектов», «без царапин», «не копия» означают обратное —
+# поэтому проверяем окно до трёх слов ПЕРЕД маркером на отрицание.
+HUNT_CONDITION_WORDS = (
+    'ремонт*', 'восстановлен*', 'разбит*', 'битый', 'битые', 'не работает',
+    'не включается', 'не заряжается', 'нет изображения', 'дефект*',
+    'удовлетворительн*', 'неудовлетворительн*', 'не оригинал',
+)
+HUNT_NEGATION_WORDS = ('не', 'без', 'нет', 'ни', 'никаких', 'никогда', 'кроме')
+# Для статистики (медианы, SQL NOT LIKE) — только однозначные слова без основ
+HUNT_MEDIAN_EXCLUDE_WORDS = (
+    'чехол', 'чехлы', 'бампер', 'кабель', 'шнур', 'провод', 'переходник', 'запчасть',
+    'запчасти', 'плата', 'шлейф', 'дисплей', 'матрица', 'наклейка', 'муляж', 'макет',
+    'реплика', 'копия', 'инструкция', 'подложка', 'плёнка', 'пленка',
 )
 
 
-HUNT_ACCESSORY_WORDS = (
-    'кабель', 'шнур', 'провод', 'переходник', 'повербанк', 'powerbank', 'павербанк',
-    'зарядное устройство', 'беспроводная зарядка', 'брелок', 'держатель в авто',
-    'чехол', 'бампер', 'стекло', 'защитное стекло', 'плёнка',
-    'пленка', 'зарядка', 'зарядное', 'адаптер', 'переходник', 'держатель',
-    'подставка', 'крепление', 'сумка для', 'ремешок', 'браслет', 'наклейка',
-    'запчасть', 'запчасти', 'ремонт', 'разбит', 'не работает', 'на запчасти',
-    # Формы слов: сравнение идёт по подстроке, поэтому «чехол» не ловил
-    # «чехлы», а «плата» вообще отсутствовала. Перечисляем падежи.
-    'чехлы', 'чехла', 'чехлу', 'чехлом', 'чехле', 'чехольчик',
-    'плата', 'платы', 'плату', 'платой', 'плате', 'материнская', 'донор', 'донора',
-    'стекло защитное', 'защитные стекл', 'бампер', 'подложка', 'плёнка защитная',
-    # Состояние: не битый и не требует ремонта
-    # Основы слов, а не отдельные падежи: «удовлетворительн» покрывает
-    # «удовлетворительное», «удовлетворительном», «удовлетворительная».
-    'удовлетворительн', 'неудовлетворительн', 'на ремонт', 'нужен ремонт', 'требует ремонта',
-    # Магазины: перекупы ищут у частников, а магазины торгуют репликами.
-    # Их выдают названия латиницей и слова shop/store/stock.
-    'shop', 'store', 'stock', 'sale', 'магазин', 'официальный дилер',
-    # Компании часто подписываются в самом заголовке: юрлицо или статус.
-    'ооо', 'зао', 'ип ', 'компания', 'организация', 'маркетплейс',
-    'фирма', 'поставщик', 'дистрибьютор', 'представительство', 'филиал',
-    'оптовый', 'оптовая', 'салон', 'бутик', 'торговый дом', 'интернет-магазин',
-    'после ремонта', 'восстановлен', 'битый', 'битые', 'разбитый', 'разбитые',
-    'не включается', 'не заряжается', 'нет изображения', 'дефект', 'дефекты',
-    # Реплики и опт: перекуп ищет оригинал у частника, а не палёнку партией.
-    '1:1', 'люкс', 'аналог', 'качество ааа', 'оптом', 'партия', 'wholesale',
-    'не оригинал', 'реплика люкс', 'копия люкс',
-    'корпус', 'крышка', 'кнопка', 'шлейф', 'дисплей', 'матрица', 
-    'инструкция', 'книга', 'книжка', 'журнал', 'постер', 'макет', 'копия',
-    'реплика', 'муляж', 'пустой', 'коробка от', 'упаковка',
-)
+def _hunt_word_pattern(words) -> 're.Pattern':
+    """Предкомпилированное выражение по границам слов (кириллица — тоже слово).
+
+    Записи со звёздочкой — основы: «дефект*» находим и в «дефектов».
+    """
+    parts = []
+    for raw in words:
+        word = str(raw or '').strip().lower()
+        if not word:
+            continue
+        stem = word.endswith('*')
+        word = word.rstrip('*')
+        pattern = re.escape(word).replace(r'\ ', r'\s+')
+        if stem:
+            pattern += r'[а-яёa-z]{0,4}'
+        parts.append(pattern)
+    return re.compile(r'(?<![\w])(?:' + '|'.join(parts) + r')(?![\w])', re.IGNORECASE)
+
+
+HUNT_RE_JUNK_ANYWHERE = _hunt_word_pattern(HUNT_JUNK_ANYWHERE)
+HUNT_RE_JUNK_START = _hunt_word_pattern(HUNT_JUNK_START)
+HUNT_RE_CONDITION = _hunt_word_pattern(HUNT_CONDITION_WORDS)
+HUNT_RE_NEGATION = _hunt_word_pattern(HUNT_NEGATION_WORDS)
+
+HUNT_RE_SHOP = _hunt_word_pattern(HUNT_SHOP_MARKERS)
+
+
+def _hunt_asked_stems(query: str) -> set:
+    """Основы слов запроса: то, что человек ищет, мусором не считается."""
+    out = set()
+    for word in re.split(r'[^\w]+', str(query or '').lower()):
+        if len(word) >= 3:
+            out.add(word[:4])
+    return out
+
+
+def _hunt_marker_asked(marker: str, asked: set) -> bool:
+    stem = str(marker or '').lower()[:4]
+    return bool(stem) and stem in asked
+
+
+def hunt_junk_word(text: str, query: str = '') -> str:
+    """Мусорное слово ВЕЗДЕ («чехол», «кабель», «реплика») или ''."""
+    low = str(text or '').lower()
+    if not low:
+        return ''
+    asked = _hunt_asked_stems(query)
+    for m in HUNT_RE_JUNK_ANYWHERE.finditer(low):
+        if not _hunt_marker_asked(m.group(0), asked):
+            return m.group(0)
+    return ''
+
+
+def hunt_junk_start_word(text: str, query: str = '') -> str:
+    """Мусорное слово в НАЧАЛЕ заголовка («Чехол для iPhone») или ''.
+
+    «iPhone 13 + чехол» — нормальное объявление, а «Чехол для iPhone 13» —
+    нет: товар в заголовке стоит первым.
+    """
+    low = str(text or '').lower().lstrip(' .,!-–—"\'«»')
+    if not low:
+        return ''
+    asked = _hunt_asked_stems(query)
+    m = HUNT_RE_JUNK_START.match(low)
+    if m and not _hunt_marker_asked(m.group(0), asked):
+        return m.group(0)
+    return ''
+
+
+def hunt_condition_word(text: str, query: str = '', window: int = 3) -> str:
+    """Признак плохого состояния («требует ремонта»), но НЕ «не было ремонта».
+
+    Отрицание ищем в окне до трёх слов перед маркером (этап D2).
+    """
+    low = str(text or '').lower()
+    if not low:
+        return ''
+    asked = _hunt_asked_stems(query)
+    for m in HUNT_RE_CONDITION.finditer(low):
+        marker = m.group(0).lower()
+        if _hunt_marker_asked(marker, asked):
+            continue
+        before = re.findall(r'[\w]+', low[max(0, m.start() - 40):m.start()])[-window:]
+        if any(HUNT_RE_NEGATION.fullmatch(word) for word in before):
+            continue
+        return marker
+    return ''
+
+
+HUNT_RE_SHOP_MATCH = HUNT_RE_SHOP
+
+
+def hunt_shop_in_name(name: str) -> str:
+    """Магазинное слово в имени продавца — по границам слов.
+
+    «ИП », «опт», «opt», «ооо» проверяем как отдельные слова: «Optima» и
+    «Оптика» — это не опт (дефект 3.2), а «ип » находился в «тип».
+    """
+    low = str(name or '').lower()
+    m = HUNT_RE_SHOP_MATCH.search(low) if low else None
+    return m.group(0) if m else ''
+
+
+# Совместимость со старым кодом (медианы и SQL-предфильтр)
+HUNT_ACCESSORY_WORDS = HUNT_MEDIAN_EXCLUDE_WORDS
+HUNT_TITLE_START_JUNK = HUNT_JUNK_START
 
 # Если цена меньше этой доли от медианы — это почти наверняка аксессуар
 # или мусор, а не находка. Настоящая вещь редко дешевле 15% рынка.
@@ -18857,25 +19018,21 @@ def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str 
     # поле пустое, и они проходят.
     _req = str(crit.get('requirements') or '').lower()
     if any(w in _req for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+        # Тип продавца из разбора страницы; ник проверяет evaluate_ad по
+        # границам слов («Optima» — не «опт», «Чип» — не «ип»), этап D2
         where.append(f"COALESCE({col('seller_type')}, '') != 'company'")
-        for _bad in HUNT_SHOP_MARKERS:
-            where.append(f"COALESCE({col('seller_name')}, '') NOT LIKE ?")
-            params.append(f"%{_bad}%")
 
-    # Магазины: латиница shop/store/opt и русские «магазин», «салон», «опт».
-    # Для всех категорий — люди хотят объявления с рук, а не из магазина.
-    for bad in HUNT_SHOP_MARKERS:
-        if bad in str(crit.get('query') or '').lower():
+    # Мусор в НАЧАЛЕ заголовка: «Чехол для iPhone» — мусор, «iPhone + чехол»
+    # — нет. Магазинные слова по заголовку НЕ проверяем (дефект 3.2): «Оптика»
+    # и «Optima» находились на «опт», «Чип» и «Клип» — на «ип ». Магазин
+    # определяем по продавцу (evaluate_ad), а не по слову в названии товара.
+    _ask = str(crit.get('query') or '').lower()
+    for bad in HUNT_JUNK_START:
+        word = str(bad).rstrip('*')
+        if len(word) < 3 or word in _ask:
             continue
         where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
-        params.append(f"%{bad}%")
-
-    for bad in HUNT_TITLE_START_JUNK:
-        # Если человек ИЩЕТ это слово — оно не мусор для него.
-        if bad in str(crit.get('query') or '').lower():
-            continue
-        where.append(f"COALESCE({col('title_lower')}, {col('title')}) NOT LIKE ?")
-        params.append(f"{bad}%")
+        params.append(f"{word}%")
 
     # Требования словами из чата: «хорошее состояние», «только новое»,
     # «не вскрывался» — превращаем в отсев по заголовку.
@@ -19130,6 +19287,8 @@ def _hunt_reason_label(reason: str) -> str:
         return ''
     if reason.startswith('requirement:'):
         return f'не выполнено требование «{reason.split(":", 1)[1]}»'
+    if reason.startswith('condition_bad:'):
+        return f'признак плохого состояния: «{reason.split(":", 1)[1]}»'
     return HUNT_REASON_LABELS.get(reason, reason)
 
 
@@ -19192,9 +19351,21 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         variants = query_word_variants(word)
         if variants and not any(v in title for v in variants):
             return no('title_words')
-    for bad in HUNT_ACCESSORY_WORDS:
-        if bad in title:
-            return no('accessory')
+    # Мусор и признаки состояния — по границам слов и с учётом отрицаний
+    # (этап D2): «чипсы», «Оптика», «iPhone 13 + зарядка», «не было ремонта»
+    # больше не отсеиваются.
+    query = str(crit.get('query') or '')
+    title_raw = str(ad.get('title') or '')
+    junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
+    if junk:
+        # Реплика и «1:1» — это не аксессуар, а подделка: причина другая
+        if str(junk).lower().startswith(('реплик', 'копи', '1:1', 'люкс', 'аналог')):
+            return no('replica')
+        return no('accessory')
+    bad_state = hunt_condition_word(
+        title_raw + ' ' + str(ad.get('description') or ''), query)
+    if bad_state:
+        return no('condition_bad:' + bad_state)
 
     description = str(ad.get('description') or '')
     low_all = (str(ad.get('title') or '') + ' ' + description).lower()
@@ -19207,8 +19378,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     if any(w in req_low for w in ('не магазин', 'с рук', 'частник', 'не компания')):
         if str(ad.get('seller_type') or '') == 'company':
             return no('shop')
-        seller_name = str(ad.get('seller_name') or '').lower()
-        if seller_name and any(w in seller_name for w in HUNT_SHOP_MARKERS):
+        if hunt_shop_in_name(str(ad.get('seller_name') or '')):
             return no('shop')
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
@@ -19943,7 +20113,7 @@ def _parse_seller(html: str) -> Dict:
         except Exception:
             out['seller_ads'] = 0
     nm = str(out['seller_name']).lower()
-    if out['seller_type'] != 'company' and any(w in nm for w in HUNT_SHOP_MARKERS):
+    if out['seller_type'] != 'company' and hunt_shop_in_name(nm):
         out['seller_type'] = 'company'
     return out
 
@@ -20256,7 +20426,7 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
     expected = os.environ.get('INGEST_TOKEN', '')
     if not expected:
         return _miniapp_err('ingest_disabled', 503)
-    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    got = _ingest_token_ok(request)
     if not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
     try:
@@ -20297,10 +20467,12 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                 failed += 1
                 continue
             cursor.execute(
-                "UPDATE ads SET description=?, seller_type=?, seller_name=?, seller_ads=?, "
+                "UPDATE ads SET description=?, description_lower=?, seller_type=?, "
+                "seller_name=?, seller_ads=?, "
                 "desc_state='ok', desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
                 "WHERE id=?",
-                (description, str(raw.get('seller_type') or '')[:20],
+                (description, description.lower(),
+                 str(raw.get('seller_type') or '')[:20],
                  str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
                  now, ad_id))
             updated += 1
@@ -20341,7 +20513,7 @@ async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Respons
     expected = os.environ.get('INGEST_TOKEN', '')
     if not expected:
         return _miniapp_err('ingest_disabled', 503)
-    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    got = _ingest_token_ok(request)
     if not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
     try:
@@ -21254,7 +21426,7 @@ async def api_ingest_checklist(request: aiohttp_web.Request) -> aiohttp_web.Resp
     expected = os.environ.get('INGEST_TOKEN', '')
     if not expected:
         return _miniapp_err('ingest_disabled', 503)
-    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    got = _ingest_token_ok(request)
     if not hmac.compare_digest(str(got), str(expected)):
         return _miniapp_err('forbidden', 403)
     source = str(request.query.get('source') or 'avito')
@@ -26310,6 +26482,7 @@ def main():
         ensure_verdict_column()
         ensure_hunt_matches()
         ensure_desc_columns()
+        ensure_description_lower()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

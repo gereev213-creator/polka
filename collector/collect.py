@@ -285,12 +285,42 @@ def fetch_item(url: str, timeout: int = 20) -> str:
 
 
 # ── Разбор страницы ─────────────────────────────────────────────────────────
+# «2 000 ₽/мес» — это платёж, а не цена товара: такие карточки пропускаем
+PER_MONTH_MARKERS = ('/мес', 'в месяц', 'мес.', 'месяц', 'рассрочк', 'за месяц',
+                     'первый взнос', 'взнос')
+
+
 def parse_price(text) -> int:
-    """«1 250 ₽» → 1250. Пустое и «бесплатно» → 0."""
+    """Цена из текста карточки. Осторожно с разделителями и рассрочкой.
+
+    Было: все нецифровые символы вырезались, и «1 250,50 ₽» превращалось в
+    125050 — объявление уходило в ленту с ценой в сто раз больше. Теперь:
+      «1 250 ₽» → 1250, «1 250,50» → 1250, «1250.50» → 1250,
+      «1.250.000» → 1250000, «от 1 200 ₽» → 1200,
+      «10 000 – 12 000 ₽» → 10000 (нижняя граница),
+      «2 000 ₽/мес» → 0 (платёж, а не цена: карточка пропускается),
+      «бесплатно» → 0.
+    """
     if isinstance(text, (int, float)):
         return int(text)
-    digits = re.sub(r'[^0-9]', '', str(text or ''))
-    return int(digits) if digits else 0
+    raw = str(text or '').strip().lower()
+    if not raw:
+        return 0
+    if any(marker in raw for marker in PER_MONTH_MARKERS):
+        return 0
+    m = re.search(r'\d[\d\s\u00a0]*(?:[.,]\d+)*', raw)
+    if not m:
+        return 0
+    num = m.group(0).replace('\u00a0', '').replace(' ', '')
+    if re.fullmatch(r'\d{1,3}(?:[.,]\d{3})+', num):
+        # «1.250.000» — разделители тысяч, а не дробная часть
+        num = re.sub(r'[.,]', '', num)
+    else:
+        num = num.replace(',', '.')
+    try:
+        return int(float(num))
+    except ValueError:
+        return 0
 
 
 def external_id_from_url(url: str) -> str:
