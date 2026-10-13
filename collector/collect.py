@@ -22,6 +22,7 @@
     python3 collect.py --loop --every 900  # повторять каждые 15 минут
 """
 import argparse
+import glob
 import json
 import os
 import random
@@ -32,6 +33,7 @@ import time
 import urllib.error
 import urllib.request
 from html import unescape
+from html.parser import HTMLParser
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -45,6 +47,19 @@ BLOCK_MARKERS = ('captcha', 'showcaptcha', 'Доступ ограничен', '�
 GONE_MARKERS = ('объявление снято', 'снято с публикации', 'объявление не найдено',
                 'страница не найдена', 'товар продан', 'продано', 'объявление удалено',
                 'это объявление больше не доступно')
+
+
+# Маркеры страницы ОДНОГО объявления (на странице выдачи их нет, поэтому
+# fetch() их не проверяет, а fetch_item() — проверяет).
+ITEM_MARKERS = ('item-view/title-info', 'item-view/item-description',
+                'item-view/item-price', 'seller-info/name')
+# Короткая страница: если в ней ещё и маркер капчи — это блокировка.
+SHORT_PAGE_CHARS = 20000
+# Авито не пустил на страницу объявления в этом проходе: описания пропускаем
+# до следующего прохода, чтобы не долбить сайт и не валить весь сбор.
+_DETAILS_BLOCKED = False
+# Сколько символов описания хранить. Дальше — маркетинговый шум продавца.
+DESC_MAX_CHARS = 2000
 
 
 class Blocked(Exception):
@@ -214,13 +229,101 @@ def fetch(url: str, timeout: int = 25) -> str:
     return html
 
 
+def fetch_item(url: str, timeout: int = 20) -> str:
+    """Страница ОДНОГО объявления — оттуда берём описание и продавца.
+
+    Отдельно от fetch(): тот считает ответ валидным только при наличии
+    data-marker="item" — это маркер СТРАНИЦЫ ВЫДАЧИ. На странице объявления
+    его нет, поэтому fetch(url) перебирал весь пул отпечатков (по 2–5 с
+    паузой после каждого), получал 439 и бросал Blocked. Итог: описания не
+    собирались никогда, а Авито получал 4–5 лишних запросов на объявление.
+
+    Здесь ровно ОДИН запрос рабочим отпечатком (если он ещё не найден —
+    первым из пула), таймаут 20 с. Блокировка = статус 403/429/439 или
+    маркеры капчи на короткой странице.
+    """
+    if _cffi is not None:
+        global _WORKING_PROFILE
+        profile = _WORKING_PROFILE or IMPERSONATE_POOL[0]
+        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
+        try:
+            r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+        except Exception as exc:
+            raise Blocked(f"{profile}: {str(exc)[:70]}")
+        text = r.text or ''
+        if r.status_code in (403, 429, 439):
+            raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
+        if len(text) < SHORT_PAGE_CHARS:
+            low = text.lower()
+            for marker in BLOCK_MARKERS:
+                if marker.lower() in low:
+                    raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+        if not any(m in text for m in ITEM_MARKERS):
+            raise Blocked("страница объявления не распознана (нет знакомых маркеров)")
+        _WORKING_PROFILE = profile
+        return text
+
+    # Без curl_cffi — обычный urllib; проверки те же
+    req = urllib.request.Request(url, headers={
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+    })
+    try:
+        with _opener().open(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429, 439):
+            raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
+        raise
+    text = raw.decode('utf-8', errors='replace')
+    if len(text) < SHORT_PAGE_CHARS:
+        low = text.lower()
+        for marker in BLOCK_MARKERS:
+            if marker.lower() in low:
+                raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+    if not any(m in text for m in ITEM_MARKERS):
+        raise Blocked("страница объявления не распознана (нет знакомых маркеров)")
+    return text
+
+
 # ── Разбор страницы ─────────────────────────────────────────────────────────
+# «2 000 ₽/мес» — это платёж, а не цена товара: такие карточки пропускаем
+PER_MONTH_MARKERS = ('/мес', 'в месяц', 'мес.', 'месяц', 'рассрочк', 'за месяц',
+                     'первый взнос', 'взнос')
+
+
 def parse_price(text) -> int:
-    """«1 250 ₽» → 1250. Пустое и «бесплатно» → 0."""
+    """Цена из текста карточки. Осторожно с разделителями и рассрочкой.
+
+    Было: все нецифровые символы вырезались, и «1 250,50 ₽» превращалось в
+    125050 — объявление уходило в ленту с ценой в сто раз больше. Теперь:
+      «1 250 ₽» → 1250, «1 250,50» → 1250, «1250.50» → 1250,
+      «1.250.000» → 1250000, «от 1 200 ₽» → 1200,
+      «10 000 – 12 000 ₽» → 10000 (нижняя граница),
+      «2 000 ₽/мес» → 0 (платёж, а не цена: карточка пропускается),
+      «бесплатно» → 0.
+    """
     if isinstance(text, (int, float)):
         return int(text)
-    digits = re.sub(r'[^0-9]', '', str(text or ''))
-    return int(digits) if digits else 0
+    raw = str(text or '').strip().lower()
+    if not raw:
+        return 0
+    if any(marker in raw for marker in PER_MONTH_MARKERS):
+        return 0
+    m = re.search(r'\d[\d\s\u00a0]*(?:[.,]\d+)*', raw)
+    if not m:
+        return 0
+    num = m.group(0).replace('\u00a0', '').replace(' ', '')
+    if re.fullmatch(r'\d{1,3}(?:[.,]\d{3})+', num):
+        # «1.250.000» — разделители тысяч, а не дробная часть
+        num = re.sub(r'[.,]', '', num)
+    else:
+        num = num.replace(',', '.')
+    try:
+        return int(float(num))
+    except ValueError:
+        return 0
 
 
 def external_id_from_url(url: str) -> str:
@@ -449,6 +552,168 @@ def items_from_html(html: str) -> list:
     return out
 
 
+class _MarkedText(HTMLParser):
+    """Текст внутри элемента с нужным data-marker.
+
+    Настоящий парсер, а не регулярка «до первого </div>»: описание на Авито
+    размечено вложенными <p>, <br> и <div>, и прежний разбор обрывался на
+    первой же вложенной закрывашке.
+    """
+
+    def __init__(self, marker: str):
+        super().__init__(convert_charrefs=True)
+        self.marker = marker
+        self.tag = None
+        self.depth = 0
+        self.parts: list = []
+        self.done = False
+
+    def handle_starttag(self, tag, attrs):
+        if self.done:
+            return
+        if self.depth == 0:
+            if dict(attrs).get('data-marker') == self.marker:
+                self.tag = tag
+                self.depth = 1
+            return
+        if tag == self.tag:
+            self.depth += 1
+        if tag == 'br':
+            self.parts.append('\n')
+        elif tag in ('p', 'div', 'li'):
+            self.parts.append('\n')
+
+    def handle_startendtag(self, tag, attrs):
+        if self.depth and tag == 'br':
+            self.parts.append('\n')
+
+    def handle_endtag(self, tag):
+        if self.done or not self.depth:
+            return
+        if tag == self.tag:
+            self.depth -= 1
+            if self.depth == 0:
+                self.done = True
+        elif tag in ('p', 'div', 'li'):
+            self.parts.append('\n')
+
+    def handle_data(self, data):
+        if self.depth:
+            self.parts.append(data)
+
+    def text(self) -> str:
+        raw = ''.join(self.parts).replace('\xa0', ' ')
+        raw = re.sub(r'[ \t\r\f\v]+', ' ', raw)
+        raw = re.sub(r' *\n *', '\n', raw)
+        raw = re.sub(r'\n{3,}', '\n\n', raw)
+        return raw.strip()
+
+
+def text_from_marker(html: str, marker: str) -> str:
+    """Текст элемента с data-marker=<marker> или ''."""
+    parser = _MarkedText(marker)
+    try:
+        parser.feed(str(html or ''))
+    except Exception:
+        return ''
+    return parser.text()
+
+
+def _meta_content(html: str, key: str) -> str:
+    """Содержимое <meta property|name="key" content="…">."""
+    pat = (r'<meta[^>]+(?:property|name)=["\']%s["\'][^>]*content=["\']([^"\']*)'
+           % re.escape(key))
+    m = re.search(pat, html, re.I)
+    if not m:
+        pat2 = (r'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name)=["\']%s["\']'
+                % re.escape(key))
+        m = re.search(pat2, html, re.I)
+    return unescape(m.group(1)).strip() if m else ''
+
+
+def _jsonld_description(html: str) -> str:
+    """Описание из структурированных данных (запасной путь)."""
+    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>',
+                         html, re.S | re.I):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        for node in (data if isinstance(data, list) else [data]):
+            if not isinstance(node, dict):
+                continue
+            if node.get('description'):
+                return str(node['description']).strip()
+            for sub in (node.get('item') or [], node.get('itemListElement') or []):
+                if isinstance(sub, dict) and sub.get('description'):
+                    return str(sub['description']).strip()
+    return ''
+
+
+# Магазинные слова в имени продавца — как HUNT_SHOP_MARKERS в боте
+SHOP_NAME_MARKERS = ('магазин', 'shop', 'store', 'салон', 'маркет', 'market',
+                     'ооо', 'ип ', 'trade', 'техно', 'центр', 'company')
+
+
+def parse_item_seller(html: str) -> dict:
+    """Тип, имя и число объявлений продавца со страницы объявления.
+
+    Логика та же, что в боте (_parse_seller), но проверки идут по блоку
+    продавца, а не по всей странице: слово «компания» встречается и в тексте
+    объявления, и тогда магазином ошибочно помечался частник.
+    """
+    out = {'seller_type': '', 'seller_name': '', 'seller_ads': 0}
+    raw = str(html or '')
+    low = raw.lower()
+    if not low:
+        return out
+    seller_block = text_from_marker(raw, 'item-view/seller-info')
+    seller_low = seller_block.lower()
+    name = text_from_marker(raw, 'seller-info/name')
+    if name:
+        out['seller_name'] = re.sub(r'\s+', ' ', name).strip()[:60]
+    if 'частное лицо' in seller_low or 'частное лицо' in low:
+        out['seller_type'] = 'private'
+    if '/brands/' in low or 'компания' in seller_low:
+        out['seller_type'] = 'company'
+    m = re.search(r'(\d[\d\s]{0,7})\s*объявлен', seller_low or low)
+    if m:
+        try:
+            out['seller_ads'] = int(re.sub(r'\D', '', m.group(1)) or 0)
+        except Exception:
+            out['seller_ads'] = 0
+    nm = str(out['seller_name']).lower()
+    if out['seller_type'] != 'company' and any(w in nm for w in SHOP_NAME_MARKERS):
+        out['seller_type'] = 'company'
+    return out
+
+
+def parse_item_page(html: str) -> dict:
+    """Описание и продавец со страницы ОДНОГО объявления.
+
+    Порядок разбора описания: блок item-view/item-description → og:description
+    → meta description → JSON-LD. Первое, что дало ≥ 20 символов, и берём.
+    """
+    raw = str(html or '')
+    desc = text_from_marker(raw, 'item-view/item-description')
+    if len(desc) < 20:
+        for alt in (_meta_content(raw, 'og:description'),
+                    _meta_content(raw, 'description'),
+                    _jsonld_description(raw)):
+            alt = re.sub(r'\s+', ' ', str(alt or '')).strip()
+            if len(alt) >= 20:
+                desc = alt
+                break
+    desc = desc.strip()[:DESC_MAX_CHARS]
+    seller = parse_item_seller(raw)
+    return {
+        'description': desc,
+        'seller_type': seller['seller_type'],
+        'seller_name': seller['seller_name'],
+        'seller_ads': seller['seller_ads'],
+    }
+
+
 def parse_page(html: str) -> list:
     """Пробуем три способа по очереди и берём тот, что дал больше карточек."""
     # Микроразметка первая: проверено, что на живой выдаче Авито JSON-LD нет,
@@ -490,7 +755,10 @@ def push(server: str, token: str, source: str, items: list) -> dict:
         return json.loads(resp.read().decode())
 
 
-def fetch_json(url: str, token: str, timeout: int = 30) -> dict:
+# Загрузка критериев у сервера. На старте он занят — считает медианы
+# и греет картинки, — и за 30 секунд не отвечал. Из-за этого сбор
+# шёл по общим страницам, а не по критериям.
+def fetch_json(url: str, token: str, timeout: int = 90) -> dict:
     """GET с токеном. Идёт через curl_cffi: у системного Python на macOS
     нет корневых сертификатов, и любой https-запрос падал с
     CERTIFICATE_VERIFY_FAILED. curl_cffi проверяет сертификаты сам."""
@@ -525,6 +793,48 @@ CITY_SLUG = {
 }
 
 
+# Слово из запроса → категория Авито (родной слаг сайта).
+#
+# Зачем: «?q=запрос» Авито блокирует, поэтому раньше критерии НЕ влияли на
+# сбор — качались все телефоны подряд, а нужное отсеивалось уже на сервере.
+# Если подходящий айфон лежал на пятой странице, его просто не находили.
+# Теперь запрос переводится в категорию + цену, и фильтрует САМ Авито.
+CATEGORY_BY_WORD = {
+    # телефоны
+    'айфон': 'telefony', 'iphone': 'telefony', 'самсунг': 'telefony',
+    'samsung': 'telefony', 'телефон': 'telefony', 'смартфон': 'telefony',
+    'xiaomi': 'telefony', 'redmi': 'telefony', 'pixel': 'telefony',
+    'huawei': 'telefony', 'realme': 'telefony', 'honor': 'telefony',
+    # ноутбуки
+    'ноутбук': 'noutbuki', 'macbook': 'noutbuki', 'макбук': 'noutbuki',
+    'lenovo': 'noutbuki', 'acer': 'noutbuki', 'asus': 'noutbuki',
+    'hp': 'noutbuki', 'dell': 'noutbuki', 'msi': 'noutbuki',
+    # планшеты
+    'планшет': 'planshety_i_elektronnye_knigi', 'ipad': 'planshety_i_elektronnye_knigi',
+    # приставки и игры
+    'приставка': 'igry_pristavki_i_programmy', 'playstation': 'igry_pristavki_i_programmy',
+    'xbox': 'igry_pristavki_i_programmy', 'nintendo': 'igry_pristavki_i_programmy',
+    # аудио и видео
+    'наушники': 'audio_i_video', 'airpods': 'audio_i_video', 'колонка': 'audio_i_video',
+    'телевизор': 'audio_i_video', 'телек': 'audio_i_video', 'саундбар': 'audio_i_video',
+    # бытовая техника
+    'холодильник': 'bytovaya_tehnika', 'стиральная': 'bytovaya_tehnika',
+    'пылесос': 'bytovaya_tehnika', 'микроволновка': 'bytovaya_tehnika',
+    # комплектующие
+    'монитор': 'tovary_dlya_kompyutera', 'клавиатура': 'tovary_dlya_kompyutera',
+    'видеокарта': 'tovary_dlya_kompyutera', 'мышь': 'tovary_dlya_kompyutera',
+    # одежда и обувь
+    'куртка': 'odezhda_obuv_aksessuary', 'пуховик': 'odezhda_obuv_aksessuary',
+    'кроссовки': 'odezhda_obuv_aksessuary', 'ботинки': 'odezhda_obuv_aksessuary',
+    'сапоги': 'odezhda_obuv_aksessuary', 'платье': 'odezhda_obuv_aksessuary',
+    'сумка': 'odezhda_obuv_aksessuary', 'джинсы': 'odezhda_obuv_aksessuary',
+    'худи': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    # прочее
+    'велосипед': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
+    'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+}
+
+
 def targets_from_criteria(server: str, token: str) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 
@@ -537,16 +847,40 @@ def targets_from_criteria(server: str, token: str) -> list:
         print(f"  ⚠ критерии не получены: {exc}")
         return []
     targets = []
-    # ВАЖНО: ссылки вида «?q=запрос» Авито отдаёт пустыми — поиск у него
-    # защищён. Поэтому такие цели НЕ строим: критерий работает как фильтр
-    # на сервере, а страницы берём из config.json (категории).
-    skipped = 0
+    seen = set()
+    built = 0
     for crit in data.get('items', []):
-        if str(crit.get('query') or '').strip():
-            skipped += 1
-    if skipped:
-        print(f"  Критериев: {skipped}. Они работают как фильтр заголовков,")
-        print("  а страницы для обхода берутся из config.json (категории Авито).")
+        words = [w for w in str(crit.get('query') or '').lower().split() if w]
+        slug = None
+        for word in words:
+            clean = word.strip('.,!?()"\'')
+            if clean in CATEGORY_BY_WORD:
+                slug = CATEGORY_BY_WORD[clean]
+                break
+        if not slug:
+            continue
+        # Родные параметры Авито: цена и сортировка по дате
+        params = ['s=104']
+        try:
+            if int(crit.get('min_price') or 0) > 0:
+                params.append(f"pmin={int(crit['min_price'])}")
+            if int(crit.get('max_price') or 0) > 0:
+                params.append(f"pmax={int(crit['max_price'])}")
+        except Exception:
+            pass
+        url = f"https://www.avito.ru/all/{slug}?" + "&".join(params)
+        if url in seen:
+            continue
+        seen.add(url)
+        all_word = " ".join(words)
+        targets.append({'url': url, 'category': crit.get('category') or slug,
+                        'query': all_word, 'page': 1})
+        built += 1
+    if built:
+        print(f"  Целей из критериев: {built} — Авито фильтрует сам по категории и цене")
+    skipped = len(data.get('items', [])) - built
+    if skipped > 0:
+        print(f"  Критериев без узнаваемой категории: {skipped} (ищут по общим страницам)")
     return targets
 
 
@@ -670,6 +1004,129 @@ def load_config(path: str) -> dict:
     return cfg
 
 
+def push_details(server: str, token: str, source: str, items: list) -> dict:
+    """Отправляет описания и продавцов на сервер: POST /api/ingest/details."""
+    url = f"{server.rstrip('/')}/api/ingest/details"
+    body = json.dumps({'source': source, 'items': items}).encode()
+    headers = {'Content-Type': 'application/json', 'X-Ingest-Token': token}
+    if _cffi is not None:
+        r = _cffi.post(url, data=body, headers=headers, timeout=90)
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:140]}")
+        return json.loads(r.text)
+    req = urllib.request.Request(url, data=body, headers=headers)
+    with _opener().open(req, timeout=90) as resp:
+        return json.loads(resp.read().decode())
+
+
+def collect_details(server: str, token: str, source: str, items: list,
+                    pause: tuple = (4.0, 9.0)) -> int:
+    """Открывает карточки кандидатов и присылает описания на сервер.
+
+    Сервер этого сделать не может: он в дата-центре, и Авито его блокирует,
+    поэтому страницы объявлений открываем мы — по одной, с паузой 4–9 секунд.
+
+    ВАЖНО про запуск на GitHub Actions: у раннеров адрес дата-центра, и
+    страницы объявлений там, скорее всего, не откроются. Это НЕ повод валить
+    весь сбор: при блокировке просто пропускаем описания до следующего
+    прохода (объявления в базе остаются с пометкой «описание не проверено»)
+    и продолжаем собирать выдачу. Пометку failed серверу в этом случае не
+    шлём — иначе три неудачных прохода подряд навсегда закроют карточку.
+    """
+    global _DETAILS_BLOCKED
+    if not items or _DETAILS_BLOCKED:
+        return 0
+    out = []
+    for i, item in enumerate(items):
+        url = str(item.get('url') or '')
+        ext = str(item.get('external_id') or '')
+        if not url.startswith('http'):
+            continue
+        try:
+            html = fetch_item(url)
+        except Blocked as exc:
+            _DETAILS_BLOCKED = True
+            print(f"  ⛔ описания недоступны с этого IP: {exc}")
+            print("    Скорее всего это дата-центр (GitHub Actions). Соберите")
+            print("    описания с домашнего компьютера: collector/start-local.sh")
+            if out:
+                try:
+                    push_details(server, token, source, out)
+                except Exception as exc2:
+                    print(f"  ✖ сервер не принял описания: {exc2}")
+            return len(out)
+        except Exception as exc:
+            print(f"  ✖ описание не открылось: {exc}")
+            out.append({'external_id': ext, 'state': 'failed'})
+            continue
+        data = parse_item_page(html)
+        if len(data.get('description') or '') < 20:
+            print(f"  ⚠ описание пустое ({url[-32:]})")
+            out.append({'external_id': ext, 'state': 'failed'})
+        else:
+            out.append({'external_id': ext, 'state': 'ok',
+                        'description': data['description'],
+                        'seller_type': data['seller_type'],
+                        'seller_name': data['seller_name'],
+                        'seller_ads': int(data['seller_ads'] or 0)})
+            who = ('магазин' if data['seller_type'] == 'company'
+                   else 'частник' if data['seller_type'] == 'private' else 'продавец не определён')
+            print(f"  ✓ описание {len(data['description'])} симв., {who}")
+        # Пауза между страницами: Авито ограничивает частые запросы
+        if i < len(items) - 1:
+            time.sleep(random.uniform(*pause))
+    if out:
+        try:
+            stats = push_details(server, token, source, out)
+            print(f"  описаний отправлено: {stats.get('updated')}, неудач {stats.get('failed')}")
+        except Exception as exc:
+            print(f"  ✖ сервер не принял описания: {exc}")
+    return len(out)
+
+
+def target_urls(target: dict, cfg: dict) -> list:
+    """Ссылки одной цели: страницы 1..pages и необязательные pmin/pmax.
+
+    Этап D10. По умолчанию pages=1: обход лишних страниц — это лишние
+    запросы к Авито, и включать его нужно осознанно (в config.json у цели:
+    "pages": 2, "pmin": 5000, "pmax": 60000). Условия проверять на живом
+    сайте: разметка страниц и параметры цены могут отличаться.
+    """
+    url = str(target.get('url') or '')
+    if not url.startswith('http'):
+        return []
+    pages = int(target.get('pages') or cfg.get('pages') or 1)
+    pages = max(1, min(pages, 3))
+    pmin = target.get('pmin') or cfg.get('pmin') or 0
+    pmax = target.get('pmax') or cfg.get('pmax') or 0
+    extra = []
+    if pmin:
+        extra.append(f"pmin={int(pmin)}")
+    if pmax:
+        extra.append(f"pmax={int(pmax)}")
+    urls = []
+    for page in range(1, pages + 1):
+        parts = list(extra)
+        if page > 1:
+            parts.append(f"p={page}")
+        if not parts:
+            urls.append(url)
+            continue
+        joiner = '&' if '?' in url else '?'
+        urls.append(url + joiner + '&'.join(parts))
+    return urls
+
+
+def date_sorted_first_page(url: str) -> bool:
+    """Выдача отсортирована по дате и это первая страница?
+
+    Отсюда берётся право считать «впервые увиденное» свежим: Авито отдаёт
+    сначала самые новые объявления (этап D5).
+    """
+    text = str(url or '')
+    return 's=104' in text and ('p=' not in text)
+
+
 def run_once(cfg: dict) -> int:
     server, token = cfg['server'], cfg['token']
     total_sent = 0
@@ -683,27 +1140,31 @@ def run_once(cfg: dict) -> int:
         known = {t.get('url') for t in targets}
         targets += [t for t in from_crit if t['url'] not in known]
     for target in targets:
-        url = target.get('url')
         source = target.get('source', 'avito')
         city = target.get('city', '')
-        if not url:
-            continue
-        print(f"\n→ {source}: {url}")
-        try:
-            html = fetch(url)
-        except Blocked as exc:
-            print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
-            # Код 3 = «нас заблокировали». Супервизор на сервере по нему
-            # делает длинную паузу вместо бессмысленных повторов.
-            raise SystemExit(3)
-        except (urllib.error.URLError, TimeoutError) as exc:
-            print(f"  ✖ не открылось: {exc}")
-            continue
-        items = parse_page(html)
-        for item in items:
-            item['category'] = item.get('category') or target.get('category', '')
-            item['city'] = item.get('city') or city
-        print(f"  найдено карточек: {len(items)}")
+        for url in target_urls(target, cfg):
+            print(f"\n→ {source}: {url}")
+            try:
+                html = fetch(url)
+            except Blocked as exc:
+                print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
+                # Код 3 = «нас заблокировали». Супервизор на сервере по нему
+                # делает длинную паузу вместо бессмысленных повторов.
+                raise SystemExit(3)
+            except (urllib.error.URLError, TimeoutError) as exc:
+                print(f"  ✖ не открылось: {exc}")
+                continue
+            items = parse_page(html)
+            first_page_dated = date_sorted_first_page(url)
+            for item in items:
+                item['category'] = item.get('category') or target.get('category', '')
+                item['city'] = item.get('city') or city
+                # Этап D5: даты в карточке нет, но выдача отсортирована по
+                # дате и это её первая страница — объявление почти наверняка
+                # свежее, о чём и сообщаем серверу
+                if item.get('hours_ago') is None and first_page_dated:
+                    item['age_estimated'] = True
+            print(f"  найдено карточек: {len(items)}")
         if not items:
             if '?' in url and 'q=' in url:
                 # Проверено на живом сайте: на поисковый запрос Авито отдаёт
@@ -722,6 +1183,12 @@ def run_once(cfg: dict) -> int:
             print(f"  отправлено: принято {stats.get('accepted')}, "
                   f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
             total_sent += int(stats.get('accepted') or 0)
+            # Сервер отвечает, по каким карточкам нужно описание: отбор
+            # по требованиям словами без него работает вслепую (этап A3)
+            need = stats.get('need_details') or []
+            if need:
+                print(f"  описаний нужно: {len(need)} — открываю карточки")
+                collect_details(server, token, source, need)
         except Exception as exc:
             print(f"  ✖ сервер не принял: {exc}")
         # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
@@ -731,9 +1198,17 @@ def run_once(cfg: dict) -> int:
 
 
 def selftest() -> int:
-    """Проверка разбора на образце — без обращения к чужим сайтам."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixture_avito.html')
-    with open(path, encoding='utf-8') as fh:
+    """Проверка разбора на образцах — без обращения к чужим сайтам.
+
+    Две части: страница ВЫДАЧИ (fixture_avito.html) и страницы ОБЪЯВЛЕНИЙ
+    (fixture_item_*.html: частник и магазин). Вторые нужны именно для
+    parse_item_page: на живом сайте их проверять нельзя, а описание и
+    продавец — то, ради чего этап A и делается.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    listing_path = os.path.join(here, 'fixture_avito.html')
+    with open(listing_path, encoding='utf-8') as fh:
         html = fh.read()
     items = parse_page(html)
     print(f"Разобрано карточек: {len(items)}")
@@ -741,6 +1216,26 @@ def selftest() -> int:
         print(f"  {item['title'][:40]:42} {item['price']:>9} ₽  id={item['external_id']}  "
               f"фото={len(item['photos'])}")
     ok = len(items) >= 2 and all(i['price'] > 0 and i['url'].startswith('http') for i in items)
+
+    print()
+    item_files = sorted(glob.glob(os.path.join(here, 'fixture_item*.html')))
+    if not item_files:
+        print("⚠ нет файлов fixture_item*.html — разбор страницы объявления не проверить")
+    for path in item_files:
+        with open(path, encoding='utf-8') as fh:
+            page = fh.read()
+        data = parse_item_page(page)
+        kind = 'магазин' if data['seller_type'] == 'company' else (
+            'частник' if data['seller_type'] == 'private' else 'тип не определён')
+        print(f"  {os.path.basename(path):34} описание {len(data['description']):>4} симв. | "
+              f"{kind} | {data['seller_name'][:34]!r} | объявлений: {data['seller_ads']}")
+        print(f"      «{data['description'][:70].replace(chr(10), ' ')}…»")
+        part_ok = (len(data['description']) >= 20
+                   and data['seller_type'] in ('private', 'company'))
+        if not part_ok:
+            print("      ✖ описание или продавец не распознались")
+        ok = ok and part_ok
+
     print("\nИТОГ:", "разбор работает" if ok else "РАЗБОР СЛОМАН")
     return 0 if ok else 1
 
