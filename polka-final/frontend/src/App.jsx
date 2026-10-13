@@ -3365,6 +3365,13 @@ function ChatsPage() {
                   ) : null}
                 </div>
               </div>
+              {/* Миниатюра товара: поле ad_photo отдаёт бэкенд; если его нет —
+                  строка просто остаётся без картинки. */}
+              {chat.ad_photo ? (
+                <span className="chat-thumb">
+                  <img src={resolveAssetUrl(chat.ad_photo)} alt="" loading="lazy" />
+                </span>
+              ) : null}
             </Link>
           )
         })}
@@ -3740,7 +3747,6 @@ function FavoritesPage() {
         <div className="list-stack mt-14">
           {items.map((item) => (
             <div key={item.id} className="favorite-row glass-card"
-              style={{ cursor: 'pointer' }}
               onClick={() => { window.location.hash = `#/listing/${item.id}` }}>
               <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
               <div>
@@ -3838,7 +3844,6 @@ function Layout() {
 
   return (
     <div className="app-shell">
-      <div className="notch" />
       <Routes>
         <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/" element={<FeedPage />} />

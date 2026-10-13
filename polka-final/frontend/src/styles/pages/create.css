@@ -49,7 +49,8 @@
    ТЗ: opacity .45 сливала кнопку с фоном — непонятно, кнопка это или нет.
    Делаем её явно неактивной, но читаемой; рядом стоит причина (см. §4). */
 .primary-btn:disabled,
-.cta-button:disabled {
+.cta-button:disabled,
+.cta-primary:disabled {
   opacity: 1;
   background: var(--surface-2);
   color: var(--text);

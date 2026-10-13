@@ -60,13 +60,15 @@
    ТЗ 3b: пока модель разбирает фразу, нужен индикатор, а не одна серая
    строка. Три точки пульсируют по очереди; текст остаётся рядом — он
    объясняет, что именно происходит. Селектор — существующий
-   .chat-bubble.is-typing: он уже задаёт цвет и размер системной строки
-   (и перебит !important в styles.css — трогать его нельзя, этап 5). */
+   .chat-bubble.is-typing: цвет и размер системной строки перенесены сюда
+   из styles.css на этапе 5 (там они были с !important). */
 .chat-bubble.is-typing {
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   min-height: 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 .chat-typing-dot {
   width: 7px;
@@ -100,6 +102,52 @@
   gap: var(--space-2);
   padding: var(--space-1) 0 var(--space-2);
 }
+
+/* ═══ 3a. ПУЗЫРИ ЧАТА: ИТОГОВЫЕ ЗНАЧЕНИЯ (ЭТАП 5) ════════════════════════
+   Раньше эти значения стояли в конце styles.css с !important: так они
+   перебивали более ранние legacy-блоки того же файла (белая карточка
+   у ответа ИИ). Теперь !important не нужен — файл подключается последним,
+   а специфичность селекторов достаточная:
+     • .chat-bubble            (0,1,0) — сильнее любого legacy-правила
+       по этому же классу, потому что идёт позже;
+     • .chat-bubble.is-me /
+       .chat-bubble.is-typing  (0,2,0) — перебивают базовое правило;
+     • .chat-row               (0,1,0) — глобальное правило для строк
+       переписки (используется и на /chats), поэтому без обёртки.
+   Вид сохранён 1:1: ответ ИИ — обычный текст без карточки, реплика
+   человека — синий пузырь справа. */
+.chat-bubble {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  max-width: 100%;
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--text);
+}
+/* Тень у синего пузыря сейчас НЕ показывается: её гасило legacy-правило
+   `.chat-bubble { box-shadow: none !important }`. Сохраняем тот же вид
+   явным «none» — иначе правило ниже из §9 снова включило бы тень. */
+.chat-bubble.is-me {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 20px 20px 6px 20px;
+  padding: 11px 15px;
+  max-width: 78%;
+  font-size: 15.5px;
+  line-height: 1.4;
+  box-shadow: none;
+}
+/* Строки: ИИ слева, человек справа, с воздухом между сообщениями */
+.chat-row {
+  display: flex;
+  margin-bottom: 16px;
+  background: transparent;
+}
+.chat-row.is-me { justify-content: flex-end; }
 
 /* ═══ 4. ИТОГОВАЯ ПЛАШКА «БУДУ ИСКАТЬ» ════════════════════════════════════
    Кнопки — общий Button (accent + ghost), как в остальных экранах ТЗ. */
@@ -236,9 +284,10 @@
 @media (max-width: 360px) {
   .chat-hello { font-size: var(--fs-h1-s); line-height: var(--lh-h1-s); }
 }
-.chat-bubble.is-me {
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent);
-}
+/* Тень синего пузыря (docs: 0 4px 14px rgba(47,107,255,.22)) не показывается:
+   legacy-правило `.chat-bubble { box-shadow: none !important }` её гасило,
+   а этап 5 обязан сохранить вид 1:1. Итоговый `box-shadow: none` для
+   .chat-bubble.is-me задан выше, в §3a. */
 .chat-send {
   box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
 }

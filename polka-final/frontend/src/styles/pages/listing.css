@@ -149,7 +149,7 @@
 }
 
 /* Удаление из избранного: спокойная ghost-кнопка с корзиной вместо красной
-   «×» (.trash-btn остаётся в styles.css — класс не удаляем и не переименовываем).
+   «×» (мёртвый legacy-класс .trash-btn удалён на этапе 5).
    Площадь нажатия ровно 44×44 — требование доступности. */
 .favorites-page .favorite-remove {
   flex: 0 0 auto;
@@ -189,3 +189,38 @@
   .listing-page .detail-hero { min-height: 440px; }
   .listing-page .detail-slide { height: 440px; }
 }
+
+/* ═══ 5. ЗОНЫ НАЖАТИЯ И МЕЛОЧИ ПО АУДИТУ ═══════════════════════════════ */
+
+/* Точки-индикаторы галереи: сама точка остаётся 6–18 px, но зона нажатия —
+   44 px, иначе по ней невозможно попасть пальцем (ТЗ: не меньше 44 px). */
+.listing-page .detail-dots { gap: 0; }
+.listing-page .detail-dot {
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border-radius: 0;
+}
+.listing-page .detail-dot::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .65);
+  transition: width var(--dur) var(--ease), border-radius var(--dur) var(--ease);
+}
+.listing-page .detail-dot.is-active { width: 44px; background: none; border-radius: 0; }
+.listing-page .detail-dot.is-active::before {
+  width: 18px;
+  border-radius: 3px;
+  background: #fff;
+}
+
+/* Чипы-счётчики категорий на поиске: 39 px были ниже нормы. */
+.count-chip { min-height: 44px; }
+
+/* Карточка избранного кликабельна целиком — курсор вместо инлайнового стиля. */
+.favorites-page .favorite-row { cursor: pointer; }

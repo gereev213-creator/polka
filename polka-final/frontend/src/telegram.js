@@ -26,29 +26,10 @@ export function initTelegramMiniApp() {
 }
 
 // Цвета берём из нашей палитры: тёмная тема убрана по решению заказчика,
-// приложение всегда светлое. Значения themeParams всё равно прокидываем
-// в CSS как --tg-theme-* — ими пользуются компоненты, если понадобится.
+// приложение всегда светлое. Маппинг themeParams → --tg-theme-* и
+// dataset.tgTheme удалены на этапе 5: тёмных токенов в CSS больше нет,
+// эти переменные никто не читал.
 function applyTelegramTheme(tg) {
-  const p = tg.themeParams || {}
-  const root = document.documentElement
-
-  const map = {
-    '--tg-theme-bg-color': p.bg_color,
-    '--tg-theme-secondary-bg-color': p.secondary_bg_color,
-    '--tg-theme-text-color': p.text_color,
-    '--tg-theme-hint-color': p.hint_color,
-    '--tg-theme-link-color': p.link_color,
-    '--tg-theme-button-color': p.button_color,
-    '--tg-theme-button-text-color': p.button_text_color,
-    '--tg-theme-header-bg-color': p.header_bg_color,
-  }
-  Object.keys(map).forEach((key) => {
-    if (map[key]) root.style.setProperty(key, map[key])
-  })
-
-  // Приложение всегда светлое: тёмная тема убрана по решению заказчика.
-  root.dataset.tgTheme = 'light'
-
   // Цвета шапки и фона — из нашей палитры. Цвета Telegram не подставляем:
   // в тёмном Telegram они сделали бы шапку тёмной при светлом приложении.
   tg.setHeaderColor?.('#F5F5F7')

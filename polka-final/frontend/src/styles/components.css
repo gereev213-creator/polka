@@ -91,7 +91,7 @@
 
 .segmented { display: flex; gap: var(--space-1); padding: 4px; background: var(--surface-2); border-radius: var(--radius-pill); }
 .segmented button {
-  flex: 1 1 0; min-height: 40px; border: none; background: transparent;
+  flex: 1 1 0; min-height: 44px; border: none; background: transparent;
   color: var(--text-secondary); font: 500 var(--fs-cap)/var(--lh-cap) var(--font);
   border-radius: var(--radius-pill);
 }

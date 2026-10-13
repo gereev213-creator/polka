@@ -2,11 +2,6 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-html, body, #root {
-  min-height: 100vh;
-  -webkit-font-smoothing: antialiased;
-}
-
 
 
 a { color: inherit; text-decoration: none; }
@@ -16,16 +11,14 @@ input, textarea, select { font-family: inherit; }
 .app-frame {
   max-width: 430px;
   margin: 0 auto;
-  min-height: 100vh;
+  min-height: 100dvh;
   padding: 0 16px 100px;
   position: relative;
 }
 
 .app-shell {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
-
-.screen { padding: 16px 0; }
 .screen.padded { padding: 16px; }
 
 /* ── Истории (референс: градиентное кольцо + фото товара) ─────────────── */
@@ -62,16 +55,6 @@ input, textarea, select { font-family: inherit; }
   transition: transform .18s ease;
 }
 .story-item:active { transform: scale(.94); }
-.story-ring {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  padding: 2.5px;
-  background: var(--ring);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .story-ring.is-own,
 .story-ring.is-seen { background: var(--border); }
 .story-avatar {
@@ -137,15 +120,6 @@ input, textarea, select { font-family: inherit; }
 }
 
 /* TopBar */
-.topbar {
-  grid-template-columns: 1fr auto 1fr;
-}
-.topbar-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-}
-.topbar-side { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .topbar-side:last-child,
 .topbar-side--right { justify-content: flex-end; }
 /* Ряд иконок в шапке: без этого кнопки встают столбиком */
@@ -224,15 +198,7 @@ input, textarea, select { font-family: inherit; }
 }
 
 /* Product Card */
-.product-card {
-  transition: all .2s ease;
-}
 .product-card:active { transform: scale(.98); }
-.product-media {
-  aspect-ratio: 1;
-  background: var(--surface-2);
-  overflow: hidden;
-}
 .product-media .media-image,
 .product-media .media-placeholder {
   width: 100%;
@@ -255,19 +221,6 @@ input, textarea, select { font-family: inherit; }
   color: var(--text-secondary);
   font-size: 13px;
 }
-.save-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,.1);
-  transition: all .2s ease;
-}
 .save-btn.is-on { color: var(--accent); }
 .save-btn.is-on .icon-svg { fill: var(--accent); }
 .product-info { padding: 12px 14px 14px; }
@@ -285,17 +238,6 @@ input, textarea, select { font-family: inherit; }
   font-size: 12px;
   color: var(--text-secondary);
   margin-top: 4px;
-}
-.product-bottom {
-  margin-top: 10px;
-}
-.product-bottom .product-price {
-  font-weight: 800;
-  letter-spacing: -.01em;
-  color: #fff;
-  background: var(--accent);
-  border-radius: 999px;
-  padding: 9px 16px;
 }
 .product-action {
   width: 40px;
@@ -368,69 +310,6 @@ input, textarea, select { font-family: inherit; }
   backdrop-filter: blur(6px);
 }
 
-/* Плавающие плашки-«якоря» поверх фото — как в референсе */
-.hero-pins {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-}
-.hero-pin {
-  position: absolute;
-  left: 14px;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.hero-pin-anchor {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: #fff;
-  border: 4.5px solid rgba(23,23,26,.88);
-  flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0,0,0,.28);
-}
-.hero-pin-pill {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 9px 17px;
-  border-radius: 999px;
-  background: rgba(23,23,26,.9);
-  color: #fff;
-  box-shadow: 0 10px 22px rgba(0,0,0,.3);
-  backdrop-filter: blur(8px);
-}
-.hero-pin-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0;
-  color: rgba(255,255,255,.6);
-}
-.hero-pin-value {
-  font-size: 13.5px;
-  font-weight: 800;
-  letter-spacing: -.01em;
-  white-space: nowrap;
-  max-width: 148px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.hero-pin-arrow {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 6px 14px rgba(47,107,255,.4);
-}
-.hero-pin-arrow .icon-svg { width: 15px; height: 15px; transform: rotate(180deg); }
-
 .detail-dots {
   position: absolute;
   left: 0;
@@ -495,22 +374,6 @@ input, textarea, select { font-family: inherit; }
 .spec-chip-label { font-size: 11px; color: var(--text-secondary); }
 .spec-chip-value { font-size: 12.5px; font-weight: 700; }
 
-.detail-meta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-/* Нижний ряд кнопок — как «AR View» + «Schedule for Event» в референсе */
-.detail-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 16px;
-}
 .cta-primary,
 .cta-dark {
   height: 54px;
@@ -528,15 +391,15 @@ input, textarea, select { font-family: inherit; }
 .cta-primary {
   /* Без flex:1 — раньше он стоял здесь глобально, и у ОДИНОЧНОЙ кнопки
      flex-basis:0% схлопывал ширину и высоту: текст вылезал за плашку.
-     Растягивание нужно только в ряду кнопок — см. .detail-actions ниже.
+     Растягивание нужно только в ряду кнопок — см. .detail-bar
+     в styles/pages/listing.css.
      Горизонтальные отступы были только у .cta-dark, поэтому одиночная
      кнопка облегала текст вплотную и выглядела «сломанной». */
   padding: 0 26px;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 8px 20px rgba(47,107,255,.34);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 34%, transparent);
 }
-.detail-actions .cta-primary { flex: 1; }
 .cta-dark {
   background: var(--ink);
   color: #fff;
@@ -576,7 +439,7 @@ input, textarea, select { font-family: inherit; }
   background: rgba(59,130,246,.12);
   border: 1px solid rgba(59,130,246,.2);
   font-size: 12px;
-  color: var(--secondary, #3b82f6);
+  color: var(--secondary);
   animation: fadeIn .2s ease both;
 }
 .mt-14 { margin-top: 14px; }
@@ -634,7 +497,7 @@ input, textarea, select { font-family: inherit; }
   overflow: hidden;
   margin: 14px 0 16px;
   background: var(--surface-2);
-  box-shadow: 0 10px 24px rgba(17,24,39,.10);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 .feed-banner-track {
   display: flex;
@@ -678,8 +541,7 @@ input, textarea, select { font-family: inherit; }
   0% { background-position: -320px 0; }
   100% { background-position: 320px 0; }
 }
-.skeleton-banner,
-.skeleton-card {
+.skeleton-banner {
   background: linear-gradient(90deg, var(--surface-2) 0%, #E7E9EE 50%, var(--surface-2) 100%);
   background-size: 320px 100%;
   animation: polka-shimmer 1.3s linear infinite;
@@ -688,15 +550,6 @@ input, textarea, select { font-family: inherit; }
 .skeleton-banner {
   height: 168px;
   border-radius: 20px;
-}
-.skeleton-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.skeleton-card {
-  aspect-ratio: .78;
-  border-radius: var(--radius-lg);
 }
 
 /* Buttons */
@@ -782,20 +635,11 @@ input, textarea, select { font-family: inherit; }
 }
 .step-actions > * { flex: 1; }
 
-/* Dock */
+/* Перебивается правилом в @media ниже по файлу: эти
+   объявления обязаны идти перед ним, поэтому живут
+   отдельным блоком (этап 5, схлопывание дублей). */
 .dock {
-  position: fixed;
-  height: 64px;
-  background: rgba(22,22,29,.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
   padding: 0 8px;
-  z-index: 100;
-  transition: transform .35s cubic-bezier(.22,.9,.3,1), opacity .3s ease;
 }
 .dock.hidden {
   transform: translateX(-50%) translateY(120%);
@@ -830,28 +674,13 @@ input, textarea, select { font-family: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.dock-badge {
-  position: absolute;
-  top: 0;
-  right: 0;
-  padding: 2px 5px;
-  border-radius: 999px;
-  background: var(--danger);
-  color: #fff;
-  font-size: 7px;
-  font-weight: 700;
-}
+
+/* Перебивается правилом в @media ниже по файлу: эти
+   объявления обязаны идти перед ним, поэтому живут
+   отдельным блоком (этап 5, схлопывание дублей). */
 .dock-create {
   width: 52px;
   height: 52px;
-  border-radius: 50%;
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: -22px;
-  transition: transform .18s ease;
 }
 .dock-create:active { transform: scale(.9); }
 .dock-create .icon-svg { width: 22px; height: 22px; }
@@ -878,14 +707,6 @@ input, textarea, select { font-family: inherit; }
 .back-to-top .icon-svg { width: 18px; height: 18px; transform: rotate(-90deg); }
 
 /* Chat */
-.chat-screen { height: 100vh; }
-.bubble {
-  max-width: 75%;
-  padding: 10px 14px;
-  border-radius: 14px;
-  font-size: 14px;
-  line-height: 1.4;
-}
 .bubble.in {
   background: var(--surface);
   border-bottom-left-radius: 4px;
@@ -922,28 +743,11 @@ input, textarea, select { font-family: inherit; }
 
 /* Profile */
 .profile-top { text-align: center; padding: 24px 0; }
-.profile-avatar {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent), #8B5CF6);
-  margin: 0 auto 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-  color: #fff;
-}
 .profile-id { font-size: 18px; font-weight: 600; }
 
 /* Utility */
-.text-center { text-align: center; }
 .mt-8 { margin-top: 8px; }
 .mt-12 { margin-top: 12px; }
-.mt-16 { margin-top: 16px; }
-.mb-8 { margin-bottom: 8px; }
-.mb-12 { margin-bottom: 12px; }
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 0; height: 0; }
@@ -1019,23 +823,6 @@ input, textarea, select { font-family: inherit; }
   color: var(--text);
 }
 .stat-card-icon .icon-svg { width: 16px; height: 16px; }
-.stat-card.is-accent {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(47,107,255,.3);
-}
-.stat-card.is-accent .stat-card-label { color: rgba(255,255,255,.75); }
-.stat-card.is-accent .stat-card-icon { background: #fff; color: var(--accent); }
-.stat-card.is-dark {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: #fff;
-  box-shadow: 0 10px 24px rgba(23,23,26,.28);
-}
-.stat-card.is-dark .stat-card-label { color: rgba(255,255,255,.62); }
-.stat-card.is-dark .stat-card-icon { background: rgba(255,255,255,.16); color: #fff; }
-
 /* ── «Personalized daily outfit» → «Рекомендуем сегодня» ─────────────── */
 .recommend-card {
   position: relative;
@@ -1212,7 +999,7 @@ input, textarea, select { font-family: inherit; }
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 8px 18px rgba(47,107,255,.28);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .count-chip.is-active .count-chip-n {
   background: rgba(255,255,255,.22);
@@ -1252,7 +1039,6 @@ input, textarea, select { font-family: inherit; }
 .filter-chip-label { color: var(--text-secondary); font-weight: 500; }
 
 /* ── Строки результатов (поиск, мои объявления, избранное) ───────────── */
-.result-row,
 .favorite-row {
   display: flex;
   align-items: center;
@@ -1264,7 +1050,6 @@ input, textarea, select { font-family: inherit; }
   box-shadow: var(--soft);
   position: relative;
 }
-.result-row:active,
 .favorite-row:active { transform: scale(.99); }
 .result-thumb {
   width: 74px;
@@ -1276,7 +1061,6 @@ input, textarea, select { font-family: inherit; }
 }
 .result-thumb .media-image,
 .result-thumb .media-placeholder { width: 100%; height: 100%; border-radius: 0; }
-.result-row > div:not(.result-thumb),
 .favorite-row > div:not(.result-thumb) { min-width: 0; flex: 1; }
 .result-price {
   display: inline-block;
@@ -1298,7 +1082,6 @@ input, textarea, select { font-family: inherit; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.result-row .product-city,
 .favorite-row .product-city {
   font-size: 11.5px;
   color: var(--text-secondary);
@@ -1306,13 +1089,6 @@ input, textarea, select { font-family: inherit; }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.save-btn.inline {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
 }
 .tool-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .tool-btn {
@@ -1328,9 +1104,6 @@ input, textarea, select { font-family: inherit; }
 .tool-btn:active { transform: scale(.95); }
 
 /* ── Поиск: заголовок, строка поиска, панель фильтров ────────────────── */
-.page-title {
-  margin: 6px 0 12px;
-}
 .search-row {
   display: flex;
   align-items: center;
@@ -1375,7 +1148,6 @@ input, textarea, select { font-family: inherit; }
   height: 46px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: linear-gradient(135deg, var(--accent), #8B5CF6);
 }
 .seller-meta { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .seller-meta strong { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
@@ -1438,21 +1210,8 @@ input, textarea, select { font-family: inherit; }
   font-weight: 700;
   letter-spacing: .03em;
 }
-.trash-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(239,68,68,.1);
-  color: var(--danger);
-  font-size: 16px;
-  flex-shrink: 0;
-}
 
 /* Карточки-состояния (загрузка / успех / ошибка) */
-.checkout-box,
 .success-box {
   padding: 16px;
   border-radius: var(--radius-lg);
@@ -1477,17 +1236,8 @@ input, textarea, select { font-family: inherit; }
 }
 
 /* ── Список диалогов ─────────────────────────────────────────────────── */
-.chat-row {
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  box-shadow: var(--soft);
-}
 .chat-row:active { transform: scale(.99); }
 .chat-row .avatar { width: 48px; height: 48px; }
-.chat-meta { flex: 1; }
 .chat-meta strong { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
 .chat-meta span {
   font-size: 12.5px;
@@ -1508,8 +1258,9 @@ input, textarea, select { font-family: inherit; }
 
 /* ── Экран диалога ───────────────────────────────────────────────────── */
 .chat-screen {
+  height: 100dvh;
   /* Фиксированная полноэкранная панель в границах «телефонной» колонки.
-     Центрируем через left/right + margin:auto, а НЕ через transform:
+     Центрируем через left/right + margin: auto, а НЕ через transform:
      анимация .screen > * (slideUp) приоритетнее обычных объявлений и
      затирала translateX(-50%) — чат уезжал вправо и обрезался по краю. */
   position: fixed;
@@ -1525,7 +1276,7 @@ input, textarea, select { font-family: inherit; }
   flex-direction: column;
   background: var(--bg);
   overflow: hidden;
-  animation: none; /* полноэкранной панели анимация появления не нужна */
+  animation: none;
 }
 /* В диалоге нижней навигации нет — запас под док не нужен */
 body:has(.chat-screen) .app-frame { padding-bottom: 0; }
@@ -1569,7 +1320,15 @@ body:has(.chat-screen) .app-frame { padding-bottom: 0; }
 .bubble-wrap { display: flex; flex-direction: column; }
 .bubble-wrap.in { align-items: flex-start; }
 .bubble-wrap.out { align-items: flex-end; }
-.bubble { position: relative; margin-bottom: 2px; }
+.bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.4;
+  position: relative;
+  margin-bottom: 2px;
+}
 .bubble-media { padding: 4px; overflow: hidden; }
 .bubble-media-img {
   display: block;
@@ -1706,7 +1465,7 @@ video.bubble-media-img {
   transform: translateX(-50%);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 30%, rgba(47,107,255,.42), transparent 62%),
+    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 62%),
     radial-gradient(circle at 70% 70%, rgba(139,92,246,.45), transparent 60%);
   filter: blur(30px);
   z-index: -1;
@@ -1757,7 +1516,6 @@ video.bubble-media-img {
 }
 .profile-avatar-img { object-fit: cover; }
 .profile-avatar-fallback {
-  background: linear-gradient(135deg, var(--accent), #8B5CF6);
   color: #fff;
   font-size: 30px;
   font-weight: 800;
@@ -1801,9 +1559,9 @@ video.bubble-media-img {
   min-height: 148px;
   padding: 18px 14px;
   border-radius: 20px;
-  border: 1.5px dashed rgba(47,107,255,.45);
+  border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background:
-    radial-gradient(circle at 50% 0%, rgba(47,107,255,.10), transparent 72%),
+    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
     var(--surface);
   cursor: pointer;
   text-align: center;
@@ -1821,7 +1579,7 @@ video.bubble-media-img {
   justify-content: center;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 10px 22px rgba(47,107,255,.35);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .upload-drop-icon .icon-svg { width: 24px; height: 24px; }
 .upload-drop-title {
@@ -1887,15 +1645,6 @@ video.bubble-media-img {
   transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
 }
 .cat-tile:active { transform: scale(.97); }
-.cat-tile-label {
-  position: relative;
-  display: block;
-  max-width: 62%;
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: -.025em;
-  line-height: 1.14;
-}
 /* PNG прижат к правому нижнему углу и намеренно выходит за край плашки.
  * У «правильной» картинки объект в правом нижнем углу, а верх прозрачный —
  * поэтому длинная подпись слева не конфликтует с иллюстрацией. */
@@ -1931,7 +1680,7 @@ video.bubble-media-img {
 /* Выбор: без обводки — только мягкое серое свечение и чуть более тёмная плашка */
 .cat-tile.is-selected {
   background: #E4E7EB;
-  box-shadow: 0 6px 20px rgba(17,24,39,.20), 0 0 14px rgba(17,24,39,.10);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--ink) 20%, transparent), 0 0 14px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -1940,10 +1689,20 @@ video.bubble-media-img {
 
 /* Своя история ждёт модерации — полосатое янтарное кольцо */
 .story-ring.is-pending {
-  background: repeating-linear-gradient(45deg, #F59E0B 0 5px, #FCD34D 5px 10px);
+  background: repeating-linear-gradient(45deg, var(--warning) 0 5px, #FCD34D 5px 10px);
 }
 /* Счётчик историй на проверке — бейджем, иначе подпись обрезается */
-.story-ring { position: relative; }
+.story-ring {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
+  padding: 2.5px;
+  background: var(--ring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
 .story-badge {
   position: absolute;
   right: -1px;
@@ -1952,7 +1711,7 @@ video.bubble-media-img {
   height: 21px;
   padding: 0 5px;
   border-radius: 999px;
-  background: #F59E0B;
+  background: var(--warning);
   color: #fff;
   font-size: 11.5px;
   font-weight: 700;
@@ -1996,7 +1755,7 @@ video.bubble-media-img {
   width: 58px;
   height: 58px;
   border-radius: 50%;
-  background: #E8F0FF;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -2032,7 +1791,7 @@ video.bubble-media-img {
   width: 64px;
   height: 64px;
   border-radius: 50%;
-  background: #E8F0FF;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -2140,7 +1899,7 @@ video.bubble-media-img {
   bottom: 0;
   z-index: 4;
   padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(11,12,16,.94), rgba(11,12,16,0));
+  background: linear-gradient(to top, color-mix(in srgb, var(--ink) 94%, transparent), transparent);
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2195,7 +1954,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   align-items: center;
   justify-content: center;
   z-index: 2;
-  box-shadow: 0 2px 8px rgba(47,107,255,.4);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
   transition: transform .16s ease;
 }
 .story-add:active { transform: scale(.9); }
@@ -2224,15 +1983,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 .segmented button.is-active {
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 2px 8px rgba(17,24,39,.10);
-}
-.auction-sort button {
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 600;
-  background: var(--surface-2);
-  color: var(--text-secondary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 .auction-sort button.is-active {
   background: var(--ink);
@@ -2299,8 +2050,8 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 .auction-timer .icon-svg { width: 13px; height: 13px; }
 /* Меньше 5 минут — таймер кричит */
 .auction-timer.is-urgent {
-  background: #FEE2E2;
-  color: #DC2626;
+  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
+  color: var(--danger-ink);
 }
 .auction-own {
   font-size: 11.5px;
@@ -2335,8 +2086,8 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 }
 .mybid-amount { font-size: 12px; color: var(--text-secondary); }
 .mybid-state { font-size: 12px; font-weight: 700; }
-.mybid-state.is-ok { color: #16A34A; }
-.mybid-state.is-warn { color: #DC2626; }
+.mybid-state.is-ok { color: var(--success-ink); }
+.mybid-state.is-warn { color: var(--danger-ink); }
 .mybid-state.is-muted { color: var(--text-secondary); }
 
 /* Шторка ставки */
@@ -2344,7 +2095,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   position: fixed;
   inset: 0;
   z-index: 130;
-  background: rgba(11,12,16,.5);
+  background: color-mix(in srgb, var(--ink) 50%, transparent);
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -2426,14 +2177,14 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   background: var(--ink);
   color: #fff;
 }
-.auction-timer.big.is-urgent { background: #DC2626; color: #fff; }
+.auction-timer.big.is-urgent { background: var(--danger-ink); color: #fff; }
 .auction-buynow {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 9px 12px;
   border-radius: 14px;
-  background: #E8F0FF;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
   color: var(--accent);
   font-size: 12.5px;
   font-weight: 700;
@@ -2448,7 +2199,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   font-size: 12.5px;
   font-weight: 600;
 }
-.auction-result.is-ok { background: #DCFCE7; color: #15803D; }
+.auction-result.is-ok { background: #DCFCE7; color: var(--success-ink); }
 .auction-result .icon-svg { width: 15px; height: 15px; }
 .auction-history-toggle {
   align-self: flex-start;
@@ -2470,10 +2221,6 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   color: var(--text-secondary);
 }
 .auction-history-row b { color: var(--ink); }
-.field-label-row {
-  letter-spacing: 0;
-  margin-bottom: -4px;
-}
 
 /* Размер файла к отправке — чтобы лимит был виден ДО отправки */
 .story-size {
@@ -2482,7 +2229,7 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
   text-align: center;
   min-height: 16px;
 }
-.story-size.is-bad { color: #DC2626; font-weight: 700; }
+.story-size.is-bad { color: var(--danger-ink); font-weight: 700; }
 
 /* Системная двойная стрелка у select выглядела чужеродно — рисуем свою */
 select.text-input {
@@ -2572,7 +2319,7 @@ select.text-input {
   padding: 14px;
   margin-top: 12px;
   border-radius: var(--radius-lg);
-  background: #E8F0FF;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 }
 .story-bot-head { display: flex; gap: 11px; align-items: flex-start; }
 .story-bot-icon {
@@ -2595,16 +2342,6 @@ select.text-input {
 }
 .story-bot-head span { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
 .story-bot-card .cta-primary { width: 100%; }
-
-/* Метка выгоды на карточке: «−32%» к медиане по категории */
-.deal-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  background: #16A34A;
-  color: #fff;
-  box-shadow: 0 2px 8px rgba(22,163,74,.4);
-}
 
 /* Призыв «Что ловить» — главный вход в продукт с первого экрана */
 .hunt-cta {
@@ -2647,8 +2384,8 @@ select.text-input {
   padding: 13px 15px;
   margin-bottom: 12px;
   border-radius: var(--radius-lg);
-  background: #FFF4E5;
-  border-left: 4px solid #F59E0B;
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface));
+  border-left: 4px solid var(--warning);
 }
 .collector-warn strong { font-size: 14px; font-weight: 700; }
 .collector-warn span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
@@ -2667,10 +2404,6 @@ select.text-input {
 .board-note span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
 .board-note .cta-primary { align-self: flex-start; margin-top: 4px; }
 
-/* У лота с Авито плашки на фото не показываем: это чужая находка,
-   а не объявление пользователя. Доски не касается. */
-.hero-pins.is-hidden { display: none; }
-
 /* ── Правки по замечаниям ───────────────────────────────────────────────── */
 
 /* 1. Свечение при нажатии. На плашках с overflow:hidden тень-свечение
@@ -2683,7 +2416,7 @@ select.text-input {
 .chip:active,
 .segmented button:active,
 [class*="tile"]:active {
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 /* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
@@ -2700,6 +2433,13 @@ select.text-input {
     transparent 72%);
 }
 .cat-tile-label {
+  position: relative;
+  display: block;
+  max-width: 62%;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.025em;
+  line-height: 1.14;
   z-index: 3;
   /* Тёмный текст на светлой подложке — единый вид на всех плашках */
   color: var(--text);
@@ -2741,52 +2481,14 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 }
 .price-pair .input { flex: 1; min-width: 0; }
 
-/* Главная кнопка экрана — во всю ширину */
-.cta-primary.is-wide { width: 100%; }
-
 /* ── Сворачивающиеся разделы фильтров ──────────────────────────────────── */
-.field-label-row.is-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  cursor: pointer;
-  user-select: none;
-}
-.field-label-row.is-toggle .toggle-mark {
-  transition: transform .18s ease;
-}
 .field-label-row.is-toggle.is-open .toggle-mark { transform: rotate(90deg); }
 
 /* ── Поиск лотов как чат ───────────────────────────────────────────────── */
 .chat-wrap {
   display: flex;
   flex-direction: column;
-  min-height: calc(100vh - 150px);
-}
-.chat-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-.chat-manual {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-.chat-list {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-bottom: 14px;
-}
-.chat-bubble.is-me {
-  border-color: var(--accent);
+  min-height: calc(100dvh - 150px);
 }
 .chat-replies {
   flex-wrap: wrap;
@@ -2802,63 +2504,13 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   font-size: 14px;
 }
 .chat-chip:active { transform: scale(.96); }
-.chat-input {
-  display: flex;
-  align-items: center;
-  padding-top: 10px;
-}
-.chat-input .text-input { flex: 1; min-width: 0; }
-.chat-send {
-  border: none;
-  background: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .chat-send .icon-svg { width: 20px; height: 20px; fill: #fff; }
 .chat-send:disabled { opacity: .45; }
 .chat-summary-line { font-size: 16px; font-weight: 700; }
 .chat-summary-line.muted { font-size: 14px; font-weight: 500; color: var(--text-secondary); margin-top: 2px; }
 .chat-summary-actions { display: flex; gap: 10px; margin-top: 14px; align-items: center; }
 
-/* ── Переключатель «ИИ-поиск / Вручную» ────────────────────────────────── */
-.chat-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  margin-bottom: 14px;
-}
-.chat-tab {
-  flex: 1;
-  height: 40px;
-  border-radius: 999px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  font-size: 14px;
-  font-weight: 600;
-}
-.chat-tab.is-active {
-  color: #fff;
-}
-
 /* ── Стартовый экран чата ──────────────────────────────────────────────── */
-.chat-start {
-  display: flex;
-  flex-direction: column;
-}
-.chat-robot { width: 78px; height: 78px; margin-bottom: 14px; }
-.chat-robot svg { width: 100%; height: 100%; }
-.chat-examples {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-}
-.chat-example {
-  color: var(--text-secondary);
-}
 .chat-example:active { transform: scale(.98); }
 
 /* ── Критерии под чатом ────────────────────────────────────────────────── */
@@ -2872,15 +2524,6 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   margin-bottom: 10px;
 }
 .chat-crit-head span { color: var(--text-secondary); font-weight: 500; }
-.chat-crit-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  margin-bottom: 8px;
-}
 .chat-crit-body { flex: 1; min-width: 0; }
 .chat-crit-title { font-size: 15px; font-weight: 600; }
 .chat-crit-sub {
@@ -2901,36 +2544,13 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 .chat-crit-x:active { transform: scale(.94); }
 
 /* ── Плашки фильтров: карточки с иконкой и значением ───────────────────── */
-.field-label-row.is-toggle {
-  padding: 14px 16px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  margin-bottom: 8px;
-}
 .field-label-row.is-toggle.is-open {
   border-color: var(--accent);
 }
-.toggle-left {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.toggle-left .icon-svg {
-  width: 18px;
-  height: 18px;
-  flex: 0 0 18px;
-}
 .field-label-row.is-toggle .toggle-mark {
+  transition: transform .18s ease;
   font-size: 17px;
   color: var(--text-secondary);
-}
-
-/* Иконки в плашках — обычные, серые, без цветных «эмодзи» */
-.toggle-left .icon-svg {
-  fill: var(--text-secondary);
-  opacity: .8;
 }
 
 /* Оценка ИИ в карточке ленты: видно сразу, похоже ли на оригинал */
@@ -2954,51 +2574,18 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  box-shadow: 0 10px 30px rgba(17, 24, 39, .10);
-}
-
-/* Нижняя панель — самая «плавающая»: приподнята и скруглена сильнее */
-.dock {
-  border-radius: 20px;
-  box-shadow: 0 14px 34px rgba(17, 24, 39, .18);
-}
-
-/* Активная плашка вкладки — плотнее, чтобы читалась поверх размытия */
-.chat-tab.is-active {
-  background: var(--accent);
-}
-
-/* Плашки фильтров чуть плотнее: в них текст, а не иконки */
-.field-label-row.is-toggle {
-  background: color-mix(in srgb, var(--surface) 84%, transparent);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 /* Карточки критериев — так же, как плашки фильтров */
 .chat-crit-card {
-  background: color-mix(in srgb, var(--surface) 84%, transparent);
-}
-
-/* Кнопки-чипы остаются читаемыми: лёгкая подложка вместо прозрачности */
-.chat-chip,
-.auction-sort button {
-  background: color-mix(in srgb, var(--surface) 90%, transparent);
-}
-
-/* ── Карточки товаров — в той же стеклянной стилистике ─────────────────── */
-.product-card {
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(18px) saturate(150%);
-  -webkit-backdrop-filter: blur(18px) saturate(150%);
-  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
-  box-shadow: 0 10px 26px rgba(17, 24, 39, .10);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
   border-radius: 20px;
-  overflow: hidden;
-}
-
-/* Кнопка «+» в нижней панели: белую обводку убрал — она смотрелась чужой.
-   Вместо неё синее свечение, как у основных кнопок приложения. */
-.dock-create {
-  box-shadow: 0 8px 20px rgba(47, 107, 255, .42);
+  margin-bottom: 8px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
 }
 
 /* ── Исправление после стекла ──────────────────────────────────────────── */
@@ -3028,30 +2615,18 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 
 /* Кнопка «+» в нижней панели: плотный акцентный фон без обводки */
 .dock-create {
+  border-radius: 50%;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: -22px;
+  transition: transform .18s ease;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 42%, transparent);
   background: var(--accent);
   border: none;
   outline: none;
-}
-
-/* Нижняя панель: отступ сдвигал её вправо, потому что позиционирование
-   идёт от краёв экрана. Правильно — отступы С ОБЕИХ сторон: тогда она
-   одинаково отходит и слева, и справа, то есть стоит по центру. */
-.dock {
-  box-sizing: border-box;
-}
-
-/* ── Возврат нижней панели на место ────────────────────────────────────── */
-/* Панель центрируется через left:50% + transform:translateX(-50%).
-   Мои попытки сдвинуть её отступами (margin, left/right) это ломали:
-   панель уезжала влево или вправо. Возвращаю исходное позиционирование
-   и оставляю только стеклянный фон. */
-.dock {
-  left: 50%;
-  right: auto;
-  width: calc(100% - 32px);
-  max-width: 400px;
-  margin: 0;
-  transform: translateX(-50%);
 }
 
 /* Поле запроса в итоговой плашке: видно, что именно уйдёт в поиск */
@@ -3084,26 +2659,25 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
    реплика человека — пузырь справа. */
 
 .chat-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 14px;
   padding: 18px 16px 10px;
   background: var(--bg);
 }
 
 /* Реплика человека: аккуратный пузырь справа, как в мессенджерах */
 .chat-bubble.is-me {
-  box-shadow: 0 4px 14px rgba(47, 107, 255, .22);
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* «Разбираю…» — приглушённо, как системная строка */
 .chat-bubble.is-typing {
   font-style: italic;
-}
-.chat-examples { gap: 9px; margin-top: 4px; }
-.chat-example {
-  padding: 12px 16px;
-  font-size: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
 }
 
 /* Итоговая плашка — единственная «карточка» в чате, и та лёгкая */
@@ -3117,37 +2691,17 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 .chat-summary-title { font-size: 13px; color: var(--text-secondary); font-weight: 500; margin-bottom: 8px; }
 
 /* Поле ввода: скруглённое, приподнятое, с круглой кнопкой отправки */
-.chat-input {
-  padding: 10px 14px 14px;
-  gap: 10px;
-  background: var(--bg);
-  border-top: 1px solid var(--border);
-}
 .chat-input .text-input {
+  flex: 1;
+  min-width: 0;
   border-radius: 20px;
   padding: 12px 18px;
   font-size: 15.5px;
   background: var(--surface);
   border: 1px solid var(--border);
 }
-.chat-send {
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
-  flex: 0 0 46px;
-  box-shadow: 0 6px 16px rgba(47, 107, 255, .3);
-}
 
 /* Шапка чата — как на вкладке «Вручную»: кнопка назад и заголовок */
-.chat-header {
-  align-items: center;
-  gap: 10px;
-}
-.chat-back {
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
 .chat-back .icon-svg {
   width: 20px;
   height: 20px;
@@ -3207,14 +2761,25 @@ button:active,
 
 /* Вкладки: активная плашка переезжает с мягким переходом цвета и тени */
 .chat-tab {
-  transition:
-    background-color .24s cubic-bezier(.2, .8, .3, 1),
+  flex: 1;
+  height: 40px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color .24s cubic-bezier(.2, .8, .3, 1),
     color .24s ease,
     box-shadow .24s ease,
     transform .14s ease;
 }
 .chat-tab:active { transform: scale(.97); }
-.chat-tab.is-active { box-shadow: 0 6px 16px rgba(47, 107, 255, .32); }
+.chat-tab.is-active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent);
+}
 
 /* Поля ввода: мягкое появление рамки при фокусе */
 .chat-input .text-input,
@@ -3235,25 +2800,42 @@ button:active,
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
-.chat-row { animation: chat-in .22s cubic-bezier(.2, .8, .3, 1); }
+.chat-row {
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: var(--soft);
+  animation: chat-in .22s cubic-bezier(.2, .8, .3, 1);
+}
 
 /* Кнопка отправки: заметнее при готовности к отправке */
-.chat-send { transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease; }
+.chat-send {
+  border: none;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  flex: 0 0 46px;
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
+  transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease;
+}
 .chat-send:not(:disabled):active { transform: scale(.9); }
 
 /* ── Скользящая плашка вкладок ─────────────────────────────────────────── */
 /* Было: активная вкладка просто перекрашивалась. Теперь под ней едет
    плашка — и въезжает в позицию, а не появляется рывком. */
-.chat-tabs { position: relative; }
-.chat-tabs-pill {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  bottom: 4px;
-  width: calc(50% - 4px);
+.chat-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
   border-radius: 999px;
-  background: var(--accent);
-  z-index: 0;
+  margin-bottom: 14px;
+  position: relative;
 }
 /* Вкладки — поверх плашки, фон у них прозрачный */
 .chat-tabs .chat-tab {
@@ -3271,7 +2853,17 @@ button:active,
   from { transform: translateX(100%); opacity: .5; }
   to   { transform: none; opacity: 1; }
 }
-.chat-tabs-pill { animation: pill-from-right .32s cubic-bezier(.2, .8, .3, 1) both; }
+.chat-tabs-pill {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  bottom: 4px;
+  width: calc(50% - 4px);
+  border-radius: 999px;
+  background: var(--accent);
+  z-index: 0;
+  animation: pill-from-right .32s cubic-bezier(.2, .8, .3, 1) both;
+}
 
 /* Ручной: активна правая — плашка въезжает СЛЕВА и встаёт справа */
 @keyframes pill-from-left {
@@ -3287,6 +2879,8 @@ button:active,
 /* «Категория» и «Состояние» стояли под кнопками — текст налезал друг на
    друга. Даём заголовку своё место и поднимаем его над плашками. */
 .field-label-row {
+  letter-spacing: 0;
+  margin-bottom: -4px;
   display: block;
   position: relative;
   z-index: 2;
@@ -3300,6 +2894,15 @@ button:active,
 /* У плашек-переключателей (Цена, Свежесть, Дополнительно) отступ другой:
    они сами карточки, и заголовок у них внутри */
 .field-label-row.is-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  user-select: none;
+  padding: 14px 16px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+  background: color-mix(in srgb, var(--surface) 84%, transparent);
   margin: 0 0 8px;
   color: var(--text);
   font-size: 15px;
@@ -3314,6 +2917,11 @@ button:active,
   margin-bottom: 18px;
 }
 .auction-sort button {
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
   flex: 0 0 auto;
   white-space: nowrap;
 }
@@ -3321,7 +2929,13 @@ button:active,
 /* ── Список чатов: видно, о каком объявлении разговор ──────────────────── */
 /* Было: одна подпись, и в ней то название объявления, то последнее
    сообщение — непонятно, о чём переписка. Как на Авито: сначала товар. */
-.chat-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chat-meta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
 .chat-ad {
   font-size: 14.5px;
   font-weight: 600;
@@ -3364,20 +2978,20 @@ button:active, a:active {
   transform: scale(0.98);
   transition: transform 110ms cubic-bezier(0.4, 0, 0.2, 1);
 }
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation: none !important;
-    transition: none !important;
-  }
-}
+/* Отключение анимаций при prefers-reduced-motion живёт в styles/base.css:
+   там оно помечено !important осознанно (иначе не гасятся анимации
+   .screen > *), поэтому дублировать блок здесь не нужно. */
 
 /* ── Типографика (раздел 4 ТЗ) ─────────────────────────────────────────── */
 html, body, #root {
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
   font-family: -apple-system, "SF Pro Display", "SF Pro Text", "Inter", system-ui, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
 .page-title {
+  margin: 6px 0 12px;
   font-size: 30px;
   line-height: 36px;
   font-weight: 600;
@@ -3414,12 +3028,15 @@ html, body, #root {
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.product-deal {
-  margin-top: 2px;
-}
 
 /* Плашка выгоды: компактнее и не залезает под сердечко */
 .deal-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: var(--success-ink);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(22,163,74,.4);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0;
@@ -3433,6 +3050,16 @@ html, body, #root {
 
 /* Сердечко — поверх всего, с собственным фоном */
 .save-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  border: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,.1);
   position: absolute;
   top: 10px;
   right: 10px;
@@ -3440,12 +3067,19 @@ html, body, #root {
 }
 
 /* Медиа-блок карточки: плашка и сердечко не пересекаются */
-.product-media { position: relative; }
+.product-media {
+  aspect-ratio: 1;
+  background: var(--surface-2);
+  overflow: hidden;
+  position: relative;
+}
 
 /* ── ТЗ 5.2: hero-блок чата ────────────────────────────────────────────── */
 /* Было: приветствие по центру в две строки — по ТЗ 3.6 центрирование
    маркетинговых заголовков убираем, выравнивание по левому краю. */
 .chat-start {
+  display: flex;
+  flex-direction: column;
   align-items: flex-start;
   text-align: left;
   padding: 24px 16px 12px;
@@ -3476,8 +3110,22 @@ html, body, #root {
   .chat-hello { font-size: 26px; line-height: 32px; }
 }
 /* Примеры запросов: слева, ровными строками */
-.chat-examples { align-items: stretch; }
-.chat-example { text-align: left; }
+.chat-examples {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 9px;
+  margin-top: 4px;
+  align-items: stretch;
+}
+.chat-example {
+  color: var(--text-secondary);
+  padding: 12px 16px;
+  font-size: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  text-align: left;
+}
 
 /* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
 /* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
@@ -3490,6 +3138,7 @@ html, body, #root {
 }
 /* Таблетки-варианты: высоту держим, но не растягиваем по ширине */
 .chat-chip, .auction-sort button {
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3509,36 +3158,8 @@ html, body, #root {
 /* ── ТЗ 5.1: sticky glass header ───────────────────────────────────────── */
 /* Шапка прилипает к верху и просвечивает содержимое: saturate(180%) + blur(20px).
    Это одна из трёх разрешённых точек стекла. */
-.topbar {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  padding: 0 16px;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  border-bottom: 0.5px solid transparent;
-  transition: background-color .18s ease, border-color .18s ease;
-}
 /* По ТЗ тень отсутствует, а волосяная линия появляется только после скролла */
-.topbar.is-scrolled {
-  border-bottom-color: var(--hairline);
-}
 /* Название приложения в центре — по ТЗ 4: 13/18, вес 500, tracking +0.3 */
-.topbar-center {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: var(--text-tertiary);
-  text-align: center;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Если backdrop-filter не поддержан — плотный фон, чтобы текст не «плыл» */
 @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
   .topbar { background: rgba(255, 255, 255, 0.92); }
@@ -3551,6 +3172,7 @@ html, body, #root {
    и полосы жестов iPhone: без него док липнет к полосе «домой». */
 
 .screen {
+  padding: 16px 0;
   box-sizing: border-box;
   padding-top: calc(16px + env(safe-area-inset-top));
   /* 96 = 64 высота дока + 16 его отступ + 16 воздуха */
@@ -3563,24 +3185,37 @@ html, body, #root {
   .screen { max-width: 520px; margin: 0 auto; }
 }
 
-/* Шапка: сдвигаем вниз на высоту выреза, чтобы её не срезало */
-.topbar {
-  box-sizing: border-box;
-}
-
-/* Док: поднимаем над полосой жестов iPhone */
+/* Док: поднимаем над полосой жестов iPhone.
+   Панель центрируется через left:50% + transform:translateX(-50%): попытки
+   сдвинуть её отступами (margin, left/right) ломали центрирование —
+   панель уезжала влево или вправо. */
 .dock {
+  position: fixed;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 100;
+  transition: transform .35s cubic-bezier(.22,.9,.3,1), opacity .3s ease;
+  border-radius: 20px;
+  box-sizing: border-box;
+  left: 50%;
+  right: auto;
+  width: calc(100% - 32px);
+  max-width: 400px;
+  margin: 0;
+  transform: translateX(-50%);
   bottom: calc(16px + env(safe-area-inset-bottom));
 }
 
 /* Чат: поле ввода тоже не должно упираться в полосу жестов */
 .chat-input {
+  display: flex;
+  align-items: center;
+  padding-top: 10px;
+  padding: 10px 14px 14px;
+  gap: 10px;
   padding-bottom: calc(14px + env(safe-area-inset-bottom));
-}
-
-/* Фиксированная нижняя полоса — по ТЗ 5.6 */
-.bottom-bar {
-  padding: 16px 16px calc(16px + env(safe-area-inset-bottom));
 }
 
 /* ── ТЗ 5.5: пустое состояние ──────────────────────────────────────────── */
@@ -3613,59 +3248,41 @@ html, body, #root {
    поэтому подпись выгоды не переносилась и налезала на цену. Ставим жёстко:
    цена — своя ячейка, подпись — отдельная строка, стрелка — справа. */
 .product-bottom {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  align-items: center !important;
-  justify-content: flex-start !important;
-  gap: 8px !important;
-  row-gap: 4px !important;
-}
-.product-bottom .product-price {
-  flex: 0 0 auto !important;
-  order: 1;
-  margin: 0 !important;
-}
-.product-deal {
-  flex: 1 1 100% !important;
-  order: 3;
-  margin: 0 !important;
-  color: var(--text-secondary);
-}
-.product-bottom .product-action {
-  order: 2;
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  row-gap: 4px;
 }
 
 /* ── Карточка: стрелка не должна съезжать на вторую строку ─────────────── */
 /* Цена «2 000 ₽» шире, чем «599 ₽», и стрелка не влезала — переносилась.
    Уменьшаем отступы цены, а подпись выгоды держим одной короткой строкой. */
 .product-bottom .product-price {
-  padding-left: 14px !important;
-  padding-right: 14px !important;
+  font-weight: 800;
+  letter-spacing: -.01em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 9px 16px;
+  flex: 0 0 auto;
+  order: 1;
+  margin: 0;
+  padding-left: 14px;
+  padding-right: 14px;
   font-size: 14px;
 }
-.product-deal {
-  font-size: 13px !important;      /* минимум по ТЗ — 13 px */
-  line-height: 18px !important;
-  white-space: nowrap !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* Стрелка зафиксирована в правом краю и не участвует в переносе */
-.product-bottom .product-action {
-  margin-left: auto !important;
-}
-
 /* ── Шапка чата: тот же вид, что на вкладке «Вручную» ──────────────────── */
 /* Было: кнопка «назад» и заголовок в одну строку — самодельный хедер,
    который отличался от остальных экранов. Приводим к общему виду:
    кнопка своей строкой, крупный заголовок под ней. */
 .chat-header {
+  align-items: center;
+  gap: 10px;
   display: block;
   margin-bottom: 0;
-}
-.chat-back {
-  display: flex;
-  margin-bottom: 12px;
 }
 .chat-header-title {
   margin: 0 0 16px;
@@ -3683,6 +3300,19 @@ html, body, #root {
    Плюс по ТЗ 3.8 высоту текстовых блоков задавать нельзя: жёсткие 48 px
    обрезали логотип сверху. Меняем на min-height. */
 .topbar {
+  grid-template-columns: 1fr auto 1fr;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 0 16px;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: 0.5px solid transparent;
+  transition: background-color .18s ease, border-color .18s ease;
+  box-sizing: border-box;
   background: transparent;
   min-height: calc(48px + env(safe-area-inset-top));
   height: auto;
@@ -3692,12 +3322,34 @@ html, body, #root {
 }
 /* Стекло появляется ТОЛЬКО когда контент уходит под шапку */
 .topbar.is-scrolled {
+  border-bottom-color: var(--hairline);
   background: var(--bg-glass);
   border-bottom: 0.5px solid var(--hairline);
 }
 /* Логотип и иконки внутри шапки не сжимаются и не обрезаются */
-.topbar-side { flex: 0 0 auto; }
-.topbar-center { flex: 1 1 auto; }
+.topbar-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 0 0 auto;
+}
+.topbar-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
+  letter-spacing: 0.3px;
+  color: var(--text-tertiary);
+  text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+}
 .topbar img, .topbar svg { flex: 0 0 auto; max-height: 32px; }
 
 /* ── Шапка без поддержки blur: без белой полосы ────────────────────────── */
@@ -3715,75 +3367,71 @@ html, body, #root {
 
 /* ── Кнопка «назад»: одна форма на всех экранах ────────────────────────── */
 /* В чате была круглая, на остальных — квадрат 12 px. Приводим к общей:
-   те же 40×40 и радиус 12, что у .icon-btn. */
+   те же 40×40 и радиус 12, что у .icon-btn. Фон и рамку задаёт общее
+   правило .chat-back, .icon-btn ниже — здесь их дублировать не нужно. */
 .chat-back {
+  display: flex;
+  margin-bottom: 12px;
   width: 40px;
   height: 40px;
   flex: 0 0 40px;
   border-radius: 12px;
-  background: var(--surface);
-  border: 1px solid var(--border);
 }
 
-/* ── Пузыри чата: окончательно ─────────────────────────────────────────── */
-/* Ответ ИИ — обычный текст на фоне, реплика человека — синий пузырь справа.
-   Прежнее правило с белой карточкой перебивало моё, поэтому ставим жёстко:
-   иначе чат выглядит как форма с карточками, а не как переписка. */
-.chat-bubble {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  border-radius: 0 !important;
-  padding: 0 !important;
-  max-width: 100% !important;
-  font-size: 15.5px !important;
-  line-height: 1.5 !important;
-  color: var(--text) !important;
-}
-.chat-bubble.is-me {
-  background: var(--accent) !important;
-  color: #fff !important;
-  border-radius: 20px 20px 6px 20px !important;
-  padding: 11px 15px !important;
-  max-width: 78% !important;
-  font-size: 15.5px !important;
-  line-height: 1.4 !important;
-}
-/* Системная строка «Разбираю…» */
-.chat-bubble.is-typing {
-  color: var(--text-secondary) !important;
-  font-size: 14px !important;
-}
-/* Строки: ИИ слева, человек справа, с воздухом между сообщениями */
-.chat-row {
-  display: flex !important;
-  margin-bottom: 16px !important;
-  background: transparent !important;
-}
-.chat-row.is-me { justify-content: flex-end !important; }
+/* ── Пузыри чата ───────────────────────────────────────────────────────── */
+/* Этап 5: итоговые значения перенесены в styles/pages/hunt.css (он
+   подключается позже) без !important — см. раздел «Чат: пузыри и строки».
+   Здесь правила больше не нужны: они были нужны только чтобы перебить
+   более ранние legacy-блоки, а это делает порядок подключения файлов. */
 
 /* ── Стрелка «открыть на Авито»: всегда в одном месте ──────────────────── */
 /* Было: у «53 ₽» стрелка в строке, у «2 000 ₽» — съезжала под цену, потому
    что цена шире. Прибиваем её к правому нижнему углу карточки: положение
    больше не зависит от длины цены. */
-.product-card { position: relative; }
+.product-card {
+  border: 1px solid color-mix(in srgb, var(--border) 55%, transparent);
+  border-radius: 20px;
+  overflow: hidden;
+  position: relative;
+}
+/* Стрелка зафиксирована в правом краю и не участвует в переносе */
 .product-bottom .product-action {
-  position: absolute !important;
-  right: 12px !important;
-  bottom: 12px !important;
-  flex: none !important;
-  margin: 0 !important;
+  order: 2;
+  margin-left: auto;
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  flex: none;
+  margin: 0;
 }
 /* Подпись выгоды не залезает под стрелку */
-.product-deal { padding-right: 54px !important; }
+.product-deal {
+  margin-top: 2px;
+  flex: 1 1 100%;
+  order: 3;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  /* минимум по ТЗ — 13 px */
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 54px;
+}
 
 /* ── Кнопка «назад»: без белого квадрата ───────────────────────────────── */
 /* Белая плашка вокруг стрелки выделялась на фоне — по ТЗ такого быть не
-   должно. Оставляем только сам значок, как в iOS. */
-.chat-back, .icon-btn {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
+   должно. Оставляем только сам значок, как в iOS.
+   .icon-btn.is-active перечислен явно: в legacy его акцентный фон
+   (правило выше) перебивался !important-ом снизу и не показывался —
+   кнопка «Фильтры» на /search выглядела как обычная иконка. На этапе 5
+   !important снят, поэтому селектор повторён здесь с той же
+   специфичностью, чтобы вид остался прежним. */
+.chat-back, .icon-btn, .icon-btn.is-active {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 }
 
 /* Пояснение о том, что фильтр может ошибаться. Честность важнее, чем

@@ -2,9 +2,8 @@
    ПОЛКА — ЭТАП 2: ГЛАВНАЯ (сегмент «Находки / Барахолка», лента, карточка
    лота, истории, категории, баннер, состояния).
    Подключается ПОСЛЕ components.css, поэтому спокойно переопределяет
-   legacy-правила styles.css без !important (единственное исключение —
-   свойства, которые в styles.css помечены !important: их можно перебить
-   только таким же !important, сами старые правила не трогаем — это этап 5).
+   legacy-правила styles.css без !important (этап 5 убрал все !important
+   из styles.css — раньше здесь стояли парные !important только ради них).
    Значения — через токены из styles/tokens.css.
    ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -93,14 +92,15 @@
 }
 
 /* Кнопка перехода к лоту: светлая круглая кнопка со стрелкой на фото.
-   Раньше это был чёрный квадрат с «самолётиком» в нижней строке карточки. */
+   Раньше это был чёрный квадрат с «самолётиком» в нижней строке карточки.
+   Размер 44 px — минимальная зона нажатия по ТЗ (было 36). */
 .feed-screen .product-card .product-action {
   position: absolute;
   right: var(--space-2);
   bottom: var(--space-2);
   z-index: 2;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius-pill);
   background: var(--bg-glass-strong);
   color: var(--accent);
@@ -116,7 +116,7 @@
   padding-top: var(--space-2);
 }
 .feed-screen .product-bottom .product-price {
-  padding: 0 !important;          /* перебиваем legacy padding с !important */
+  padding: 0;                     /* перебивает legacy padding по специфичности */
   background: none;
   border-radius: 0;
   color: var(--text);
@@ -132,9 +132,9 @@
 /* Подпись выгоды: кнопка уехала на фото, поэтому место под неё больше не
    резервируем — текст «дешевле на 27%» перестаёт обрезаться */
 .feed-screen .product-deal {
-  padding-right: 0 !important;
-  font-size: 12px !important;
-  line-height: 16px !important;
+  padding-right: 0;
+  font-size: 12px;
+  line-height: 16px;
 }
 
 /* Метка-вердикт ИИ: тот же ритм, что и остальная мета */
@@ -195,6 +195,11 @@
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
   box-shadow: var(--soft);
 }
+/* Нажатие на выбранную категорию тень не показывает: это итог legacy-правила
+   `.cat-tile:active { box-shadow: none !important }` (этап 5 снял !important).
+   Селектор приходится повторять здесь: правило выше специфичнее legacy-
+   селектора `:active`, и без этой строки при нажатии появлялась бы тень. */
+.category-cards .cat-tile.is-selected:active { box-shadow: none; }
 
 /* ── 7. Баннер-карусель: индикаторы крупнее (ТЗ этап 2) ────────────────── */
 .feed-screen .feed-banner-dots {

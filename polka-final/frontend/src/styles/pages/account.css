@@ -84,3 +84,13 @@
 .onboarding { min-height: 70dvh; }
 .onboarding .dots span { width: 8px; height: 8px; }
 .onboarding .dots span.is-active { width: 22px; border-radius: var(--radius-pill); background: var(--accent); }
+
+/* Узкие экраны (320 px): три карточки статистики с длинными подписями
+   распирали контейнер — дорожки сетки давали min-content больше 1fr.
+   Запрещаем трекам расти по содержимому и разрешаем подписи переноситься. */
+.stats-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.stat-card { min-width: 0; }
+.stat-card-label { overflow-wrap: anywhere; }
+
+/* Декоративное пятно онбординга (330 px) вылезало за экран на 320 px. */
+.blob { width: min(330px, 92vw); height: min(330px, 92vw); }

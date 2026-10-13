@@ -63,7 +63,6 @@ body {
 }
 /* Чат: компенсируем вырез снизу, иначе поле ввода упирается в полосу жестов */
 .chat-input { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
-.bottom-bar { padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom)); }
 
 /* ── Доступность ────────────────────────────────────────────────────────── */
 button, a, [role="button"], input, textarea, select {
@@ -91,6 +90,13 @@ button:disabled, [aria-disabled="true"] {
   min-height: 44px;
 }
 
+/* ОСОЗНАННОЕ ИСКЛЮЧЕНИЕ (этап 5): !important здесь оставлен намеренно.
+   Это единственное место с !important в проекте. Без него не гасятся
+   анимации и переходы, заданные внутри правил с более высокой
+   специфичностью (например, `.screen > *` и inline-анимации появления
+   экранов) — требование доступности prefers-reduced-motion важнее, чем
+   чистота каскада, поэтому правило обязано выигрывать всегда.
+   Убирать нельзя: это ломает доступность. */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation: none !important;
