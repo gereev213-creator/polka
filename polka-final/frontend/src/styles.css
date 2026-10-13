@@ -21,78 +21,6 @@ input, textarea, select { font-family: inherit; }
 }
 .screen.padded { padding: 16px; }
 
-/* ── Истории (референс: градиентное кольцо + фото товара) ─────────────── */
-.stories-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 0 0;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  letter-spacing: -.01em;
-}
-.stories-head .icon-svg { width: 14px; height: 14px; color: var(--accent); }
-.stories-row {
-  display: flex;
-  gap: 13px;
-  overflow-x: auto;
-  padding: 10px 0 14px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.stories-row::-webkit-scrollbar { display: none; }
-.story-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  flex: 0 0 auto;
-  width: 68px;
-  background: none;
-  border: none;
-  padding: 0;
-  transition: transform .18s ease;
-}
-.story-item:active { transform: scale(.94); }
-.story-ring.is-own,
-.story-ring.is-seen { background: var(--border); }
-.story-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: var(--surface-2);
-  border: 2.5px solid #fff;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -.02em;
-}
-.story-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.story-ring.is-own .story-avatar {
-  background: #fff;
-  color: var(--text);
-}
-.story-ring.is-own .story-avatar .icon-svg { width: 22px; height: 22px; }
-.story-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  max-width: 68px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
-}
 
 /* ── Рельс категорий в ленте ─────────────────────────────────────────
  * Те же плашки .cat-tile, что и в форме (см. ниже), только в
@@ -533,8 +461,6 @@ input, textarea, select { font-family: inherit; }
   width: 14px;
   border-radius: 3px;
 }
-
-.stories-block { padding-top: 2px; }
 
 /* ── Скелетон ленты ──────────────────────────────────────────────────── */
 @keyframes polka-shimmer {
@@ -1687,278 +1613,21 @@ video.bubble-media-img {
    ИСТОРИИ ПРОДАВЦОВ: создание и полноэкранный просмотр
    ══════════════════════════════════════════════════════════════════════════ */
 
-/* Своя история ждёт модерации — полосатое янтарное кольцо */
-.story-ring.is-pending {
-  background: repeating-linear-gradient(45deg, var(--warning) 0 5px, #FCD34D 5px 10px);
-}
-/* Счётчик историй на проверке — бейджем, иначе подпись обрезается */
-.story-ring {
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  padding: 2.5px;
-  background: var(--ring);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-}
-.story-badge {
-  position: absolute;
-  right: -1px;
-  top: -1px; /* сверху, чтобы не спорить с кнопкой «+» в правом нижнем углу */
-  min-width: 21px;
-  height: 21px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--warning);
-  color: #fff;
-  font-size: 11.5px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 2px solid #fff;
-}
 
 /* ── Экран создания ────────────────────────────────────────────────────── */
-.story-drop {
-  display: block;
-  position: relative;
-  border-radius: var(--radius-lg);
-  border: 2px dashed var(--border);
-  background: var(--surface);
-  overflow: hidden;
-  cursor: pointer;
-}
-.story-drop.has-preview {
-  border-style: solid;
-  border-color: transparent;
-}
-.story-drop-media {
-  display: block;
-  width: 100%;
-  max-height: 420px;
-  object-fit: cover;
-}
-.story-drop-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 250px;
-  padding: 24px;
-  text-align: center;
-}
-.story-drop-icon {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-drop-icon .icon-svg { width: 26px; height: 26px; }
-.story-drop-empty strong { font-size: 15px; }
-.story-drop-empty span { font-size: 12.5px; color: var(--text-secondary); }
-.story-replace {
-  display: inline-block;
-  margin: 10px 0 4px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  cursor: pointer;
-}
 .story-hint {
   margin-top: 10px;
   font-size: 12.5px;
   color: var(--text-secondary);
   text-align: center;
 }
-.story-sent {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  padding: 30px 20px;
-  margin-top: 20px;
-  text-align: center;
-}
-.story-sent-icon {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--accent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-sent-icon .icon-svg { width: 28px; height: 28px; }
-.story-sent p { font-size: 13.5px; color: var(--text-secondary); }
-.story-sent .cta-primary { margin-top: 6px; }
 
 /* ── Полноэкранный просмотр ────────────────────────────────────────────── */
-.story-viewer {
-  position: fixed;
-  inset: 0;
-  z-index: 120; /* выше нижнего дока — у него 100 */
-  background: #0B0C10;
-  overflow: hidden;
-  /* Как и у чата: не полагаемся на transform, его перебивают анимации */
-  animation: none;
-}
-.story-progress {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  right: 10px;
-  z-index: 4;
-  display: flex;
-  gap: 4px;
-}
-.story-bar {
-  flex: 1;
-  height: 3px;
-  border-radius: 2px;
-  background: rgba(255,255,255,.28);
-  overflow: hidden;
-}
-.story-bar-fill { display: block; height: 100%; background: #fff; }
-.story-topbar {
-  position: absolute;
-  top: 22px;
-  left: 12px;
-  right: 12px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.story-author { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.story-author-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex: 0 0 auto;
-  border: 1.5px solid rgba(255,255,255,.6);
-  background: #222;
-}
-.story-author-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.story-author-text { display: flex; flex-direction: column; min-width: 0; }
-.story-author-text strong { color: #fff; font-size: 13.5px; font-weight: 700; }
-.story-author-text span { color: rgba(255,255,255,.7); font-size: 11.5px; }
-.story-close {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  flex: 0 0 auto;
-  background: rgba(255,255,255,.16);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-close .icon-svg { width: 16px; height: 16px; transform: rotate(45deg); }
-.story-stage {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 70px 0 100px;
-}
-.story-media {
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
-  display: block;
-  user-select: none;
-}
 /* Зоны тапа: слева — назад, справа — вперёд */
-.story-tap {
-  position: absolute;
-  top: 70px;
-  bottom: 100px;
-  z-index: 3;
-  background: transparent;
-  border: 0;
-  padding: 0;
-}
-.story-tap-prev { left: 0; width: 30%; }
-.story-tap-next { right: 0; width: 50%; }
-.story-footer {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 4;
-  padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
-  background: linear-gradient(to top, color-mix(in srgb, var(--ink) 94%, transparent), transparent);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.story-caption { color: #fff; font-size: 14px; line-height: 1.45; }
-.story-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.story-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: rgba(255,255,255,.16);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.story-action .icon-svg { width: 14px; height: 14px; transform: rotate(180deg); }
 
-/* Вьюер историй занимает весь экран — нижний док под ним только мешает.
    Тот же приём, что для экрана чата: скрываем через :has(). */
-body:has(.story-viewer) .dock { display: none; }
-body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 
 /* ── «Вы» в рельсе: кольцо + постоянная кнопка «+» ──────────────────────── */
-.story-item.is-mine { cursor: default; }
-.story-item.is-mine:active { transform: none; }
-.story-mine-ring {
-  position: relative;
-  display: inline-flex;
-}
-.story-ring-hit {
-  display: block;
-  padding: 0;
-  border: 0;
-  background: none;
-  transition: transform .18s ease;
-}
-.story-ring-hit:active { transform: scale(.94); }
-/* Кнопка добавления — всегда на виду, даже когда своя история уже есть */
-.story-add {
-  position: absolute;
-  right: -3px;
-  bottom: -3px;
-  width: 27px;
-  height: 27px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  border: 2.5px solid #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2;
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--accent) 40%, transparent);
-  transition: transform .16s ease;
-}
-.story-add:active { transform: scale(.9); }
-.story-add .icon-svg { width: 14px; height: 14px; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    АУКЦИОНЫ
@@ -2223,13 +1892,6 @@ body:has(.story-viewer) .app-frame { padding-bottom: 0; }
 .auction-history-row b { color: var(--ink); }
 
 /* Размер файла к отправке — чтобы лимит был виден ДО отправки */
-.story-size {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  text-align: center;
-  min-height: 16px;
-}
-.story-size.is-bad { color: var(--danger-ink); font-weight: 700; }
 
 /* Системная двойная стрелка у select выглядела чужеродно — рисуем свою */
 select.text-input {
@@ -2278,70 +1940,7 @@ select.text-input {
 /* Переключатель «Объявления | Аукционы» в ленте */
 .feed-switch { margin-top: 2px; }
 
-/* Плашка «товар из истории» — ведёт в объявление */
-.story-ad-plate {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255,255,255,.16);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255,255,255,.22);
-  text-align: left;
-  transition: transform .16s ease;
-}
-.story-ad-plate:active { transform: scale(.98); }
-.story-ad-icon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: 11px;
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-ad-icon .icon-svg { width: 17px; height: 17px; }
-.story-ad-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.story-ad-text strong { color: #fff; font-size: 13.5px; font-weight: 700; }
-.story-ad-text span { color: rgba(255,255,255,.72); font-size: 11.5px; }
-.story-ad-arrow { color: #fff; display: flex; }
-.story-ad-arrow .icon-svg { width: 15px; height: 15px; transform: rotate(180deg); }
 
-/* Подсказка «видео лучше отправить боту» на экране истории */
-.story-bot-card {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 14px;
-  margin-top: 12px;
-  border-radius: var(--radius-lg);
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-}
-.story-bot-head { display: flex; gap: 11px; align-items: flex-start; }
-.story-bot-icon {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  border-radius: 11px;
-  background: var(--accent);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.story-bot-icon .icon-svg { width: 17px; height: 17px; }
-.story-bot-head strong {
-  display: block;
-  font-size: 14px;
-  font-weight: 700;
-  margin-bottom: 3px;
-}
-.story-bot-head span { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); }
-.story-bot-card .cta-primary { width: 100%; }
 
 /* Призыв «Что ловить» — главный вход в продукт с первого экрана */
 .hunt-cta {

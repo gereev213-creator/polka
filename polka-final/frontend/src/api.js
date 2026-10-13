@@ -222,38 +222,6 @@ export const api = {
   editMessage: (chatId, messageId, text) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ text }) }),
   deleteMessage: (chatId, messageId) => request(`/api/chat/${chatId}/messages/${messageId}`, { method: 'DELETE' }),
 
-  // ── Истории продавцов ────────────────────────────────────────────────────
-  getStories: () => request('/api/stories'),
-  // Создание — multipart, поэтому отдельный запрос (как uploadPhotos).
-  createStory: async (file, { caption = '', adId = null } = {}) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    if (caption) formData.append('caption', caption)
-    if (adId) formData.append('ad_id', String(adId))
-    const headers = {}
-    if (getInitData()) headers['X-Telegram-Init-Data'] = getInitData()
-    const response = await fetch(`${API_BASE}/api/stories`, {
-      method: 'POST',
-      body: formData,
-      headers,
-    })
-    if (!response.ok) {
-      let detail = ''
-      try {
-        const data = await response.json()
-        detail = data.detail || data.error || ''
-      } catch {
-        // ignore
-      }
-      const error = new Error(detail || `http_${response.status}`)
-      error.status = response.status
-      error.detail = detail
-      throw error
-    }
-    return response.json()
-  },
-  viewStory: (storyId) => request(`/api/stories/${storyId}/view`, { method: 'POST' }),
-  deleteStory: (storyId) => request(`/api/stories/${storyId}`, { method: 'DELETE' }),
 
   // ── Аукционы ─────────────────────────────────────────────────────────────
   // Находки агрегатора: отсортированы по выгоде относительно рынка

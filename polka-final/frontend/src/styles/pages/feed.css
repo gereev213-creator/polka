@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════════════════
    ПОЛКА — ЭТАП 2: ГЛАВНАЯ (сегмент «Находки / Барахолка», лента, карточка
-   лота, истории, категории, баннер, состояния).
+   товара, категории, баннер, состояния).
    Подключается ПОСЛЕ components.css, поэтому спокойно переопределяет
    legacy-правила styles.css без !important (этап 5 убрал все !important
    из styles.css — раньше здесь стояли парные !important только ради них).
@@ -141,26 +141,17 @@
 .feed-screen .product-card .verdict-line { margin-bottom: var(--space-1); }
 
 /* ── 4. Горизонтальные ленты: scroll-snap и видимый край следующего ────── */
-.stories-row,
 .category-cards {
   scroll-snap-type: x proximity;
   overscroll-behavior-x: contain;
   max-width: 100%;
   padding-right: var(--space-2);
 }
-.stories-row > *,
 .category-cards > * { scroll-snap-align: start; }
 @media (prefers-reduced-motion: reduce) {
-  .stories-row,
   .category-cards { scroll-snap-type: none; }
 }
 
-/* ── 5. Истории: кольца сохранены, приведены к токенам темы ───────────── */
-.feed-screen .story-avatar { border-color: var(--surface); }
-.feed-screen .story-ring.is-own .story-avatar { background: var(--surface); }
-.feed-screen .story-add { border-color: var(--surface); box-shadow: var(--soft); }
-.feed-screen .story-badge { border-color: var(--surface); }
-.feed-screen .stories-head { font-size: var(--fs-cap); }
 
 /* ── 6. Категории: текст слева сверху, иллюстрация справа снизу ──────────
    Фон — светлый градиент от акцента к поверхности вместо серой плашки;
