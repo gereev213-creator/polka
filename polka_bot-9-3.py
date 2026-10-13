@@ -2480,38 +2480,6 @@ class Database:
         except Exception:
             pass
 
-        # Истории продавцов: фото/видео на 24 часа с пре-модерацией
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS stories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                media TEXT NOT NULL,
-                media_type TEXT DEFAULT 'photo',
-                thumb TEXT,
-                caption TEXT,
-                ad_id INTEGER,
-                status TEXT DEFAULT 'pending',
-                reject_reason TEXT,
-                created_at TEXT,
-                expires_at TEXT,
-                moderated_at TEXT,
-                moderated_by INTEGER
-            )
-        ''')
-        # Кто какую историю уже посмотрел — для колец «новое/просмотрено»
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS story_views (
-                story_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                viewed_at TEXT,
-                PRIMARY KEY (story_id, user_id)
-            )
-        ''')
-        try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_stories_status ON stories(status, expires_at)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_stories_user ON stories(user_id, created_at)")
-        except Exception:
-            pass
         # Миграция: платформа пользователя (telegram/max)
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN platform TEXT DEFAULT 'telegram'")
@@ -2644,22 +2612,9 @@ class Database:
             cursor.execute("ALTER TABLE ads ADD COLUMN search_index TEXT")
         except Exception:
             pass
-        # ── Аукционы ────────────────────────────────────────────────────────
-        # Аукцион — это объявление с особым режимом продажи: переиспользуем
-        # фото, категорию, город, модерацию, избранное и чат. price у аукциона
-        # хранит ТЕКУЩУЮ цену (стартовую, затем лучшую ставку), поэтому
-        # существующая отрисовка карточек работает без изменений.
-        for _auction_sql in [
-            "ALTER TABLE ads ADD COLUMN sale_type TEXT DEFAULT 'sale'",
-            "ALTER TABLE ads ADD COLUMN start_price INTEGER",
-            "ALTER TABLE ads ADD COLUMN bid_step INTEGER",
-            "ALTER TABLE ads ADD COLUMN buy_now_price INTEGER",
-            "ALTER TABLE ads ADD COLUMN ends_at TEXT",
-            "ALTER TABLE ads ADD COLUMN auction_days INTEGER",
-            "ALTER TABLE ads ADD COLUMN current_bid INTEGER",
-            "ALTER TABLE ads ADD COLUMN bids_count INTEGER DEFAULT 0",
-            "ALTER TABLE ads ADD COLUMN winner_id INTEGER",
-            "ALTER TABLE ads ADD COLUMN finished_at TEXT",
+        # ── Миграции: колонки, добавленные позже ────────────────────────────
+        # (находки из внешних источников, поиск, судьба лота)
+        for _col_sql in [
             # ── Находки из внешних источников (агрегатор) ───────────────────
             # Храним ТОЛЬКО публичное: без имён и телефонов продавцов.
             "ALTER TABLE ads ADD COLUMN source TEXT DEFAULT 'polka'",
@@ -2691,23 +2646,10 @@ class Database:
             "ALTER TABLE hunt_criteria ADD COLUMN told_empty_at TEXT",
         ]:
             try:
-                cursor.execute(_auction_sql)
+                cursor.execute(_col_sql)
             except Exception:
                 pass
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS bids (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ad_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                amount INTEGER NOT NULL,
-                status TEXT DEFAULT 'active',
-                created_at TEXT
-            )
-        ''')
         try:
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_ad ON bids(ad_id, amount DESC)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_bids_user ON bids(user_id, created_at)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_auction ON ads(sale_type, status, ends_at)")
             cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_ads_external "
                            "ON ads(source, external_id) WHERE external_id IS NOT NULL")
         except Exception:
@@ -3643,21 +3585,6 @@ class Database:
                 WHERE id = ?
             ''', (status, moderator_id, reason, ad_id))
         
-        # Аукцион: срок торгов считаем от ОДОБРЕНИЯ, а не от создания —
-        # иначе время, проведённое в модерации, съедало бы лот.
-        if status == 'active':
-            try:
-                cursor.execute("SELECT sale_type, auction_days, ends_at FROM ads WHERE id=?", (ad_id,))
-                _row = cursor.fetchone()
-                if _row and _row['sale_type'] == 'auction' and not _row['ends_at']:
-                    _days = int(_row['auction_days'] or 3)
-                    _ends = (get_moscow_time() + timedelta(days=_days)).isoformat()
-                    cursor.execute(
-                        "UPDATE ads SET ends_at=?, price=COALESCE(current_bid, start_price, price) WHERE id=?",
-                        (_ends, ad_id))
-            except Exception as _e:
-                logger.warning(f"auction ends_at on approve: {_e}")
-
         # ВАЖНО: Явно фиксируем изменения
         self.conn.commit()
         
@@ -7416,10 +7343,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 deep_link_ad_id = int(arg.replace('contact_', ''))
             except Exception as _e:
                 logger.debug(f"Ignored error: {_e}")
-        elif arg == 'story':
-            # Переход из Mini App: «видео удобнее прислать боту»
-            await story_start(update, context)
-            return
         elif arg.startswith('favorite_'):
             try:
                 deep_link_action = 'favorite'
@@ -12656,7 +12579,6 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
          InlineKeyboardButton(" Аналитика", callback_data="admin_advanced_analytics")],
         [InlineKeyboardButton(" Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
-        [InlineKeyboardButton(" Истории", callback_data="admin_stories")],
         [InlineKeyboardButton(" Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
@@ -13242,7 +13164,6 @@ async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
          InlineKeyboardButton(" Аналитика", callback_data="admin_advanced_analytics")],
         [InlineKeyboardButton(" Цены закрепов", callback_data="admin_prices"),
          InlineKeyboardButton(EM_DOT + " Криптоссылки", callback_data="admin_crypto_links")],
-        [InlineKeyboardButton(" Истории", callback_data="admin_stories")],
         [InlineKeyboardButton(" Баннеры", callback_data="admin_banners"),
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
@@ -17254,197 +17175,6 @@ def save_chat_message(session_id: int, sender_id: int, text: str = '', file_id: 
     return cursor.lastrowid
 
 
-# ── Истории продавцов: 24 часа, пре-модерация для всех ───────────────────────
-STORY_TTL_HOURS = 24          # срок жизни после одобрения
-STORY_MAX_ACTIVE = 5          # одновременно опубликованных у одного автора
-STORY_MAX_PENDING = 3         # в очереди на проверку — чтобы не заваливать модерацию
-STORY_CAPTION_MAX = 200
-STORY_PENDING_TTL_HOURS = 48  # неодобренная история сгорает, чтобы не копилась очередь
-
-
-def create_story(user_id: int, media: str, media_type: str = 'photo',
-                 caption: str = '', ad_id: Optional[int] = None) -> int:
-    """Создаёт историю в статусе pending.
-
-    expires_at НЕ ставим здесь: отсчёт 24 часов пойдёт с момента одобрения,
-    иначе история, пролежавшая ночь в модерации, публиковалась бы «на часок».
-    """
-    cursor = db.conn.cursor()
-    now = get_moscow_time().isoformat()
-    cursor.execute('''
-        INSERT INTO stories (user_id, media, media_type, caption, ad_id, status, created_at)
-        VALUES (?, ?, ?, ?, ?, 'pending', ?)
-    ''', (user_id, media, media_type, (caption or '')[:STORY_CAPTION_MAX], ad_id, now))
-    db.conn.commit()
-    return cursor.lastrowid
-
-
-def get_story(story_id: int) -> Optional[Dict]:
-    cursor = db.conn.cursor()
-    cursor.execute('SELECT * FROM stories WHERE id=?', (story_id,))
-    row = cursor.fetchone()
-    return dict(row) if row else None
-
-
-def count_user_stories(user_id: int, statuses: tuple) -> int:
-    cursor = db.conn.cursor()
-    marks = ','.join('?' * len(statuses))
-    cursor.execute(f'SELECT COUNT(*) AS n FROM stories WHERE user_id=? AND status IN ({marks})',
-                   (user_id, *statuses))
-    row = cursor.fetchone()
-    return int(row['n']) if row else 0
-
-
-def get_user_stories(user_id: int, include_inactive: bool = True) -> List[Dict]:
-    """Свои истории: автор видит и то, что на проверке, и отклонённые."""
-    cursor = db.conn.cursor()
-    where = '' if include_inactive else " AND status='active' AND (expires_at IS NULL OR expires_at > ?)"
-    params: tuple = (user_id,) if include_inactive else (user_id, get_moscow_time().isoformat())
-    cursor.execute(f'SELECT * FROM stories WHERE user_id=?{where} ORDER BY id DESC', params)
-    return [dict(r) for r in cursor.fetchall()]
-
-
-def get_story_rail(viewer_id: int, limit: int = 60) -> List[Dict]:
-    """Активные истории, сгруппированные по авторам, для рельса в ленте.
-
-    Авторы сортируются по свежести последней истории; внутри автора —
-    от старой к новой, как во вьюере. Вместе с историями отдаём, сколько
-    из них зритель уже видел, чтобы нарисовать кольцо.
-    """
-    cursor = db.conn.cursor()
-    now = get_moscow_time().isoformat()
-    cursor.execute('''
-        SELECT s.*, u.username, u.first_name,
-               (SELECT COUNT(*) FROM story_views v
-                 WHERE v.story_id=s.id AND v.user_id=?) AS seen
-        FROM stories s
-        LEFT JOIN users u ON u.user_id = s.user_id
-        WHERE s.status='active' AND (s.expires_at IS NULL OR s.expires_at > ?)
-        ORDER BY s.created_at DESC
-        LIMIT ?
-    ''', (viewer_id or 0, now, limit))
-    rows = [dict(r) for r in cursor.fetchall()]
-
-    authors: Dict[int, Dict] = {}
-    order: List[int] = []
-    for r in rows:
-        uid = r['user_id']
-        if uid not in authors:
-            authors[uid] = {
-                'user_id': uid,
-                'name': r['username'] or r['first_name'] or f'id{uid}',
-                'is_me': (uid == viewer_id),
-                'stories': [],
-                'unseen': 0,
-            }
-            order.append(uid)
-        story = {
-            'id': r['id'],
-            'media': r['media'],
-            'media_type': r['media_type'],
-            'caption': r['caption'] or '',
-            'ad_id': r['ad_id'],
-            'created_at': r['created_at'],
-            'expires_at': r['expires_at'],
-            'seen': bool(r['seen']),
-        }
-        authors[uid]['stories'].append(story)
-        if not r['seen']:
-            authors[uid]['unseen'] += 1
-    for uid in order:
-        # внутри автора показываем от старых к новым, как во вьюере
-        authors[uid]['stories'].reverse()
-    return [authors[uid] for uid in order]
-
-
-def mark_story_viewed(story_id: int, user_id: int):
-    if not user_id:
-        return
-    try:
-        cursor = db.conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO story_views (story_id, user_id, viewed_at)
-            VALUES (?, ?, ?)
-        ''', (story_id, user_id, get_moscow_time().isoformat()))
-        db.conn.commit()
-    except Exception as e:
-        logger.warning(f"mark_story_viewed: {e}")
-
-
-def get_story_viewers(story_id: int) -> int:
-    cursor = db.conn.cursor()
-    cursor.execute('SELECT COUNT(*) AS n FROM story_views WHERE story_id=?', (story_id,))
-    row = cursor.fetchone()
-    return int(row['n']) if row else 0
-
-
-def get_pending_stories(limit: int = 20) -> List[Dict]:
-    cursor = db.conn.cursor()
-    cursor.execute('''
-        SELECT s.*, u.username, u.first_name
-        FROM stories s LEFT JOIN users u ON u.user_id = s.user_id
-        WHERE s.status='pending' ORDER BY s.id ASC LIMIT ?
-    ''', (limit,))
-    return [dict(r) for r in cursor.fetchall()]
-
-
-def moderate_story(story_id: int, status: str, admin_id: int, reason: str = '') -> Optional[Dict]:
-    """Одобряет или отклоняет историю.
-
-    При одобрении срок жизни отсчитывается от ЭТОГО момента — автор
-    получает полные 24 часа, а не остаток от ожидания в очереди.
-    """
-    cursor = db.conn.cursor()
-    now = get_moscow_time()
-    expires = (now + timedelta(hours=STORY_TTL_HOURS)).isoformat() if status == 'active' else None
-    cursor.execute('''
-        UPDATE stories SET status=?, reject_reason=?, moderated_at=?, moderated_by=?, expires_at=?
-        WHERE id=?
-    ''', (status, (reason or '')[:200], now.isoformat(), admin_id, expires, story_id))
-    db.conn.commit()
-    return get_story(story_id)
-
-
-def expire_stories() -> Dict[str, int]:
-    """Чистка: гасим просроченные, снимаем зависшие в модерации, чистим архив.
-
-    Файлы удаляем здесь же, иначе папка загрузок растёт бесконечно.
-    """
-    cursor = db.conn.cursor()
-    now = get_moscow_time()
-    result = {'expired': 0, 'stale_pending': 0, 'purged': 0}
-
-    cursor.execute("SELECT id, media FROM stories WHERE status='active' AND expires_at IS NOT NULL AND expires_at <= ?",
-                   (now.isoformat(),))
-    for row in cursor.fetchall():
-        _remove_story_file(row['media'])
-        result['expired'] += 1
-    cursor.execute("UPDATE stories SET status='expired' WHERE status='active' AND expires_at IS NOT NULL AND expires_at <= ?",
-                   (now.isoformat(),))
-
-    stale_before = (now - timedelta(hours=STORY_PENDING_TTL_HOURS)).isoformat()
-    cursor.execute("SELECT id, media FROM stories WHERE status='pending' AND created_at <= ?", (stale_before,))
-    for row in cursor.fetchall():
-        _remove_story_file(row['media'])
-        result['stale_pending'] += 1
-    cursor.execute("UPDATE stories SET status='rejected', reject_reason='истекла на модерации' "
-                   "WHERE status='pending' AND created_at <= ?", (stale_before,))
-
-    # Архив: реджекты и просроченные старше 30 дней — удаляем вместе с файлами
-    old_before = (now - timedelta(days=30)).isoformat()
-    cursor.execute("SELECT id, media FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?",
-                   (old_before,))
-    for row in cursor.fetchall():
-        _remove_story_file(row['media'])
-        result['purged'] += 1
-    cursor.execute("DELETE FROM story_views WHERE story_id IN "
-                   "(SELECT id FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?)",
-                   (old_before,))
-    cursor.execute("DELETE FROM stories WHERE status IN ('rejected','expired') AND created_at <= ?", (old_before,))
-    db.conn.commit()
-    return result
-
-
 def _row_get(row, key, default=0):
     """Достаёт поле из sqlite3.Row без падений.
 
@@ -18077,7 +17807,7 @@ def _prepare_upload_dir() -> str:
     """Готовит папку загрузок на ПОСТОЯННОМ томе.
 
     Было /app/uploads — эфемерная папка контейнера: при каждом деплое все фото
-    объявлений и историй пропадали, и у всех, кроме автора (у него файлы
+    объявлений пропадали, и у всех, кроме автора (у него файлы
     оставались в кеше браузера), картинки превращались в «?».
     Постоянный том Amvera смонтирован в /data — там же лежит база.
     """
@@ -18222,9 +17952,9 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             cursor.execute('''
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
-                                 external_id, parsed_at, sale_type, views, published_hours_ago,
+                                 external_id, parsed_at, views, published_hours_ago,
                                  title_lower)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 'sale', 0, ?, ?)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?)
             ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
                   now, now, source, url, ext, now, ago, title.lower()))
             stats['accepted'] += 1
@@ -20171,8 +19901,7 @@ def cleanup_all() -> Dict:
       • находки старше недели — объявление уже продано, искать поздно;
       • отметки об отправке старше месяца — нужны только чтобы не слать
         одно и то же дважды, дальше это балласт;
-      • логи старше двух недель — забивают базу быстрее всего;
-      • истории и их просмотры старше трёх дней — живут 24 часа, дальше мусор.
+      • логи старше двух недель — забивают базу быстрее всего.
 
     НЕ трогаем: объявления доски, переписку, платежи, отзывы, подписки —
     это данные людей и деньги.
@@ -20196,8 +19925,6 @@ def cleanup_all() -> Dict:
 
     removed['отметки об отправке'] = _cut('search_notifications_sent', 30, 'sent_at')
     removed['логи'] = _cut('logs', 14)
-    removed['просмотры историй'] = _cut('story_views', 3, 'viewed_at')
-    removed['истории'] = _cut('stories', 3, 'created_at')
 
     total = sum(removed.values())
     _setting_set('last_cleanup_at', get_moscow_time().isoformat())
@@ -20841,311 +20568,6 @@ async def api_ingest_checklist(request: aiohttp_web.Request) -> aiohttp_web.Resp
         logger.error(f"checklist: {e}")
         return _miniapp_err('load_failed', 500)
     return _miniapp_json({'source': source, 'items': items})
-
-
-def _remove_story_file(media: str):
-    """Удаляет файл истории с диска (медиа лежит в UPLOAD_DIR)."""
-    if not media:
-        return
-    try:
-        name = os.path.basename(str(media))
-        upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
-        path = os.path.join(upload_dir, name)
-        if name and os.path.isfile(path):
-            os.remove(path)
-    except Exception as e:
-        logger.warning(f"story file remove: {e}")
-
-
-# ── Аукционы: ставки, антиснайпинг, выкуп, завершение ───────────────────────
-AUCTION_MIN_STEP = 10            # минимальный шаг ставки, ₽
-AUCTION_ANTISNIPE_WINDOW = 300   # ставка в последние 5 минут…
-AUCTION_ANTISNIPE_EXTEND = 300   # …продлевает лот на 5 минут
-AUCTION_DURATIONS = (1, 3, 7)    # срок в днях, на выбор продавца
-AUCTION_MAX_STEP_MULT = 10       # шаг не больше 10× стартовой цены
-
-
-def _auction(ad_id: int) -> Optional[Dict]:
-    cursor = db.conn.cursor()
-    cursor.execute("SELECT * FROM ads WHERE id=? AND sale_type='auction'", (ad_id,))
-    row = cursor.fetchone()
-    return dict(row) if row else None
-
-
-def min_next_bid(ad: Dict) -> int:
-    """Минимальная допустимая ставка: стартовая для первой, текущая+шаг далее."""
-    step = max(AUCTION_MIN_STEP, int(ad.get('bid_step') or 0))
-    current = int(ad.get('current_bid') or 0)
-    if current:
-        return current + step
-    return int(ad.get('start_price') or 0)
-
-
-def auction_time_left(ad: Dict) -> int:
-    """Секунд до конца лота (0 — время вышло)."""
-    if not ad.get('ends_at'):
-        return 0
-    ends = _safe_isoparse(ad['ends_at'])
-    return max(0, int((ends - get_moscow_time()).total_seconds()))
-
-
-def get_bids(ad_id: int, limit: int = 30) -> List[Dict]:
-    cursor = db.conn.cursor()
-    cursor.execute('''
-        SELECT b.*, u.username, u.first_name
-        FROM bids b LEFT JOIN users u ON u.user_id = b.user_id
-        WHERE b.ad_id=? ORDER BY b.amount DESC, b.id ASC LIMIT ?
-    ''', (ad_id, limit))
-    return [dict(r) for r in cursor.fetchall()]
-
-
-def _current_leader_bid(ad_id: int) -> Optional[Dict]:
-    cursor = db.conn.cursor()
-    cursor.execute("SELECT * FROM bids WHERE ad_id=? AND status='active' "
-                   "ORDER BY amount DESC, id ASC LIMIT 1", (ad_id,))
-    row = cursor.fetchone()
-    return dict(row) if row else None
-
-
-def place_bid(ad_id: int, user_id: int, amount) -> Dict:
-    """Ставит ставку. Возвращает {'ok': True, 'ad', 'outbid'} либо ошибку."""
-    ad = _auction(ad_id)
-    if not ad:
-        return {'ok': False, 'error': 'not_auction'}
-    if ad.get('status') != 'active':
-        return {'ok': False, 'error': 'not_active'}
-    if auction_time_left(ad) <= 0:
-        return {'ok': False, 'error': 'ended'}
-    if int(ad.get('user_id') or 0) == int(user_id):
-        return {'ok': False, 'error': 'own_lot'}
-    try:
-        amount = int(amount)
-    except (TypeError, ValueError):
-        return {'ok': False, 'error': 'bad_amount'}
-
-    minimum = min_next_bid(ad)
-    if amount < minimum:
-        return {'ok': False, 'error': 'too_low', 'minimum': minimum}
-    buy_now = int(ad.get('buy_now_price') or 0)
-    if buy_now and amount >= buy_now:
-        return {'ok': False, 'error': 'use_buy_now', 'buy_now': buy_now}
-
-    prev = _current_leader_bid(ad_id)
-    now = get_moscow_time()
-    cursor = db.conn.cursor()
-    cursor.execute("UPDATE bids SET status='outbid' WHERE ad_id=? AND status='active'", (ad_id,))
-    cursor.execute("INSERT INTO bids (ad_id, user_id, amount, status, created_at) "
-                   "VALUES (?, ?, ?, 'active', ?)", (ad_id, user_id, amount, now.isoformat()))
-
-    # Антиснайпинг: ставка в концовке продлевает лот, иначе все ждут
-    # последней секунды и честной борьбы не выходит.
-    extended = False
-    ends_at = ad.get('ends_at')
-    if ends_at:
-        ends = _safe_isoparse(ends_at)
-        left = int((ends - now).total_seconds())
-        if left <= AUCTION_ANTISNIPE_WINDOW:
-            ends = ends + timedelta(seconds=AUCTION_ANTISNIPE_EXTEND)
-            ends_at = ends.isoformat()
-            extended = True
-
-    cursor.execute('''
-        UPDATE ads SET current_bid=?, price=?, bids_count=COALESCE(bids_count,0)+1, ends_at=?
-        WHERE id=?
-    ''', (amount, amount, ends_at, ad_id))
-    db.conn.commit()
-
-    ad = _auction(ad_id)
-    return {'ok': True, 'ad': ad, 'outbid': prev, 'extended': extended, 'amount': amount}
-
-
-def buy_now(ad_id: int, user_id: int) -> Dict:
-    """Мгновенный выкуп: закрывает лот сразу по цене выкупа."""
-    ad = _auction(ad_id)
-    if not ad:
-        return {'ok': False, 'error': 'not_auction'}
-    if ad.get('status') != 'active':
-        return {'ok': False, 'error': 'not_active'}
-    if auction_time_left(ad) <= 0:
-        return {'ok': False, 'error': 'ended'}
-    if int(ad.get('user_id') or 0) == int(user_id):
-        return {'ok': False, 'error': 'own_lot'}
-    price = int(ad.get('buy_now_price') or 0)
-    if not price:
-        return {'ok': False, 'error': 'no_buy_now'}
-
-    now = get_moscow_time()
-    cursor = db.conn.cursor()
-    cursor.execute("UPDATE bids SET status='outbid' WHERE ad_id=? AND status='active'", (ad_id,))
-    cursor.execute("INSERT INTO bids (ad_id, user_id, amount, status, created_at) "
-                   "VALUES (?, ?, ?, 'won', ?)", (ad_id, user_id, price, now.isoformat()))
-    cursor.execute('''
-        UPDATE ads SET status='ended', winner_id=?, finished_at=?, price=?, current_bid=?,
-                       bids_count=COALESCE(bids_count,0)+1
-        WHERE id=?
-    ''', (user_id, now.isoformat(), price, price, ad_id))
-    db.conn.commit()
-    return {'ok': True, 'ad': _auction(ad_id), 'amount': price, 'buy_now': True}
-
-
-def validate_auction_params(body: Dict) -> Dict:
-    """Проверяет параметры лота ДО создания объявления.
-
-    Шаг по умолчанию — 5% от стартовой цены, но не меньше 10 ₽ и не больше
-    10× стартовой: иначе либо ставки по рублю, либо шаг больше самого лота.
-    """
-    start = _miniapp_parse_price(body.get('start_price', 0))
-    if start <= 0:
-        return {'ok': False, 'error': 'bad_start_price'}
-    raw_step = _miniapp_parse_price(body.get('bid_step', 0))
-    step = int(raw_step) if raw_step else max(AUCTION_MIN_STEP, int(start * 0.05))
-    step = max(AUCTION_MIN_STEP, min(int(step), int(start) * AUCTION_MAX_STEP_MULT))
-    try:
-        days = int(body.get('auction_days') or 3)
-    except (TypeError, ValueError):
-        days = 3
-    if days not in AUCTION_DURATIONS:
-        days = 3
-    buy_now = _miniapp_parse_price(body.get('buy_now_price', 0)) or None
-    if buy_now is not None and buy_now < start + step:
-        return {'ok': False, 'error': 'bad_buy_now'}
-    return {'ok': True, 'start_price': start, 'bid_step': step,
-            'buy_now_price': buy_now, 'auction_days': days}
-
-
-def set_auction_params(ad_id: int, start_price: int, bid_step: int,
-                       buy_now_price: Optional[int], days: int):
-    """Включает у объявления режим аукциона.
-
-    price = стартовая цена, чтобы карточка в ленте показывала «от N ₽»
-    до первых ставок. ends_at НЕ ставим — срок пойдёт от одобрения.
-    """
-    cursor = db.conn.cursor()
-    cursor.execute('''
-        UPDATE ads SET sale_type='auction', start_price=?, bid_step=?, buy_now_price=?,
-                       auction_days=?, current_bid=0, bids_count=0, price=?
-        WHERE id=?
-    ''', (start_price, bid_step, buy_now_price, days, start_price, ad_id))
-    db.conn.commit()
-
-
-def get_my_bids(user_id: int, limit: int = 50) -> List[Dict]:
-    """Мои ставки с состоянием лота — для раздела «Мои ставки»."""
-    cursor = db.conn.cursor()
-    cursor.execute('''
-        SELECT b.id AS bid_id, b.amount, b.status AS bid_status, b.created_at AS bid_at,
-               a.id AS ad_id, a.title, a.photos, a.status AS ad_status, a.sale_type,
-               a.ends_at, a.current_bid, a.winner_id, a.user_id AS seller_id
-        FROM bids b JOIN ads a ON a.id = b.ad_id
-        WHERE b.user_id=?
-        ORDER BY b.created_at DESC LIMIT ?
-    ''', (user_id, limit))
-    return [dict(r) for r in cursor.fetchall()]
-
-
-def finish_auctions() -> List[Dict]:
-    """Завершает лоты, у которых вышло время. Возвращает их для уведомлений.
-
-    Победитель — лучшая ставка; чат победителя с продавцом создаём сразу,
-    чтобы им не пришлось искать друг друга.
-    """
-    cursor = db.conn.cursor()
-    now = get_moscow_time()
-    cursor.execute('''
-        SELECT * FROM ads
-        WHERE sale_type='auction' AND status='active'
-          AND ends_at IS NOT NULL AND ends_at <= ?
-    ''', (now.isoformat(),))
-    finished = []
-    for row in [dict(r) for r in cursor.fetchall()]:
-        cursor.execute("SELECT * FROM bids WHERE ad_id=? ORDER BY amount DESC, id ASC LIMIT 1",
-                       (row['id'],))
-        top = cursor.fetchone()
-        if top:
-            top = dict(top)
-            cursor.execute("UPDATE bids SET status='won' WHERE id=?", (top['id'],))
-            cursor.execute("UPDATE bids SET status='lost' WHERE ad_id=? AND id<>? "
-                           "AND status IN ('active','outbid')", (row['id'], top['id']))
-            cursor.execute('''
-                UPDATE ads SET status='ended', winner_id=?, finished_at=?, price=?, current_bid=?
-                WHERE id=?
-            ''', (top['user_id'], now.isoformat(), top['amount'], top['amount'], row['id']))
-            row['winner_id'] = top['user_id']
-            row['top_bid'] = top['amount']
-        else:
-            cursor.execute("UPDATE ads SET status='ended_unsold', finished_at=? WHERE id=?",
-                           (now.isoformat(), row['id']))
-            row['top_bid'] = 0
-        finished.append(row)
-    if finished:
-        db.conn.commit()
-    return finished
-
-
-async def _notify_auction(user_id: int, text: str, ad_id: Optional[int] = None):
-    """Сообщение участнику аукциона через бота."""
-    app = _get_bot_app()
-    if not app or not user_id:
-        return
-    kb = None
-    if ad_id:
-        kb = InlineKeyboardMarkup([[
-            InlineKeyboardButton(EM_ARROW_R + " Открыть лот", callback_data=f"view_ad:{ad_id}")
-        ]])
-    try:
-        await app.bot.send_message(chat_id=user_id, text=text, parse_mode=ParseMode.HTML,
-                                   reply_markup=kb)
-    except Exception as e:
-        logger.warning(f"auction notify -> {user_id}: {e}")
-
-
-async def _notify_auction_finished(ad: Dict):
-    """Уведомления по завершённому лоту: победителю, продавцу, наблюдавшим."""
-    title = str(ad.get('title') or '')[:40]
-    winner_id = ad.get('winner_id')
-    seller_id = ad.get('user_id')
-    top_bid = ad.get('top_bid') or ad.get('current_bid') or 0
-    if winner_id:
-        chat_id = None
-        try:
-            chat_id = get_or_create_chat(ad['id'], winner_id, seller_id)
-        except Exception as e:
-            logger.warning(f"auction chat: {e}")
-        await _notify_auction(
-            winner_id,
-            f"{EM_OK} <b>Вы выиграли аукцион!</b>\n"
-            f"«{title}» за {top_bid:,} ₽\n\n"
-            f"Напишите продавцу, чтобы договориться о передаче.".replace(',', ' '),
-            ad['id'],
-        )
-        await _notify_auction(
-            seller_id,
-            f"{EM_OK} <b>Ваш лот продан!</b>\n"
-            f"«{title}» за {top_bid:,} ₽\n\n"
-            f"Победитель уже получил уведомление.".replace(',', ' '),
-            ad['id'],
-        )
-    else:
-        await _notify_auction(
-            seller_id,
-            f"{EM_WARN} <b>Аукцион завершён без ставок</b>\n"
-            f"«{title}»\n\nМожно выставить лот снова.".replace(',', ' '),
-            ad['id'],
-        )
-
-
-async def _auctions_loop():
-    """Раз в 30 секунд закрывает лоты с истёкшим временем."""
-    while True:
-        try:
-            await asyncio.sleep(30)
-            for ad in finish_auctions():
-                await _notify_auction_finished(ad)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning(f"auctions loop: {e}")
-            await asyncio.sleep(60)
 
 
 def get_user_chats(user_id: int, limit: int = 20) -> List[Dict]:
@@ -23005,20 +22427,6 @@ def _media_content_type(ctype: str, data: bytes) -> str:
     return 'application/octet-stream'
 
 
-def _story_media_url(media) -> str:
-    """Ссылка на медиа истории.
-
-    Истории из Mini App хранят локальный путь, а созданные через бота —
-    Telegram file_id: его заворачиваем в прокси, чтобы токен не утекал.
-    """
-    s = str(media or '')
-    if not s or s.startswith('{'):
-        return ''
-    if s.startswith('/') or s.startswith('http'):
-        return s
-    return f"/api/photo/{s}"
-
-
 async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/chat/{session_id}/media — вложение в диалог (multipart, поле file).
 
@@ -23126,186 +22534,6 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
     return _miniapp_json({'ok': True, 'message': message}, status=201)
 
 
-# ── API историй продавцов ────────────────────────────────────────────────────
-def _story_public(story: Dict, with_views: bool = False) -> Dict:
-    """История для клиента. reject_reason и просмотры — только автору."""
-    data = {
-        'id': story['id'],
-        'user_id': story['user_id'],
-        'media': _story_media_url(story['media']),
-        'media_type': story['media_type'],
-        'caption': story.get('caption') or '',
-        'ad_id': story.get('ad_id'),
-        'status': story.get('status'),
-        'created_at': story.get('created_at'),
-        'expires_at': story.get('expires_at'),
-    }
-    if with_views:
-        data['reject_reason'] = story.get('reject_reason') or ''
-        data['views'] = get_story_viewers(story['id'])
-    return data
-
-
-async def api_miniapp_stories(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/stories — рельс историй и состояние своих.
-
-    Свои истории отдаём с просмотрами и причиной отклонения: автор должен
-    понимать, почему история не появилась в ленте.
-    """
-    viewer_id = _miniapp_viewer(request) or 0
-    try:
-        authors = get_story_rail(viewer_id)
-        # Истории из бота хранят file_id — отдаём их через прокси
-        for author in authors:
-            for story in author.get('stories', []):
-                story['media'] = _story_media_url(story.get('media'))
-    except Exception as e:
-        logger.error(f"stories rail: {e}")
-        return _miniapp_err('load_failed', 500)
-
-    mine = {'stories': [], 'can_post': False, 'active': 0, 'pending': 0,
-            'max_active': STORY_MAX_ACTIVE, 'max_pending': STORY_MAX_PENDING}
-    if viewer_id:
-        active = count_user_stories(viewer_id, ('active',))
-        pending = count_user_stories(viewer_id, ('pending',))
-        mine.update({
-            'stories': [_story_public(s, with_views=True) for s in get_user_stories(viewer_id)],
-            'active': active,
-            'pending': pending,
-            'can_post': active < STORY_MAX_ACTIVE and pending < STORY_MAX_PENDING,
-        })
-    return _miniapp_json({'authors': authors, 'mine': mine})
-
-
-async def api_miniapp_story_create(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/stories — добавить историю (multipart: file, caption, ad_id).
-
-    Создаётся в статусе pending: у нас пре-модерация для всех, в ленту
-    история попадает только после одобрения администратором.
-    """
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-
-    active = count_user_stories(viewer_id, ('active',))
-    pending = count_user_stories(viewer_id, ('pending',))
-    if active >= STORY_MAX_ACTIVE:
-        return _miniapp_json({'error': 'limit_active',
-                              'detail': f'у вас уже {STORY_MAX_ACTIVE} историй'}, status=429)
-    if pending >= STORY_MAX_PENDING:
-        return _miniapp_json({'error': 'limit_pending',
-                              'detail': 'предыдущие ещё на проверке, подождите'}, status=429)
-
-    try:
-        form = await request.post()
-    except Exception:
-        return _miniapp_err('bad_multipart', 400)
-    field = form.get('file') or form.get('media') or form.get('photo')
-    if field is None:
-        extra = form.getall('file', [])
-        field = extra[0] if extra else None
-    if field is None:
-        return _miniapp_err('no_file', 400)
-
-    data = field.file.read(CHAT_MEDIA_LIMITS['video'] + 1)
-    if not data:
-        return _miniapp_err('empty_file', 400)
-    ctype = getattr(field, 'content_type', '') or ''
-    kind = _classify_chat_media(ctype, data)
-    if kind == 'voice':
-        return _miniapp_json({'error': 'unsupported_media',
-                              'detail': 'для истории подойдут фото или видео'}, status=415)
-    if not kind:
-        return _miniapp_json({'error': 'unsupported_media',
-                              'detail': 'поддерживаются фото и видео'}, status=415)
-    limit = CHAT_MEDIA_LIMITS[kind]
-    if len(data) > limit:
-        return _miniapp_json({'error': 'too_large',
-                              'detail': f'{kind}: до {limit // (1024 * 1024)} МБ'}, status=413)
-
-    caption = (form.get('caption') or '')[:STORY_CAPTION_MAX]
-    ad_id = None
-    raw_ad = form.get('ad_id')
-    if raw_ad:
-        try:
-            ad_id = int(raw_ad)
-            ad = db.get_ad(ad_id)
-            # привязывать можно только к своему объявлению
-            if not ad or int(ad.get('user_id') or 0) != int(viewer_id):
-                ad_id = None
-        except (TypeError, ValueError):
-            ad_id = None
-
-    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
-    try:
-        os.makedirs(upload_dir, exist_ok=True)
-    except Exception:
-        pass
-    ext = _chat_media_ext(ctype, data, kind)
-    name = f"s{viewer_id}_{int(_time.time())}.{ext}"
-    path = os.path.join(upload_dir, name)
-    try:
-        with open(path, 'wb') as fh:
-            fh.write(data)
-    except Exception as e:
-        logger.error(f"story save: {e}")
-        return _miniapp_err('save_failed', 500)
-
-    try:
-        story_id = create_story(viewer_id, f"/api/ads/photos/{name}", kind, caption, ad_id)
-    except Exception as e:
-        logger.error(f"story create: {e}")
-        return _miniapp_err('save_failed', 500)
-
-    story = get_story(story_id)
-    try:
-        await _notify_story_moderation(story)
-    except Exception as e:
-        logger.warning(f"story moderation notify: {e}")
-
-    return _miniapp_json({'ok': True, 'story': _story_public(story, with_views=True)}, status=201)
-
-
-async def api_miniapp_story_view(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/stories/{story_id}/view — отметить историю просмотренной."""
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-    try:
-        story_id = int(request.match_info['story_id'])
-    except (KeyError, ValueError):
-        return _miniapp_err('not_found', 404)
-    mark_story_viewed(story_id, viewer_id)
-    return _miniapp_json({'ok': True, 'views': get_story_viewers(story_id)})
-
-
-async def api_miniapp_story_delete(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """DELETE /api/stories/{story_id} — автор удаляет свою историю."""
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-    try:
-        story_id = int(request.match_info['story_id'])
-    except (KeyError, ValueError):
-        return _miniapp_err('not_found', 404)
-    story = get_story(story_id)
-    if not story:
-        return _miniapp_err('not_found', 404)
-    if int(story['user_id']) != int(viewer_id):
-        return _miniapp_err('forbidden', 403)
-    try:
-        _remove_story_file(story['media'])
-        cursor = db.conn.cursor()
-        cursor.execute('DELETE FROM story_views WHERE story_id=?', (story_id,))
-        cursor.execute('DELETE FROM stories WHERE id=?', (story_id,))
-        db.conn.commit()
-    except Exception as e:
-        logger.error(f"story delete: {e}")
-        return _miniapp_err('delete_failed', 500)
-    return _miniapp_json({'ok': True})
-
-
-# ── API аукционов ────────────────────────────────────────────────────────────
 async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/findings — находки, отсортированные по выгоде.
 
@@ -23395,161 +22623,6 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in rows],
         'has_more': has_more,
     })
-
-
-async def api_miniapp_auctions(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/auctions — активные лоты.
-
-    По умолчанию сначала те, что заканчиваются раньше: там таймер важнее
-    всего, а «свежие» лоты и так видны в общей ленте.
-    """
-    viewer_id = _miniapp_viewer(request)
-    order = "ends_at ASC" if (request.query.get('sort') or 'ending') == 'ending' \
-        else "created_at DESC"
-    try:
-        cursor = db.conn.cursor()
-        cursor.execute(f'''
-            SELECT * FROM ads
-            WHERE sale_type='auction' AND status='active'
-              AND ends_at IS NOT NULL AND ends_at > ?
-            ORDER BY {order} LIMIT 60
-        ''', (get_moscow_time().isoformat(),))
-        ads = [dict(r) for r in cursor.fetchall()]
-    except Exception as e:
-        logger.error(f"auctions list: {e}")
-        return _miniapp_err('load_failed', 500)
-    fav_counts, fav_mine = _miniapp_fav_map([a['id'] for a in ads], viewer_id)
-    return _miniapp_json({
-        'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in ads],
-    })
-
-
-async def api_miniapp_place_bid(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/ads/{ad_id}/bid — сделать ставку."""
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-    try:
-        ad_id = int(request.match_info['ad_id'])
-    except (KeyError, ValueError):
-        return _miniapp_err('not_found', 404)
-    try:
-        body = await request.json()
-    except Exception:
-        return _miniapp_err('bad_json', 400)
-
-    res = place_bid(ad_id, viewer_id, (body or {}).get('amount'))
-    if not res.get('ok'):
-        code = res.get('error')
-        status = 400
-        if code in ('not_auction', 'not_active', 'ended'):
-            status = 409
-        elif code == 'own_lot':
-            status = 403
-        payload = {'error': code}
-        if res.get('minimum'):
-            payload['minimum'] = res['minimum']
-        if res.get('buy_now'):
-            payload['buy_now'] = res['buy_now']
-        return _miniapp_json(payload, status=status)
-
-    ad = res['ad']
-    title = str(ad.get('title') or '')[:40]
-    amount = f"{res['amount']:,}".replace(',', ' ')
-    await _notify_auction(ad['user_id'],
-                          f"{EM_DOT} <b>Новая ставка</b>\n«{title}» — {amount} ₽", ad_id)
-    prev = res.get('outbid')
-    if prev and int(prev['user_id']) != int(viewer_id):
-        await _notify_auction(
-            prev['user_id'],
-            f"{EM_WARN} <b>Вашу ставку перебили</b>\n"
-            f"«{title}» — теперь {amount} ₽\n\nУспейте поднять, пока идут торги.", ad_id)
-    return _miniapp_json({
-        'ok': True,
-        'ad': _miniapp_serialize_ad(ad, viewer_id),
-        'amount': res['amount'],
-        'extended': bool(res.get('extended')),
-    })
-
-
-async def api_miniapp_buy_now(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/ads/{ad_id}/buy-now — выкупить лот сразу."""
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-    try:
-        ad_id = int(request.match_info['ad_id'])
-    except (KeyError, ValueError):
-        return _miniapp_err('not_found', 404)
-    res = buy_now(ad_id, viewer_id)
-    if not res.get('ok'):
-        code = res.get('error')
-        status = 409 if code in ('not_auction', 'not_active', 'ended') else 400
-        if code == 'own_lot':
-            status = 403
-        return _miniapp_json({'error': code}, status=status)
-    await _notify_auction_finished({**res['ad'], 'top_bid': res['amount']})
-    return _miniapp_json({
-        'ok': True,
-        'ad': _miniapp_serialize_ad(res['ad'], viewer_id),
-        'amount': res['amount'],
-    })
-
-
-async def api_miniapp_ad_bids(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/ads/{ad_id}/bids — история ставок (имена анонимны)."""
-    viewer_id = _miniapp_viewer(request)
-    try:
-        ad_id = int(request.match_info['ad_id'])
-    except (KeyError, ValueError):
-        return _miniapp_err('not_found', 404)
-    items = []
-    for b in get_bids(ad_id, limit=30):
-        user = db.get_user(b['user_id'])
-        items.append({
-            'amount': b['amount'],
-            'created_at': b['created_at'],
-            'status': b['status'],
-            'is_me': bool(viewer_id and int(b['user_id']) == int(viewer_id)),
-            'name': get_anon_id(user) if user else f"id{b['user_id']}",
-        })
-    return _miniapp_json({'items': items})
-
-
-async def api_miniapp_my_bids(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/my-bids — мои ставки с понятным состоянием."""
-    viewer_id = _miniapp_viewer(request)
-    if not viewer_id:
-        return _miniapp_err('unauthorized', 401)
-    items = []
-    for row in get_my_bids(viewer_id):
-        if row.get('ad_status') == 'ended':
-            state = 'won' if int(row.get('winner_id') or 0) == int(viewer_id) else 'lost'
-        elif row.get('ad_status') == 'ended_unsold':
-            state = 'lost'
-        elif row.get('bid_status') == 'active':
-            state = 'leading'
-        else:
-            state = 'outbid'
-        photos = row.get('photos') or []
-        if isinstance(photos, str):
-            try:
-                photos = json.loads(photos)
-            except Exception:
-                photos = []
-        items.append({
-            'ad_id': row['ad_id'],
-            'title': row.get('title') or '',
-            'photo': (_miniapp_photo_urls(photos) or [''])[0],
-            'amount': row['amount'],
-            'current_bid': row.get('current_bid') or 0,
-            'created_at': row.get('bid_at') or '',
-            'ends_at': row.get('ends_at') or '',
-            # остаток считает сервер: часы на устройстве могут расходиться
-            'time_left': auction_time_left(row),
-            'state': state,
-        })
-    return _miniapp_json({'items': items})
 
 
 async def api_serve_html(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -24587,30 +23660,6 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
         'source_url': ad.get('source_url') or '',
         'discount_percent': ad.get('discount_percent'),
         'market_median': ad.get('market_median'),
-        **_miniapp_auction_fields(ad, viewer_id),
-    }
-
-
-def _miniapp_auction_fields(ad: dict, viewer_id: Optional[int] = None) -> dict:
-    """Поля аукциона для клиента. Для обычных объявлений — пустой словарь.
-
-    Отдаём минимальную следующую ставку и остаток времени: без них
-    интерфейс не сможет показать кнопку «Сделать ставку» и таймер.
-    """
-    if (ad.get('sale_type') or 'sale') != 'auction':
-        return {'sale_type': 'sale'}
-    return {
-        'sale_type': 'auction',
-        'start_price': ad.get('start_price') or 0,
-        'bid_step': ad.get('bid_step') or AUCTION_MIN_STEP,
-        'buy_now_price': ad.get('buy_now_price') or 0,
-        'current_bid': ad.get('current_bid') or 0,
-        'bids_count': ad.get('bids_count') or 0,
-        'ends_at': ad.get('ends_at') or '',
-        'time_left': auction_time_left(ad),
-        'min_next_bid': min_next_bid(ad),
-        'winner_id': ad.get('winner_id'),
-        'is_winner': bool(viewer_id and ad.get('winner_id') == viewer_id),
     }
 
 
@@ -24888,343 +23937,6 @@ async def admin_banners(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-# ── Модерация историй (отдельный раздел, не мешается с объявлениями) ─────────
-_STORY_REJECT_REASONS = {
-    'spam': 'Реклама или спам',
-    'quality': 'Плохое качество',
-    'offtopic': 'Не по теме площадки',
-    'other': 'Без объяснения',
-}
-
-
-def _story_card_caption(story: Dict, header: str = 'История на проверке') -> str:
-    """Подпись карточки истории для админа."""
-    user = db.get_user(story['user_id'])
-    who = get_anon_id(user) if user else f"id{story['user_id']}"
-    parts = [f"<b>{header}</b>", f"Автор: <b>{who}</b>"]
-    if story.get('ad_id'):
-        ad = db.get_ad(story['ad_id'])
-        if ad:
-            parts.append(f"Объявление: «{str(ad.get('title'))[:40]}»")
-    parts.append(f"Тип: {'видео' if story.get('media_type') == 'video' else 'фото'}")
-    if story.get('caption'):
-        parts.append(f"\n<i>{story['caption'][:180]}</i>")
-    return "\n".join(parts)
-
-
-def _story_media_path(story: Dict) -> str:
-    upload_dir = os.environ.get('UPLOAD_DIR', '/data/uploads')
-    return os.path.join(upload_dir, os.path.basename(str(story.get('media') or '')))
-
-
-async def _send_story_card(bot, chat_id: int, story: Dict, header: str) -> bool:
-    """Отправляет карточку истории с кнопками решения."""
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton(EM_OK + " Одобрить", callback_data=f"story_ok:{story['id']}"),
-        InlineKeyboardButton(EM_FAIL + " Отклонить", callback_data=f"story_no:{story['id']}"),
-    ]])
-    caption = _story_card_caption(story, header)
-    path = _story_media_path(story)
-    # Медиа бывает двух видов: локальный файл (загрузка из Mini App) или
-    # Telegram file_id (история прислана боту). Для файла открываем его,
-    # для file_id передаём строку, иначе — просто текст.
-    raw_media = str(story.get('media') or '')
-    is_video = story.get('media_type') == 'video'
-    try:
-        if os.path.isfile(path):
-            with open(path, 'rb') as fh:
-                if is_video:
-                    await bot.send_video(chat_id=chat_id, video=fh, caption=caption,
-                                         reply_markup=kb, parse_mode=ParseMode.HTML)
-                else:
-                    await bot.send_photo(chat_id=chat_id, photo=fh, caption=caption,
-                                         reply_markup=kb, parse_mode=ParseMode.HTML)
-        elif raw_media and not raw_media.startswith('/'):
-            if is_video:
-                await bot.send_video(chat_id=chat_id, video=raw_media, caption=caption,
-                                     reply_markup=kb, parse_mode=ParseMode.HTML)
-            else:
-                await bot.send_photo(chat_id=chat_id, photo=raw_media, caption=caption,
-                                     reply_markup=kb, parse_mode=ParseMode.HTML)
-        else:
-            await bot.send_message(chat_id=chat_id, text=caption, reply_markup=kb,
-                                   parse_mode=ParseMode.HTML)
-        return True
-    except Exception as e:
-        logger.warning(f"story card -> {chat_id}: {e}")
-        return False
-
-
-async def _stories_cleanup_loop():
-    """Раз в час гасит просроченные истории и удаляет их файлы.
-
-    APScheduler в проекте импортирован, но нигде не запускается, поэтому
-    используем обычный фоновый цикл — как сделано для других задач.
-    """
-    while True:
-        try:
-            await asyncio.sleep(3600)
-            result = expire_stories()
-            if any(result.values()):
-                logger.info(f"stories cleanup: {result}")
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            logger.warning(f"stories cleanup: {e}")
-            await asyncio.sleep(300)
-
-
-async def _notify_story_moderation(story: Dict):
-    """Пре-модерация для всех: зовём админов сразу, не дожидаясь открытия панели."""
-    app = _get_bot_app()
-    if not app or not story:
-        return
-    for admin_id in ADMIN_USER_IDS:
-        await _send_story_card(app.bot, admin_id, story, "Новая история на проверке")
-
-
-async def _notify_story_author(story: Dict, approved: bool, reason: str = ''):
-    app = _get_bot_app()
-    if not app or not story:
-        return
-    try:
-        if approved:
-            text = (f"{EM_OK} Ваша история опубликована!\n"
-                    f"Она будет в ленте 24 часа в разделе «Истории продавцов».")
-        else:
-            text = f"{EM_FAIL} История отклонена."
-            if reason:
-                text += f"\nПричина: {reason}"
-        await app.bot.send_message(chat_id=story['user_id'], text=text)
-    except Exception as e:
-        logger.warning(f"story author notify: {e}")
-
-
-# ── История через бота ───────────────────────────────────────────────────────
-# Платформа режет тело запроса на ~10 МБ, поэтому видео с телефона в Mini App
-# не пролезает. Telegram принимает файлы любого размера — берём file_id и
-# отдаём его в ленту через прокси /api/photo/<file_id>.
-async def story_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Просит прислать фото или видео для истории."""
-    query = update.callback_query
-    if query:
-        await safe_answer(query, )
-    context.user_data['story_adding'] = True
-    text = (" <b>Новая история</b>\n\n"
-            "Пришлите фото или видео одним сообщением — подпись к нему станет "
-            "текстом истории.\n\n"
-            "Через бота можно и большое видео: ограничения платформы здесь не мешают.")
-    kb = InlineKeyboardMarkup([[
-        InlineKeyboardButton(EM_ARROW_L + " Отмена", callback_data="back_to_menu")
-    ]])
-    if query:
-        await safe_edit_message(query, text, kb)
-    else:
-        await update.message.reply_text(text, reply_markup=kb, parse_mode=ParseMode.HTML)
-    return States.MAIN_MENU
-
-
-async def story_media_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Создаёт историю из присланного фото или видео (статус «на проверке»)."""
-    if not context.user_data.get('story_adding'):
-        return
-    msg = update.message
-    user = update.effective_user
-    if msg.photo:
-        file_id, kind = msg.photo[-1].file_id, 'photo'
-    elif msg.video:
-        file_id, kind = msg.video.file_id, 'video'
-    else:
-        return
-    context.user_data.pop('story_adding', None)
-
-    try:
-        story_id = create_story(user.id, file_id, kind, msg.caption or '')
-    except Exception as e:
-        logger.error(f"bot story create: {e}")
-        await msg.reply_text("Не удалось создать историю. Попробуйте позже.")
-        return
-
-    story = get_story(story_id)
-    try:
-        await _notify_story_moderation(story)
-    except Exception as e:
-        logger.warning(f"bot story notify: {e}")
-
-    kb_rows = []
-    try:
-        active = [a for a in db.get_user_ads(user.id, limit=20) if a.get('status') == 'active']
-    except Exception:
-        active = []
-    if active:
-        kb_rows.append([InlineKeyboardButton(" Привязать объявление",
-                                             callback_data=f"story_attach_ad:{story_id}")])
-    kb_rows.append([InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")])
-    await msg.reply_text(
-        f"{EM_OK} История отправлена на проверку.\n\n"
-        f"Она появится в ленте на 24 часа после одобрения."
-        + ("\n\nМожно привязать объявление — тогда в истории будет кнопка "
-           "«Посмотреть объявление»." if active else ""),
-        reply_markup=InlineKeyboardMarkup(kb_rows),
-    )
-
-
-async def story_attach_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показывает активные объявления автора для привязки к истории."""
-    query = update.callback_query
-    await safe_answer(query, )
-    try:
-        story_id = int((query.data or '').split(':')[1])
-    except (IndexError, ValueError):
-        return
-    story = get_story(story_id)
-    if not story or int(story['user_id']) != int(update.effective_user.id):
-        await safe_edit_message(query, "История не найдена.")
-        return
-    try:
-        active = [a for a in db.get_user_ads(update.effective_user.id, limit=20)
-                  if a.get('status') == 'active']
-    except Exception:
-        active = []
-    rows = [[InlineKeyboardButton(f"{str(a.get('title'))[:34]}",
-                                  callback_data=f"story_setad:{story_id}:{a['id']}")]
-            for a in active[:8]]
-    rows.append([InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")])
-    await safe_edit_message(query, "Выберите объявление для этой истории:", InlineKeyboardMarkup(rows))
-
-
-async def story_set_ad(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Привязывает объявление к истории."""
-    query = update.callback_query
-    await safe_answer(query, )
-    parts = (query.data or '').split(':')
-    if len(parts) < 3:
-        return
-    try:
-        story_id, ad_id = int(parts[1]), int(parts[2])
-    except ValueError:
-        return
-    story = get_story(story_id)
-    if not story or int(story['user_id']) != int(update.effective_user.id):
-        await safe_edit_message(query, "История не найдена.")
-        return
-    try:
-        ad = db.get_ad(ad_id)
-        if not ad or int(ad.get('user_id') or 0) != int(update.effective_user.id):
-            await safe_edit_message(query, "Это не ваше объявление.")
-            return
-        cursor = db.conn.cursor()
-        cursor.execute("UPDATE stories SET ad_id=? WHERE id=?", (ad_id, story_id))
-        db.conn.commit()
-    except Exception as e:
-        logger.error(f"story set ad: {e}")
-        await safe_edit_message(query, "Не удалось привязать объявление.")
-        return
-    await safe_edit_message(
-        query,
-        f"{EM_OK} Объявление привязано.\n\nВ истории появится кнопка "
-        f"«Посмотреть объявление».",
-        InlineKeyboardMarkup([[
-            InlineKeyboardButton(EM_ARROW_L + " В меню", callback_data="back_to_menu")
-        ]]),
-    )
-
-
-async def admin_stories(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Раздел «Истории» в админ-панели — очередь на модерацию."""
-    query = update.callback_query
-    await safe_answer(query, )
-    if not await is_admin(update.effective_user.id):
-        return
-    pending = get_pending_stories(20)
-    back = InlineKeyboardMarkup([[InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]])
-    if not pending:
-        await safe_edit_message(query, "Истории\n\nОчередь пуста.", back)
-        return
-    await safe_edit_message(
-        query,
-        f"Истории на проверке: {len(pending)}\n\n"
-        "Карточки ниже — одобрите или отклоните.",
-        back,
-    )
-    for story in pending[:5]:
-        await _send_story_card(context.bot, update.effective_user.id, story, "История на проверке")
-
-
-async def story_moderation_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Одобрение истории или переход к выбору причины отклонения."""
-    query = update.callback_query
-    if not await is_admin(update.effective_user.id):
-        await safe_answer(query, "Недостаточно прав", show_alert=True)
-        return
-    action, _, raw_id = (query.data or "").partition(':')
-    try:
-        story_id = int(raw_id)
-    except (TypeError, ValueError):
-        await safe_answer(query, )
-        return
-    story = get_story(story_id)
-    if not story:
-        await safe_answer(query, "История не найдена", show_alert=True)
-        return
-    if story.get('status') != 'pending':
-        await safe_answer(query, "Уже обработана", show_alert=True)
-        return
-
-    if action == 'story_ok':
-        updated = moderate_story(story_id, 'active', update.effective_user.id)
-        await safe_answer(query, "Одобрено")
-        try:
-            await query.edit_message_reply_markup(reply_markup=None)
-            await query.edit_message_caption(caption=_story_card_caption(updated, "Одобрено"))
-        except Exception:
-            pass
-        await _notify_story_author(updated, approved=True)
-        return
-
-    # Отклонение: сначала спрашиваем причину — быстрыми кнопками, без ввода текста
-    rows = [[InlineKeyboardButton(label, callback_data=f"story_rej:{story_id}:{code}")]
-            for code, label in _STORY_REJECT_REASONS.items()]
-    try:
-        await query.edit_message_reply_markup(reply_markup=InlineKeyboardMarkup(rows))
-    except Exception:
-        pass
-    await safe_answer(query, "Выберите причину")
-
-
-async def story_moderation_reason(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Применяет отклонение истории с выбранной причиной."""
-    query = update.callback_query
-    if not await is_admin(update.effective_user.id):
-        await safe_answer(query, "Недостаточно прав", show_alert=True)
-        return
-    parts = (query.data or "").split(':')
-    if len(parts) < 3:
-        await safe_answer(query, )
-        return
-    try:
-        story_id = int(parts[1])
-    except (TypeError, ValueError):
-        await safe_answer(query, )
-        return
-    reason = _STORY_REJECT_REASONS.get(parts[2], parts[2])
-    story = get_story(story_id)
-    if not story:
-        await safe_answer(query, "История не найдена", show_alert=True)
-        return
-    if story.get('status') != 'pending':
-        await safe_answer(query, "Уже обработана", show_alert=True)
-        return
-    updated = moderate_story(story_id, 'rejected', update.effective_user.id, reason)
-    await safe_answer(query, "Отклонено")
-    try:
-        await query.edit_message_reply_markup(reply_markup=None)
-        await query.edit_message_caption(caption=_story_card_caption(updated, f"Отклонено: {reason}"))
-    except Exception:
-        pass
-    await _notify_story_author(updated, approved=False, reason=reason)
-
-
 async def admin_banner_pick(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await safe_answer(query, )
@@ -25412,13 +24124,6 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     if not isinstance(photos, list) or len(photos) > MINIAPP_MAX_PHOTOS:
         return _miniapp_err('bad_photos', 400)
     photos = [str(p) for p in photos if isinstance(p, str) and p][:MINIAPP_MAX_PHOTOS]
-    # Аукцион: параметры проверяем ДО создания объявления, чтобы при ошибке
-    # не оставалось битой записи
-    auction = None
-    if str(body.get('sale_type') or '') == 'auction':
-        auction = validate_auction_params(body)
-        if not auction.get('ok'):
-            return _miniapp_err(auction.get('error') or 'bad_auction', 400)
     description = str(body.get('description') or '')[:4000]
     init_data = request.headers.get('X-Telegram-Init-Data', '')
     _miniapp_ensure_user(viewer_id, init_data)
@@ -25441,12 +24146,6 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     except Exception as e:
         logger.error(f"miniapp ads_create: {e}")
         return _miniapp_err('create_failed', 500)
-    if auction:
-        try:
-            set_auction_params(ad_id, auction['start_price'], auction['bid_step'],
-                               auction['buy_now_price'], auction['auction_days'])
-        except Exception as e:
-            logger.error(f"miniapp auction params: {e}")
     try:
         db.update_user(viewer_id,
                        daily_ads_count=(db.get_user(viewer_id) or {}).get('daily_ads_count', 0) + 1)
@@ -26284,12 +24983,6 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/chat/{session_id}/poll', api_poll_messages)
     app.router.add_post('/api/chat/{session_id}/send', api_send_message)
     app.router.add_post('/api/chat/{session_id}/media', api_chat_media_upload)
-    # ── Истории ──────────────────────────────────────────────────────────────
-    app.router.add_get('/api/stories', api_miniapp_stories)
-    app.router.add_post('/api/stories', api_miniapp_story_create)
-    app.router.add_post('/api/stories/{story_id}/view', api_miniapp_story_view)
-    app.router.add_delete('/api/stories/{story_id}', api_miniapp_story_delete)
-    # ── Аукционы ─────────────────────────────────────────────────────────────
     # ── Агрегатор находок ────────────────────────────────────────────────────
     app.router.add_post('/api/ingest', api_ingest_findings)
     app.router.add_post('/api/ingest/status', api_ingest_status)
@@ -26302,11 +24995,6 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
-    app.router.add_get('/api/auctions', api_miniapp_auctions)
-    app.router.add_get('/api/my-bids', api_miniapp_my_bids)
-    app.router.add_get('/api/ads/{ad_id}/bids', api_miniapp_ad_bids)
-    app.router.add_post('/api/ads/{ad_id}/bid', api_miniapp_place_bid)
-    app.router.add_post('/api/ads/{ad_id}/buy-now', api_miniapp_buy_now)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
     # Заглушка для paid_btn_url (пользователи после оплаты попадают сюда)
@@ -26443,10 +25131,6 @@ def main():
     # ─── Диспетчер входящих фото ─────────────────────────────────────────────────
     async def dispatch_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud = context.user_data
-        # История из бота: сюда попадают и фото, и видео (большое видео
-        # в Mini App не проходит по лимиту платформы)
-        if ud.get('story_adding'):
-            return await story_media_received(update, context)
         if ud.get('republish_step'):
             return await handle_admin_republish_forward(update, context)
         if ud.get('del_ad_step') == 'id_input':
@@ -26576,7 +25260,7 @@ def main():
         return await handle_search(update, context)
 
     application.add_handler(MessageHandler(filters.PHOTO   & ~filters.COMMAND, dispatch_photo))
-    # Видео раньше не обрабатывалось вовсе — нужно для историй
+    # Видео идёт тем же диспетчером (поиск по фото, чаты, объявления)
     application.add_handler(MessageHandler(filters.VIDEO   & ~filters.COMMAND, dispatch_photo))
     application.add_handler(MessageHandler(filters.TEXT    & ~filters.COMMAND, dispatch_text))
     # Обработчик контакта для верификации (Поделиться номером)
@@ -26728,14 +25412,6 @@ def main():
     application.add_handler(CallbackQueryHandler(admin_moderation,           pattern="^admin_moderation$"))
     application.add_handler(CallbackQueryHandler(admin_view_moderation_ad,   pattern="^admin_view_ad:"))
     application.add_handler(CallbackQueryHandler(moderate_ad_action,         pattern="^moderate_approve:|^moderate_reject:"))
-    # Истории: своя очередь модерации, отдельно от объявлений
-    application.add_handler(CallbackQueryHandler(admin_stories,              pattern="^admin_stories$"))
-    application.add_handler(CallbackQueryHandler(story_moderation_action,    pattern="^story_(ok|no):"))
-    application.add_handler(CallbackQueryHandler(story_moderation_reason,    pattern="^story_rej:"))
-    # История через бота: старт, привязка объявления
-    application.add_handler(CallbackQueryHandler(story_start,               pattern="^story_start$"))
-    application.add_handler(CallbackQueryHandler(story_attach_ad,           pattern="^story_attach_ad:"))
-    application.add_handler(CallbackQueryHandler(story_set_ad,              pattern="^story_setad:"))
     application.add_handler(CallbackQueryHandler(show_moderation_ads,        pattern="^show_moderation_ads$"))
     application.add_handler(CallbackQueryHandler(admin_moderation_next,      pattern="^admin_moderation_next$"))
     application.add_handler(CallbackQueryHandler(admin_payments,             pattern="^admin_payments$"))
@@ -26884,8 +25560,6 @@ def main():
         print(f"{EM_OK} Бот запущен")
         # Запускаем фоновые задачи
         asyncio.create_task(precache_banners())
-        asyncio.create_task(_stories_cleanup_loop())
-        asyncio.create_task(_auctions_loop())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:
