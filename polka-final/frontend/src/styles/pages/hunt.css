@@ -32,7 +32,8 @@
 .chat-examples-label {
   font-size: var(--fs-cap);
   line-height: var(--lh-cap);
-  color: var(--text-tertiary);
+  /* --text-tertiary на --bg даёт 2.95:1 — ниже нормы WCAG AA (4.5:1). */
+  color: var(--text-secondary);
   margin-bottom: var(--space-2);
 }
 .chat-examples {
@@ -85,6 +86,19 @@
 @keyframes chat-dot {
   0%, 60%, 100% { opacity: .25; transform: translateY(0); }
   30%           { opacity: 1;   transform: translateY(-3px); }
+}
+
+/* ── Варианты ответа под вопросом ИИ ─────────────────────────────────────
+   В styles.css стояло `.chat-replies { display: none }` («кнопки убраны»),
+   но разметка вариантов живая: память, АКБ, состояние, пробег, цена. Это
+   был конфликт CSS и JSX — снят в пользу разметки: тап по чипу быстрее,
+   чем набор ответа текстом, а диалог по-прежнему ведёт модель. */
+.chat-replies {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-1) 0 var(--space-2);
 }
 
 /* ═══ 4. ИТОГОВАЯ ПЛАШКА «БУДУ ИСКАТЬ» ════════════════════════════════════
@@ -181,6 +195,10 @@
   font-size: 12.5px;
   line-height: 18px;
   padding: 5px 10px;
+  /* --text-secondary на --surface-2 давал 4.15:1 — ниже нормы WCAG AA
+     для обычного текста (4.5:1). Основной текст на том же фоне — 14.2:1. */
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 /* «Убрать» — компактная иконочная кнопка в цвете опасности вместо крупной
@@ -199,3 +217,74 @@
 /* ═══ 8. СКЕЛЕТОН СПИСКА КРИТЕРИЕВ ═══════════════════════════════════════ */
 .hunt-screen .sk-stack { padding: 0; }
 .hunt-screen .sk-line { height: 64px; border-radius: var(--radius-panel); }
+
+/* ═══ 9. ЧАТ: РАЗМЕРЫ, ОТСТУПЫ И ЦВЕТА ЧЕРЕЗ ТОКЕНЫ ══════════════════════
+   Стартовый экран, пузырь человека, кнопка отправки и активная вкладка
+   были заданы абсолютными значениями, а в тенях остался старый синий
+   #2F6BFF (до смены акцента). Переводим на токены: вид тот же, значения —
+   из одного источника. Селекторы существующие, ничего не переименовано. */
+.chat-hello {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  margin-bottom: var(--space-2);
+}
+.chat-hello-sub {
+  font-size: var(--fs-sub);
+  line-height: var(--lh-sub);
+  margin-bottom: var(--space-6);
+}
+@media (max-width: 360px) {
+  .chat-hello { font-size: var(--fs-h1-s); line-height: var(--lh-h1-s); }
+}
+.chat-bubble.is-me {
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.chat-send {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.chat-tab.is-active {
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent);
+}
+/* Карточки критериев под чатом — те же отступы, радиус и рамка, что у
+   карточек ручного поиска: список «Мои критерии» выглядит одинаково на
+   обеих вкладках. */
+.chat-crit-card {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-panel);
+  border-color: var(--border);
+  gap: var(--space-3);
+}
+.chat-crit-sub { margin-top: var(--space-1); }
+
+/* Кнопки-подсказки в диалоге: размеры и цвета — из системы. Ряд вариантов
+   виден (см. §3 — конфликт `display: none` снят в пользу разметки), а сами
+   кнопки приведены к токенам: один вид чипа на обеих вкладках поиска. */
+.chat-chip {
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: var(--fs-cap);
+  line-height: var(--lh-cap);
+}
+
+/* ═══ 10. «СИНЕЕ ПЯТНО» ПОД ШАПКОЙ РУЧНОГО ПОИСКА ════════════════════════
+   ТЗ 3b: на экране «Мои критерии» под шапкой просвечивало синее пятно.
+   Причина — полупрозрачная при скролле шапка (--bg-glass-strong), сквозь
+   которую видно акцентную плашку вкладок и активные чипы фильтров.
+   Делаем шапку этого экрана плотной: контент под ней больше не «светит».
+   В покое (страница наверху) она по-прежнему прозрачная, как в ТЗ. */
+.hunt-screen .topbar.is-scrolled {
+  background: var(--bg);
+}
+
+/* ═══ 11. ПОДСКАЗКИ: КОНТРАСТ WCAG AA ════════════════════════════════════
+   .hint-note — обычный текст 13px, а --text-tertiary (#8E8E93) на светлом
+   фоне даёт 2.95:1: ниже нормы 4.5:1. На обеих вкладках поиска берём
+   --text-secondary — 4.66:1 на --bg и 5.3:1 на --surface. Правило scoped:
+   подсказки на других экранах этапа не трогаем. */
+.hunt-screen .hint-note,
+.chat-summary .hint-note {
+  color: var(--text-secondary);
+}

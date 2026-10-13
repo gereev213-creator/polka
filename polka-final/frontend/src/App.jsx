@@ -29,6 +29,7 @@ import { ListRow } from './components/ListRow'
 
 import { Icon } from './components/Icon'
 import { IconButton } from './components/IconButton'
+import { Avatar } from './components/Avatar'
 import { TopBar } from './components/TopBar'
 import { BottomNav } from './components/BottomNav'
 
@@ -127,6 +128,38 @@ function shortTime(raw) {
     return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
   }
   return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+}
+
+/* Разделитель дня в переписке: «Сегодня», «Вчера», иначе «11 окт».
+ * Раньше дата стояла в каждом пузыре и повторялась у всех сообщений подряд. */
+function dayLabel(raw) {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const midnight = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+  const days = Math.round((midnight(now) - midnight(d)) / 86400000)
+  if (days === 0) return 'Сегодня'
+  if (days === 1) return 'Вчера'
+  if (d.getFullYear() === now.getFullYear()) return `${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}`
+  return `${d.getDate()}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+}
+
+/* Ключ дня для сравнения соседних сообщений (ISO «2026-10-02T11:20»). */
+const dayKey = (raw) => String(raw || '').slice(0, 10)
+
+/* Время внутри пузыря: только часы и минуты — дата теперь в разделителе. */
+function timeOnly(raw) {
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+/* Имя собеседника: бэкенд иногда отдаёт «0» вместо анонима — тогда
+ * «Пользователь», иначе в списке чатов показывалось имя «0». */
+function chatName(chat) {
+  const raw = String(chat?.user || '').trim()
+  return raw && raw !== '0' ? raw : 'Пользователь'
 }
 
 /* Ссылка на вложение в сообщении. Бэкенд отдаёт file_id + msg_type,
@@ -1060,74 +1093,10 @@ function CriteriaPage() {
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
   // Свежесть — главное: перекуп звонит первым, пока товар не ушёл.
-  // Подсказки под категорию. Появляются, когда человек начал печатать
-  // запрос: набрал «айфон» — видит объёмы памяти, набрал «ботинки» —
-  // размеры. Это то, чем реально фильтруют на Авито, и эти слова есть
-  // в заголовках объявлений, поэтому поиск находит точно.
-  const ATTR_CHIPS = [
-    { words: ['айфон', 'iphone', 'самсунг', 'samsung', 'телефон', 'смартфон', 'xiaomi', 'redmi', 'pixel', 'huawei', 'honor'],
-      items: ['64', '128', '256', '512'] },
-    { words: ['ноутбук', 'macbook', 'макбук', 'lenovo', 'asus', 'acer', 'dell', 'hp', 'msi'],
-      items: ['8', '16', '32', 'SSD', 'Touch Bar'] },
-    { words: ['куртка', 'пуховик', 'кроссовки', 'ботинки', 'сапоги', 'худи', 'платье', 'джинсы', 'футболка', 'пальто'],
-      items: ['36', '37', '38', '39', '40', '41', '42', '43', '44', '45', 'S', 'M', 'L', 'XL'] },
-    { words: ['планшет', 'ipad'], items: ['32', '64', '128', '256'] },
-    { words: ['наушники', 'airpods', 'колонка', 'телевизор'], items: ['Pro', 'Max', '2', '3'] },
-  ]
-
-  const queryWords = query.toLowerCase().split(/\s+/).filter(Boolean)
-  const activeChips = (ATTR_CHIPS.find((g) => g.words.some((w) => queryWords.includes(w))) || {}).items || []
-
-  const toggleChip = (word) => {
-    const parts = query.split(/\s+/).filter(Boolean)
-    if (parts.includes(word)) {
-      setQuery(parts.filter((p) => p !== word).join(' '))
-    } else {
-      setQuery([...parts, word].join(' '))
-    }
-  }
-  // Способ 2: человек пишет словами, ИИ разбирает в фильтры
-  const [aiText, setAiText] = useState('')
-  const [aiBusy, setAiBusy] = useState(false)
-  const [aiNote, setAiNote] = useState('')
-  // Что ИИ разобрал: показываем чипами, чтобы было видно и можно было убрать
-  const [aiParsed, setAiParsed] = useState(null)
-  const [aiFollowUp, setAiFollowUp] = useState('')
   // Какой раздел фильтров раскрыт. Свёрнутые фильтры продолжают работать:
   // их значения хранятся в состоянии, а не в разметке.
   const [openSec, setOpenSec] = useState('')
   const toggleSec = (name) => setOpenSec(openSec === name ? '' : name)
-
-  const runAi = async () => {
-    setAiBusy(true); setAiNote('')
-    try {
-      const d = await api.parseHunt(aiText)
-      if (!d || !d.ok) {
-        setAiNote((d && d.error) || 'Не получилось разобрать')
-        return
-      }
-      if (d.query) setQuery(d.query)
-      if (d.city) setCity(d.city)
-      if (d.min_price) setMinPrice(String(d.min_price))
-      if (d.max_price) setMaxPrice(String(d.max_price))
-      if (d.max_hours) setMaxHours(d.max_hours)
-      if (d.mode) setMode(d.mode)
-      setAiParsed({
-        query: d.query || '',
-        price: (d.min_price || d.max_price)
-          ? `${d.min_price ? 'от ' + d.min_price.toLocaleString('ru-RU') + ' ' : ''}до ${(d.max_price || 0).toLocaleString('ru-RU')} ₽`
-          : '',
-        city: d.city || '',
-        hours: d.max_hours ? `за ${d.max_hours} ч` : '',
-      })
-      setAiFollowUp(String(d.follow_up || '').trim())
-      setAiNote('Распознал запрос')
-    } catch (e) {
-      setAiNote('Ошибка связи с сервером')
-    } finally {
-      setAiBusy(false)
-    }
-  }
 
   const [minPrice, setMinPrice] = useState('')
   const [maxHours, setMaxHours] = useState(0)
@@ -1215,7 +1184,7 @@ function CriteriaPage() {
 
   return (
     <Screen className="hunt-screen">
-      <TopBar left={<IconButton icon="back" to="/" />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="page-title">Поиск лотов</div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
       <div className="chat-tabs is-second">
@@ -1224,89 +1193,6 @@ function CriteriaPage() {
         <button type="button" className="chat-tab"
           onClick={() => { window.location.hash = '#/hunt' }}>ИИ-поиск</button>
         <button type="button" className="chat-tab is-active">Вручную</button>
-      </div>
-
-      {/* Категория: то, чего не хватало ручному поиску */}
-
-      {/* Умный подбор: главный способ задать поиск. Написал словами —
-          ИИ разложил на фильтры, они появились ниже. */}
-      <div className="ai-card mt-12">
-        <div className="ai-hero" onClick={() => document.getElementById('ai-hunt-input')?.focus()}>
-          <div className="ai-hero-icon"><Icon name="sparkles" /></div>
-          <div className="ai-hero-body">
-            <div className="ai-hero-title">Умный подбор</div>
-            <div className="ai-hero-sub">Напишите, что ищете</div>
-          </div>
-          <div className="ai-hero-arrow">›</div>
-        </div>
-        <textarea id="ai-hunt-input" className="input mt-12" rows={2} value={aiText}
-          onChange={(e) => setAiText(e.target.value)}
-          placeholder="Например: айфон 15 про на 256, до 55 тысяч, Москва" />
-        {aiNote ? (
-          <div className="ai-result mt-12">
-            <span className="ai-result-mark">✓</span>
-            <span>{aiNote}</span>
-          </div>
-        ) : null}
-        {aiParsed ? (
-          <>
-            <div className="field-label-row">Распознанные фильтры</div>
-            <div className="auction-sort">
-              {aiParsed.query ? (
-                <button type="button" className="is-active"
-                  onClick={() => { setQuery(''); setAiParsed({ ...aiParsed, query: '' }) }}>
-                  {aiParsed.query} ×
-                </button>
-              ) : null}
-              {aiParsed.price ? (
-                <button type="button" className="is-active"
-                  onClick={() => { setMinPrice(''); setMaxPrice(''); setAiParsed({ ...aiParsed, price: '' }) }}>
-                  {aiParsed.price} ×
-                </button>
-              ) : null}
-              {aiParsed.city ? (
-                <button type="button" className="is-active"
-                  onClick={() => { setCity(''); setAiParsed({ ...aiParsed, city: '' }) }}>
-                  {aiParsed.city} ×
-                </button>
-              ) : null}
-              {aiParsed.hours ? (
-                <button type="button" className="is-active"
-                  onClick={() => { setMaxHours(0); setAiParsed({ ...aiParsed, hours: '' }) }}>
-                  {aiParsed.hours} ×
-                </button>
-              ) : null}
-            </div>
-            {aiFollowUp ? (
-              <div className="sub-copy">
-                ИИ: {aiFollowUp} Желаете что-то добавить? Допишите в поле выше
-                и нажмите «Разобрать на фильтры» ещё раз.
-              </div>
-            ) : null}
-          </>
-        ) : null}
-        <button type="button" className="cta-primary is-wide mt-12"
-          disabled={aiBusy || !aiText.trim()} onClick={runAi}>
-          {aiBusy ? 'Анализирую…' : 'Разобрать на фильтры'}
-        </button>
-        {/* Пока идёт разбор — понятный экран вместо «ничего не происходит» */}
-        {aiBusy ? (
-          <div className="ai-overlay">
-            <div className="ai-modal">
-              <div className="ai-modal-icon"><Icon name="sparkles" /></div>
-              <div className="ai-modal-title">AI анализирует ваш запрос</div>
-              <div className="ai-modal-sub">Разложу на фильтры</div>
-              {aiText ? (
-                <div className="ai-result">
-                  <span>«{aiText}»</span>
-                </div>
-              ) : null}
-              <button type="button" className="cta-primary is-wide mt-12" disabled>
-                <span className="ai-spinner" />Анализируем…
-              </button>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <p className="sub-copy">
@@ -1388,19 +1274,6 @@ function CriteriaPage() {
               : (collector.server_mode
                   ? `Сбор идёт, но последний выход был ${Math.round(collector.minutes / 60)} ч назад. Похоже, Авито ограничил сбор — попробую позже сам.`
                   : `Сборщик последний раз выходил ${Math.round(collector.minutes / 60)} ч назад. Проверьте, запущен ли он.`)}
-          </span>
-        </div>
-      ) : collector && !collector.alive ? (
-        <div className="collector-ok">
-          <Icon name="clock" />
-          <span>Собираем первые объявления — это займёт несколько минут</span>
-        </div>
-      ) : collector && collector.alive ? (
-        <div className="collector-ok">
-          <Icon name="check" />
-          <span>
-            Сборщик на связи{collector.minutes === 0 ? ' только что' : ` ${collector.minutes} мин назад`}
-            {' '}— ждём подходящие объявления
           </span>
         </div>
       ) : null}
@@ -1969,10 +1842,13 @@ function FeedBanner() {
  * Живёт в профиле; caption нужен, только если рядом нет имени пользователя. */
 function SellerStats({ profile, caption = '' }) {
   if (!profile) return null
+  // Три карточки одного вида: раньше они были синей, тёмной и белой без
+  // причины. Иконка «Объявления» — ярлык вместо закладки: закладка путала
+  // со следующим пунктом меню «Избранное».
   const cards = [
-    { key: 'ads', label: 'Объявления', value: profile.active_ads || 0, icon: 'bookmark', tone: 'is-accent', to: '/my' },
-    { key: 'mod', label: 'На модерации', value: profile.moderation_ads || 0, icon: 'clock', tone: 'is-dark', to: '/my' },
-    { key: 'fav', label: 'В избранном', value: profile.favorites || 0, icon: 'heart', tone: '', to: '/favorites' },
+    { key: 'ads', label: 'Объявления', value: profile.active_ads || 0, icon: 'tag', to: '/my' },
+    { key: 'mod', label: 'На модерации', value: profile.moderation_ads || 0, icon: 'clock', to: '/my' },
+    { key: 'fav', label: 'В избранном', value: profile.favorites || 0, icon: 'heart', to: '/favorites' },
   ]
   return (
     <>
@@ -1982,7 +1858,7 @@ function SellerStats({ profile, caption = '' }) {
       </div>
       <div className="stats-row">
         {cards.map((c) => (
-          <Link key={c.key} to={c.to} className={`stat-card ${c.tone}`.trim()}>
+          <Link key={c.key} to={c.to} className="stat-card">
             <span className="stat-card-label">{c.label}</span>
             <span className="stat-card-bottom">
               <span className="stat-card-value">{c.value}</span>
@@ -3368,18 +3244,18 @@ function MyAdsPage() {
         <>
           <div className="tab-row">
             {tabs.map((s) => (
-              <button key={s} className={`chip ${activeTab === s ? 'is-active' : ''}`} onClick={() => setActiveTab(s)}>
+              <Chip key={s} active={activeTab === s} onClick={() => setActiveTab(s)}>
                 {STATUS_LABELS[s] || s}
-              </button>
+              </Chip>
             ))}
           </div>
           {visible.length === 0 ? <EmptyBlock text="В этом разделе пока пусто." /> : null}
           <div className="list-stack mt-14">
             {visible.map((item) => (
-              <div key={item.id} className="favorite-row glass-card">
+              <div key={item.id} className="favorite-row glass-card myad-card">
                 <div className="result-thumb"><MediaPlaceholder imageUrl={firstPhoto(item)} /></div>
-                <div>
-                  <div className="product-price result-price">{priceText(item)}</div>
+                <div className="myad-body">
+                  <div className="myad-price">{priceText(item)}</div>
                   <div className="row-title">{item.title}</div>
                   <div className="product-city">{item.views || 0} просмотров · {item.favorites_count || 0} в избранном</div>
                   <div className="tool-row">
@@ -3431,17 +3307,31 @@ function ChatsPage() {
       {error ? <ErrorBlock text={error} onRetry={load} /> : null}
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Диалогов пока нет. Напишите продавцу из карточки объявления." /> : null}
       <div className="list-stack mt-14">
-        {items.map((chat) => (
-          <Link to={`/chat/${chat.id}`} key={chat.id} className="chat-row glass-card">
-            <div className="avatar" />
-            <div className="chat-meta">
-              <strong>{chat.user}</strong>
-              <span className="chat-ad">{(chat.ad_title || 'Объявление').slice(0, 42)}</span>
-              <span className="chat-last">{chat.last_text || 'Сообщений пока нет'}</span>
-            </div>
-            <div className="product-city">{shortTime(chat.time)}</div>
-          </Link>
-        ))}
+        {/* Строка диалога: аватар с инициалами (пустые круги были одинаковые),
+            имя, объявление, последнее сообщение, время и непрочитанные. */}
+        {items.map((chat) => {
+          const name = chatName(chat)
+          return (
+            <Link to={`/chat/${chat.id}`} key={chat.id} className="chat-row glass-card">
+              <Avatar name={name} size="lg" />
+              <div className="chat-meta">
+                <div className="chat-meta-top">
+                  <strong>{name}</strong>
+                  <span className="chat-time">{shortTime(chat.time)}</span>
+                </div>
+                <span className="chat-ad">{(chat.ad_title || 'Объявление').slice(0, 42)}</span>
+                <div className="chat-meta-bottom">
+                  <span className="chat-last">{chat.last_text || 'Сообщений пока нет'}</span>
+                  {chat.unread ? (
+                    <span className="chat-unread" aria-label={`Непрочитанных: ${chat.unread}`}>
+                      {chat.unread}
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+            </Link>
+          )
+        })}
       </div>
     </Screen>
   )
@@ -3653,6 +3543,10 @@ function ChatPage() {
     if (rec && rec.state !== 'inactive') rec.stop()
   }, [])
 
+  // Пустые сообщения (ни текста, ни вложения) не рисуем: в переписке
+  // появлялись пузыри, в которых была только дата.
+  const visibleMessages = messages.filter((m) => (m.text && String(m.text).trim()) || chatMediaUrl(m))
+
   return (
     <Screen padded={false}>
       <div className="chat-screen">
@@ -3661,7 +3555,7 @@ function ChatPage() {
             left={
               <div className="chat-header-left">
                 <IconButton icon="back" to="/chats" />
-                <div className="avatar" />
+                <Avatar name={chatInfo.user || 'Диалог'} />
                 <div>
                   <strong>{chatInfo.user || 'Диалог'}</strong>
                   <div className="product-city">{chatInfo.ad_title}</div>
@@ -3673,11 +3567,15 @@ function ChatPage() {
         {loading ? <div className="padded-inline"><LoadingBlock /></div> : null}
         {error ? <div className="padded-inline"><ErrorBlock text={error} /></div> : null}
         <div className="chat-messages padded-inline" onClick={closeMenu}>
-          {messages.map((message) => {
+          {visibleMessages.map((message, index) => {
             const isMine = viewerId != null && message.sender_id === viewerId
             const canEdit = isMine && !message.is_read
+            // Разделитель дня появляется один раз перед первым сообщением дня
+            const showDay = dayKey(message.created_at) !== dayKey(visibleMessages[index - 1]?.created_at)
             return (
-              <div key={message.id} className={`bubble-wrap ${side(message)}`}>
+              <React.Fragment key={message.id}>
+                {showDay ? <div className="chat-day">{dayLabel(message.created_at)}</div> : null}
+                <div className={`bubble-wrap ${side(message)}`}>
                 <div
                   className={`bubble ${side(message)} ${isMediaMessage(message) ? 'bubble-media' : ''}`}
                   onContextMenu={(e) => { e.preventDefault(); openMenu(message.id) }}
@@ -3708,7 +3606,7 @@ function ChatPage() {
                     )
                   ) : null}
                   {message.text ? <span>{message.text}</span> : null}
-                  <span className="bubble-time">{shortTime(message.created_at)}</span>
+                  <span className="bubble-time">{timeOnly(message.created_at)}</span>
                 </div>
                 {menuFor === message.id ? (
                   <div className="bubble-menu">
@@ -3721,7 +3619,8 @@ function ChatPage() {
                     ) : null}
                   </div>
                 ) : null}
-              </div>
+                </div>
+              </React.Fragment>
             )
           })}
           <div ref={bottomRef} />
@@ -3833,8 +3732,10 @@ function ProfilePage() {
 
   return (
     <Screen>
+      {/* Логотип переехал в шапку: в .profile-top он стоял слева, а аватар
+          по центру — два разных выравнивания на одном экране. */}
+      <TopBar left={<Logo />} />
       <div className="profile-top">
-        <Logo />
         {avatarUrl ? (
           <img className="profile-avatar-img" src={avatarUrl} alt="Аватар" referrerPolicy="no-referrer" />
         ) : (
@@ -3849,11 +3750,25 @@ function ProfilePage() {
           и здесь больше нет дублирующей строки с теми же цифрами. */}
       <SellerStats profile={profile} />
       {!profile ? <ErrorBlock text={`Профиль недоступен (initData: ${getInitData()?.length || 0} симв.). Откройте Mini App кнопкой бота, не прямой ссылкой.`} /> : null}
-      <div className="list-stack mt-14">
-        <Link to="/my" className="setting-row glass-card"><span>Мои объявления</span></Link>
-        <Link to="/favorites" className="setting-row glass-card"><span>Избранное</span><Icon name="bookmark" /></Link>
-        <Link to="/chats" className="setting-row glass-card"><span>Сообщения</span><Icon name="chat" /></Link>
-        <Link to="/create" className="setting-row glass-card"><span>Разместить объявление</span><Icon name="plus" /></Link>
+      <div className="list-stack mt-14 menu-list">
+        {/* Единый набор иконок слева и шеврон справа: раньше у «Моих
+            объявлений» иконки не было вовсе, а остальные стояли справа. */}
+        <Link to="/my" className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="tag" /><span>Мои объявления</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </Link>
+        <Link to="/favorites" className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="bookmark" /><span>Избранное</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </Link>
+        <Link to="/chats" className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="chat" /><span>Сообщения</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </Link>
+        <Link to="/create" className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="plus" /><span>Разместить объявление</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </Link>
       </div>
     </Screen>
   )

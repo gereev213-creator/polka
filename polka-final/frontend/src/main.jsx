@@ -15,6 +15,10 @@ import './styles/pages/listing.css'
 // ЭТАП 3b: ИИ-поиск (/hunt) и «Мои критерии» (/hunt/manual). Последним:
 // выравнивает поля обеих вкладок и переопределяет legacy-правила чата.
 import './styles/pages/hunt.css'
+// ЭТАП 4: сообщения (/chats), переписка (/chat/:id), профиль, мои объявления
+// и онбординг. Строго последними: перекрывают legacy-правила чата и карточек.
+import './styles/pages/chat.css'
+import './styles/pages/account.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

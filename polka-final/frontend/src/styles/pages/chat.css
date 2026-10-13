@@ -1,0 +1,130 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — ЭТАП 4: сообщения (/chats) и переписка (/chat/:id).
+   Подключается ПОСЛЕ styles/pages/hunt.css, поэтому переопределяет
+   legacy-правила styles.css порядком, а не !important — своих !important
+   в файле нет. Значения — через токены styles/tokens.css.
+   Логику чата (polling 3 с, отправка, вложения, скролл) не трогаем.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ 1. СПИСОК ДИАЛОГОВ /chats ═══════════════════════════════════════════ */
+/* Аватар с инициалами вместо пустых серых кругов; время — строкой с именем,
+   непрочитанные — счётчиком справа от последнего сообщения. */
+.chat-row { padding: var(--space-3); gap: var(--space-3); align-items: center; }
+.chat-row .avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 16px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-2));
+  color: var(--accent);
+}
+.chat-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.chat-meta-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.chat-meta-top strong {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-meta .chat-time {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+.chat-meta-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+/* Селектор с классом родителя: иначе `цвет` перебивает общее
+   правило `.chat-meta span` (специфичность 0,1,1). */
+.chat-meta .chat-unread {
+  flex: 0 0 auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ═══ 2. ПЕРЕПИСКА /chat/:id ═════════════════════════════════════════════ */
+/* Разделитель дня: дата была в каждом пузыре и повторялась подряд. */
+.chat-day {
+  align-self: center;
+  margin: var(--space-2) 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Пузырь: одна геометрия у своих и чужих, ширина до 78% (было 75%),
+   время — мелкой строкой внутри, но читаемым цветом. */
+.bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: var(--radius-panel);
+  font-size: 15px;
+  line-height: 1.4;
+  margin-bottom: var(--space-1);
+}
+.bubble.in {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-bottom-left-radius: 6px;
+}
+.bubble.out {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.bubble-media { padding: 4px; }
+.bubble-time {
+  margin-top: var(--space-1);
+  font-size: 11px;
+  opacity: 1;
+  color: var(--text-secondary);
+}
+.bubble.out .bubble-time { color: rgba(255, 255, 255, .85); }
+
+/* Поле ввода: кнопки одного веса и не меньше 44 px (было 36×36). */
+.chat-input-wrap .chat-input {
+  margin: 0 var(--page-pad);
+  padding: 6px;
+  gap: var(--space-2);
+  border-radius: var(--radius-pill);
+}
+.attach-btn,
+.mic-btn,
+.send-btn {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+.attach-btn .icon-svg { width: 20px; height: 20px; }
+.mic-btn .icon-svg { width: 19px; height: 19px; }
+.send-btn .icon-svg { width: 20px; height: 20px; }
+.chat-field {
+  padding: 12px 16px;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+}
+.chat-media-busy { margin: 0 var(--page-pad); }

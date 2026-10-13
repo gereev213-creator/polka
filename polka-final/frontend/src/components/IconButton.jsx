@@ -5,8 +5,10 @@ export function IconButton({ icon, to, active = false, onClick, label = '', ...r
   const className = `icon-btn ${active ? 'is-active' : ''}`.trim()
 
   if (to) {
+    // label уже есть в props, но в ветке ссылки он не доходил до разметки:
+    // иконочная кнопка «назад» оставалась без доступного имени (ТЗ, §7).
     return (
-      <Link to={to} className={className}>
+      <Link to={to} className={className} aria-label={label || undefined}>
         <Icon name={icon} />
       </Link>
     )
