@@ -558,7 +558,6 @@ async def send_banner(target, banner_key: str, text: str, reply_markup=None, par
     await target.reply_text(text, **kwargs)
 
 
-
 # Настройка логирования
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -631,7 +630,6 @@ def get_moscow_time():
 # ВАЖНО: только ЗДЕСЬ, после определения get_moscow_time. Раньше эта строка
 # стояла выше и роняла приложение с NameError при запуске.
 _PROCESS_STARTED_AT = get_moscow_time().isoformat()
-
 
 
 def _safe_isoparse(value: str):
@@ -2263,8 +2261,6 @@ async def create_crypto_invoice(
 DEEPAI_API_KEY = ""   # не используется
 
 
-
-
 # Уникальные тексты для категорий
 CATEGORY_EXAMPLES = {
     # Техника
@@ -2898,7 +2894,6 @@ class Database:
                 FOREIGN KEY(ad_id) REFERENCES ads(id)
             )
         ''')
-
 
 
         # ТАБЛИЦА: Дневная аналитика просмотров объявлений
@@ -4962,7 +4957,6 @@ class Database:
         ''', (ad_id, field, old_value, new_value, get_moscow_time().isoformat()))
         self.conn.commit()
         return update_rowcount > 0, old_value
-
 
 
     # ========== МЕТОДЫ ДЛЯ АНАЛИТИКИ ПРОСМОТРОВ ==========
@@ -8701,7 +8695,6 @@ def search_by_photo_hash(photo_hash: str, threshold: int = 20, limit: int = 30,
     return candidates[:limit]
 
 
-
 async def search_by_photo_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Пользователь нажал 'Поиск по фото' — просим прислать фото."""
     query = update.callback_query
@@ -9075,7 +9068,6 @@ async def handle_search_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     )
     context.user_data.pop("awaiting_search_photo", None)
     return States.SEARCH_QUERY
-
 
 
 async def search_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -11666,7 +11658,6 @@ async def edit_photo_cancel_handler(update: Update, context: ContextTypes.DEFAUL
         [InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="cancel")],
     ]
     await safe_edit_message(query, text, kbd, parse_mode=ParseMode.HTML)
-
 
 
 async def _enhance_with_hf(image_bytes: bytes) -> bytes | None:
@@ -17372,6 +17363,29 @@ def ensure_hunt_matches():
         logger.error(f"ensure_hunt_matches: {e}")
 
 
+def ensure_desc_columns():
+    """Состояние описания у объявления: получено, ждём, не вышло.
+
+    Описания собирает ТОЛЬКО сборщик (домашний IP): сервер ходит на Авито
+    с адреса дата-центра, и его блокируют. Здесь храним, что по описанию
+    уже сделано, чтобы не просить одно и то же дважды.
+    """
+    cursor = db.conn.cursor()
+    for sql in (
+        "ALTER TABLE ads ADD COLUMN desc_state TEXT DEFAULT ''",
+        "ALTER TABLE ads ADD COLUMN desc_attempts INTEGER DEFAULT 0",
+        "ALTER TABLE ads ADD COLUMN desc_checked_at TEXT",
+    ):
+        try:
+            cursor.execute(sql)
+        except Exception:
+            pass  # колонка уже есть — это нормально (миграция идемпотентна)
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+
+
 def ensure_verdict_column():
     """Колонка для оценки ИИ: оригинал, реплика или нужно проверить."""
     try:
@@ -18019,6 +18033,13 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             hunt_matches_recompute(ad_ids=stats.get('ids') or [])
         except Exception as e:
             logger.error(f"hunt_matches ingest: {e}")
+        # Этап A3: просим сборщика открыть карточки, где описание меняет
+        # решение. Сервер этого сделать не может — его IP Авито блокирует.
+        try:
+            stats['need_details'] = hunt_need_details(stats.get('ids') or [])
+        except Exception as e:
+            logger.warning(f"need_details: {e}")
+            stats['need_details'] = []
     return stats
 
 
@@ -18611,7 +18632,6 @@ def query_word_variants(word: str) -> tuple:
     return tuple(dict.fromkeys((key,) + tuple(variants)))
 
 
-
 # Русские написания моделей. Продавец может написать «Айфон 15 Про» —
 # латинского «pro» в заголовке нет, и объявление терялось. Добавляем
 # русские варианты к тем, что уже умеет query_word_variants.
@@ -18792,7 +18812,6 @@ def _requirement_excludes(requirements: str) -> list:
     if any(w in text for w in ('магазин', 'не магазин', 'частник', 'с рук', 'не компания')):
         out += list(HUNT_SHOP_MARKERS)
     return list(dict.fromkeys(out))
-
 
 
 def _apply_criterion_filters(where: List, params: List, crit: Dict, prefix: str = ""):
@@ -19344,6 +19363,65 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
     return written
 
 
+def hunt_need_details(ad_ids: Optional[List[int]] = None, limit: int = 0) -> List[Dict]:
+    """Какие карточки сборщик должен открыть, чтобы принести описание.
+
+    Просим только тех, у кого описание РЕАЛЬНО влияет на отбор (в критерии
+    есть требования словами или условие по состоянию), только новые, и не
+    чаще HUNT_DESC_RETRY_MIN минут, максимум HUNT_DESC_MAX_TRIES попытки.
+    Сервер сам за описанием не ходит: его IP Авито блокирует.
+    """
+    if not limit:
+        limit = HUNT_DESC_PER_PASS
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM hunt_criteria WHERE active=1")
+        crits = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"need_details criteria: {e}")
+        return []
+    crits = [c for c in crits if _hunt_needs_description(c)]
+    if not crits:
+        return []
+    retry_before = (get_moscow_time() - timedelta(minutes=HUNT_DESC_RETRY_MIN)).isoformat()
+    try:
+        if ad_ids:
+            ids = [int(i) for i in ad_ids][:500]
+            marks = ','.join('?' for _ in ids)
+            cursor.execute(
+                f"SELECT * FROM ads WHERE id IN ({marks}) AND COALESCE(description,'')='' "
+                f"AND COALESCE(desc_attempts,0) < ? "
+                f"AND (desc_checked_at IS NULL OR desc_checked_at < ?) "
+                f"ORDER BY id DESC", (*ids, HUNT_DESC_MAX_TRIES, retry_before))
+        else:
+            cursor.execute(
+                "SELECT * FROM ads WHERE status='active' AND source_url LIKE 'http%' "
+                "AND COALESCE(description,'')='' AND COALESCE(desc_attempts,0) < ? "
+                "AND (desc_checked_at IS NULL OR desc_checked_at < ?) "
+                "ORDER BY id DESC LIMIT ?",
+                (HUNT_DESC_MAX_TRIES, retry_before, max(limit * 4, limit)))
+        ads = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"need_details ads: {e}")
+        return []
+    out: List[Dict] = []
+    seen = set()
+    for ad in ads:
+        ext = str(ad.get('external_id') or '')
+        url = str(ad.get('source_url') or '')
+        if not url.startswith('http') or ext in seen:
+            continue
+        for crit in crits:
+            decision = evaluate_ad(ad, crit, require_description=False)
+            if decision.ok and decision.needs_description:
+                out.append({'external_id': ext, 'url': url, 'id': int(ad['id'])})
+                seen.add(ext)
+                break
+        if len(out) >= limit:
+            break
+    return out
+
+
 def hunt_match_mark_sent(user_id: int, ad_id: int, delivery: str = 'chat') -> None:
     """Помечает запись отправленной. Вызывается там же, где уходит сообщение,
     поэтому лента и чат не расходятся (в этапе C это делает воркер)."""
@@ -19473,8 +19551,12 @@ async def _send_html_safe(send, **kwargs) -> bool:
 
 
 def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
-                     verdict: str = '') -> str:
-    """Текст сообщения о находке. Все данные объявления — через _hunt_escape."""
+                     verdict: str = '', desc_checked: Optional[bool] = None) -> str:
+    """Текст сообщения о находке. Все данные объявления — через _hunt_escape.
+
+    desc_checked=False — критерий опирается на описание, а описания нет:
+    честно пишем «не проверено», а не делаем вид, что проверили (этап A7).
+    """
     lines = [
         ("🔥 <b>Нашёл дешевле обычного</b>" if diff
          else "🔎 <b>Подходит под ваш запрос</b>"),
@@ -19488,6 +19570,9 @@ def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
         lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
     lines.append("")
     lines.append(f"{_hunt_escape(ad.get('city') or '')} · опубликовано {fresh}")
+    if desc_checked is False:
+        lines.append("")
+        lines.append("⚠️ описание не проверено — смотрите фото и карточку")
     if verdict:
         lines.insert(1, f"<i>{_hunt_escape(verdict)}</i>")
         lines.insert(2, "")
@@ -19586,35 +19671,12 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
 # делает скрипт — он сверяет все объявления с критерием бесплатно и без
 # лимитов. ИИ нужен только для того, чего нет в заголовке (АКБ, состояние
 # на странице). Включается одной переменной, если понадобится.
+# Этап A: сколько карточек за проход просит сборщик, как часто повторяем
+# неудачную попытку и сколько раз пробуем вообще
+HUNT_DESC_PER_PASS = int(os.environ.get('HUNT_DESC_PER_PASS', '25'))
+HUNT_DESC_RETRY_MIN = int(os.environ.get('HUNT_DESC_RETRY_MIN', '30'))
+HUNT_DESC_MAX_TRIES = int(os.environ.get('HUNT_DESC_MAX_TRIES', '3'))
 HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
-# Загрузка описания со страницы объявления. По умолчанию ВЫКЛЮЧЕНА:
-# Авито отдаёт 439, страницы по 2.5 МБ уходят впустую, а лимит запросов
-# тратится — из-за этого вставал весь сбор. Включать осознанно.
-# Описания грузим, но ЖЁСТКО ограниченно: не больше 5 в час.
-# Прошлая попытка грузила 5 за проход (каждые 5 минут) — это 150 МБ в час,
-# Авито ответил 439 и встал весь сбор. Поэтому счётчик в настройках.
-DESC_FETCH_PER_HOUR = int(os.environ.get('HUNT_DESC_PER_HOUR', '5'))
-
-
-def _desc_budget_ok() -> bool:
-    """Можно ли сейчас загрузить ещё одно описание."""
-    try:
-        now = int(_time.time())
-        window = int(_setting_get('desc_window', '0') or 0)
-        used = int(_setting_get('desc_used', '0') or 0)
-        if now - window >= 3600:
-            _setting_set('desc_window', str(now))
-            _setting_set('desc_used', '0')
-            return True
-        if used < DESC_FETCH_PER_HOUR:
-            _setting_set('desc_used', str(used + 1))
-            return True
-        return False
-    except Exception as e:
-        # Ошибку трактуем как ЗАПРЕТ, а не как разрешение: если счётчик
-        # недоступен, лучше не грузить описание вовсе, чем уйти в бан Авито.
-        logger.warning(f"desc budget: {e}")
-        return False
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 
 
@@ -19714,75 +19776,13 @@ def _parse_seller(html: str) -> Dict:
     return out
 
 
-async def fetch_ad_description(ad: Dict, out: Dict = None) -> str:
-    """Забирает описание со страницы объявления.
-
-    Заголовок говорит мало: «Timberland 43». А в описании — «копия», «носил
-    год», «коробка, чек» — то, по чему перекуп и решает. Открываем страницу
-    только для кандидатов, прошедших фильтры, и не чаще лимита.
-    """
-    url = str(ad.get('source_url') or '')
-    if not url.startswith('http'):
-        return ''
-    html = ''
-    try:
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-        if path not in sys.path:
-            sys.path.insert(0, path)
-        import collect as collector
-        html = await asyncio.to_thread(collector.fetch, url)
-    except Exception as e:
-        logger.warning(f"fetch description: {str(e)[:100]}")
-        return ''
-    if not html:
-        return ''
-    text = ''
-    # 1. JSON-LD: на странице объявления там лежит полный текст описания
-    try:
-        m = re.search(r'"description"\s*:\s*"(.{20,4000}?)"\s*[,}]', html, re.S)
-        if m:
-            text = m.group(1)
-    except Exception:
-        text = ''
-    # 2. Запасной путь — блок описания по разметке Авито
-    if not text:
-        try:
-            m = re.search(r'item-description[^>]*>(.{20,4000}?)</div>', html, re.S)
-            if m:
-                text = m.group(1)
-        except Exception:
-            text = ''
-    if not text:
-        return ''
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = (text.replace('\\n', ' ').replace('\\"', '"')
-                .replace('\\u002F', '/').replace('\\u003C', '<'))
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text[:600]
-
-
 async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
     """Возвращает строку-вердикт или пустую строку. Никогда не мешает отправке."""
     if not (LLM_API_KEY or GROQ_API_KEY):
         return ''
-    # Описание сильно повышает точность: в заголовке «Timberland 43»,
-    # а в описании — «копия» или «коробка, чек». Тянем один раз и сохраняем.
-    try:
-        if (not str(ad.get('description') or '').strip()
-                and ad.get('source_url')
-                and _desc_budget_ok()):
-            desc = await fetch_ad_description(ad)
-            if desc:
-                ad = dict(ad)
-                ad['description'] = desc
-                try:
-                    db.conn.execute("UPDATE ads SET description=? WHERE id=?",
-                                    (desc, int(ad['id'])))
-                    db.conn.commit()
-                except Exception as _de:
-                    logger.warning(f"description save: {_de}")
-    except Exception as _fe:
-        logger.warning(f"description step: {_fe}")
+    # Описание берём из базы: его приносит СБОРЩИК с домашнего IP (этап A6).
+    # Сервер за страницами не ходит — Авито блокирует адреса дата-центров,
+    # и раньше каждая попытка обходилась в 4–5 лишних запросов.
 
     try:
         raw = await _llm_completion(
@@ -19899,45 +19899,15 @@ async def notify_hunt_matches(ad_ids: List[int]):
             elif not any_mode:
                 continue
             text = _hunt_match_text(ad, fresh, median, diff)
-            # Описание со страницы нужно СКРИПТУ, а не ИИ: состояние, цвет,
-            # «требуется ремонт» написаны в тексте объявления, а не в заголовке.
-            # Грузим не больше 5 в час — иначе Авито отвечает 439 и встаёт сбор.
-            # Сначала — отправка. Находка, прошедшая фильтр, уходит в чат
-            # СРАЗУ: скорость и есть ценность сервиса. Описание грузим ей
-            # первым делом, вперёд очереди, и БЕЗ общего лимита: подходящих
-            # объявлений в час единицы, лимит для них не нужен. Очередь
-            # (для остальных) лимит соблюдает — она фоновая.
-            if (not str(ad.get('description') or '').strip()
-                    and ad.get('source_url')):
-                _sinfo: Dict = {}
-                _desc = await fetch_ad_description(ad, _sinfo)
-                if _desc:
-                    try:
-                        db.conn.execute(
-                            "UPDATE ads SET description=?, seller_type=?, seller_name=?, "
-                            "seller_ads=? WHERE id=?",
-                            (_desc, _sinfo.get('seller_type', ''),
-                             _sinfo.get('seller_name', ''), int(_sinfo.get('seller_ads') or 0),
-                             int(ad['id'])))
-                        db.conn.commit()
-                    except Exception as _de:
-                        logger.warning(f"desc save: {_de}")
-                    ad = dict(ad)
-                    ad['description'] = _desc
-                    ad['seller_type'] = _sinfo.get('seller_type', '')
-                    ad['seller_name'] = _sinfo.get('seller_name', '')
-                    # ПЕРЕПРОВЕРКА ПОЛНЫМ СОСТАВОМ. До этой строки отбор шёл
-                    # по одному заголовку — и реплики с магазинами проходили
-                    # именно поэтому. Теперь есть описание и данные продавца,
-                    # и объявление проверяется заново, уже по-настоящему.
-                    if match_findings_for_user(crit, ad) is None:
-                        logger.info(
-                            f"Отсеяно по описанию/продавцу: {str(ad.get('title'))[:50]}")
-                        continue
-                    # Если описание противоречит критерию — не отправляем
-                    if not _condition_ok(crit.get('condition'), _desc):
-                        logger.info(f"Отсеяно по описанию: {str(ad.get('title'))[:50]}")
-                        continue
+            # Описание со страницы сервер НЕ грузит (этап A6): он ходит на
+            # Авито с адреса дата-центра, его блокируют, и каждая попытка —
+            # это 4–5 запросов впустую. Описания приносит сборщик с домашнего
+            # IP через /api/ingest/details, после чего решения пересчитываются
+            # (hunt_matches). Здесь только проверяем, что уже есть: если
+            # критерий опирается на описание, а описания нет — объявление
+            # уходит с пометкой «описание не проверено» (этап A7).
+            if _hunt_needs_description(crit) and not str(ad.get('description') or '').strip():
+                text = _hunt_match_text(ad, fresh, median, diff, desc_checked=False)
 
             # Вердикт ИИ — перед текстом, но не вместо него.
             # Если модель недоступна, сообщение уходит как раньше.
@@ -20037,6 +20007,101 @@ def mark_listing_state(source: str, external_id: str, state: str) -> Optional[Di
     ad['listing_state'] = state
     ad['sold_after_hours'] = hours
     return ad
+
+
+async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/ingest/details — сборщик принёс описания и данные продавца.
+
+    Тело: {"source": "avito", "items": [
+        {"external_id": "...", "description": "...", "seller_type": "private",
+         "seller_name": "Ирина", "seller_ads": 4, "state": "ok"|"failed"}]}
+
+    Для каждого объявления: сохраняем описание и продавца, помечаем
+    desc_state и пересчитываем решения (evaluate_ad уже с описанием).
+    Неудачу помечаем failed и повторяем не раньше чем через
+    HUNT_DESC_RETRY_MIN минут, максимум HUNT_DESC_MAX_TRIES раз.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = request.headers.get('X-Ingest-Token', '') or request.query.get('token', '')
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    source = str((body or {}).get('source') or 'other').lower()
+    items = (body or {}).get('items') or []
+    if not isinstance(items, list):
+        return _miniapp_err('bad_items', 400)
+    cursor = db.conn.cursor()
+    now = get_moscow_time().isoformat()
+    updated, failed, touched = 0, 0, []
+    for raw in items[:100]:
+        if not isinstance(raw, dict):
+            continue
+        ext = str(raw.get('external_id') or '').strip()
+        if not ext:
+            continue
+        state = str(raw.get('state') or 'ok').lower()
+        try:
+            cursor.execute("SELECT id FROM ads WHERE source=? AND external_id=? "
+                           "ORDER BY id DESC LIMIT 1", (source, ext))
+            row = cursor.fetchone()
+            if not row:
+                continue
+            ad_id = int(row['id'])
+            description = str(raw.get('description') or '').strip()[:2000]
+            if state == 'failed' or len(description) < 20:
+                cursor.execute("UPDATE ads SET desc_state='failed', "
+                               "desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
+                               "WHERE id=?", (now, ad_id))
+                try:
+                    cursor.execute("UPDATE hunt_matches SET desc_state='failed', updated_at=? "
+                                   "WHERE ad_id=? AND desc_state='pending'", (now, ad_id))
+                except Exception:
+                    pass
+                failed += 1
+                continue
+            cursor.execute(
+                "UPDATE ads SET description=?, seller_type=?, seller_name=?, seller_ads=?, "
+                "desc_state='ok', desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
+                "WHERE id=?",
+                (description, str(raw.get('seller_type') or '')[:20],
+                 str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
+                 now, ad_id))
+            updated += 1
+            touched.append(ad_id)
+        except Exception as e:
+            logger.warning(f"ingest details: {e}")
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    _touch_collector(source)
+    ready_ids: List[int] = []
+    if touched:
+        try:
+            recompute_criterion_medians()
+            hunt_matches_recompute(ad_ids=touched)
+            # Готовые к отправке по этим объявлениям — тем же путём, что и
+            # обычная рассылка: одно сообщение на находку
+            cur2 = db.conn.cursor()
+            marks = ','.join('?' for _ in touched)
+            cur2.execute(f"SELECT ad_id FROM hunt_matches WHERE ad_id IN ({marks}) "
+                         f"AND status='ready' ORDER BY discount DESC LIMIT 30", touched)
+            ready_ids = [int(r['ad_id']) for r in cur2.fetchall()]
+        except Exception as e:
+            logger.warning(f"details recompute: {e}")
+    if ready_ids:
+        try:
+            asyncio.create_task(notify_hunt_matches(ready_ids))
+        except Exception as e:
+            logger.warning(f"details notify: {e}")
+    logger.info(f"ingest details {source}: описаний {updated}, неудач {failed}")
+    return _miniapp_json({'ok': True, 'updated': updated, 'failed': failed,
+                          'need_details': hunt_need_details()})
 
 
 async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -20410,32 +20475,8 @@ async def _hunt_catchup_loop():
             _HUNT_SEND_STATS['criteria'] = len(crits)
             sent_total = 0
             total_ids = 0
-            # ── Очередь описаний ──────────────────────────────────────────────
-            # Грузим описания не только для отправляемых, а для ВСЕХ, кто прошёл
-            # фильтр: иначе характеристики видны у единиц, а остальные — только
-            # по заголовку. По одному за проход, темп безопасный (см. счётчик).
-            try:
-                if _desc_budget_ok():
-                    _qc = db.conn.cursor()
-                    _qc.execute("SELECT id, source_url FROM ads WHERE status='active' "
-                                "AND source_url LIKE 'http%' AND COALESCE(description,'')='' "
-                                "ORDER BY id DESC LIMIT 1")
-                    _qrow = _qc.fetchone()
-                    if _qrow:
-                        _qinfo: Dict = {}
-                        _qtxt = await fetch_ad_description(
-                            {'id': _qrow['id'], 'source_url': _qrow['source_url']}, _qinfo)
-                        if _qtxt:
-                            db.conn.execute(
-                                'UPDATE ads SET description=?, seller_type=?, '
-                                'seller_name=?, seller_ads=? WHERE id=?',
-                                (_qtxt, _qinfo.get('seller_type', ''),
-                                 _qinfo.get('seller_name', ''),
-                                 int(_qinfo.get('seller_ads') or 0), int(_qrow['id'])))
-                            db.conn.commit()
-                            logger.info(f'Описание в очередь: объявление {int(_qrow["id"])}')
-            except Exception as _qe:
-                logger.warning(f'desc queue: {_qe}')
+            # Описания сервер не грузит (этап A6): их приносит сборщик
+            # с домашнего IP. Здесь только досылка того, что уже решено.
 
             for crit in crits:
                 ids = fresh_ids_for_criterion(crit, limit=30)
@@ -21975,8 +22016,6 @@ async def search_start_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await search_start(update, context)
 
 
-
-
 # ═══════════════════════════════════════════════════════════════════════
 #  УПРАВЛЕНИЕ ЦЕНАМИ (АДМИН)
 # ═══════════════════════════════════════════════════════════════════════
@@ -22029,7 +22068,6 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard.append([InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")])
 
     await safe_edit_message(query, text, keyboard, parse_mode=ParseMode.HTML)
-
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -23259,7 +23297,6 @@ async def _dispatch_max_paw_order(order_id: str) -> bool:
     except Exception as e:
         logger.error(f"PAW webhook: ошибка обработки MAX-заказа {order_id}: {e}", exc_info=True)
         return False
-
 
 
 async def api_check_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -25508,6 +25545,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/chat/{session_id}/media', api_chat_media_upload)
     # ── Агрегатор находок ────────────────────────────────────────────────────
     app.router.add_post('/api/ingest', api_ingest_findings)
+    app.router.add_post('/api/ingest/details', api_ingest_details)
     app.router.add_post('/api/ingest/status', api_ingest_status)
     app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)
@@ -26046,6 +26084,7 @@ def main():
         ensure_hidden_table()
         ensure_verdict_column()
         ensure_hunt_matches()
+        ensure_desc_columns()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
@@ -26241,8 +26280,6 @@ async def handle_webapp_data(update: Update, context: ContextTypes.DEFAULT_TYPE)
             parse_mode=ParseMode.HTML,
         )
     # pending_payment уже сохранён выше — dispatch_photo его подхватит
-
-
 
 
 if __name__ == '__main__':

@@ -971,6 +971,77 @@ def load_config(path: str) -> dict:
     return cfg
 
 
+def push_details(server: str, token: str, source: str, items: list) -> dict:
+    """Отправляет описания и продавцов на сервер: POST /api/ingest/details."""
+    url = f"{server.rstrip('/')}/api/ingest/details"
+    body = json.dumps({'source': source, 'items': items}).encode()
+    headers = {'Content-Type': 'application/json', 'X-Ingest-Token': token}
+    if _cffi is not None:
+        r = _cffi.post(url, data=body, headers=headers, timeout=90)
+        if r.status_code >= 400:
+            raise RuntimeError(f"HTTP {r.status_code}: {r.text[:140]}")
+        return json.loads(r.text)
+    req = urllib.request.Request(url, data=body, headers=headers)
+    with _opener().open(req, timeout=90) as resp:
+        return json.loads(resp.read().decode())
+
+
+def collect_details(server: str, token: str, source: str, items: list,
+                    pause: tuple = (4.0, 9.0)) -> int:
+    """Открывает карточки кандидатов и присылает описания на сервер.
+
+    Сервер этого сделать не может: он в дата-центре, и Авито его блокирует.
+    Поэтому страницы объявлений открываем мы, с домашнего IP, по одной —
+    с паузой 4–9 секунд между запросами. При блокировке останавливаемся
+    и возвращаем код 3: супервизор сделает длинную паузу.
+    """
+    if not items:
+        return 0
+    out = []
+    for i, item in enumerate(items):
+        url = str(item.get('url') or '')
+        ext = str(item.get('external_id') or '')
+        if not url.startswith('http'):
+            continue
+        try:
+            html = fetch_item(url)
+        except Blocked as exc:
+            print(f"  ⛔ описание: {exc} — останавливаюсь, чтобы не усугублять")
+            if out:
+                try:
+                    push_details(server, token, source, out)
+                except Exception as exc2:
+                    print(f"  ✖ сервер не принял описания: {exc2}")
+            raise SystemExit(3)
+        except Exception as exc:
+            print(f"  ✖ описание не открылось: {exc}")
+            out.append({'external_id': ext, 'state': 'failed'})
+            continue
+        data = parse_item_page(html)
+        if len(data.get('description') or '') < 20:
+            print(f"  ⚠ описание пустое ({url[-32:]})")
+            out.append({'external_id': ext, 'state': 'failed'})
+        else:
+            out.append({'external_id': ext, 'state': 'ok',
+                        'description': data['description'],
+                        'seller_type': data['seller_type'],
+                        'seller_name': data['seller_name'],
+                        'seller_ads': int(data['seller_ads'] or 0)})
+            who = ('магазин' if data['seller_type'] == 'company'
+                   else 'частник' if data['seller_type'] == 'private' else 'продавец не определён')
+            print(f"  ✓ описание {len(data['description'])} симв., {who}")
+        # Пауза между страницами: Авито ограничивает частые запросы
+        if i < len(items) - 1:
+            time.sleep(random.uniform(*pause))
+    if out:
+        try:
+            stats = push_details(server, token, source, out)
+            print(f"  описаний отправлено: {stats.get('updated')}, неудач {stats.get('failed')}")
+        except Exception as exc:
+            print(f"  ✖ сервер не принял описания: {exc}")
+    return len(out)
+
+
 def run_once(cfg: dict) -> int:
     server, token = cfg['server'], cfg['token']
     total_sent = 0
@@ -1023,6 +1094,12 @@ def run_once(cfg: dict) -> int:
             print(f"  отправлено: принято {stats.get('accepted')}, "
                   f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
             total_sent += int(stats.get('accepted') or 0)
+            # Сервер отвечает, по каким карточкам нужно описание: отбор
+            # по требованиям словами без него работает вслепую (этап A3)
+            need = stats.get('need_details') or []
+            if need:
+                print(f"  описаний нужно: {len(need)} — открываю карточки")
+                collect_details(server, token, source, need)
         except Exception as exc:
             print(f"  ✖ сервер не принял: {exc}")
         # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
