@@ -68,7 +68,7 @@ states = {i['external_id']: i['state'] for i in sent[-1]['items']}
 assert states == {'a': 'failed', 'b': 'ok'}, states
 print('3) сбой одной карточки → failed у неё, остальные обрабатываются')
 
-# ── 4. Блокировка: код 3 и то, что успели собрать, всё равно уходит
+# ── 4. Блокировка на странице объявления: описания пропускаем, сбор не валим
 sent.clear()
 calls['n'] = 0
 
@@ -80,14 +80,19 @@ def blocked_after_first(url, timeout=20):
     raise collect.Blocked('HTTP 429 — доступ ограничен по IP')
 
 
+collect._DETAILS_BLOCKED = False
 collect.fetch_item = blocked_after_first
-try:
-    collect.collect_details('https://srv', 'tok', 'avito', two, pause=(0, 0))
-    raise AssertionError('блокировка не остановила сборщик')
-except SystemExit as e:
-    assert e.code == 3, e.code
+collect.collect_details('https://srv', 'tok', 'avito', two, pause=(0, 0))
 assert len(sent) == 1 and sent[0]['items'][0]['external_id'] == 'a', sent
-print('4) блокировка → код 3, собранное до неё описания отправлены')
+# failed серверу не отправляем: иначе три прохода на дата-центре закроют карточку
+assert all(i['state'] == 'ok' for i in sent[0]['items']), sent[0]['items']
+assert collect._DETAILS_BLOCKED is True, 'флаг блокировки не выставлен'
+# и в этом же проходе больше не пробуем
+sent.clear()
+collect.collect_details('https://srv', 'tok', 'avito', two, pause=(0, 0))
+assert sent == [], 'продолжаем долбить Авито после блокировки'
+collect._DETAILS_BLOCKED = False
+print('4) блокировка на карточке → описания пропускаем, сбор продолжается, failed не шлём')
 
 # ── 5. Ограничение паузы: 25 карточек максимум за проход (сервер режет сам)
 print('5) пауза между карточками задаётся параметром pause (4–9 с по умолчанию)')

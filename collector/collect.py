@@ -55,6 +55,9 @@ ITEM_MARKERS = ('item-view/title-info', 'item-view/item-description',
                 'item-view/item-price', 'seller-info/name')
 # Короткая страница: если в ней ещё и маркер капчи — это блокировка.
 SHORT_PAGE_CHARS = 20000
+# Авито не пустил на страницу объявления в этом проходе: описания пропускаем
+# до следующего прохода, чтобы не долбить сайт и не валить весь сбор.
+_DETAILS_BLOCKED = False
 # Сколько символов описания хранить. Дальше — маркетинговый шум продавца.
 DESC_MAX_CHARS = 2000
 
@@ -1020,12 +1023,18 @@ def collect_details(server: str, token: str, source: str, items: list,
                     pause: tuple = (4.0, 9.0)) -> int:
     """Открывает карточки кандидатов и присылает описания на сервер.
 
-    Сервер этого сделать не может: он в дата-центре, и Авито его блокирует.
-    Поэтому страницы объявлений открываем мы, с домашнего IP, по одной —
-    с паузой 4–9 секунд между запросами. При блокировке останавливаемся
-    и возвращаем код 3: супервизор сделает длинную паузу.
+    Сервер этого сделать не может: он в дата-центре, и Авито его блокирует,
+    поэтому страницы объявлений открываем мы — по одной, с паузой 4–9 секунд.
+
+    ВАЖНО про запуск на GitHub Actions: у раннеров адрес дата-центра, и
+    страницы объявлений там, скорее всего, не откроются. Это НЕ повод валить
+    весь сбор: при блокировке просто пропускаем описания до следующего
+    прохода (объявления в базе остаются с пометкой «описание не проверено»)
+    и продолжаем собирать выдачу. Пометку failed серверу в этом случае не
+    шлём — иначе три неудачных прохода подряд навсегда закроют карточку.
     """
-    if not items:
+    global _DETAILS_BLOCKED
+    if not items or _DETAILS_BLOCKED:
         return 0
     out = []
     for i, item in enumerate(items):
@@ -1036,13 +1045,16 @@ def collect_details(server: str, token: str, source: str, items: list,
         try:
             html = fetch_item(url)
         except Blocked as exc:
-            print(f"  ⛔ описание: {exc} — останавливаюсь, чтобы не усугублять")
+            _DETAILS_BLOCKED = True
+            print(f"  ⛔ описания недоступны с этого IP: {exc}")
+            print("    Скорее всего это дата-центр (GitHub Actions). Соберите")
+            print("    описания с домашнего компьютера: collector/start-local.sh")
             if out:
                 try:
                     push_details(server, token, source, out)
                 except Exception as exc2:
                     print(f"  ✖ сервер не принял описания: {exc2}")
-            raise SystemExit(3)
+            return len(out)
         except Exception as exc:
             print(f"  ✖ описание не открылось: {exc}")
             out.append({'external_id': ext, 'state': 'failed'})
