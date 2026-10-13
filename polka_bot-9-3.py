@@ -26015,7 +26015,7 @@ async def api_miniapp_chats(request: aiohttp_web.Request) -> aiohttp_web.Respons
         cur = db.conn.cursor()
         cur.execute('''
             SELECT cs.id, cs.ad_id, cs.buyer_id, cs.seller_id, cs.last_message_at,
-                   a.title AS ad_title, a.price AS ad_price,
+                   a.title AS ad_title, a.price AS ad_price, a.photos AS ad_photos,
                    (SELECT m.text FROM chat_messages m
                     WHERE m.session_id = cs.id ORDER BY m.id DESC LIMIT 1) AS last_text,
                 (SELECT m.created_at FROM chat_messages m
@@ -26033,15 +26033,44 @@ async def api_miniapp_chats(request: aiohttp_web.Request) -> aiohttp_web.Respons
     for row in rows:
         other_id = row['seller_id'] if viewer_id == row['buyer_id'] else row['buyer_id']
         other = db.get_user(other_id) or {}
+        # Первое фото объявления — тем же способом, что и в остальных ответах
+        # мини-аппа (_miniapp_photo_urls): photos хранится JSON-строкой, внутри
+        # либо Telegram file_id, либо готовый путь /api/ads/photos/<name>.
+        try:
+            _photos = json.loads(row['ad_photos']) if row['ad_photos'] else []
+        except Exception:
+            _photos = []
+        _photo_urls = _miniapp_photo_urls(_photos)
+        # Непрочитанные: сообщения собеседника после моей отметки «прочитано».
+        # Отметки (buyer_last_read / seller_last_read) добавляются миграцией при
+        # инициализации БД; если колонок ещё нет, список диалогов всё равно
+        # работает — просто без счётчика.
+        unread = 0
+        try:
+            cur.execute('SELECT buyer_last_read, seller_last_read FROM chat_sessions WHERE id = ?',
+                        (row['id'],))
+            _read = cur.fetchone()
+            if _read:
+                marker = (_read['buyer_last_read'] if viewer_id == row['buyer_id']
+                          else _read['seller_last_read'])
+                cur.execute('''SELECT COUNT(*) AS n FROM chat_messages
+                               WHERE session_id = ? AND sender_id != ?
+                                 AND (? IS NULL OR created_at > ?)''',
+                            (row['id'], viewer_id, marker, marker))
+                _cnt = cur.fetchone()
+                unread = int((_cnt['n'] if _cnt else 0) or 0)
+        except Exception as e:
+            logger.error(f'miniapp chats unread: {e}')
         items.append({
             'id': row['id'],
             'ad_id': row['ad_id'],
             'ad_title': row['ad_title'] or '',
             'ad_price': row['ad_price'],
+            'ad_photo': (_photo_urls[0] if _photo_urls else ''),
             'user': get_anon_id(other) if other else str(other_id),
             'last_text': row['last_text'] or '',
             'time': (row['last_time'] or row['last_message_at'] or '')[:16],
-            'unread': 0,
+            'unread': unread,
         })
     return _miniapp_json({'items': items})
 
