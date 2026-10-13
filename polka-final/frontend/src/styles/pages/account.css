@@ -90,7 +90,12 @@
    Запрещаем трекам расти по содержимому и разрешаем подписи переноситься. */
 .stats-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stat-card { min-width: 0; }
-.stat-card-label { overflow-wrap: anywhere; }
+/* Переносим по словам, а не по буквам: «На модерации» ломалось посередине. */
+.stat-card-label { overflow-wrap: break-word; }
+@media (max-width: 360px) {
+  .stat-card { padding: var(--space-3) 8px; }
+  .stat-card-label { font-size: 10px; letter-spacing: -.02em; }
+}
 
 /* Декоративное пятно онбординга (330 px) вылезало за экран на 320 px. */
 .blob { width: min(330px, 92vw); height: min(330px, 92vw); }
