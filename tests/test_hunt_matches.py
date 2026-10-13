@@ -6,6 +6,7 @@ ready / pending_details / rejected / sent, причины отказа, поме
 
 Запуск: python3 tests/test_hunt_matches.py
 """
+import asyncio
 import os
 import re
 import sqlite3
@@ -28,7 +29,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS', 'HUNT_TITLE_START_JUNK',
           'HUNT_FRESH_HOURS', 'HUNT_ALLOW_UNDATED', 'HUNT_MIN_PRICE_SHARE',
           'ensure_hunt_matches', 'hunt_match_store', 'hunt_matches_recompute',
-          'hunt_match_mark_sent', 'hunt_ready_ids')
+          'hunt_matches_recompute_async', 'hunt_match_mark_sent', 'hunt_ready_ids')
 
 
 def chunks(src):
@@ -47,7 +48,7 @@ def chunks(src):
 
 
 def name_of(chunk):
-    m = re.match(r'(?:class|def)\s+([A-Za-z_][A-Za-z0-9_]*)', chunk[0])
+    m = re.match(r'(?:async\s+def|class|def)\s+([A-Za-z_][A-Za-z0-9_]*)', chunk[0])
     if m:
         return m.group(1)
     m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=]+)?=', chunk[0])
@@ -87,7 +88,7 @@ conn.executescript('''
                                 created_at TEXT, mode TEXT, requirements TEXT);
 ''')
 
-ns = {'os': os, 're': re, 'sqlite3': sqlite3, 'NamedTuple': NamedTuple, 'Dict': Dict,
+ns = {'os': os, 're': re, 'sqlite3': sqlite3, 'asyncio': asyncio, 'NamedTuple': NamedTuple, 'Dict': Dict,
       'List': List, 'Optional': Optional, 'Tuple': tuple, 'logger': FakeLog(),
       'db': FakeDb(conn),
       'get_moscow_time': lambda: datetime(2026, 10, 13, 12, 0, 0),
@@ -214,3 +215,42 @@ assert before == after, (before, after)
 print(f'9) дублей нет: записей до {before}, после {after}')
 
 print('\nB: hunt_matches — все проверки пройдены')
+
+# ── 10. Пересчёт порциями: only_missing и async-обёртка
+conn.execute("INSERT INTO hunt_criteria (id, user_id, query, category, city, max_price, "
+             "min_price, max_hours, with_photo, min_discount, median_price, sample_size, "
+             "active, created_at, mode, requirements) "
+             "VALUES (20, 11, 'iphone 13', '', '', 0, 0, 0, 0, 15, 50000, 20, 1, "
+             "'2026-10-13', 'any', '')")
+for i in range(100, 160):
+    conn.execute("INSERT INTO ads (id, title, title_lower, price, city, category, description, "
+                 "photos, published_hours_ago, seller_type, status, source) "
+                 "VALUES (?, 'iPhone 13 lot', 'iphone 13 lot', 40000, 'Ижевск', 'Электроника', "
+                 "'', '[\"http://x/1.jpg\"]', 3, '', 'active', 'avito')", (i,))
+conn.commit()
+
+before = conn.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE user_id=11").fetchone()['n']
+assert before == 0, before
+written = ns['hunt_matches_recompute'](crit_id=20, limit_ads=60, only_missing=True)
+rows = conn.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE user_id=11").fetchone()['n']
+assert rows == 60, (written, rows)
+# повторный проход ничего не делает: решения уже есть
+again = ns['hunt_matches_recompute'](crit_id=20, limit_ads=60, only_missing=True)
+rows2 = conn.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE user_id=11").fetchone()['n']
+assert again == 0 and rows2 == 60, (again, rows2)
+print('10) only_missing: 60 решений с первого прохода, повторный — 0 работы')
+
+# async-обёртка считает порциями и доходит до конца
+for i in range(200, 230):
+    conn.execute("INSERT INTO ads (id, title, title_lower, price, city, category, description, "
+                 "photos, published_hours_ago, seller_type, status, source) "
+                 "VALUES (?, 'iPhone 13 fresh', 'iphone 13 fresh', 40000, 'Ижевск', "
+                 "'Электроника', '', '[\"http://x/1.jpg\"]', 3, '', 'active', 'avito')", (i,))
+conn.commit()
+done = asyncio.run(ns['hunt_matches_recompute_async'](crit_id=20, limit_ads=30,
+                                                      only_missing=True, batch=10))
+rows3 = conn.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE user_id=11").fetchone()['n']
+assert rows3 == 90, (done, rows3)
+print('11) async-пересчёт идёт порциями по 10 и обрабатывает все 30 объявлений')
+
+print('\nB: hunt_matches — все проверки пройдены (включая порционный пересчёт)')

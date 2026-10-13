@@ -18182,7 +18182,10 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         # Решения по новым объявлениям — в hunt_matches: из неё читает лента,
         # и по ней же будет работать очередь отправки (этап C)
         try:
-            hunt_matches_recompute(ad_ids=stats.get('ids') or [])
+            # Ограничиваем порцию: при массовом приёме (500 карточек) пересчёт
+            # всех подряд держал бы цикл событий, а приложение в это время не
+            # отвечает. Остальное доберёт фоновый цикл.
+            hunt_matches_recompute(ad_ids=(stats.get('ids') or [])[:100])
         except Exception as e:
             logger.error(f"hunt_matches ingest: {e}")
         # Этап A3: просим сборщика открыть карточки, где описание меняет
@@ -19605,11 +19608,18 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
 
 
 def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional[int] = None,
-                           limit_ads: int = 300) -> int:
+                           limit_ads: int = 300, only_missing: bool = False,
+                           offset: int = 0, batch: int = 0,
+                           counter: Optional[Dict] = None) -> int:
     """Пересчитывает решения: при приёме находок, создании критерия, описаниях.
 
     ad_ids — только эти объявления (при ingest и после описаний); иначе
     последние limit_ads объявлений с Авито (при создании критерия).
+    only_missing — брать только те, по которым решений ещё нет (дешёвая
+    страховка в фоновом цикле). offset/batch — порции: синхронный пересчёт
+    двухсот объявлений занимает 10–15 секунд и на это время блокирует цикл
+    событий, поэтому вызывающий режет работу на пачки (см.
+    hunt_matches_recompute_async).
     """
     cursor = db.conn.cursor()
     try:
@@ -19629,9 +19639,15 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             marks = ','.join('?' for _ in ids)
             cursor.execute(f"SELECT * FROM ads WHERE id IN ({marks})", ids)
         else:
-            cursor.execute("SELECT * FROM ads WHERE source <> 'polka' AND price > 0 "
-                           "ORDER BY id DESC LIMIT ?", (int(limit_ads),))
+            sql = "SELECT * FROM ads WHERE source <> 'polka' AND price > 0"
+            if only_missing:
+                sql += (" AND NOT EXISTS (SELECT 1 FROM hunt_matches hm "
+                        "WHERE hm.ad_id = ads.id)")
+            sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+            cursor.execute(sql, (int(batch or limit_ads), int(offset)))
         ads = [dict(r) for r in cursor.fetchall()]
+        if counter is not None:
+            counter['ads'] = len(ads)
     except Exception as e:
         logger.error(f"hunt_matches ads: {e}")
         return 0
@@ -19975,6 +19991,45 @@ def _hunt_debug_ad_id(raw: str) -> Optional[int]:
         except Exception:
             return None
     return None
+
+
+async def hunt_matches_recompute_async(ad_ids: Optional[List[int]] = None,
+                                       crit_id: Optional[int] = None,
+                                       limit_ads: int = 300,
+                                       only_missing: bool = False,
+                                       batch: int = 15,
+                                       pause: float = 0.05) -> int:
+    """Пересчёт решения порциями, не блокируя приложение.
+
+    Проверено на живом сервере: синхронный пересчёт 200 объявлений держал
+    цикл событий 10–15 секунд, и всё это время /api/hunt отвечал 401 только
+    через 11–13 секунд — приложение выглядело зависшим. Считаем по 25
+    объявлений и отдаём управление между порциями.
+    """
+    if ad_ids:
+        # Новых объявлений за проход немного: считаем разом
+        return hunt_matches_recompute(ad_ids=ad_ids, crit_id=crit_id,
+                                      limit_ads=limit_ads, only_missing=only_missing)
+    total = 0
+    offset = 0
+    while offset < max(1, int(limit_ads)):
+        counter: Dict = {}
+        size = min(int(batch), int(limit_ads) - offset)
+        total += hunt_matches_recompute(crit_id=crit_id, limit_ads=limit_ads,
+                                        only_missing=only_missing, offset=offset,
+                                        batch=size, counter=counter)
+        got = int(counter.get('ads') or 0)
+        if not got or got < size:
+            break
+        # При only_missing набор «без решений» сам уменьшается с каждой
+        # порцией, поэтому сдвигать offset нельзя — иначе половину пропустим
+        if not only_missing:
+            offset += got
+        # Короткая настоящая пауза, а не только yield: одна порция — это
+        # запросы к базе на доли секунды, и приложение не должно ждать их
+        # подряд без передышки
+        await asyncio.sleep(max(0.0, float(pause)))
+    return total
 
 
 def hunt_match_row(ad_id: int, user_id: Optional[int] = None) -> List[Dict]:
@@ -20799,8 +20854,11 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
         if crit_row:
             # Этап B: сначала записываем решения по уже собранным объявлениям,
             # потом отправляем те, что готовы (раньше выборка была отдельной
-            # и расходилась с рассылкой)
-            hunt_matches_recompute(crit_id=crit_id)
+            # и расходилась с рассылкой). Порция небольшая и только по тем,
+            # у кого решений ещё нет: полный пересчёт держал цикл событий
+            # секундами, и приложение «зависало» в момент создания критерия.
+            # Остальное подхватит фоновый цикл (only_missing).
+            hunt_matches_recompute(crit_id=crit_id, limit_ads=60, only_missing=True)
             ready = hunt_ready_ids(crit_id=crit_id, limit=30)
             if ready:
                 logger.info(f"критерий {crit_id}: сразу отправляю {len(ready)} находок")
@@ -21018,7 +21076,9 @@ async def _hunt_catchup_loop():
     while True:
         try:
             recompute_criterion_medians()
-            written = hunt_matches_recompute(limit_ads=200)
+            # only_missing: решения по уже посчитанным не пересчитываем —
+            # это дешёвая страховка, а не полный проход по базе
+            written = await hunt_matches_recompute_async(limit_ads=100, only_missing=True)
             flushed = hunt_flush_stale_pending()
             ready = len(hunt_ready_ids(limit=200))
             _HUNT_SEND_STATS['criteria'] = written

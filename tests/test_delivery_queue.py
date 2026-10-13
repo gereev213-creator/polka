@@ -51,7 +51,7 @@ def chunks(src):
 
 
 def name_of(chunk):
-    m = re.match(r'(?:class|def)\s+([A-Za-z_][A-Za-z0-9_]*)', chunk[0])
+    m = re.match(r'(?:async\s+def|class|def)\s+([A-Za-z_][A-Za-z0-9_]*)', chunk[0])
     if m:
         return m.group(1)
     m = re.match(r'([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=]+)?=', chunk[0])
