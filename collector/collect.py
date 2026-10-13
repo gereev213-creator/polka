@@ -22,6 +22,7 @@
     python3 collect.py --loop --every 900  # повторять каждые 15 минут
 """
 import argparse
+import glob
 import json
 import os
 import random
@@ -32,6 +33,7 @@ import time
 import urllib.error
 import urllib.request
 from html import unescape
+from html.parser import HTMLParser
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -45,6 +47,16 @@ BLOCK_MARKERS = ('captcha', 'showcaptcha', 'Доступ ограничен', '�
 GONE_MARKERS = ('объявление снято', 'снято с публикации', 'объявление не найдено',
                 'страница не найдена', 'товар продан', 'продано', 'объявление удалено',
                 'это объявление больше не доступно')
+
+
+# Маркеры страницы ОДНОГО объявления (на странице выдачи их нет, поэтому
+# fetch() их не проверяет, а fetch_item() — проверяет).
+ITEM_MARKERS = ('item-view/title-info', 'item-view/item-description',
+                'item-view/item-price', 'seller-info/name')
+# Короткая страница: если в ней ещё и маркер капчи — это блокировка.
+SHORT_PAGE_CHARS = 20000
+# Сколько символов описания хранить. Дальше — маркетинговый шум продавца.
+DESC_MAX_CHARS = 2000
 
 
 class Blocked(Exception):
@@ -212,6 +224,64 @@ def fetch(url: str, timeout: int = 25) -> str:
             if marker.lower() in low:
                 raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
     return html
+
+
+def fetch_item(url: str, timeout: int = 20) -> str:
+    """Страница ОДНОГО объявления — оттуда берём описание и продавца.
+
+    Отдельно от fetch(): тот считает ответ валидным только при наличии
+    data-marker="item" — это маркер СТРАНИЦЫ ВЫДАЧИ. На странице объявления
+    его нет, поэтому fetch(url) перебирал весь пул отпечатков (по 2–5 с
+    паузой после каждого), получал 439 и бросал Blocked. Итог: описания не
+    собирались никогда, а Авито получал 4–5 лишних запросов на объявление.
+
+    Здесь ровно ОДИН запрос рабочим отпечатком (если он ещё не найден —
+    первым из пула), таймаут 20 с. Блокировка = статус 403/429/439 или
+    маркеры капчи на короткой странице.
+    """
+    if _cffi is not None:
+        global _WORKING_PROFILE
+        profile = _WORKING_PROFILE or IMPERSONATE_POOL[0]
+        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
+        try:
+            r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+        except Exception as exc:
+            raise Blocked(f"{profile}: {str(exc)[:70]}")
+        text = r.text or ''
+        if r.status_code in (403, 429, 439):
+            raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
+        if len(text) < SHORT_PAGE_CHARS:
+            low = text.lower()
+            for marker in BLOCK_MARKERS:
+                if marker.lower() in low:
+                    raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+        if not any(m in text for m in ITEM_MARKERS):
+            raise Blocked("страница объявления не распознана (нет знакомых маркеров)")
+        _WORKING_PROFILE = profile
+        return text
+
+    # Без curl_cffi — обычный urllib; проверки те же
+    req = urllib.request.Request(url, headers={
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+    })
+    try:
+        with _opener().open(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        if exc.code in (403, 429, 439):
+            raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
+        raise
+    text = raw.decode('utf-8', errors='replace')
+    if len(text) < SHORT_PAGE_CHARS:
+        low = text.lower()
+        for marker in BLOCK_MARKERS:
+            if marker.lower() in low:
+                raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
+    if not any(m in text for m in ITEM_MARKERS):
+        raise Blocked("страница объявления не распознана (нет знакомых маркеров)")
+    return text
 
 
 # ── Разбор страницы ─────────────────────────────────────────────────────────
@@ -447,6 +517,168 @@ def items_from_html(html: str) -> list:
                 'city': unescape(city.group(1)).strip() if city else '',
             })
     return out
+
+
+class _MarkedText(HTMLParser):
+    """Текст внутри элемента с нужным data-marker.
+
+    Настоящий парсер, а не регулярка «до первого </div>»: описание на Авито
+    размечено вложенными <p>, <br> и <div>, и прежний разбор обрывался на
+    первой же вложенной закрывашке.
+    """
+
+    def __init__(self, marker: str):
+        super().__init__(convert_charrefs=True)
+        self.marker = marker
+        self.tag = None
+        self.depth = 0
+        self.parts: list = []
+        self.done = False
+
+    def handle_starttag(self, tag, attrs):
+        if self.done:
+            return
+        if self.depth == 0:
+            if dict(attrs).get('data-marker') == self.marker:
+                self.tag = tag
+                self.depth = 1
+            return
+        if tag == self.tag:
+            self.depth += 1
+        if tag == 'br':
+            self.parts.append('\n')
+        elif tag in ('p', 'div', 'li'):
+            self.parts.append('\n')
+
+    def handle_startendtag(self, tag, attrs):
+        if self.depth and tag == 'br':
+            self.parts.append('\n')
+
+    def handle_endtag(self, tag):
+        if self.done or not self.depth:
+            return
+        if tag == self.tag:
+            self.depth -= 1
+            if self.depth == 0:
+                self.done = True
+        elif tag in ('p', 'div', 'li'):
+            self.parts.append('\n')
+
+    def handle_data(self, data):
+        if self.depth:
+            self.parts.append(data)
+
+    def text(self) -> str:
+        raw = ''.join(self.parts).replace('\xa0', ' ')
+        raw = re.sub(r'[ \t\r\f\v]+', ' ', raw)
+        raw = re.sub(r' *\n *', '\n', raw)
+        raw = re.sub(r'\n{3,}', '\n\n', raw)
+        return raw.strip()
+
+
+def text_from_marker(html: str, marker: str) -> str:
+    """Текст элемента с data-marker=<marker> или ''."""
+    parser = _MarkedText(marker)
+    try:
+        parser.feed(str(html or ''))
+    except Exception:
+        return ''
+    return parser.text()
+
+
+def _meta_content(html: str, key: str) -> str:
+    """Содержимое <meta property|name="key" content="…">."""
+    pat = (r'<meta[^>]+(?:property|name)=["\']%s["\'][^>]*content=["\']([^"\']*)'
+           % re.escape(key))
+    m = re.search(pat, html, re.I)
+    if not m:
+        pat2 = (r'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name)=["\']%s["\']'
+                % re.escape(key))
+        m = re.search(pat2, html, re.I)
+    return unescape(m.group(1)).strip() if m else ''
+
+
+def _jsonld_description(html: str) -> str:
+    """Описание из структурированных данных (запасной путь)."""
+    for m in re.finditer(r'<script[^>]+application/ld\+json[^>]*>(.*?)</script>',
+                         html, re.S | re.I):
+        try:
+            data = json.loads(m.group(1).strip())
+        except Exception:
+            continue
+        for node in (data if isinstance(data, list) else [data]):
+            if not isinstance(node, dict):
+                continue
+            if node.get('description'):
+                return str(node['description']).strip()
+            for sub in (node.get('item') or [], node.get('itemListElement') or []):
+                if isinstance(sub, dict) and sub.get('description'):
+                    return str(sub['description']).strip()
+    return ''
+
+
+# Магазинные слова в имени продавца — как HUNT_SHOP_MARKERS в боте
+SHOP_NAME_MARKERS = ('магазин', 'shop', 'store', 'салон', 'маркет', 'market',
+                     'ооо', 'ип ', 'trade', 'техно', 'центр', 'company')
+
+
+def parse_item_seller(html: str) -> dict:
+    """Тип, имя и число объявлений продавца со страницы объявления.
+
+    Логика та же, что в боте (_parse_seller), но проверки идут по блоку
+    продавца, а не по всей странице: слово «компания» встречается и в тексте
+    объявления, и тогда магазином ошибочно помечался частник.
+    """
+    out = {'seller_type': '', 'seller_name': '', 'seller_ads': 0}
+    raw = str(html or '')
+    low = raw.lower()
+    if not low:
+        return out
+    seller_block = text_from_marker(raw, 'item-view/seller-info')
+    seller_low = seller_block.lower()
+    name = text_from_marker(raw, 'seller-info/name')
+    if name:
+        out['seller_name'] = re.sub(r'\s+', ' ', name).strip()[:60]
+    if 'частное лицо' in seller_low or 'частное лицо' in low:
+        out['seller_type'] = 'private'
+    if '/brands/' in low or 'компания' in seller_low:
+        out['seller_type'] = 'company'
+    m = re.search(r'(\d[\d\s]{0,7})\s*объявлен', seller_low or low)
+    if m:
+        try:
+            out['seller_ads'] = int(re.sub(r'\D', '', m.group(1)) or 0)
+        except Exception:
+            out['seller_ads'] = 0
+    nm = str(out['seller_name']).lower()
+    if out['seller_type'] != 'company' and any(w in nm for w in SHOP_NAME_MARKERS):
+        out['seller_type'] = 'company'
+    return out
+
+
+def parse_item_page(html: str) -> dict:
+    """Описание и продавец со страницы ОДНОГО объявления.
+
+    Порядок разбора описания: блок item-view/item-description → og:description
+    → meta description → JSON-LD. Первое, что дало ≥ 20 символов, и берём.
+    """
+    raw = str(html or '')
+    desc = text_from_marker(raw, 'item-view/item-description')
+    if len(desc) < 20:
+        for alt in (_meta_content(raw, 'og:description'),
+                    _meta_content(raw, 'description'),
+                    _jsonld_description(raw)):
+            alt = re.sub(r'\s+', ' ', str(alt or '')).strip()
+            if len(alt) >= 20:
+                desc = alt
+                break
+    desc = desc.strip()[:DESC_MAX_CHARS]
+    seller = parse_item_seller(raw)
+    return {
+        'description': desc,
+        'seller_type': seller['seller_type'],
+        'seller_name': seller['seller_name'],
+        'seller_ads': seller['seller_ads'],
+    }
 
 
 def parse_page(html: str) -> list:
@@ -800,9 +1032,17 @@ def run_once(cfg: dict) -> int:
 
 
 def selftest() -> int:
-    """Проверка разбора на образце — без обращения к чужим сайтам."""
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fixture_avito.html')
-    with open(path, encoding='utf-8') as fh:
+    """Проверка разбора на образцах — без обращения к чужим сайтам.
+
+    Две части: страница ВЫДАЧИ (fixture_avito.html) и страницы ОБЪЯВЛЕНИЙ
+    (fixture_item_*.html: частник и магазин). Вторые нужны именно для
+    parse_item_page: на живом сайте их проверять нельзя, а описание и
+    продавец — то, ради чего этап A и делается.
+    """
+    here = os.path.dirname(os.path.abspath(__file__))
+
+    listing_path = os.path.join(here, 'fixture_avito.html')
+    with open(listing_path, encoding='utf-8') as fh:
         html = fh.read()
     items = parse_page(html)
     print(f"Разобрано карточек: {len(items)}")
@@ -810,6 +1050,26 @@ def selftest() -> int:
         print(f"  {item['title'][:40]:42} {item['price']:>9} ₽  id={item['external_id']}  "
               f"фото={len(item['photos'])}")
     ok = len(items) >= 2 and all(i['price'] > 0 and i['url'].startswith('http') for i in items)
+
+    print()
+    item_files = sorted(glob.glob(os.path.join(here, 'fixture_item*.html')))
+    if not item_files:
+        print("⚠ нет файлов fixture_item*.html — разбор страницы объявления не проверить")
+    for path in item_files:
+        with open(path, encoding='utf-8') as fh:
+            page = fh.read()
+        data = parse_item_page(page)
+        kind = 'магазин' if data['seller_type'] == 'company' else (
+            'частник' if data['seller_type'] == 'private' else 'тип не определён')
+        print(f"  {os.path.basename(path):34} описание {len(data['description']):>4} симв. | "
+              f"{kind} | {data['seller_name'][:34]!r} | объявлений: {data['seller_ads']}")
+        print(f"      «{data['description'][:70].replace(chr(10), ' ')}…»")
+        part_ok = (len(data['description']) >= 20
+                   and data['seller_type'] in ('private', 'company'))
+        if not part_ok:
+            print("      ✖ описание или продавец не распознались")
+        ok = ok and part_ok
+
     print("\nИТОГ:", "разбор работает" if ok else "РАЗБОР СЛОМАН")
     return 0 if ok else 1
 
