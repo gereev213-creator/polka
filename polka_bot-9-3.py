@@ -19102,6 +19102,77 @@ def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
     return discount
 
 
+# ── Безопасный HTML в сообщениях о находках (этап D1) ───────────────────────
+# Заголовки и города приходят от продавцов: «H&M», «<новая> куртка», «A < B».
+# В сообщении с parse_mode=HTML такие символы ломали разбор, Telegram отвечал
+# BadRequest, и находка не уходила в чат вообще — ошибка оставалась только в
+# логе, а объявление пробовалось снова каждые 2 минуты.
+def _hunt_escape(value) -> str:
+    """Экранирует текст продавца для parse_mode=HTML."""
+    return _html.escape(str(value if value is not None else ''))
+
+
+async def _send_html_safe(send, **kwargs) -> bool:
+    """Отправка HTML-сообщения с запасным вариантом без разметки.
+
+    Если Telegram всё равно ответил «can't parse entities» — повторяем БЕЗ
+    parse_mode: сообщение уходит с «сырыми» символами, но уходит. Такой
+    заголовок лучше, чем тишина в чате.
+    """
+    try:
+        await send(parse_mode=ParseMode.HTML, **kwargs)
+        return True
+    except Exception as e:
+        low = str(e).lower()
+        if 'parse' not in low and 'entit' not in low:
+            logger.warning(f'hunt send: {e}')
+            return False
+        logger.warning(f'HTML не разобрался, повтор без разметки: {e}')
+        kwargs.pop('parse_mode', None)
+        try:
+            await send(**kwargs)
+            return True
+        except Exception as e2:
+            logger.warning(f'hunt send (без разметки): {e2}')
+            return False
+
+
+def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
+                     verdict: str = '') -> str:
+    """Текст сообщения о находке. Все данные объявления — через _hunt_escape."""
+    lines = [
+        ("🔥 <b>Нашёл дешевле обычного</b>" if diff
+         else "🔎 <b>Подходит под ваш запрос</b>"),
+        "",
+        f"<b>{_hunt_escape(str(ad.get('title'))[:70])}</b>",
+        "",
+        f"<b>{_money(ad.get('price') or 0)} ₽</b>",
+    ]
+    if diff and median:
+        lines.append(f"Обычно такие стоят {_money(median)} ₽")
+        lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
+    lines.append("")
+    lines.append(f"{_hunt_escape(ad.get('city') or '')} · опубликовано {fresh}")
+    if verdict:
+        lines.insert(1, f"<i>{_hunt_escape(verdict)}</i>")
+        lines.insert(2, "")
+    return "\n".join(lines)
+
+
+def _hunt_digest_text(query, fresh_count: int, top: list) -> str:
+    """Текст сводки «нашлось N вариантов». top: [(ad, discount)]."""
+    lines = [f" <b>Нашлось {fresh_count} вариантов — «{_hunt_escape(query)}»</b>", ""]
+    for ad, discount in top:
+        lines.append(f"• <b>{_money(ad.get('price') or 0)} ₽</b> (−{discount}%) — "
+                     f"{_hunt_escape(str(ad.get('title'))[:44])}")
+    if fresh_count > len(top):
+        lines.append("")
+        lines.append(f"…и ещё {fresh_count - len(top)}. Все — в приложении.")
+    lines.append("")
+    lines.append("Открыть можно в приложении: Главная → Находки.")
+    return "\n".join(lines)
+
+
 async def _send_hunt_digest(crit: Dict, items: list) -> int:
     """Одна сводка вместо потока, когда находок слишком много.
 
@@ -19129,20 +19200,8 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
     # Лучшие — наверх: сначала самая большая выгода
     fresh.sort(key=lambda x: -x[1])
     top = fresh[:10]
-    lines = [f" <b>Нашлось {len(fresh)} вариантов — «{crit.get('query')}»</b>", ""]
-    for ad, discount in top:
-        lines.append(f"• <b>{_money(ad['price'])} ₽</b> (−{discount}%) — "
-                     f"{str(ad.get('title'))[:44]}")
-    if len(fresh) > len(top):
-        lines.append("")
-        lines.append(f"…и ещё {len(fresh) - len(top)}. Все — в приложении.")
-    lines.append("")
-    lines.append("Открыть можно в приложении: Главная → Находки.")
-    try:
-        await app.bot.send_message(chat_id=user_id, text="\n".join(lines),
-                                   parse_mode=ParseMode.HTML)
-    except Exception as e:
-        logger.warning(f"hunt digest -> {user_id}: {e}")
+    text = _hunt_digest_text(crit.get('query'), len(fresh), top)
+    if not await _send_html_safe(app.bot.send_message, chat_id=user_id, text=text):
         return 0
     # Помечаем все отправленные, чтобы не слать их повторно поштучно
     for ad, _d in fresh:
@@ -19502,19 +19561,7 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 diff = median - int(ad['price'])
             elif not any_mode:
                 continue
-            lines = [
-                ("🔥 <b>Нашёл дешевле обычного</b>" if diff
-                 else "🔎 <b>Подходит под ваш запрос</b>"),
-                "",
-                f"<b>{str(ad.get('title'))[:70]}</b>",
-                "",
-                f"<b>{_money(ad['price'])} ₽</b>",
-            ]
-            if diff:
-                lines.append(f"Обычно такие стоят {_money(median)} ₽")
-                lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
-            lines.append("")
-            lines.append(f"{ad.get('city') or ''} · опубликовано {fresh}")
+            text = _hunt_match_text(ad, fresh, median, diff)
             # Описание со страницы нужно СКРИПТУ, а не ИИ: состояние, цвет,
             # «требуется ремонт» написаны в тексте объявления, а не в заголовке.
             # Грузим не больше 5 в час — иначе Авито отвечает 439 и встаёт сбор.
@@ -19574,11 +19621,10 @@ async def notify_hunt_matches(ad_ids: List[int]):
                         db.conn.commit()
                     except Exception as _ve:
                         logger.warning(f'ai_verdict save: {_ve}')
-                    lines.insert(1, f"<i>{_verdict}</i>")
-                    lines.insert(2, "")
+                    # Оценка модели идёт в HTML-сообщение: текст экранируется
+                    text = _hunt_match_text(ad, fresh, median, diff, verdict=_verdict)
                 else:
                     _HUNT_AI_CALLS['skipped'] += 1
-            text = "\n".join(lines)
             kb = None
             if ad.get('source_url'):
                 kb = InlineKeyboardMarkup([[
@@ -19597,15 +19643,15 @@ async def notify_hunt_matches(ad_ids: List[int]):
                 try:
                     _ph = json.loads(str(ad.get('photos') or '[]'))
                     if isinstance(_ph, list) and _ph and str(_ph[0]).startswith('http'):
-                        await app.bot.send_photo(chat_id=user_id, photo=str(_ph[0]),
-                                                 caption=text, parse_mode=ParseMode.HTML,
-                                                 reply_markup=kb)
-                        _photo_sent = True
+                        _photo_sent = await _send_html_safe(
+                            app.bot.send_photo, chat_id=user_id, photo=str(_ph[0]),
+                            caption=text, reply_markup=kb)
                 except Exception as _pe:
                     logger.warning(f'hunt photo: {_pe}')
                 if not _photo_sent:
-                    await app.bot.send_message(chat_id=user_id, text=text,
-                                               parse_mode=ParseMode.HTML, reply_markup=kb)
+                    if not await _send_html_safe(app.bot.send_message, chat_id=user_id,
+                                                 text=text, reply_markup=kb):
+                        continue
                 _hunt_note_send(sent=1)
                 try:
                     db.mark_search_notification_sent(user_id, ad['id'])
@@ -20236,7 +20282,7 @@ def hunt_report(user_id: int) -> str:
         except Exception:
             pass
         mark = "" if fresh else ""
-        lines.append(f"{mark} <b>{c['query']}</b> — нашлось {matches}, свежих {fresh}")
+        lines.append(f"{mark} <b>{_hunt_escape(c['query'])}</b> — нашлось {matches}, свежих {fresh}")
         if not fresh:
             if matches:
                 lines.append("   свежих нет: подходящие есть, но старше суток")
