@@ -26,6 +26,7 @@ import { Card } from './components/Card'
 import { Chip } from './components/Chip'
 import { Badge } from './components/Badge'
 import { ListRow } from './components/ListRow'
+import { Input } from './components/Input'
 
 import { Icon } from './components/Icon'
 import { IconButton } from './components/IconButton'
@@ -946,8 +947,7 @@ function CriteriaPage() {
       </div>
 
       <div className="field-label-row">Требования словами</div>
-      <input
-        className="input"
+      <Input
         value={huntNotes}
         onChange={(e) => setHuntNotes(e.target.value)}
         placeholder="размер 43, чёрный, АКБ от 85%, не вскрывался"
@@ -978,12 +978,12 @@ function CriteriaPage() {
       ) : null}
 
       <div className="form-stack">
-        <input className="input" value={query}
+        <Input value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Что искать — например «iphone 13»" />
         {/* Город — на всю ширину строки: раньше он стоял в .grid-two и занимал
             половину ширины без причины. */}
-        <input className="input" value={city}
+        <Input value={city}
           onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
         <datalist id="hunt-cities">
           {cities.map((c) => <option key={c.value} value={c.label} />)}
@@ -1005,9 +1005,9 @@ function CriteriaPage() {
           />
           {openSec === 'price' ? (
             <div className="price-pair">
-              <input className="input" type="number" inputMode="numeric" placeholder="от"
+              <Input type="number" inputMode="numeric" placeholder="от"
                 value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
-              <input className="input" type="number" inputMode="numeric" placeholder="до"
+              <Input type="number" inputMode="numeric" placeholder="до"
                 value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
             </div>
           ) : null}
