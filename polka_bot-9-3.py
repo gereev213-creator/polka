@@ -17,7 +17,7 @@ import aiohttp
 from aiohttp import web as aiohttp_web
 from datetime import datetime, timedelta, time
 from zoneinfo import ZoneInfo
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional, Tuple, Any, NamedTuple
 from enum import Enum
 from collections import defaultdict
 
@@ -17330,6 +17330,48 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
 # ── Скрытые лоты ────────────────────────────────────────────────────────────
 # Человек посмотрел объявление и понял: не то. Просил убрать его из ленты и
 # из чата. Запоминаем это, чтобы лот не возвращался при следующем сборе.
+def ensure_hunt_matches():
+    """Таблица решений по находкам — источник истины для чата и ленты.
+
+    До неё лента собиралась своим SQL, а рассылка — своим кодом, и одно и то
+    же объявление могло быть в ленте и не прийти в чат без объяснения. Теперь
+    каждая пара (пользователь, объявление) хранит решение evaluate_ad: статус,
+    причину, скидку и состояние описания.
+
+    Идемпотентно: CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS.
+    """
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hunt_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                crit_id INTEGER NOT NULL,
+                ad_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending_details',
+                reason TEXT DEFAULT '',
+                reject_reason TEXT DEFAULT '',
+                discount INTEGER DEFAULT 0,
+                desc_state TEXT DEFAULT '',
+                created_at TEXT,
+                updated_at TEXT,
+                delivery TEXT DEFAULT '',
+                notified_at TEXT,
+                UNIQUE(user_id, ad_id)
+            )
+        """)
+        cols = {r['name'] for r in cursor.execute("PRAGMA table_info(hunt_matches)").fetchall()}
+        if 'delivery' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN delivery TEXT DEFAULT ''")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
+                       "ON hunt_matches(user_id, status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_ad ON hunt_matches(ad_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_crit ON hunt_matches(crit_id)")
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"ensure_hunt_matches: {e}")
+
+
 def ensure_verdict_column():
     """Колонка для оценки ИИ: оригинал, реплика или нужно проверить."""
     try:
@@ -17971,6 +18013,12 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         # Медианы критериев пересчитываем ДО рассылки: иначе скидка
         # считалась бы по устаревшей выборке
         recompute_criterion_medians()
+        # Решения по новым объявлениям — в hunt_matches: из неё читает лента,
+        # и по ней же будет работать очередь отправки (этап C)
+        try:
+            hunt_matches_recompute(ad_ids=stats.get('ids') or [])
+        except Exception as e:
+            logger.error(f"hunt_matches ingest: {e}")
     return stats
 
 
@@ -19009,97 +19057,384 @@ def median_for_ad(ad: Dict, crit: Dict = None, min_samples: int = 5) -> Optional
     return None
 
 
-def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
-    """Подходит ли находка под критерий. Возвращает скидку в % (0 = без скидки).
+# ── ЭТАП B: одно правило отбора для чата и ленты ─────────────────────────────
+# До этого чат и лента считали по-разному: объявление могло быть в ленте и не
+# прийти в чат, и причину нельзя было посмотреть. Теперь решение принимает
+# одна чистая функция evaluate_ad (ни SQL, ни сети), а результат складывается
+# в hunt_matches — из неё читают и лента, и рассылка.
+class Decision(NamedTuple):
+    """Решение по объявлению: подходит ли, почему, с какой выгодой."""
+    ok: bool
+    reason: str = 'ok'
+    label: str = ''
+    discount: int = 0
+    needs_description: bool = False
 
-    Режим 'any' работает СРАЗУ, без накопленной статистики: иначе человек
-    создаёт критерий, ждёт и не получает ничего, не понимая почему.
+
+HUNT_REASON_LABELS = {
+    'ok': 'подходит',
+    'ok_discount': 'дешевле рынка',
+    'date_unknown_ok': 'дата не указана — пропускаем',
+    'desc_needed': 'нужна проверка по описанию',
+    'desc_failed': 'описание не получено',
+    'no_price': 'нет цены',
+    'hidden': 'человек убрал этот лот',
+    'already_sent': 'уже отправляли',
+    'no_photo': 'нет фото, а в критерии «только с фото»',
+    'price_too_high': 'дороже потолка критерия',
+    'price_too_low': 'дешевле нижней границы критерия',
+    'price_below_floor': 'цена ниже 15% медианы — похоже, не тот товар',
+    'no_median': 'нет медианы: меньше пяти похожих, режим «только выгодные»',
+    'not_cheaper': 'не дешевле рынка, а режим «только выгодные»',
+    'discount_low': 'скидка меньше заданной',
+    'stale': 'старше порога свежести',
+    'category_mismatch': 'другая категория',
+    'city_mismatch': 'другой город',
+    'title_words': 'в заголовке нет слов или чисел запроса',
+    'accessory': 'аксессуар, а не сам товар',
+    'condition_new_used': 'состояние не совпало',
+    'shop': 'магазин, а человек просил с рук',
+    'replica': 'реплика или копия в описании',
+    'requirement': 'не выполнено требование словами',
+}
+
+
+def _hunt_reason_label(reason: str) -> str:
+    """Человекочитаемая подпись причины — её видит админ в /hunt_debug."""
+    if not reason:
+        return ''
+    if reason.startswith('requirement:'):
+        return f'не выполнено требование «{reason.split(":", 1)[1]}»'
+    return HUNT_REASON_LABELS.get(reason, reason)
+
+
+def _hunt_needs_description(crit: Dict) -> bool:
+    """Зависит ли решение от описания — тогда его должен принести сборщик."""
+    if str(crit.get('requirements') or '').strip():
+        return True
+    if str(crit.get('condition') or '').strip():
+        return True
+    return False
+
+
+def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
+                hidden: bool = False, already_sent: bool = False) -> Decision:
+    """Подходит ли объявление под критерий. Без SQL и без сети.
+
+    require_description=True — окончательное решение: если критерий опирается
+    на описание, а описания нет, объявление НЕ считается подходящим (статус
+    «нужна проверка по описанию»). С False — предварительное: подходит, но
+    описание надо дозагрузить.
     """
-    median = int(crit.get('median_price') or 0)
+    def no(reason: str) -> Decision:
+        return Decision(False, reason, _hunt_reason_label(reason))
+
     price = int(ad.get('price') or 0)
     if price <= 0:
-        return None
-    max_price = int(crit.get('max_price') or 0)
-    if max_price and price > max_price:
-        return None
-    # Те же фильтры, что и в ленте: иначе бот присылал бы не то, что видно
-    min_price = int(crit.get('min_price') or 0)
-    if min_price and price < min_price:
-        return None
-    max_hours = int(crit.get('max_hours') or 0)
-    if max_hours:
-        ago = ad.get('published_hours_ago')
-        if ago is None or int(ago) > max_hours:
-            return None
+        return no('no_price')
+    if hidden:
+        return no('hidden')
+    if already_sent:
+        return no('already_sent')
     if int(crit.get('with_photo') or 0):
         photos = str(ad.get('photos') or '')
         if photos in ('', '[]', 'null'):
-            return None
+            return no('no_photo')
+    max_price = int(crit.get('max_price') or 0)
+    if max_price and price > max_price:
+        return no('price_too_high')
+    min_price = int(crit.get('min_price') or 0)
+    if min_price and price < min_price:
+        return no('price_too_low')
+    if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
+        return no('category_mismatch')
+    if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
+        return no('city_mismatch')
+
     title = str(ad.get('title') or '').lower()
     if not _condition_ok(crit.get('condition'), title):
-        return None
+        return no('condition_new_used')
     alts = _query_alt_numbers(crit.get('query'))
     if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', title) for n in alts):
-        return None
-    padded = ' ' + title + ' '
+        return no('title_words')
     for word in _query_words_required(crit.get('query')):
-        # Числа сверяем как отдельные слова, а не как часть строки
+        # Числа (размер, память, год) сверяем отдельным словом: «43» не должно
+        # находить «1430», а «13» — «2013».
         if str(word).isdigit():
             if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', title):
-                return None
+                return no('title_words')
             continue
         variants = query_word_variants(word)
-        if not variants:
-            continue
-        if not any(v in title for v in variants):
-            return None
-    if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
-        return None
-    if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
-        return None
-
-    # Аксессуары и мусор отсекаем: «кабель для iPhone» — не айфон
-    low_title = str(ad.get('title') or '').lower()
-    # Требования словами: «только оригинал», «не магазин, только с рук»,
-    # «хорошее состояние», «не вскрывался». Раньше их проверяла ТОЛЬКО лента,
-    # а отправка в Телеграм — нет: поэтому реплики и магазины приходили.
-    _req_low = str(crit.get('requirements') or '').lower()
-    _low_all = (str(ad.get('title') or '') + ' ' + str(ad.get('description') or '')).lower()
-    for _bad in _requirement_excludes(crit.get('requirements')):
-        if _bad in _low_all:
-            return None
-    # Магазин по данным страницы: тип продавца и ник надёжнее слова в заголовке
-    if any(w in _req_low for w in ('не магазин', 'с рук', 'частник', 'не компания')):
-        if str(ad.get('seller_type') or '') == 'company':
-            return None
-        _sn = str(ad.get('seller_name') or '').lower()
-        if _sn and any(w in _sn for w in HUNT_SHOP_MARKERS):
-            return None
-
+        if variants and not any(v in title for v in variants):
+            return no('title_words')
     for bad in HUNT_ACCESSORY_WORDS:
-        if bad in low_title:
-            return None
-    # Цена в разы ниже медианы — это не выгода, а другая категория товара
+        if bad in title:
+            return no('accessory')
+
+    description = str(ad.get('description') or '')
+    low_all = (str(ad.get('title') or '') + ' ' + description).lower()
+    for phrase in _requirement_excludes(crit.get('requirements')):
+        if phrase in low_all:
+            if any(m in str(phrase) for m in HUNT_REPLICA_MARKERS):
+                return no('replica')
+            return no('requirement:' + str(phrase))
+    req_low = str(crit.get('requirements') or '').lower()
+    if any(w in req_low for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+        if str(ad.get('seller_type') or '') == 'company':
+            return no('shop')
+        seller_name = str(ad.get('seller_name') or '').lower()
+        if seller_name and any(w in seller_name for w in HUNT_SHOP_MARKERS):
+            return no('shop')
+
+    # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
+    # но помечаем одинаково в чате и ленте (решение B1).
+    ago = ad.get('published_hours_ago')
+    max_hours = int(crit.get('max_hours') or 0)
+    date_reason = ''
+    if max_hours:
+        if ago is None:
+            date_reason = 'date_unknown_ok'
+        elif int(ago) > max_hours:
+            return no('stale')
+    if ago is not None and int(ago) > HUNT_FRESH_HOURS:
+        return no('stale')
+    if ago is None and not HUNT_ALLOW_UNDATED:
+        return no('stale')
+
+    needs_description = _hunt_needs_description(crit)
+    if needs_description and not description.strip():
+        reason = 'desc_needed'
+        if require_description:
+            return Decision(False, reason, _hunt_reason_label(reason), 0, True)
+        return Decision(True, reason, _hunt_reason_label(reason), 0, True)
+
+    median = int(crit.get('median_price') or 0)
+    mode = str(crit.get('mode') or 'any')
+    # Цена в разы ниже медианы — это другой товар, а не выгода: iPhone за 53 ₽
+    # при медиане 24 990 в чат не уходит, а в ленте получает ВИДИМУЮ причину
+    # (этап D покажет по ней серый бейдж вместо «ниже рынка»).
     if median and price < median * HUNT_MIN_PRICE_SHARE:
-        return None
-
-    if (crit.get('mode') or 'any') == 'any':
-        # «Любые подходящие» — присылаем КАЖДОЕ совпадение, даже если оно
-        # не дешевле рынка. Раньше здесь стоял отсев «дороже медианы —
-        # пропускаем», и в чат не уходило НИЧЕГО: подходило 60 объявлений,
-        # отправлено 0. В ленте при этом они были — человек видел варианты
-        # и не понимал, почему бот молчит.
-        if not median or price >= median:
-            return 0
-        discount = int(round((median - price) * 100.0 / median))
-        return discount
-
-    if not median or price >= median:
-        return None
+        return no('price_below_floor')
+    if not median:
+        if mode == 'deal':
+            return no('no_median')
+        reason = date_reason or 'ok'
+        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description)
+    if price >= median:
+        if mode == 'deal':
+            return no('not_cheaper')
+        reason = date_reason or 'ok'
+        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description)
     discount = int(round((median - price) * 100.0 / median))
-    if discount < int(crit.get('min_discount') or 15):
+    if mode == 'deal' and discount < int(crit.get('min_discount') or 15):
+        return no('discount_low')
+    reason = date_reason or 'ok_discount'
+    return Decision(True, reason, _hunt_reason_label(reason), discount, needs_description)
+
+
+# ── Записи решений: hunt_matches ────────────────────────────────────────────
+HUNT_STATUSES = ('pending_details', 'ready', 'sending', 'sent', 'rejected', 'send_failed')
+
+
+def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
+                     desc_state: str = '', force_status: str = '',
+                     notified: bool = False) -> None:
+    """Записывает решение по паре (пользователь, объявление).
+
+    Уже отправленное не перезаписываем: повторный пересчёт не должен
+    «оживлять» то, что человеку прислали (`sent` остаётся `sent`).
+    """
+    user_id, crit_id, ad_id = int(user_id), int(crit_id), int(ad_id)
+    if force_status:
+        status = force_status
+    elif decision.reason == 'desc_needed':
+        # Не отказ: ждём описание от сборщика (этап A5), потом пересчитаем
+        status = 'pending_details'
+    elif decision.ok:
+        status = 'ready'
+    else:
+        status = 'rejected'
+    reject_reason = decision.reason if status == 'rejected' else ''
+    now = get_moscow_time().isoformat()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT id, status, notified_at FROM hunt_matches "
+                       "WHERE user_id=? AND ad_id=?", (user_id, ad_id))
+        row = cursor.fetchone()
+        if row:
+            old_status = str(row['status'] or '')
+            if old_status in ('sent', 'sending') and not force_status:
+                # Уже ушло человеку: обновляем только скидку и время
+                cursor.execute("UPDATE hunt_matches SET discount=?, updated_at=? WHERE id=?",
+                               (int(decision.discount or 0), now, int(row['id'])))
+            else:
+                cursor.execute(
+                    "UPDATE hunt_matches SET crit_id=?, status=?, reason=?, reject_reason=?, "
+                    "discount=?, desc_state=COALESCE(NULLIF(?, ''), desc_state), updated_at=?, "
+                    "notified_at=COALESCE(?, notified_at) WHERE id=?",
+                    (crit_id, status, decision.reason, reject_reason, int(decision.discount or 0),
+                     desc_state, now, now if notified else None, int(row['id'])))
+        else:
+            cursor.execute(
+                "INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
+                "discount, desc_state, created_at, updated_at, notified_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (user_id, crit_id, ad_id, status, decision.reason, reject_reason,
+                 int(decision.discount or 0), desc_state, now, now, now if notified else None))
+    except Exception as e:
+        logger.warning(f"hunt_match_store: {e}")
+
+
+def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional[int] = None,
+                           limit_ads: int = 300) -> int:
+    """Пересчитывает решения: при приёме находок, создании критерия, описаниях.
+
+    ad_ids — только эти объявления (при ingest и после описаний); иначе
+    последние limit_ads объявлений с Авито (при создании критерия).
+    """
+    cursor = db.conn.cursor()
+    try:
+        if crit_id:
+            cursor.execute("SELECT * FROM hunt_criteria WHERE id=?", (int(crit_id),))
+        else:
+            cursor.execute("SELECT * FROM hunt_criteria WHERE active=1")
+        crits = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"hunt_matches criteria: {e}")
+        return 0
+    if not crits:
+        return 0
+    try:
+        if ad_ids:
+            ids = [int(i) for i in ad_ids][:500]
+            marks = ','.join('?' for _ in ids)
+            cursor.execute(f"SELECT * FROM ads WHERE id IN ({marks})", ids)
+        else:
+            cursor.execute("SELECT * FROM ads WHERE source <> 'polka' AND price > 0 "
+                           "ORDER BY id DESC LIMIT ?", (int(limit_ads),))
+        ads = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"hunt_matches ads: {e}")
+        return 0
+    written = 0
+    for ad in ads:
+        for crit in crits:
+            uid = int(crit.get('user_id') or 0)
+            if not uid:
+                continue
+            try:
+                hidden = is_finding_hidden(uid, int(ad['id']))
+                legacy_sent = db.is_search_notification_sent(uid, int(ad['id']))
+            except Exception:
+                hidden, legacy_sent = False, False
+            decision = evaluate_ad(ad, crit, require_description=_hunt_needs_description(crit),
+                                   hidden=hidden, already_sent=False)
+            desc = str(ad.get('description') or '').strip()
+            desc_state = 'ok' if desc else ('pending' if decision.needs_description else '')
+            # Отметка прошлых отправок главнее решения: если человеку уже
+            # прислали, запись обязана быть sent
+            force = 'sent' if legacy_sent else ''
+            hunt_match_store(uid, int(crit['id']), int(ad['id']), decision,
+                             desc_state=desc_state, force_status=force)
+            written += 1
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    return written
+
+
+def hunt_match_mark_sent(user_id: int, ad_id: int, delivery: str = 'chat') -> None:
+    """Помечает запись отправленной. Вызывается там же, где уходит сообщение,
+    поэтому лента и чат не расходятся (в этапе C это делает воркер)."""
+    now = get_moscow_time().isoformat()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("UPDATE hunt_matches SET status='sent', delivery=?, notified_at=?, "
+                       "updated_at=? WHERE user_id=? AND ad_id=?",
+                       (str(delivery or 'chat'), now, now, int(user_id), int(ad_id)))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"hunt_match_mark_sent: {e}")
+
+
+def hunt_ready_ids(crit_id: Optional[int] = None, user_id: Optional[int] = None,
+                   limit: int = 30) -> List[int]:
+    """Объявления, готовые к отправке (для немедленной отправки после создания
+    критерия и для воркера этапа C)."""
+    sql = "SELECT ad_id FROM hunt_matches WHERE status='ready'"
+    params: List = []
+    if crit_id:
+        sql += " AND crit_id=?"
+        params.append(int(crit_id))
+    if user_id:
+        sql += " AND user_id=?"
+        params.append(int(user_id))
+    sql += " ORDER BY discount DESC, id DESC LIMIT ?"
+    params.append(int(limit))
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(sql, params)
+        return [int(r['ad_id']) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.warning(f"hunt_ready_ids: {e}")
+        return []
+
+
+def _hunt_debug_ad_id(raw: str) -> Optional[int]:
+    """id объявления из «12345» или из ссылки Авито (по external_id)."""
+    raw = str(raw or '').strip()
+    if not raw:
         return None
-    return discount
+    cursor = db.conn.cursor()
+    if raw.isdigit():
+        try:
+            cursor.execute("SELECT id FROM ads WHERE id=?", (int(raw),))
+            row = cursor.fetchone()
+            if row:
+                return int(row['id'])
+        except Exception:
+            return None
+    m = re.search(r'_(\d{6,})', raw)
+    ext = m.group(1) if m else ''
+    if ext:
+        try:
+            cursor.execute("SELECT id FROM ads WHERE external_id=? ORDER BY id DESC LIMIT 1", (ext,))
+            row = cursor.fetchone()
+            if row:
+                return int(row['id'])
+        except Exception:
+            return None
+    return None
+
+
+def hunt_match_row(ad_id: int, user_id: Optional[int] = None) -> List[Dict]:
+    """Записи решений по объявлению (для /hunt_debug)."""
+    cursor = db.conn.cursor()
+    sql = ("SELECT hm.*, hc.query, hc.mode, c.title AS ad_title, c.price AS ad_price "
+           "FROM hunt_matches hm "
+           "LEFT JOIN hunt_criteria hc ON hc.id = hm.crit_id "
+           "LEFT JOIN ads c ON c.id = hm.ad_id WHERE hm.ad_id = ?")
+    params: List = [int(ad_id)]
+    if user_id:
+        sql += " AND hm.user_id = ?"
+        params.append(int(user_id))
+    try:
+        cursor.execute(sql + " ORDER BY hm.id", params)
+        return [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.warning(f"hunt_match_row: {e}")
+        return []
+
+
+def match_findings_for_user(crit: Dict, ad: Dict) -> Optional[int]:
+    """Совместимость со старым кодом: скидка в % или None.
+
+    Сами правила живут в evaluate_ad (этап B) — здесь только вызов, чтобы
+    рассылка и лента считали одинаково.
+    """
+    decision = evaluate_ad(ad, crit)
+    return decision.discount if decision.ok else None
 
 
 # ── Безопасный HTML в сообщениях о находках (этап D1) ───────────────────────
@@ -19209,6 +19544,8 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
             db.mark_search_notification_sent(user_id, ad['id'])
         except Exception:
             pass
+        # Сводка — тоже отправка: статус и признак «ушло сводкой» (C4)
+        hunt_match_mark_sent(user_id, ad['id'], 'digest')
     return 1
 
 
@@ -19657,6 +19994,9 @@ async def notify_hunt_matches(ad_ids: List[int]):
                     db.mark_search_notification_sent(user_id, ad['id'])
                 except Exception:
                     pass
+                # Лента читает hunt_matches: без этой пометки она считала бы
+                # отправленное «в очереди» (этап C делает то же в воркере)
+                hunt_match_mark_sent(user_id, ad['id'], 'chat')
                 sent += 1
             except Exception as e:
                 logger.warning(f"hunt push -> {user_id}: {e}")
@@ -19839,7 +20179,11 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                 crit_row = c
                 break
         if crit_row:
-            ids = fresh_ids_for_criterion(crit_row)
+            # Этап B: сначала записываем решения по уже собранным объявлениям,
+            # потом отправляем те, что готовы (раньше выборка была отдельной
+            # и расходилась с рассылкой)
+            hunt_matches_recompute(crit_id=crit_id)
+            ids = hunt_ready_ids(crit_id=crit_id, limit=30)
             if ids:
                 logger.info(f"критерий {crit_id}: сразу отправляю {len(ids)} находок")
                 asyncio.get_running_loop().create_task(notify_hunt_matches(ids))
@@ -20488,6 +20832,62 @@ async def hunt_show_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text(text, parse_mode=ParseMode.HTML, reply_markup=kb)
     except Exception as e:
         logger.warning(f"hunt_show отправка: {e}")
+
+
+async def hunt_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /hunt_debug <ссылка или id> — почему объявление ушло или не ушло.
+
+    Админская диагностика (этап B5): по каждому критерию видно решение
+    evaluate_ad — статус, код причины, скидку и состояние описания.
+    """
+    user = update.effective_user
+    if not await is_admin(user.id):
+        return
+    raw = ' '.join(context.args or []).strip()
+    ad_id = _hunt_debug_ad_id(raw)
+    if not ad_id:
+        await update.message.reply_text(
+            "Использование: <code>/hunt_debug &lt;ссылка или id&gt;</code>\n"
+            "Например: <code>/hunt_debug https://www.avito.ru/..._2738491025</code>",
+            parse_mode=ParseMode.HTML)
+        return
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT * FROM ads WHERE id=?", (ad_id,))
+    row = cursor.fetchone()
+    if not row:
+        await update.message.reply_text(f"Объявление #{ad_id} не найдено")
+        return
+    ad = dict(row)
+    desc_len = len(str(ad.get('description') or '').strip())
+    lines = [
+        f"<b>#{ad_id} {_hunt_escape(str(ad.get('title'))[:60])}</b>",
+        f"{_money(ad.get('price') or 0)} ₽ · {_hunt_escape(ad.get('city') or '')} · "
+        f"{_hunt_escape(ad.get('category') or '')}",
+        f"описание: {'нет' if not desc_len else str(desc_len) + ' симв.'}"
+        + (f" · продавец: {_hunt_escape(str(ad.get('seller_type') or 'не определён'))}"
+           if ad.get('seller_type') else ''),
+        "",
+    ]
+    records = hunt_match_row(ad_id)
+    if not records:
+        lines.append("Решений нет: объявление ещё не проходило пересчёт "
+                     "(появится после следующего сбора или создания критерия).")
+    for r in records:
+        parts = [f"<b>{_hunt_escape(str(r.get('status') or ''))}</b>"]
+        reason = str(r.get('reason') or '')
+        if reason:
+            label = _hunt_reason_label(reason)
+            parts.append(_hunt_escape(f"{reason} — {label}" if label and label != reason else reason))
+        parts.append(f"скидка {int(r.get('discount') or 0)}%")
+        if r.get('desc_state'):
+            parts.append(f"описание: {_hunt_escape(str(r.get('desc_state')))}")
+        if r.get('reject_reason'):
+            parts.append(_hunt_escape(f"отказ: {r.get('reject_reason')}"))
+        if r.get('notified_at'):
+            parts.append(_hunt_escape(f"отправлено {str(r.get('notified_at'))[:16]}"))
+        lines.append(f"• «{_hunt_escape(str(r.get('query') or ''))}» "
+                     f"[{_hunt_escape(str(r.get('mode') or 'any'))}] — " + ", ".join(parts))
+    await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
 
 async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -22580,6 +22980,74 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
     return _miniapp_json({'ok': True, 'message': message}, status=201)
 
 
+async def _findings_from_matches(viewer_id: int, min_discount: int, category: str,
+                                 city: str, limit: int, offset: int):
+    """Лента из hunt_matches — то же, что решил evaluate_ad.
+
+    Своих правил отбора у ленты больше нет: статус, причина и скидка приходят
+    из таблицы решений, поэтому чат и лента не могут разойтись. Подозрительно
+    дешёвые лоты (цена ниже 15% медианы) показываем в конце с причиной —
+    человек должен видеть, почему лот не ушёл в чат, а не гадать.
+    """
+    cursor = db.conn.cursor()
+    where = ["hm.user_id = ?",
+             "hm.status IN ('ready','sent','sending','pending_details','send_failed') "
+             "OR hm.reject_reason = 'price_below_floor'"]
+    params: List = [int(viewer_id)]
+    if min_discount > 0:
+        where.append("COALESCE(hm.discount, 0) >= ?")
+        params.append(int(min_discount))
+    if category:
+        where.append("a.category LIKE ?")
+        params.append(f"%{category}%")
+    if city:
+        where.append("a.city = ?")
+        params.append(city)
+    sql = (f"SELECT a.*, hm.status AS hunt_status, hm.reason AS hunt_reason, "
+           f"hm.reject_reason AS hunt_reject, hm.discount AS hunt_discount, "
+           f"hm.desc_state AS hunt_desc_state, hm.delivery AS hunt_delivery "
+           f"FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
+           f"WHERE {' AND '.join(where)} "
+           f"ORDER BY CASE WHEN hm.reject_reason = 'price_below_floor' THEN 1 ELSE 0 END, "
+           f"COALESCE(hm.discount, 0) DESC, a.id DESC LIMIT ? OFFSET ?")
+    try:
+        cursor.execute(sql, (*params, limit + 1, offset))
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"findings from matches: {e}")
+        return _miniapp_err('load_failed', 500)
+
+    has_more = len(rows) > limit
+    rows = rows[:limit]
+    fav_counts, fav_mine = _miniapp_fav_map([a['id'] for a in rows], viewer_id)
+    try:
+        admin = bool(await is_admin(int(viewer_id)))
+    except Exception:
+        admin = False
+    items = []
+    for row in rows:
+        item = _miniapp_serialize_ad(row, viewer_id, fav_counts, fav_mine)
+        status = str(row.get('hunt_status') or '')
+        stored = str(row.get('hunt_delivery') or '')
+        if status == 'sent':
+            delivery = stored or 'sent'
+        elif status in ('ready', 'sending'):
+            delivery = 'queued'
+        else:
+            delivery = 'not_sent'
+        item['delivery'] = delivery
+        item['hunt_status'] = status
+        item['hunt_reason'] = str(row.get('hunt_reason') or '')
+        item['hunt_reason_label'] = _hunt_reason_label(item['hunt_reason'])
+        item['hunt_discount'] = int(row.get('hunt_discount') or 0)
+        item['desc_state'] = str(row.get('hunt_desc_state') or '')
+        item['price_suspect'] = 1 if str(row.get('hunt_reject') or '') == 'price_below_floor' else 0
+        if admin:
+            item['reject_reason'] = str(row.get('hunt_reject') or '')
+        items.append(item)
+    return _miniapp_json({'items': items, 'has_more': has_more})
+
+
 async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/findings — находки, отсортированные по выгоде.
 
@@ -22609,6 +23077,15 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     # Лента показывает ВСЁ, что нашлось по критериям человека — включая то,
     # что бот не отправил в чат. Так видно, что поиск работает и сколько
     # вариантов есть, даже если сообщение ушло не про каждый.
+    # Этап B: лента читает таблицу решений hunt_matches — те же правила, что
+    # в чате, плюс причина отказа. Старый SQL остаётся за FEED_LEGACY=1 для
+    # отката одной переменной окружения.
+    if os.environ.get('FEED_LEGACY', '0') != '1':
+        crits_now = [c for c in get_user_criteria(viewer_id) if c.get('active')]
+        if not crits_now:
+            return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
+        return await _findings_from_matches(viewer_id, min_discount, category, city, limit, offset)
+
     crits = [c for c in get_user_criteria(viewer_id) if c.get('active')]
     if not crits:
         return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
@@ -25160,6 +25637,7 @@ def main():
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
+    application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
@@ -25567,6 +26045,7 @@ def main():
         ensure_filter_columns()
         ensure_hidden_table()
         ensure_verdict_column()
+        ensure_hunt_matches()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
