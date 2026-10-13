@@ -17347,6 +17347,8 @@ def ensure_hunt_matches():
                 created_at TEXT,
                 updated_at TEXT,
                 delivery TEXT DEFAULT '',
+                send_attempts INTEGER DEFAULT 0,
+                send_error TEXT DEFAULT '',
                 notified_at TEXT,
                 UNIQUE(user_id, ad_id)
             )
@@ -17354,6 +17356,10 @@ def ensure_hunt_matches():
         cols = {r['name'] for r in cursor.execute("PRAGMA table_info(hunt_matches)").fetchall()}
         if 'delivery' not in cols:
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN delivery TEXT DEFAULT ''")
+        if 'send_attempts' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_attempts INTEGER DEFAULT 0")
+        if 'send_error' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_error TEXT DEFAULT ''")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
                        "ON hunt_matches(user_id, status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_ad ON hunt_matches(ad_id)")
@@ -18074,7 +18080,7 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     pushed = 0
     if stats['accepted']:
         try:
-            asyncio.create_task(notify_hunt_matches(stats.get('ids') or []))
+            hunt_wake()
         except Exception as e:
             logger.warning(f"hunt notify start: {e}")
     return _miniapp_json({'ok': True, 'source': source, 'pushed': pushed, **stats})
@@ -19422,6 +19428,183 @@ def hunt_need_details(ad_ids: Optional[List[int]] = None, limit: int = 0) -> Lis
     return out
 
 
+def hunt_claim_batch(limit: int = 0, statuses: tuple = ('ready',)) -> List[Dict]:
+    """Атомарно забирает записи к отправке: ready → sending.
+
+    Захват одной командой UPDATE ... AND status='ready': если воркеров
+    окажется два (перезапуск контейнера), второй получит ноль строк и ничего
+    не отправит дважды. Возвращаем ровно то, что захватили мы.
+    """
+    if not limit:
+        limit = HUNT_WORKER_BATCH
+    now = get_moscow_time().isoformat()
+    cursor = db.conn.cursor()
+    try:
+        status_list = tuple(statuses) or ('ready',)
+        marks_st = ','.join('?' for _ in status_list)
+        cursor.execute(
+            f"SELECT id FROM hunt_matches WHERE status IN ({marks_st}) "
+            f"ORDER BY discount DESC, id LIMIT ?", (*status_list, int(limit)))
+        ids = [int(r['id']) for r in cursor.fetchall()]
+        if not ids:
+            return []
+        marks = ','.join('?' for _ in ids)
+        cursor.execute(
+            f"UPDATE hunt_matches SET status='sending', updated_at=? "
+            f"WHERE id IN ({marks}) AND status IN ({marks_st})",
+            (now, *ids, *status_list))
+        claimed = int(cursor.rowcount or 0)
+        db.conn.commit()
+        if not claimed:
+            return []
+        cursor.execute(f"SELECT * FROM hunt_matches WHERE id IN ({marks}) "
+                       f"AND status='sending' AND updated_at=?", (*ids, now))
+        return [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.error(f"hunt_claim_batch: {e}")
+        return []
+
+
+def hunt_release(rows: List[Dict], status: str, error: str = '') -> None:
+    """Возвращает записи в очередь или помечает неудачу (этап C3)."""
+    if not rows:
+        return
+    now = get_moscow_time().isoformat()
+    cursor = db.conn.cursor()
+    for row in rows:
+        try:
+            if status == 'send_failed':
+                cursor.execute(
+                    "UPDATE hunt_matches SET status='send_failed', send_error=?, "
+                    "send_attempts=COALESCE(send_attempts,0)+1, updated_at=? WHERE id=?",
+                    (str(error)[:180], now, int(row['id'])))
+            elif status == 'rejected':
+                cursor.execute("UPDATE hunt_matches SET status='rejected', reject_reason=?, "
+                               "updated_at=? WHERE id=?", (str(error)[:120], now, int(row['id'])))
+            else:
+                cursor.execute("UPDATE hunt_matches SET status=?, updated_at=? WHERE id=?",
+                               (str(status), now, int(row['id'])))
+        except Exception as e:
+            logger.warning(f"hunt_release: {e}")
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+
+
+def hunt_retry_failed() -> int:
+    """Неудачные отправки возвращает в очередь: не сразу и не бесконечно."""
+    now = get_moscow_time()
+    before = (now - timedelta(minutes=HUNT_SEND_RETRY_MIN)).isoformat()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE hunt_matches SET status='ready', updated_at=? "
+            "WHERE status='send_failed' AND COALESCE(send_attempts,0) < ? "
+            "AND COALESCE(send_error,'') <> 'bot_blocked' "
+            "AND updated_at < ?", (now.isoformat(), HUNT_SEND_MAX_TRIES, before))
+        n = int(cursor.rowcount or 0)
+        db.conn.commit()
+        return n
+    except Exception as e:
+        logger.warning(f"hunt_retry_failed: {e}")
+        return 0
+
+
+def hunt_flush_stale_pending(minutes: int = 0) -> int:
+    """«Ждём описание» дольше HUNT_PENDING_MAX_MIN минут → отправляем с пометкой.
+
+    Если сборщик не смог принести описание (или его нет вовсе), находка не
+    должна пропадать: человек получает сообщение с пометкой «описание не
+    проверено» (этап A7), а не тишину.
+    """
+    if not minutes:
+        minutes = HUNT_PENDING_MAX_MIN
+    now = get_moscow_time()
+    before = (now - timedelta(minutes=minutes)).isoformat()
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute(
+            "UPDATE hunt_matches SET status='ready', reason='desc_failed', "
+            "desc_state='failed', updated_at=? "
+            "WHERE status='pending_details' AND created_at < ?",
+            (now.isoformat(), before))
+        n = int(cursor.rowcount or 0)
+        db.conn.commit()
+        return n
+    except Exception as e:
+        logger.warning(f"hunt_flush_stale_pending: {e}")
+        return 0
+
+
+def hunt_note_blocked(user_id: int, reason: str = '') -> None:
+    """Запоминает, что человек заблокировал бота: слать ему больше нельзя.
+
+    Пишем в настройки, чтобы приложение могло показать плашку «откройте
+    бота и нажмите Start» — без этого находки уходили в пустоту.
+    """
+    try:
+        _setting_set(f'bot_blocked:{int(user_id)}', get_moscow_time().isoformat())
+        logger.warning(f"hunt: бот заблокирован пользователем {user_id}: {str(reason)[:80]}")
+    except Exception as e:
+        logger.warning(f"hunt_note_blocked: {e}")
+
+
+def hunt_is_blocked(user_id: int) -> bool:
+    try:
+        return bool(_setting_get(f'bot_blocked:{int(user_id)}', ''))
+    except Exception:
+        return False
+
+
+def hunt_stats_text() -> str:
+    """Сводка очереди для админа: сколько готово, ушло, не ушло и почему."""
+    cursor = db.conn.cursor()
+    day_ago = (get_moscow_time() - timedelta(hours=24)).isoformat()
+    lines = ["<b>Очередь доставки</b>", ""]
+    try:
+        cursor.execute("SELECT status, COUNT(*) AS n FROM hunt_matches GROUP BY status")
+        for row in cursor.fetchall():
+            lines.append(f"{row['status']}: <b>{row['n']}</b>")
+    except Exception as e:
+        lines.append(f"ошибка чтения очереди: {_hunt_escape(str(e))}")
+    try:
+        cursor.execute("SELECT reject_reason, COUNT(*) AS n FROM hunt_matches "
+                       "WHERE status='rejected' AND updated_at >= ? "
+                       "GROUP BY reject_reason ORDER BY n DESC LIMIT 8", (day_ago,))
+        rejects = cursor.fetchall()
+        if rejects:
+            lines.append("")
+            lines.append("<b>Почему отказали за сутки</b>")
+            for row in rejects:
+                reason = str(row['reject_reason'] or 'без причины')
+                lines.append(f"{_hunt_escape(reason)} — {row['n']} "
+                             f"({_hunt_escape(_hunt_reason_label(reason))})")
+    except Exception:
+        pass
+    try:
+        cursor.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE "
+                       "status='send_failed'")
+        row = cursor.fetchone()
+        if row and row['n']:
+            lines.append("")
+            lines.append(f"Не ушло (повторим): <b>{row['n']}</b>")
+    except Exception:
+        pass
+    try:
+        cursor.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE "
+                       "status='sent' AND notified_at >= ?", (day_ago,))
+        row = cursor.fetchone()
+        lines.append("")
+        lines.append(f"Отправлено за сутки: <b>{row['n'] if row else 0}</b>")
+    except Exception:
+        pass
+    lines.append("")
+    lines.append(f"Воркер: пачка {HUNT_WORKER_BATCH}, каждые {HUNT_WORKER_EVERY} с, "
+                 f"повтор неудач через {HUNT_SEND_RETRY_MIN} мин")
+    return "\n".join(lines)
+
+
 def hunt_match_mark_sent(user_id: int, ad_id: int, delivery: str = 'chat') -> None:
     """Помечает запись отправленной. Вызывается там же, где уходит сообщение,
     поэтому лента и чат не расходятся (в этапе C это делает воркер)."""
@@ -19537,6 +19720,13 @@ async def _send_html_safe(send, **kwargs) -> bool:
         return True
     except Exception as e:
         low = str(e).lower()
+        name = type(e).__name__
+        # Заблокированный бот и лимиты Telegram — это не «ошибка разметки»:
+        # их обрабатывает воркер (пометить пользователя / подождать), поэтому
+        # пропускаем наверх, а не глотаем здесь
+        if name in ('Forbidden', 'RetryAfter') or 'blocked by the user' in low \
+                or 'retry after' in low or 'too many requests' in low:
+            raise
         if 'parse' not in low and 'entit' not in low:
             logger.warning(f'hunt send: {e}')
             return False
@@ -19634,35 +19824,6 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
     return 1
 
 
-def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
-    """Свежие находки, подходящие под критерий ПРЯМО СЕЙЧАС.
-
-    Нужно при создании критерия: объявления, собранные до этого, в ленте
-    видны, а в чат никогда не приходили — рассылка видит только те, что
-    пришли с очередным сбором. Человек создавал критерий, видел находки
-    в ленте и не понимал, почему бот молчит.
-    """
-    try:
-        # active_only=False: находки с Авито — не объявления доски, и их
-        # status не равен 'active'. С фильтром статуса выборка выходила
-        # ПУСТОЙ при 41 подходящем объявлении — рассылка молчала.
-        where, params = _criterion_where(crit, active_only=False)
-        sql = ("SELECT id FROM ads WHERE " + str(where) +
-               " ORDER BY COALESCE(parsed_at, created_at) DESC LIMIT ?")
-        cur = db.conn.cursor()
-        cur.execute(sql, (*params, int(limit)))
-        return [int(r['id']) for r in cur.fetchall()]
-    except Exception as e:
-        # Ошибку выборки показываем в диагностике: раньше она глоталась,
-        # и рассылка молча возвращала ноль при 47 подходящих объявлениях.
-        try:
-            _hunt_note_send(error=f'выборка: {e}')
-        except Exception:
-            pass
-        logger.warning(f"fresh_ids_for_criterion: {e}")
-        return []
-
-
 # ── Оценка объявления ИИ ────────────────────────────────────────────────────
 # ИИ смотрит заголовок, цену и город и говорит, похоже ли на оригинал.
 # Работает ТОЛЬКО для кандидатов, прошедших дешёвые фильтры, и не больше
@@ -19671,13 +19832,24 @@ def fresh_ids_for_criterion(crit: Dict, limit: int = 30) -> List[int]:
 # делает скрипт — он сверяет все объявления с критерием бесплатно и без
 # лимитов. ИИ нужен только для того, чего нет в заголовке (АКБ, состояние
 # на странице). Включается одной переменной, если понадобится.
+HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
 # Этап A: сколько карточек за проход просит сборщик, как часто повторяем
 # неудачную попытку и сколько раз пробуем вообще
 HUNT_DESC_PER_PASS = int(os.environ.get('HUNT_DESC_PER_PASS', '25'))
 HUNT_DESC_RETRY_MIN = int(os.environ.get('HUNT_DESC_RETRY_MIN', '30'))
 HUNT_DESC_MAX_TRIES = int(os.environ.get('HUNT_DESC_MAX_TRIES', '3'))
-HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
+# Этап C: очередь доставки. Один воркер забирает готовые записи пачками,
+# поэтому дублей не бывает даже при параллельных сборах.
+HUNT_WORKER_BATCH = int(os.environ.get('HUNT_WORKER_BATCH', '15'))
+HUNT_WORKER_EVERY = int(os.environ.get('HUNT_WORKER_EVERY', '20'))
+HUNT_SEND_MAX_TRIES = int(os.environ.get('HUNT_SEND_MAX_TRIES', '3'))
+HUNT_SEND_RETRY_MIN = int(os.environ.get('HUNT_SEND_RETRY_MIN', '10'))
+HUNT_PENDING_MAX_MIN = int(os.environ.get('HUNT_PENDING_MAX_MIN', '30'))
+
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
+# Пробудка воркера очереди: ingest, новый критерий и описания будят его сразу,
+# чтобы находка уходила в чат через секунды, а не через свой тик
+_HUNT_WAKE: 'Optional[asyncio.Event]' = None
 
 
 def _hunt_verdict_prompt(ad: Dict, query: str = '', requirements: str = '',
@@ -19820,164 +19992,224 @@ async def ai_judge_ad(ad: Dict, crit: Dict = None) -> str:
         return ''
 
 
-async def notify_hunt_matches(ad_ids: List[int]):
-    """Рассылает находки тем, чьи критерии они удовлетворяют.
+def hunt_wake() -> None:
+    """Будит воркер очереди: отправлять сразу, а не ждать свой тик.
 
-    Использует готовые таблицы проекта: search_notifications_sent не даёт
-    отправить одно и то же дважды.
+    Нужно, чтобы находка уходила в чат через секунды после сбора, а не через
+    20 секунд. Сам воркер при этом остаётся единственным отправителем.
     """
-    if not ad_ids:
-        _hunt_note_send(error='пустой список объявлений')
-        return 0
-    app = _get_bot_app()
-    if not app:
-        _hunt_note_send(error='нет доступа к боту (app is None)')
-        return 0
-    cursor = db.conn.cursor()
     try:
-        cursor.execute("SELECT * FROM hunt_criteria WHERE active=1")
-        crits = [dict(r) for r in cursor.fetchall()]
+        _HUNT_WAKE.set()
     except Exception:
-        return 0
-    sent = 0
-    # Ограничиваем объём: если пришло 300 находок, проверять все дорого,
-    # а старые всё равно не нужны — свежие важнее.
-    ad_ids = list(ad_ids)[:200]
-    matched: Dict[int, list] = {}
-    for ad_id in ad_ids:
-        ad = db.get_ad(ad_id)
-        if not ad or int(ad.get('price') or 0) <= 0:
-            continue
-        for crit in crits:
-            discount = match_findings_for_user(crit, ad)
-            if discount is not None:
-                matched.setdefault(int(crit['id']), []).append((ad, crit, discount))
-    for crit in crits:
-        items = matched.get(int(crit['id'])) or []
-        if len(items) > HUNT_DIGEST_AFTER:
-            sent += await _send_hunt_digest(crit, items)
-            continue
-        _ai_left = HUNT_AI_VERDICT_PER_PASS
-        for ad, crit, discount in items:
-            user_id = int(crit['user_id'])
+        pass
+
+
+async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: int,
+                           delivery: str = 'chat', ai_left: int = 0) -> str:
+    """Отправляет ОДНО сообщение о находке. Единственный путь в чат.
+
+    Возвращает 'sent', 'skipped', 'blocked' или 'failed:<ошибка>'.
+    И рассылка, и воркер очереди ходят сюда — поэтому текст, проверки и
+    пометки в базе живут в одном месте и не могут разойтись.
+    """
+    try:
+        if is_finding_hidden(int(user_id), int(ad['id'])):
+            return 'skipped'
+        if db.is_search_notification_sent(int(user_id), int(ad['id'])):
+            return 'skipped'
+    except Exception:
+        pass
+    price = int(ad.get('price') or 0)
+    # Несвежее не присылаем: недельное объявление — не находка. Если даты
+    # нет вовсе — присылаем (у большинства карточек её нет), см. HUNT_ALLOW_UNDATED.
+    ago = ad.get('published_hours_ago')
+    if ago is not None and int(ago) > HUNT_FRESH_HOURS:
+        return 'skipped'
+    if ago is None:
+        if not HUNT_ALLOW_UNDATED:
+            return 'skipped'
+        fresh = "дата не указана"
+    else:
+        hours = int(ago)
+        fresh = "только что" if hours == 0 else f"{hours} ч назад"
+    median = median_for_ad(ad, crit)
+    diff = 0
+    if median and median > price:
+        diff = median - price
+    elif (crit.get('mode') or 'any') != 'any':
+        return 'skipped'
+    needs_desc = (_hunt_needs_description(crit)
+                  and not str(ad.get('description') or '').strip())
+    text = _hunt_match_text(ad, fresh, median, diff,
+                            desc_checked=False if needs_desc else None)
+    if ai_left > 0:
+        try:
+            verdict = await ai_judge_ad(ad, crit)
+        except Exception as e:
+            verdict = ''
+            logger.warning(f'ai_judge_ad: {e}')
+        if verdict and str(verdict).strip().lower().startswith('мимо'):
+            _HUNT_AI_CALLS['rejected'] = _HUNT_AI_CALLS.get('rejected', 0) + 1
+            logger.info(f"ИИ отклонил: {str(verdict)[:90]}")
+            return 'skipped'
+        if verdict:
             try:
-                if db.is_search_notification_sent(user_id, ad['id']):
-                    continue
-                if is_finding_hidden(user_id, ad['id']):
-                    continue  # человек этот лот уже убрал
+                db.conn.execute("UPDATE ads SET ai_verdict=? WHERE id=?",
+                                (verdict, int(ad['id'])))
+                db.conn.commit()
+            except Exception as _ve:
+                logger.warning(f'ai_verdict save: {_ve}')
+            text = _hunt_match_text(ad, fresh, median, diff, verdict=verdict,
+                                    desc_checked=False if needs_desc else None)
+        else:
+            _HUNT_AI_CALLS['skipped'] = _HUNT_AI_CALLS.get('skipped', 0) + 1
+    kb = None
+    if ad.get('source_url'):
+        kb = InlineKeyboardMarkup([[
+            InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте", url=str(ad['source_url']))
+        ], [
+            # Убрать лот: человек посмотрел и понял — не то.
+            # Больше не придёт ни в чат, ни в ленту приложения.
+            InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
+        ]])
+    for attempt in (1, 2):
+        try:
+            # Сначала пробуем отправить С ФОТО: объявление продаёт картинка,
+            # и перекуп решает по ней за секунду. Если Авито не отдаст
+            # изображение — отправляем текстом, как раньше.
+            _photo_sent = False
+            try:
+                _ph = json.loads(str(ad.get('photos') or '[]'))
+                if isinstance(_ph, list) and _ph and str(_ph[0]).startswith('http'):
+                    _photo_sent = await _send_html_safe(
+                        app.bot.send_photo, chat_id=user_id, photo=str(_ph[0]),
+                        caption=text, reply_markup=kb)
+            except Exception as _pe:
+                logger.warning(f'hunt photo: {_pe}')
+            if not _photo_sent:
+                if not await _send_html_safe(app.bot.send_message, chat_id=user_id,
+                                             text=text, reply_markup=kb):
+                    return 'failed:send'
+            _hunt_note_send(sent=1)
+            try:
+                db.mark_search_notification_sent(int(user_id), int(ad['id']))
             except Exception:
                 pass
-            # Несвежее не присылаем: недельное объявление — не находка.
-            # НО: если даты нет вовсе — присылаем. Проверено на живой выдаче
-            # Авито: дату не проставляет БОЛЬШИНСТВО карточек (52 из 76), и
-            # прежнее правило «нет даты — молчим» приводило к полной тишине.
-            # От повторов защищает дедупликация, поэтому риск невелик.
-            ago = ad.get('published_hours_ago')
-            if ago is not None and int(ago) > HUNT_FRESH_HOURS:
-                continue
-            if ago is None:
-                if not HUNT_ALLOW_UNDATED:
-                    continue  # человек просил только подтверждённо свежее
-                fresh = "дата не указана"
-            else:
-                hours = int(ago)
-                fresh = "только что" if hours == 0 else f"{hours} ч назад"
-            # Показываем просто цену и разницу с рынком. Никаких «наваров»,
-            # «окупаемостей» и комиссий: человеку нужна цена, а не расчёты.
-            # Рынок считаем по ТАКИМ ЖЕ товарам: повербанк с повербанками.
-            # Если похожих мало — не выдумываем цифру, а молчим.
-            median = median_for_ad(ad, crit)
-            # Раньше здесь стоял безусловный continue: в чат попадали ТОЛЬКО
-            # товары дешевле рынка. В ленте при этом были все совпадения —
-            # человек видел варианты в приложении и не понимал, почему в
-            # чате тишина. Теперь в режиме «любые подходящие» присылаем
-            # каждое совпадение, а выгоду показываем, только если она есть.
-            any_mode = (crit.get('mode') or 'any') == 'any'
-            diff = 0
-            if median and median > int(ad['price']):
-                diff = median - int(ad['price'])
-            elif not any_mode:
-                continue
-            text = _hunt_match_text(ad, fresh, median, diff)
-            # Описание со страницы сервер НЕ грузит (этап A6): он ходит на
-            # Авито с адреса дата-центра, его блокируют, и каждая попытка —
-            # это 4–5 запросов впустую. Описания приносит сборщик с домашнего
-            # IP через /api/ingest/details, после чего решения пересчитываются
-            # (hunt_matches). Здесь только проверяем, что уже есть: если
-            # критерий опирается на описание, а описания нет — объявление
-            # уходит с пометкой «описание не проверено» (этап A7).
-            if _hunt_needs_description(crit) and not str(ad.get('description') or '').strip():
-                text = _hunt_match_text(ad, fresh, median, diff, desc_checked=False)
-
-            # Вердикт ИИ — перед текстом, но не вместо него.
-            # Если модель недоступна, сообщение уходит как раньше.
-            if _ai_left > 0:
-                _ai_left -= 1
-                _verdict = await ai_judge_ad(ad, crit)
-                if _verdict and str(_verdict).strip().lower().startswith('мимо'):
-                    # ИИ сверил описание и критерий — товар не тот.
-                    # Перекупу такое не нужно: не отправляем и считаем.
-                    _HUNT_AI_CALLS['rejected'] = _HUNT_AI_CALLS.get('rejected', 0) + 1
-                    logger.info(f"ИИ отклонил: {str(_verdict)[:90]}")
+            # Лента читает hunt_matches: без этой пометки она считала бы
+            # отправленное «в очереди»
+            hunt_match_mark_sent(int(user_id), int(ad['id']), delivery)
+            return 'sent'
+        except Exception as e:
+            name = type(e).__name__
+            low = str(e).lower()
+            if name == 'RetryAfter' or 'retry after' in low:
+                wait = float(getattr(e, 'retry_after', 5) or 5)
+                logger.warning(f'Telegram просит подождать {wait:.0f} с')
+                if attempt == 1:
+                    await asyncio.sleep(min(wait, 60) + 1)
                     continue
-                if _verdict:
-                    # Запоминаем оценку: её увидит лента находок
-                    try:
-                        db.conn.execute("UPDATE ads SET ai_verdict=? WHERE id=?",
-                                        (_verdict, int(ad['id'])))
-                        db.conn.commit()
-                    except Exception as _ve:
-                        logger.warning(f'ai_verdict save: {_ve}')
-                    # Оценка модели идёт в HTML-сообщение: текст экранируется
-                    text = _hunt_match_text(ad, fresh, median, diff, verdict=_verdict)
-                else:
-                    _HUNT_AI_CALLS['skipped'] += 1
-            kb = None
-            if ad.get('source_url'):
-                kb = InlineKeyboardMarkup([[
-                    InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте",
-                                         url=str(ad['source_url']))
-                ], [
-                    # Убрать лот: человек посмотрел и понял — не то.
-                    # Больше не придёт ни в чат, ни в ленту приложения.
-                    InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
-                ]])
-            try:
-                # Сначала пробуем отправить С ФОТО: объявление продаёт картинка,
-                # и перекуп решает по ней за секунду. Если Авито не отдаст
-                # изображение — отправляем текстом, как раньше.
-                _photo_sent = False
-                try:
-                    _ph = json.loads(str(ad.get('photos') or '[]'))
-                    if isinstance(_ph, list) and _ph and str(_ph[0]).startswith('http'):
-                        _photo_sent = await _send_html_safe(
-                            app.bot.send_photo, chat_id=user_id, photo=str(_ph[0]),
-                            caption=text, reply_markup=kb)
-                except Exception as _pe:
-                    logger.warning(f'hunt photo: {_pe}')
-                if not _photo_sent:
-                    if not await _send_html_safe(app.bot.send_message, chat_id=user_id,
-                                                 text=text, reply_markup=kb):
-                        continue
-                _hunt_note_send(sent=1)
-                try:
-                    db.mark_search_notification_sent(user_id, ad['id'])
-                except Exception:
-                    pass
-                # Лента читает hunt_matches: без этой пометки она считала бы
-                # отправленное «в очереди» (этап C делает то же в воркере)
-                hunt_match_mark_sent(user_id, ad['id'], 'chat')
-                sent += 1
-            except Exception as e:
-                logger.warning(f"hunt push -> {user_id}: {e}")
-    if sent:
+                return 'failed:retry_after'
+            if name == 'Forbidden' or 'blocked by the user' in low:
+                hunt_note_blocked(int(user_id), str(e))
+                return 'blocked'
+            logger.warning(f"hunt push -> {user_id}: {e}")
+            return f'failed:{str(e)[:120]}'
+    return 'failed:retry_after'
+
+
+async def _hunt_deliver_rows(app, rows: List[Dict]) -> int:
+    """Разбирает захваченную пачку: по одному сообщению или сводкой (C4).
+
+    Много находок одному человеку по одному критерию отправляем одной
+    сводкой: иначе бот заваливает чат десятками сообщений и его блокируют.
+    """
+    if not rows:
+        return 0
+    groups: Dict[tuple, List[Dict]] = {}
+    for row in rows:
+        groups.setdefault((int(row['user_id']), int(row['crit_id'])), []).append(row)
+    sent = 0
+    for (user_id, crit_id), group in groups.items():
+        if hunt_is_blocked(user_id):
+            hunt_release(group, 'send_failed', 'bot_blocked')
+            continue
+        crit = None
         try:
-            cursor.execute("UPDATE hunt_criteria SET last_pushed_at=? WHERE active=1",
-                           (get_moscow_time().isoformat(),))
-            db.conn.commit()
-        except Exception:
-            pass
+            cur = db.conn.cursor()
+            cur.execute("SELECT * FROM hunt_criteria WHERE id=?", (int(crit_id),))
+            found = cur.fetchone()
+            crit = dict(found) if found else None
+        except Exception as e:
+            logger.warning(f"hunt crit {crit_id}: {e}")
+        if not crit or not crit.get('active'):
+            hunt_release(group, 'rejected', 'crit_inactive')
+            continue
+        items = []
+        for row in group:
+            ad = db.get_ad(int(row['ad_id']))
+            if not ad or int(ad.get('price') or 0) <= 0:
+                hunt_release([row], 'rejected', 'ad_gone')
+                continue
+            items.append((ad, crit, int(row.get('discount') or 0), row))
+        if not items:
+            continue
+        if len(items) > HUNT_DIGEST_AFTER:
+            try:
+                await _send_hunt_digest(crit, [(a, c, d) for a, c, d, _r in items])
+                sent += len(items)
+            except Exception as e:
+                logger.warning(f'hunt digest: {e}')
+                hunt_release([r for *_x, r in items], 'ready')
+            continue
+        ai_left = HUNT_AI_VERDICT_PER_PASS
+        for ad, crit_row, discount, row in items:
+            result = await _hunt_send_match(app, user_id, ad, crit_row, discount, 'chat', ai_left)
+            if result == 'sent':
+                sent += 1
+                if ai_left > 0:
+                    ai_left -= 1
+            elif result == 'blocked':
+                hunt_release([row], 'send_failed', 'bot_blocked')
+            elif result == 'skipped':
+                hunt_release([row], 'rejected', 'skipped')
+            else:
+                hunt_release([row], 'send_failed', result)
     return sent
+
+
+async def _hunt_delivery_loop():
+    """Единственный отправитель находок: очередь hunt_matches → чат (этап C).
+
+    Почему воркер, а не отправка прямо в обработчике приёма: сбор идёт
+    параллельно (несколько проходов сборщика сразу), и раньше два прохода
+    могли отправить одно и то же дважды, а упавшая отправка терялась вовсе.
+    Теперь захват пачки — одна атомарная команда, неудачные возвращаются
+    в очередь, а «ждём описание» дольше получаса уходит с пометкой.
+    """
+    await asyncio.sleep(20)
+    while True:
+        try:
+            app = _get_bot_app()
+            if app:
+                retried = hunt_retry_failed()
+                flushed = hunt_flush_stale_pending()
+                if retried or flushed:
+                    logger.info(f'очередь находок: возвращено {retried}, '
+                                f'отправляем с пометкой {flushed}')
+                rows = hunt_claim_batch()
+                if rows:
+                    sent = await _hunt_deliver_rows(app, rows)
+                    if sent:
+                        logger.info(f'очередь находок: отправлено {sent}')
+        except Exception as e:
+            logger.warning(f'hunt delivery loop: {e}')
+        try:
+            await asyncio.wait_for(_HUNT_WAKE.wait(), timeout=HUNT_WORKER_EVERY)
+            _HUNT_WAKE.clear()
+        except asyncio.TimeoutError:
+            pass
+        except Exception:
+            await asyncio.sleep(HUNT_WORKER_EVERY)
 
 
 def mark_listing_state(source: str, external_id: str, state: str) -> Optional[Dict]:
@@ -20095,10 +20327,7 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
         except Exception as e:
             logger.warning(f"details recompute: {e}")
     if ready_ids:
-        try:
-            asyncio.create_task(notify_hunt_matches(ready_ids))
-        except Exception as e:
-            logger.warning(f"details notify: {e}")
+        hunt_wake()
     logger.info(f"ingest details {source}: описаний {updated}, неудач {failed}")
     return _miniapp_json({'ok': True, 'updated': updated, 'failed': failed,
                           'need_details': hunt_need_details()})
@@ -20248,10 +20477,10 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             # потом отправляем те, что готовы (раньше выборка была отдельной
             # и расходилась с рассылкой)
             hunt_matches_recompute(crit_id=crit_id)
-            ids = hunt_ready_ids(crit_id=crit_id, limit=30)
-            if ids:
-                logger.info(f"критерий {crit_id}: сразу отправляю {len(ids)} находок")
-                asyncio.get_running_loop().create_task(notify_hunt_matches(ids))
+            ready = hunt_ready_ids(crit_id=crit_id, limit=30)
+            if ready:
+                logger.info(f"критерий {crit_id}: сразу отправляю {len(ready)} находок")
+                hunt_wake()
     except Exception as e:
         logger.warning(f"первичная отправка по критерию: {e}")
     return crit_id
@@ -20295,6 +20524,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             'items': [_criterion_public(c) for c in get_user_criteria(viewer_id)],
             # Без этого человек не понимает, почему ничего не приходит
             'collector': collector_status(),
+            # Заблокировал бота — находки физически не дойдут: покажем плашку
+            'bot_blocked': hunt_is_blocked(viewer_id),
         })
 
     if method == 'POST':
@@ -20451,45 +20682,31 @@ def _hunt_note_send(sent: int = 0, error: str = ''):
 
 
 async def _hunt_catchup_loop():
-    """Досылает то, что подходит под критерии, но ещё не отправлено.
+    """Каждые 10 минут пересчитывает решения и будит очередь доставки.
 
-    Зачем: рассылка при сборе видит ТОЛЬКО объявления из текущей партии.
-    Всё, что пришло раньше, оставалось в ленте и не доходило в чат —
-    человек видел варианты в приложении, а бот молчал. Проверено на
-    живых данных: по критерию подходило 30, а отправлено было 10.
-
-    Работает раз в 10 минут и добирает всё, что подходит и ещё не ушло.
+    Раньше здесь была своя выборка и своя отправка — из-за этого правила
+    расходились с лентой, а часть находок не уходила вовсе. Теперь единый
+    путь: hunt_matches_recompute (те же правила evaluate_ad), дальше воркер
+    очереди сам отправляет готовое. Описания сервер не грузит (этап A6):
+    их приносит сборщик с домашнего IP.
     """
     await asyncio.sleep(60)
     while True:
         try:
-            # Берём критерии НАПРЯМУЮ из таблицы: get_user_criteria мог
-            # возвращать пусто, и досылка молча ничего не делала.
-            cur = db.conn.cursor()
-            cur.execute("SELECT id, user_id, query, COALESCE(category,'') AS category, "
-                        "COALESCE(city,'') AS city, COALESCE(min_price,0) AS min_price, "
-                        "COALESCE(max_price,0) AS max_price, COALESCE(max_hours,0) AS max_hours, "
-                        "COALESCE(with_photo,0) AS with_photo, COALESCE(mode,'any') AS mode "
-                        "FROM hunt_criteria WHERE active=1")
-            crits = [dict(r) for r in cur.fetchall()]
-            _HUNT_SEND_STATS['criteria'] = len(crits)
-            sent_total = 0
-            total_ids = 0
-            # Описания сервер не грузит (этап A6): их приносит сборщик
-            # с домашнего IP. Здесь только досылка того, что уже решено.
-
-            for crit in crits:
-                ids = fresh_ids_for_criterion(crit, limit=30)
-                total_ids += len(ids)
-                if ids:
-                    sent_total += await notify_hunt_matches(ids)
-            _HUNT_SEND_STATS['last_ids'] = total_ids
-            logger.info(f"Досылка: критериев {len(crits)}, подходит {total_ids}, отправлено {sent_total}")
-            _hunt_note_send(sent=sent_total)
+            recompute_criterion_medians()
+            written = hunt_matches_recompute(limit_ads=200)
+            flushed = hunt_flush_stale_pending()
+            ready = len(hunt_ready_ids(limit=200))
+            _HUNT_SEND_STATS['criteria'] = written
+            _HUNT_SEND_STATS['last_ids'] = ready
+            logger.info(f"Пересчёт находок: решений {written}, готово к отправке {ready}, "
+                        f"без описания {flushed}")
+            if ready:
+                hunt_wake()
         except Exception as e:
             _hunt_note_send(error=str(e))
             logger.warning(f"hunt catchup loop: {e}")
-        await asyncio.sleep(120)
+        await asyncio.sleep(600)
 
 
 async def _findings_cleanup_loop():
@@ -20929,6 +21146,13 @@ async def hunt_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         lines.append(f"• «{_hunt_escape(str(r.get('query') or ''))}» "
                      f"[{_hunt_escape(str(r.get('mode') or 'any'))}] — " + ", ".join(parts))
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+async def hunt_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /hunt_stats — состояние очереди доставки (только админ, этап C5)."""
+    if not await is_admin(update.effective_user.id):
+        return
+    await update.message.reply_text(hunt_stats_text(), parse_mode=ParseMode.HTML)
 
 
 async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -25676,6 +25900,7 @@ def main():
     application.add_handler(CommandHandler("start",   start))
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
+    application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
@@ -26095,6 +26320,8 @@ def main():
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
             asyncio.ensure_future(_collector_inline_loop())
+            globals()['_HUNT_WAKE'] = asyncio.Event()
+            asyncio.ensure_future(_hunt_delivery_loop())
             asyncio.ensure_future(_hunt_catchup_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())
