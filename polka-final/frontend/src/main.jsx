@@ -19,6 +19,9 @@ import './styles/pages/hunt.css'
 // и онбординг. Строго последними: перекрывают legacy-правила чата и карточек.
 import './styles/pages/chat.css'
 import './styles/pages/account.css'
+// ЭТАП 5: мастер создания (/create, /edit/:id) — шаги, сетка категорий,
+// ошибки валидации у полей.
+import './styles/pages/create.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

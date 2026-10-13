@@ -1,0 +1,82 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   ПОЛКА — ЭТАП 5: мастер создания (/create, /edit/:id) — шаги, сетка
+   категорий, подсказки и ошибки валидации у полей.
+   Подключается после styles/pages/account.css, переопределяет legacy-правила
+   styles.css порядком, а не !important. Значения — через токены.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ═══ 1. ПРОГРЕСС ШАГОВ ══════════════════════════════════════════════════
+   ТЗ: «1/5» почти не читалось (13 px серый + полоса 4 px). Делаем шаг
+   заметным: название этапа основным цветом и полоса 6 px. */
+.step-indicator { margin: var(--space-4) 0; }
+.step-indicator span {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.step-bar {
+  margin-top: var(--space-3);
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.step-bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  transition: width var(--dur-slow) var(--ease);
+}
+
+/* ═══ 2. СЕТКА КАТЕГОРИЙ: 2 / 3 / 4 КОЛОНКИ ══════════════════════════════
+   Было жёстко 2 колонки на всех ширинах — на планшете плитки растягивались. */
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+@media (min-width: 768px) {
+  .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .category-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+/* ═══ 3. НЕАКТИВНАЯ КНОПКА «ДАЛЕЕ» ═══════════════════════════════════════
+   ТЗ: opacity .45 сливала кнопку с фоном — непонятно, кнопка это или нет.
+   Делаем её явно неактивной, но читаемой; рядом стоит причина (см. §4). */
+.primary-btn:disabled,
+.cta-button:disabled {
+  opacity: 1;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* ═══ 4. ОШИБКИ ВАЛИДАЦИИ И ПОДСКАЗКА ШАГА ═══════════════════════════════
+   ТЗ: у полей не было причин отказа — только погашенная кнопка. */
+.field-error {
+  margin-top: var(--space-2);
+  font-size: 12.5px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--danger-ink);
+}
+.text-input.is-invalid,
+.text-area.is-invalid { border-color: var(--danger-ink); }
+.step-hint {
+  margin-top: var(--space-4);
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ═══ 5. ЭКРАН УСПЕХА И ПРЕВЬЮ ═══════════════════════════════════════════ */
+.success-box { border-color: color-mix(in srgb, var(--success) 35%, transparent); }
+.preview-card { align-items: center; }
+.photo-step .grid-two { gap: var(--space-3); }

@@ -2218,7 +2218,7 @@ function SearchPage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} center={<Logo />} right={<IconButton icon="filter" active={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)} />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} right={<IconButton icon="filter" active={filtersOpen} onClick={() => setFiltersOpen(!filtersOpen)} label="Фильтры" />} />
       <div className="page-title">Поиск</div>
       <div className="search-row">
         <input className="text-input glass-card" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Что ищем?" />
@@ -2862,6 +2862,10 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [focusedField, setFocusedField] = useState('')
+  // Поля, которых человек уже касался: ошибку показываем только после того,
+  // как он ушёл из поля, а не с первого экрана формы (ТЗ этапа 5).
+  const [touched, setTouched] = useState({})
+  const markTouched = (key) => setTouched((t) => (t[key] ? t : { ...t, [key]: true }))
   const fileInputRef = useRef(null)
 
   useEffect(() => {
@@ -2921,6 +2925,20 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
 
   const stepTitles = ['Категория', 'Фото', 'Описание', 'Цена и город', 'Проверка']
 
+  // Почему «Далее» неактивна: причина текстом, а не только погашенной кнопкой.
+  const stepProblem =
+    form.step === 1 ? (form.category ? '' : 'Выберите категорию товара') :
+    form.step === 2 ? (form.photos.length ? '' : 'Добавьте хотя бы одно фото') :
+    form.step === 3 ? (
+      form.title.trim().length < 3 ? 'Название — не короче трёх символов'
+        : (!form.description.trim() ? 'Добавьте описание: состояние, особенности, комплектация' : '')
+    ) :
+    form.step === 4 ? (
+      form.saleType === 'auction'
+        ? (!form.startPrice ? 'Укажите стартовую цену' : (!form.city.trim() ? 'Укажите город' : ''))
+        : (!form.price ? 'Укажите цену' : (!form.city.trim() ? 'Укажите город' : ''))
+    ) : ''
+
   return (
     <div className="ad-form">
       <div className="step-indicator">
@@ -2965,12 +2983,18 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
       {form.step === 3 && (
         <div className="form-stack">
           <div className="field-wrap">
-            <input className="text-input glass-card" value={form.title} onChange={(e) => update('title', e.target.value)} onFocus={() => setFocusedField('title')} onBlur={() => setFocusedField('')} placeholder="Название товара" />
+            <input className={`text-input glass-card ${touched.title && form.title.trim().length < 3 ? 'is-invalid' : ''}`} value={form.title} onChange={(e) => update('title', e.target.value)} onFocus={() => setFocusedField('title')} onBlur={() => { setFocusedField(''); markTouched('title') }} placeholder="Название товара" />
             <FieldHint text="Например: Куртка Zara, размер M" visible={focusedField === 'title'} />
+            {touched.title && form.title.trim().length < 3 ? (
+              <div className="field-error" role="alert">Название — не короче трёх символов</div>
+            ) : null}
           </div>
           <div className="field-wrap">
-            <textarea className="text-area glass-card" value={form.description} onChange={(e) => update('description', e.target.value)} onFocus={() => setFocusedField('description')} onBlur={() => setFocusedField('')} placeholder="Описание: состояние, особенности, комплектация…" />
+            <textarea className={`text-area glass-card ${touched.description && !form.description.trim() ? 'is-invalid' : ''}`} value={form.description} onChange={(e) => update('description', e.target.value)} onFocus={() => setFocusedField('description')} onBlur={() => { setFocusedField(''); markTouched('description') }} placeholder="Описание: состояние, особенности, комплектация…" />
             <FieldHint text="Расскажите о состоянии, дефектах, комплектации" visible={focusedField === 'description'} />
+            {touched.description && !form.description.trim() ? (
+              <div className="field-error" role="alert">Опишите состояние и особенности — так меньше вопросов</div>
+            ) : null}
           </div>
           <button className="ghost-btn mt-10" type="button" onClick={handleGenerate} disabled={!form.title.trim()}>
             {uploading ? 'Генерирую…' : 'Сгенерировать с ИИ'}
@@ -3002,11 +3026,14 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
           {form.saleType === 'auction' ? (
             <>
               <div className="field-wrap">
-                <input className="text-input glass-card" value={form.startPrice} inputMode="numeric"
+                <input className={`text-input glass-card ${touched.start && !form.startPrice ? 'is-invalid' : ''}`} value={form.startPrice} inputMode="numeric"
                   onChange={(e) => update('startPrice', e.target.value.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setFocusedField('start')} onBlur={() => setFocusedField('')}
+                  onFocus={() => setFocusedField('start')} onBlur={() => { setFocusedField(''); markTouched('start') }}
                   placeholder="Стартовая цена, ₽" />
                 <FieldHint text="Первая ставка не может быть ниже" visible={focusedField === 'start'} />
+                {touched.start && !form.startPrice ? (
+                  <div className="field-error" role="alert">Стартовая цена обязательна для аукциона</div>
+                ) : null}
               </div>
               <div className="field-wrap">
                 <input className="text-input glass-card" value={form.bidStep} inputMode="numeric"
@@ -3034,14 +3061,20 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
             </>
           ) : (
             <div className="field-wrap">
-              <input className="text-input glass-card" value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => setFocusedField('')} placeholder="Цена, ₽" />
+              <input className={`text-input glass-card ${touched.price && !form.price ? 'is-invalid' : ''}`} value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => { setFocusedField(''); markTouched('price') }} placeholder="Цена, ₽" />
               <FieldHint text="Укажите цену в рублях" visible={focusedField === 'price'} />
+              {touched.price && !form.price ? (
+                <div className="field-error" role="alert">Укажите цену — без неё объявление не опубликуется</div>
+              ) : null}
             </div>
           )}
 
           <div className="field-wrap">
-            <input className="text-input glass-card" value={form.city} onChange={(e) => update('city', e.target.value)} onFocus={() => setFocusedField('city')} onBlur={() => setFocusedField('')} placeholder="Город" list="ad-city-options" />
+            <input className={`text-input glass-card ${touched.city && !form.city.trim() ? 'is-invalid' : ''}`} value={form.city} onChange={(e) => update('city', e.target.value)} onFocus={() => setFocusedField('city')} onBlur={() => { setFocusedField(''); markTouched('city') }} placeholder="Город" list="ad-city-options" />
             <FieldHint text="Начните вводить — появятся подсказки" visible={focusedField === 'city'} />
+            {touched.city && !form.city.trim() ? (
+              <div className="field-error" role="alert">Город нужен, чтобы объявление нашли рядом</div>
+            ) : null}
             <datalist id="ad-city-options">{cities.map((c) => <option key={c} value={c} />)}</datalist>
           </div>
           <div className="field-wrap">
@@ -3075,6 +3108,9 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
         </div>
       )}
 
+      {/* Почему нельзя идти дальше: причина под шагами, а не только
+          погашенная кнопка «Далее». */}
+      {stepProblem ? <div className="step-hint">{stepProblem}</div> : null}
       <div className="step-actions">
         {form.step > 1 ? <button className="ghost-btn" type="button" onClick={prevStep}>Назад</button> : null}
         {form.step < totalSteps ? (
@@ -3119,7 +3155,7 @@ function CreatePage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} center={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="page-title">Новое объявление</div>
       <div className="sub-copy">Заполните информацию о товаре — это займёт пару минут. После публикации объявление уйдёт на модерацию.</div>
       {error ? <div className="status-line error">{error}</div> : null}
@@ -3181,7 +3217,7 @@ function EditAdPage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to={`/listing/${listingId}`} />} center={<Logo />} />
+      <TopBar left={<IconButton icon="back" to={`/listing/${listingId}`} label="Назад" />} />
       <div className="page-title">Редактировать</div>
       <div className="sub-copy">После правок объявление снова уйдёт на модерацию.</div>
       {loading ? <LoadingBlock /> : null}
@@ -3236,7 +3272,7 @@ function MyAdsPage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/profile" />} center={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/profile" label="Назад" />} />
       <div className="page-title">Мои объявления</div>
       {loading ? <LoadingBlock /> : null}
       {error ? <ErrorBlock text={error} onRetry={load} /> : null}
@@ -3301,7 +3337,7 @@ function ChatsPage() {
 
   return (
     <Screen>
-      <TopBar left={<IconButton icon="back" to="/" />} center={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="page-title">Сообщения</div>
       {loading ? <LoadingBlock /> : null}
       {error ? <ErrorBlock text={error} onRetry={load} /> : null}
