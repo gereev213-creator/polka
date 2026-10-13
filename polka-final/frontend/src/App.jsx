@@ -318,8 +318,13 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
       <div className="product-media">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
         {/* Выгода относительно медианы по категории — то, ради чего подписчик
-            и открывает ленту, а не «свежесть публикации» */}
-        {Number(item.discount_percent) >= 15 ? (
+            и открывает ленту, а не «свежесть публикации». Подозрительно
+            дешёвые лоты (скидка больше 70%: рассрочка, залог, не тот товар)
+            бейджа «ниже рынка» НЕ получают — иначе человек идёт по ложному
+            следу. Показываем честную серую пометку (этап D3). */}
+        {Number(item.price_suspect) ? (
+          <span className="deal-badge is-suspect">цена подозрительная</span>
+        ) : Number(item.discount_percent) >= 15 ? (
           <span className="deal-badge">ниже рынка</span>
         ) : null}
         <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}

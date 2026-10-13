@@ -1072,6 +1072,49 @@ def collect_details(server: str, token: str, source: str, items: list,
     return len(out)
 
 
+def target_urls(target: dict, cfg: dict) -> list:
+    """Ссылки одной цели: страницы 1..pages и необязательные pmin/pmax.
+
+    Этап D10. По умолчанию pages=1: обход лишних страниц — это лишние
+    запросы к Авито, и включать его нужно осознанно (в config.json у цели:
+    "pages": 2, "pmin": 5000, "pmax": 60000). Условия проверять на живом
+    сайте: разметка страниц и параметры цены могут отличаться.
+    """
+    url = str(target.get('url') or '')
+    if not url.startswith('http'):
+        return []
+    pages = int(target.get('pages') or cfg.get('pages') or 1)
+    pages = max(1, min(pages, 3))
+    pmin = target.get('pmin') or cfg.get('pmin') or 0
+    pmax = target.get('pmax') or cfg.get('pmax') or 0
+    extra = []
+    if pmin:
+        extra.append(f"pmin={int(pmin)}")
+    if pmax:
+        extra.append(f"pmax={int(pmax)}")
+    urls = []
+    for page in range(1, pages + 1):
+        parts = list(extra)
+        if page > 1:
+            parts.append(f"p={page}")
+        if not parts:
+            urls.append(url)
+            continue
+        joiner = '&' if '?' in url else '?'
+        urls.append(url + joiner + '&'.join(parts))
+    return urls
+
+
+def date_sorted_first_page(url: str) -> bool:
+    """Выдача отсортирована по дате и это первая страница?
+
+    Отсюда берётся право считать «впервые увиденное» свежим: Авито отдаёт
+    сначала самые новые объявления (этап D5).
+    """
+    text = str(url or '')
+    return 's=104' in text and ('p=' not in text)
+
+
 def run_once(cfg: dict) -> int:
     server, token = cfg['server'], cfg['token']
     total_sent = 0
@@ -1085,27 +1128,31 @@ def run_once(cfg: dict) -> int:
         known = {t.get('url') for t in targets}
         targets += [t for t in from_crit if t['url'] not in known]
     for target in targets:
-        url = target.get('url')
         source = target.get('source', 'avito')
         city = target.get('city', '')
-        if not url:
-            continue
-        print(f"\n→ {source}: {url}")
-        try:
-            html = fetch(url)
-        except Blocked as exc:
-            print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
-            # Код 3 = «нас заблокировали». Супервизор на сервере по нему
-            # делает длинную паузу вместо бессмысленных повторов.
-            raise SystemExit(3)
-        except (urllib.error.URLError, TimeoutError) as exc:
-            print(f"  ✖ не открылось: {exc}")
-            continue
-        items = parse_page(html)
-        for item in items:
-            item['category'] = item.get('category') or target.get('category', '')
-            item['city'] = item.get('city') or city
-        print(f"  найдено карточек: {len(items)}")
+        for url in target_urls(target, cfg):
+            print(f"\n→ {source}: {url}")
+            try:
+                html = fetch(url)
+            except Blocked as exc:
+                print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
+                # Код 3 = «нас заблокировали». Супервизор на сервере по нему
+                # делает длинную паузу вместо бессмысленных повторов.
+                raise SystemExit(3)
+            except (urllib.error.URLError, TimeoutError) as exc:
+                print(f"  ✖ не открылось: {exc}")
+                continue
+            items = parse_page(html)
+            first_page_dated = date_sorted_first_page(url)
+            for item in items:
+                item['category'] = item.get('category') or target.get('category', '')
+                item['city'] = item.get('city') or city
+                # Этап D5: даты в карточке нет, но выдача отсортирована по
+                # дате и это её первая страница — объявление почти наверняка
+                # свежее, о чём и сообщаем серверу
+                if item.get('hours_ago') is None and first_page_dated:
+                    item['age_estimated'] = True
+            print(f"  найдено карточек: {len(items)}")
         if not items:
             if '?' in url and 'q=' in url:
                 # Проверено на живом сайте: на поисковый запрос Авито отдаёт

@@ -17370,6 +17370,56 @@ def ensure_hunt_matches():
         logger.error(f"ensure_hunt_matches: {e}")
 
 
+def ensure_quality_columns() -> None:
+    """Колонки и таблица для качества данных (этапы D3, D5, D8).
+
+    Идемпотентно: каждая колонка добавляется в try/except, таблица — через
+    CREATE TABLE IF NOT EXISTS. Данные не удаляются.
+    """
+    cursor = db.conn.cursor()
+    for sql in (
+        "ALTER TABLE ads ADD COLUMN price_suspect INTEGER DEFAULT 0",
+        "ALTER TABLE ads ADD COLUMN age_estimated INTEGER DEFAULT 0",
+        "ALTER TABLE ads ADD COLUMN prev_price INTEGER DEFAULT 0",
+        "ALTER TABLE ads ADD COLUMN last_drop_notice_at TEXT",
+    ):
+        try:
+            cursor.execute(sql)
+        except Exception:
+            pass
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ads_price_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad_id INTEGER NOT NULL,
+                price INTEGER NOT NULL,
+                seen_at TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_ad "
+                       "ON ads_price_history(ad_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_suspect ON ads(price_suspect)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_quality_columns: {e}")
+
+
+def _ad_hours_ago(ad: Dict) -> Optional[int]:
+    """Сколько часов назад объявление опубликовано.
+
+    Если даты на странице нет, а выдача была отсортирована по дате, сборщик
+    помечает объявление age_estimated — тогда считаем часы от момента, когда
+    мы его впервые увидели (parsed_at). Хранить такое «навсегда» нельзя:
+    объявление стареет, поэтому считаем при чтении (этап D5).
+    """
+    if ad.get('age_estimated'):
+        hours = _hours_since(ad.get('parsed_at') or ad.get('created_at'))
+        if hours is not None:
+            return int(hours)
+    ago = ad.get('published_hours_ago')
+    return None if ago is None else int(ago)
+
+
 def ensure_description_lower(limit: int = 500) -> int:
     """Колонка description_lower и заполнение старых строк.
 
@@ -17944,7 +17994,10 @@ def recompute_market_medians(category: Optional[str] = None) -> int:
     была бы выдумкой.
     """
     cursor = db.conn.cursor()
-    where = ("status='active' AND price > 0 AND category IS NOT NULL AND category <> ''")
+    # Подозрительно дешёвые (скидка >70%) медиану только портят: iPhone за
+    # 53 ₽ тянет её вниз, и «выгодными» становятся обычные цены (этап D3)
+    where = ("status='active' AND price > 0 AND category IS NOT NULL AND category <> '' "
+             "AND COALESCE(price_suspect,0)=0")
     params: tuple = ()
     if category:
         where += " AND category = ?"
@@ -17992,6 +18045,54 @@ def recompute_market_medians(category: Optional[str] = None) -> int:
     return updated
 
 
+def _price_drop(cursor, ad_id: int, old_price: int, new_price: int, last_notice,
+                now: str, stats: Dict) -> bool:
+    """Объявление подешевело — обновляем цену и открываем находку заново.
+
+    Возвращает True, если это снижение (тогда карточку не считаем дублем).
+    Уведомляем не чаще одного раза в сутки на объявление (этап D8).
+    """
+    if not old_price or not new_price or new_price >= old_price:
+        return False
+    drop = (old_price - new_price) * 100.0 / old_price
+    if drop < HUNT_PRICE_DROP_PERCENT:
+        return False
+    notify = True
+    if last_notice:
+        hours = _hours_since(last_notice)
+        if hours is not None and hours < 24:
+            notify = False
+    try:
+        cursor.execute("UPDATE ads SET price=?, prev_price=?, status='active' WHERE id=?",
+                       (new_price, old_price, int(ad_id)))
+        cursor.execute("INSERT INTO ads_price_history (ad_id, price, seen_at) VALUES (?,?,?)",
+                       (int(ad_id), new_price, now))
+        # Скидку к рынку пересчитываем: она участвует в сортировке ленты
+        try:
+            cursor.execute(
+                "UPDATE ads SET discount_percent = CAST((market_median - ?) * 100 / market_median "
+                "AS INTEGER) WHERE id=? AND COALESCE(market_median,0) > 0",
+                (new_price, int(ad_id)))
+        except Exception:
+            pass
+        if notify:
+            cursor.execute("UPDATE ads SET last_drop_notice_at=? WHERE id=?", (now, int(ad_id)))
+            # Находка с новой ценой должна уйти в чат заново
+            cursor.execute("UPDATE hunt_matches SET status='ready', reason='price_drop', "
+                           "reject_reason='', updated_at=? WHERE ad_id=? "
+                           "AND status IN ('rejected','sent','ready','send_failed')",
+                           (now, int(ad_id)))
+        stats['price_drop'] = int(stats.get('price_drop') or 0) + 1
+        if int(ad_id) not in stats['ids']:
+            stats['ids'].append(int(ad_id))
+        logger.info(f"цена снижена: #{ad_id} {old_price} → {new_price} ₽ "
+                    f"({drop:.0f}%), уведомление: {'да' if notify else 'нет'}")
+        return True
+    except Exception as e:
+        logger.warning(f"price drop: {e}")
+        return False
+
+
 def ingest_findings(items: List[Dict], source: str) -> Dict:
     """Принимает находки от сборщика: дедуп, вставка, пересчёт скидок.
 
@@ -18002,7 +18103,7 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         source = 'other'
     cursor = db.conn.cursor()
     now = get_moscow_time().isoformat()
-    stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': []}
+    stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'price_drop': 0}
 
     for raw in (items or [])[:500]:
         if not isinstance(raw, dict):
@@ -18030,8 +18131,15 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             ext = hashlib.md5(url.encode()).hexdigest()[:32]
 
         try:
-            cursor.execute("SELECT id FROM ads WHERE source=? AND external_id=?", (source, ext))
-            if cursor.fetchone():
+            cursor.execute("SELECT id, price, last_drop_notice_at FROM ads "
+                           "WHERE source=? AND external_id=? ORDER BY id LIMIT 1",
+                           (source, ext))
+            _known = cursor.fetchone()
+            if _known:
+                # Этап D8: то же объявление подешевело — это новость, а не дубль
+                if _price_drop(cursor, int(_known['id']), int(_known['price'] or 0), price,
+                               _known['last_drop_notice_at'], now, stats):
+                    continue
                 stats['duplicate'] += 1
                 continue
             # Второй рубеж: тот же заголовок и цена в том же городе
@@ -18044,14 +18152,19 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
                 ago = int(raw.get('hours_ago')) if raw.get('hours_ago') is not None else None
             except (TypeError, ValueError):
                 ago = None
+            # Этап D5: даты нет, но выдача была отсортирована по дате —
+            # считаем возраст от первого показа (parsed_at)
+            age_estimated = 1 if (ago is None and raw.get('age_estimated')) else 0
             cursor.execute('''
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
                                  external_id, parsed_at, views, published_hours_ago,
-                                 title_lower)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                                 title_lower, age_estimated)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
             ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
-                  now, now, source, url, ext, now, ago, title.lower()))
+                  now, now, source, url, ext, now, ago, title.lower(), age_estimated))
+            cursor.execute("INSERT INTO ads_price_history (ad_id, price, seen_at) "
+                           "VALUES (?, ?, ?)", (cursor.lastrowid, price, now))
             stats['accepted'] += 1
             stats['ids'].append(cursor.lastrowid)
         except Exception as e:
@@ -19067,6 +19180,8 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     из-за этого срок оборота не считался вовсе.
     """
     where = ["price > 0"]
+    # Подозрительные цены не участвуют ни в медианах, ни в статистике (D3)
+    where.append("COALESCE(price_suspect,0)=0")
     if active_only:
         where.insert(0, "status='active'")
     params: List = []
@@ -19266,6 +19381,10 @@ HUNT_REASON_LABELS = {
     'price_too_high': 'дороже потолка критерия',
     'price_too_low': 'дешевле нижней границы критерия',
     'price_below_floor': 'цена ниже 15% медианы — похоже, не тот товар',
+    'price_suspect': 'скидка больше 70% — цена подозрительно низкая',
+    'price_drop': 'цена снижена',
+    'date_estimated': 'дата определена по первому показу',
+    'crit_inactive': 'критерий выключен',
     'no_median': 'нет медианы: меньше пяти похожих, режим «только выгодные»',
     'not_cheaper': 'не дешевле рынка, а режим «только выгодные»',
     'discount_low': 'скидка меньше заданной',
@@ -19383,9 +19502,9 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
     # но помечаем одинаково в чате и ленте (решение B1).
-    ago = ad.get('published_hours_ago')
+    ago = _ad_hours_ago(ad)
     max_hours = int(crit.get('max_hours') or 0)
-    date_reason = ''
+    date_reason = 'date_estimated' if (ad.get('age_estimated') and ago is not None) else ''
     if max_hours:
         if ago is None:
             date_reason = 'date_unknown_ok'
@@ -19410,6 +19529,11 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # (этап D покажет по ней серый бейдж вместо «ниже рынка»).
     if median and price < median * HUNT_MIN_PRICE_SHARE:
         return no('price_below_floor')
+    # Этап D3: скидка больше HUNT_SUSPECT_DISCOUNT процентов — почти всегда
+    # другой товар, рассрочка или залог. В чат не уходит, бейджа «ниже рынка»
+    # не получает, в медианах не участвует.
+    if median and price < median * (100 - HUNT_SUSPECT_DISCOUNT) / 100.0:
+        return no('price_suspect')
     if not median:
         if mode == 'deal':
             return no('no_median')
@@ -19513,6 +19637,8 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
         return 0
     written = 0
     for ad in ads:
+        saw_ok = False
+        saw_suspect = False
         for crit in crits:
             uid = int(crit.get('user_id') or 0)
             if not uid:
@@ -19524,6 +19650,10 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
                 hidden, legacy_sent = False, False
             decision = evaluate_ad(ad, crit, require_description=_hunt_needs_description(crit),
                                    hidden=hidden, already_sent=False)
+            if decision.ok:
+                saw_ok = True
+            elif decision.reason == 'price_suspect':
+                saw_suspect = True
             desc = str(ad.get('description') or '').strip()
             desc_state = 'ok' if desc else ('pending' if decision.needs_description else '')
             # Отметка прошлых отправок главнее решения: если человеку уже
@@ -19532,6 +19662,14 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             hunt_match_store(uid, int(crit['id']), int(ad['id']), decision,
                              desc_state=desc_state, force_status=force)
             written += 1
+        if saw_ok or saw_suspect:
+            # Подходит хоть под один критерий — флаг снимаем: он нужен только
+            # тем, кто выглядит подозрительно для всех (этап D3)
+            try:
+                db.conn.execute("UPDATE ads SET price_suspect=? WHERE id=?",
+                                (0 if saw_ok else 1, int(ad['id'])))
+            except Exception:
+                pass
     try:
         db.conn.commit()
     except Exception:
@@ -19911,7 +20049,8 @@ async def _send_html_safe(send, **kwargs) -> bool:
 
 
 def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
-                     verdict: str = '', desc_checked: Optional[bool] = None) -> str:
+                     verdict: str = '', desc_checked: Optional[bool] = None,
+                     price_drop: bool = False) -> str:
     """Текст сообщения о находке. Все данные объявления — через _hunt_escape.
 
     desc_checked=False — критерий опирается на описание, а описания нет:
@@ -19925,6 +20064,11 @@ def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
         "",
         f"<b>{_money(ad.get('price') or 0)} ₽</b>",
     ]
+    if price_drop and int(ad.get('prev_price') or 0) > int(ad.get('price') or 0):
+        # Этап D8: человек уже видел этот лот дороже — говорим прямо
+        lines.append("")
+        lines.append(f"💰 <b>Цена снижена</b>: было {_money(ad.get('prev_price') or 0)} ₽, "
+                     f"стало {_money(ad.get('price') or 0)} ₽")
     if diff and median:
         lines.append(f"Обычно такие стоят {_money(median)} ₽")
         lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
@@ -20015,6 +20159,10 @@ HUNT_WORKER_EVERY = int(os.environ.get('HUNT_WORKER_EVERY', '20'))
 HUNT_SEND_MAX_TRIES = int(os.environ.get('HUNT_SEND_MAX_TRIES', '3'))
 HUNT_SEND_RETRY_MIN = int(os.environ.get('HUNT_SEND_RETRY_MIN', '10'))
 HUNT_PENDING_MAX_MIN = int(os.environ.get('HUNT_PENDING_MAX_MIN', '30'))
+# Этап D3: скидка больше 70% от медианы — это не выгода, а другой товар
+HUNT_SUSPECT_DISCOUNT = int(os.environ.get('HUNT_SUSPECT_DISCOUNT', '70'))
+# Этап D8: снижение цены, о котором стоит сказать (в процентах)
+HUNT_PRICE_DROP_PERCENT = int(os.environ.get('HUNT_PRICE_DROP_PERCENT', '5'))
 
 _HUNT_AI_CALLS = {'count': 0, 'errors': 0, 'skipped': 0}
 # Пробудка воркера очереди: ingest, новый критерий и описания будят его сразу,
@@ -20175,7 +20323,8 @@ def hunt_wake() -> None:
 
 
 async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: int,
-                           delivery: str = 'chat', ai_left: int = 0) -> str:
+                           delivery: str = 'chat', ai_left: int = 0,
+                           reason: str = '') -> str:
     """Отправляет ОДНО сообщение о находке. Единственный путь в чат.
 
     Возвращает 'sent', 'skipped', 'blocked' или 'failed:<ошибка>'.
@@ -20192,7 +20341,7 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     price = int(ad.get('price') or 0)
     # Несвежее не присылаем: недельное объявление — не находка. Если даты
     # нет вовсе — присылаем (у большинства карточек её нет), см. HUNT_ALLOW_UNDATED.
-    ago = ad.get('published_hours_ago')
+    ago = _ad_hours_ago(ad)
     if ago is not None and int(ago) > HUNT_FRESH_HOURS:
         return 'skipped'
     if ago is None:
@@ -20211,7 +20360,8 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     needs_desc = (_hunt_needs_description(crit)
                   and not str(ad.get('description') or '').strip())
     text = _hunt_match_text(ad, fresh, median, diff,
-                            desc_checked=False if needs_desc else None)
+                            desc_checked=False if needs_desc else None,
+                            price_drop=(str(reason) == 'price_drop'))
     if ai_left > 0:
         try:
             verdict = await ai_judge_ad(ad, crit)
@@ -20230,7 +20380,8 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
             except Exception as _ve:
                 logger.warning(f'ai_verdict save: {_ve}')
             text = _hunt_match_text(ad, fresh, median, diff, verdict=verdict,
-                                    desc_checked=False if needs_desc else None)
+                                    desc_checked=False if needs_desc else None,
+                                    price_drop=(str(reason) == 'price_drop'))
         else:
             _HUNT_AI_CALLS['skipped'] = _HUNT_AI_CALLS.get('skipped', 0) + 1
     kb = None
@@ -20333,7 +20484,8 @@ async def _hunt_deliver_rows(app, rows: List[Dict]) -> int:
             continue
         ai_left = HUNT_AI_VERDICT_PER_PASS
         for ad, crit_row, discount, row in items:
-            result = await _hunt_send_match(app, user_id, ad, crit_row, discount, 'chat', ai_left)
+            result = await _hunt_send_match(app, user_id, ad, crit_row, discount, 'chat',
+                                            ai_left, str(row.get('reason') or ''))
             if result == 'sent':
                 sent += 1
                 if ai_left > 0:
@@ -23415,7 +23567,8 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
 
 
 async def _findings_from_matches(viewer_id: int, min_discount: int, category: str,
-                                 city: str, limit: int, offset: int):
+                                 city: str, limit: int, offset: int,
+                                 show_suspect: bool = False):
     """Лента из hunt_matches — то же, что решил evaluate_ad.
 
     Своих правил отбора у ленты больше нет: статус, причина и скидка приходят
@@ -23424,9 +23577,12 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     человек должен видеть, почему лот не ушёл в чат, а не гадать.
     """
     cursor = db.conn.cursor()
-    where = ["hm.user_id = ?",
-             "hm.status IN ('ready','sent','sending','pending_details','send_failed') "
-             "OR hm.reject_reason = 'price_below_floor'"]
+    statuses = ("hm.status IN ('ready','sent','sending','pending_details','send_failed') "
+                "OR hm.reject_reason = 'price_below_floor'")
+    if show_suspect:
+        # Показать подозрительно дешёвые (этап D3) — по запросу ?show_suspect=1
+        statuses = f"({statuses} OR hm.reject_reason = 'price_suspect')"
+    where = ["hm.user_id = ?", statuses]
     params: List = [int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")
@@ -23518,7 +23674,9 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         crits_now = [c for c in get_user_criteria(viewer_id) if c.get('active')]
         if not crits_now:
             return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
-        return await _findings_from_matches(viewer_id, min_discount, category, city, limit, offset)
+        show_suspect = str(request.query.get('show_suspect') or '') == '1'
+        return await _findings_from_matches(viewer_id, min_discount, category, city, limit,
+                                            offset, show_suspect)
 
     crits = [c for c in get_user_criteria(viewer_id) if c.get('active')]
     if not crits:
@@ -24594,6 +24752,9 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
         'category_raw': ad.get('category', ''),
         'condition': ad.get('condition', ''),
         'city': ad.get('city', ''),
+        # Этап D3: подозрительно дешёвый лот (скидка >70%) — бейджа «ниже
+        # рынка» не получает, в медианах не участвует, в чат не уходит
+        'price_suspect': int(ad.get('price_suspect') or 0),
         'delivery': ad.get('delivery', ''),
         'size': ad.get('size', ''),
         'status': ad.get('status', ''),
@@ -26483,6 +26644,7 @@ def main():
         ensure_hunt_matches()
         ensure_desc_columns()
         ensure_description_lower()
+        ensure_quality_columns()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

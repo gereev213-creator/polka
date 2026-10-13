@@ -18,6 +18,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           'evaluate_ad', '_condition_ok', '_query_alt_numbers', '_query_words_required',
           'query_word_variants', '_query_word_variants_orig', '_requirement_excludes',
           'HUNT_JUNK_ANYWHERE', 'HUNT_JUNK_START', 'HUNT_CONDITION_WORDS',
+          '_ad_hours_ago', 'HUNT_SUSPECT_DISCOUNT', 'HUNT_PRICE_DROP_PERCENT', 'HUNT_MEDIAN_EXCLUDE_WORDS', 'HUNT_JUNK_ANYWHERE',
           'HUNT_NEGATION_WORDS', 'HUNT_MEDIAN_EXCLUDE_WORDS', 'HUNT_SHOP_MARKERS',
           'HUNT_ACCESSORY_WORDS', 'HUNT_TITLE_START_JUNK', '_hunt_word_pattern',
           'HUNT_RE_JUNK_ANYWHERE', 'HUNT_RE_JUNK_START', 'HUNT_RE_CONDITION',

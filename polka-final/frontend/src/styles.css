@@ -2388,6 +2388,14 @@ html, body, #root {
   white-space: nowrap;
 }
 
+/* Подозрительно дешёвый лот: скидка больше 70% — это рассрочка, залог или
+   другой товар. Серый бейдж вместо зелёного «ниже рынка» (этап D3). */
+.deal-badge.is-suspect {
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  box-shadow: none;
+}
+
 /* Сердечко — поверх всего, с собственным фоном */
 .save-btn {
   width: 36px;
