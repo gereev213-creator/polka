@@ -2,8 +2,6 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-
-
 a { color: inherit; text-decoration: none; }
 button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; }
 input, textarea, select { font-family: inherit; }
@@ -20,7 +18,6 @@ input, textarea, select { font-family: inherit; }
   min-height: 100dvh;
 }
 .screen.padded { padding: 16px; }
-
 
 /* ── Рельс категорий в ленте ─────────────────────────────────────────
  * Те же плашки .cat-tile, что и в форме (см. ниже), только в
@@ -1613,7 +1610,6 @@ video.bubble-media-img {
    ИСТОРИИ ПРОДАВЦОВ: создание и полноэкранный просмотр
    ══════════════════════════════════════════════════════════════════════════ */
 
-
 /* ── Экран создания ────────────────────────────────────────────────────── */
 .story-hint {
   margin-top: 10px;
@@ -1654,242 +1650,7 @@ video.bubble-media-img {
   color: var(--ink);
   box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 10%, transparent);
 }
-.auction-sort button.is-active {
-  background: var(--ink);
-  color: #fff;
-}
 
-/* Карточка лота: слева фото, справа цифры и таймер */
-.auction-card {
-  display: flex;
-  gap: 12px;
-  padding: 10px;
-  border-radius: var(--radius-lg);
-  align-items: stretch;
-}
-.auction-thumb {
-  width: 88px;
-  height: 88px;
-  flex: 0 0 auto;
-  border-radius: 14px;
-  overflow: hidden;
-}
-.auction-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-.auction-title {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--ink);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.auction-meta {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.auction-meta strong { font-size: 16px; font-weight: 800; }
-.auction-meta span { font-size: 11.5px; color: var(--text-secondary); }
-.auction-foot {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.auction-timer {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border-radius: 999px;
-  background: var(--surface-2);
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-}
-.auction-timer .icon-svg { width: 13px; height: 13px; }
-/* Меньше 5 минут — таймер кричит */
-.auction-timer.is-urgent {
-  background: color-mix(in srgb, var(--danger) 16%, var(--surface));
-  color: var(--danger-ink);
-}
-.auction-own {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-.auction-bid-btn {
-  padding: 7px 16px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.auction-bid-btn:active { transform: scale(.96); }
-
-/* Мои ставки */
-.mybid-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px;
-  border-radius: var(--radius-lg);
-}
-.mybid-thumb { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 14px; overflow: hidden; }
-.mybid-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.mybid-body strong {
-  font-size: 13.5px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mybid-amount { font-size: 12px; color: var(--text-secondary); }
-.mybid-state { font-size: 12px; font-weight: 700; }
-.mybid-state.is-ok { color: var(--success-ink); }
-.mybid-state.is-warn { color: var(--danger-ink); }
-.mybid-state.is-muted { color: var(--text-secondary); }
-
-/* Шторка ставки */
-.sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 130;
-  background: color-mix(in srgb, var(--ink) 50%, transparent);
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  animation: none;
-}
-.sheet {
-  width: 100%;
-  max-width: 430px;
-  background: var(--bg);
-  border-radius: 20px 26px 0 0;
-  padding: 10px 18px calc(20px + env(safe-area-inset-bottom));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.sheet-grip {
-  width: 40px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border);
-  margin: 0 auto 4px;
-}
-.sheet-title { font-size: 17px; font-weight: 800; }
-.sheet-lot {
-  font-size: 13.5px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.sheet-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 13.5px;
-  color: var(--text-secondary);
-}
-.sheet-row b { color: var(--ink); }
-.bid-input-row { display: flex; align-items: center; gap: 10px; }
-.bid-step {
-  width: 46px;
-  height: 46px;
-  flex: 0 0 auto;
-  border-radius: 14px;
-  background: var(--surface-2);
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--ink);
-}
-.bid-input { flex: 1; text-align: center; font-size: 18px; font-weight: 700; }
-
-/* ── Блок аукциона в карточке товара ───────────────────────────────────── */
-.auction-panel {
-  padding: 14px 16px;
-  border-radius: var(--radius-lg);
-  margin-top: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.auction-panel-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.auction-panel-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.auction-panel-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0;
-  color: var(--text-secondary);
-}
-.auction-panel-price { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
-.auction-panel-sub { font-size: 12px; color: var(--text-secondary); }
-.auction-panel-timer { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
-.auction-timer.big {
-  font-size: 14px;
-  padding: 6px 12px;
-  background: var(--ink);
-  color: #fff;
-}
-.auction-timer.big.is-urgent { background: var(--danger-ink); color: #fff; }
-.auction-buynow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 12px;
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--accent) 10%, var(--surface));
-  color: var(--accent);
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.auction-buynow .icon-svg { width: 15px; height: 15px; }
-.auction-result {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-size: 12.5px;
-  font-weight: 600;
-}
-.auction-result.is-ok { background: #DCFCE7; color: var(--success-ink); }
-.auction-result .icon-svg { width: 15px; height: 15px; }
-.auction-history-toggle {
-  align-self: flex-start;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--accent);
-}
-.auction-history {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-.auction-history-row {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-.auction-history-row b { color: var(--ink); }
 
 /* Размер файла к отправке — чтобы лимит был виден ДО отправки */
 
@@ -1939,8 +1700,6 @@ select.text-input {
 
 /* Переключатель «Объявления | Аукционы» в ленте */
 .feed-switch { margin-top: 2px; }
-
-
 
 /* Призыв «Что ловить» — главный вход в продукт с первого экрана */
 .hunt-cta {
@@ -2329,8 +2088,7 @@ button,
 .product-card,
 .chat-crit-card,
 .chat-crit-x,
-.field-label-row.is-toggle,
-.auction-sort button {
+.field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
@@ -2509,21 +2267,6 @@ button:active,
 }
 
 /* Плашки-варианты: ровный ряд с переносами и воздухом снизу */
-.auction-sort {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-.auction-sort button {
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
 
 /* ── Список чатов: видно, о каком объявлении разговор ──────────────────── */
 /* Было: одна подпись, и в ней то название объявления, то последнее
@@ -2557,9 +2300,7 @@ button:active,
    весь интерфейс меняется без правки разметки ни в одном файле.
    ══════════════════════════════════════════════════════════════════════════ */
 
-
 /* Тёмная тема — по ТЗ */
-
 
 /* ── Состояния элементов (раздел 7 ТЗ) ─────────────────────────────────── */
 button, a, [role="button"], input, textarea, select {
@@ -2729,14 +2470,12 @@ html, body, #root {
 /* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
 /* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
    это требование доступности, а не вкусовщина. */
-.chat-chip, .auction-sort button, .chat-tab, .chat-example,
-.save-btn, .chat-crit-x, .chat-back, .chat-send,
-.icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
+.chat-chip, .chat-tab, .chat-example, .save-btn, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
   min-height: 44px;
   min-width: 44px;
 }
 /* Таблетки-варианты: высоту держим, но не растягиваем по ширине */
-.chat-chip, .auction-sort button {
+.chat-chip {
   background: color-mix(in srgb, var(--surface) 90%, transparent);
   display: inline-flex;
   align-items: center;
@@ -2763,7 +2502,6 @@ html, body, #root {
 @supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
   .topbar { background: rgba(255, 255, 255, 0.92); }
 }
-
 
 /* ── ТЗ 1: safe-area и отступ под нижнюю полосу ─────────────────────────── */
 /* Док занимает 80 px снизу (16 отступ + 64 высота), но контент этого не
@@ -2962,7 +2700,6 @@ html, body, #root {
     border-bottom: 0.5px solid var(--hairline);
   }
 }
-
 
 /* ── Кнопка «назад»: одна форма на всех экранах ────────────────────────── */
 /* В чате была круглая, на остальных — квадрат 12 px. Приводим к общей:

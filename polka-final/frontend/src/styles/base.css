@@ -85,8 +85,7 @@ button:disabled, [aria-disabled="true"] {
   min-width: 44px;
   min-height: 44px;
 }
-.chat-chip, .auction-sort button, .chat-tab, .chat-example,
-.send-btn, .ghost-btn, .cta-round {
+.chat-chip, .chat-tab, .chat-example, .send-btn, .ghost-btn, .cta-round {
   min-height: 44px;
 }
 

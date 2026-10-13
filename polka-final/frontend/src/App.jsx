@@ -20,7 +20,7 @@ import { ErrorState } from './components/ErrorState'
 // но с ролью tablist и одним источником стилей (этап 1).
 import { SegmentedControl } from './components/SegmentedControl'
 // Общие компоненты дизайн-системы: подключаются на экранах поиска лотов
-// (этап 3b) вместо самодельных .auction-sort / .cta-primary / .ghost-btn.
+// (этап 3b) вместо самодельных чипов и кнопок legacy-разметки.
 import { Button } from './components/Button'
 import { Card } from './components/Card'
 import { Chip } from './components/Chip'
@@ -45,9 +45,6 @@ const STATUS_LABELS = {
   sold: 'Проданные',
   rejected: 'Отклонённые',
   inactive: 'Снятые',
-  // Итоги аукциона
-  ended: 'Лот продан',
-  ended_unsold: 'Торги без ставок',
 }
 
 function useApp() {
@@ -627,148 +624,6 @@ function CategoryArt({ label }) {
   )
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   АУКЦИОНЫ
-   Сервер отдаёт остаток времени в секундах — дальше считаем сами, чтобы
-   таймер не зависел от расхождения часов на устройстве.
-   ══════════════════════════════════════════════════════════════════════════ */
-const AUCTION_URGENT_SEC = 300
-
-function formatLeft(seconds) {
-  const total = Math.max(0, Math.floor(seconds || 0))
-  const days = Math.floor(total / 86400)
-  const hours = Math.floor((total % 86400) / 3600)
-  const mins = Math.floor((total % 3600) / 60)
-  const secs = total % 60
-  if (days > 0) return `${days} д ${hours} ч`
-  if (hours > 0) return `${hours}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-  return `${mins}:${String(secs).padStart(2, '0')}`
-}
-
-function Countdown({ seconds, className = '', doneText = 'Завершён' }) {
-  const [left, setLeft] = useState(() => Math.max(0, Number(seconds) || 0))
-  useEffect(() => {
-    setLeft(Math.max(0, Number(seconds) || 0))
-    const timer = setInterval(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000)
-    return () => clearInterval(timer)
-  }, [seconds])
-  if (left <= 0) return <span className={className}>{doneText}</span>
-  const urgent = left <= AUCTION_URGENT_SEC
-  return (
-    <span className={`${className} ${urgent ? 'is-urgent' : ''}`.trim()}>
-      <Icon name="clock" />{formatLeft(left)}
-    </span>
-  )
-}
-
-function auctionPriceText(item) {
-  const hasBids = Number(item?.bids_count || 0) > 0
-  const value = hasBids ? Number(item.current_bid || 0) : Number(item.start_price || 0)
-  const label = hasBids ? 'Текущая ставка' : 'Старт'
-  return { label, value: `${value.toLocaleString('ru-RU')} ₽`, raw: value }
-}
-
-/* Шторка ставки — общая для ленты лотов и карточки товара */
-function BidSheet({ item, onClose, onDone }) {
-  const min = Number(item?.min_next_bid || 0)
-  const [amount, setAmount] = useState(String(min))
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const submit = async () => {
-    const value = Number(String(amount).replace(/[^0-9]/g, ''))
-    if (!value) { setError('Введите сумму.'); return }
-    if (value < min) { setError(`Минимум ${min.toLocaleString('ru-RU')} ₽`); return }
-    setBusy(true)
-    setError('')
-    try {
-      const data = await api.placeBid(item.id, value)
-      onDone?.(data)
-      onClose()
-    } catch (err) {
-      const code = err?.detail || err?.message || ''
-      if (code === 'too_low') setError(`Ставка уже выросла. Минимум ${Number(err.minimum || min).toLocaleString('ru-RU')} ₽`)
-      else if (code === 'own_lot') setError('Нельзя ставить на свой лот.')
-      else if (code === 'ended') setError('Торги уже завершены.')
-      else if (code === 'use_buy_now') setError('Сумма дошла до цены выкупа — используйте «Купить сразу».')
-      else setError('Не удалось сделать ставку.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-grip" />
-        <strong className="sheet-title">Ставка за лот</strong>
-        <div className="sheet-lot">{item?.title}</div>
-        <div className="sheet-row">
-          <span>Минимум</span>
-          <b>{min.toLocaleString('ru-RU')} ₽</b>
-        </div>
-        {item?.buy_now_price ? (
-          <div className="sheet-row">
-            <span>Купить сразу</span>
-            <b>{Number(item.buy_now_price).toLocaleString('ru-RU')} ₽</b>
-          </div>
-        ) : null}
-        <div className="bid-input-row">
-          <button type="button" className="bid-step" onClick={() => setAmount(String(Math.max(min, Number(amount || 0) - Number(item?.bid_step || 0))))}>−</button>
-          <input
-            className="text-input glass-card bid-input"
-            value={amount}
-            inputMode="numeric"
-            onChange={(e) => setAmount(e.target.value.replace(/[^0-9]/g, ''))}
-          />
-          <button type="button" className="bid-step" onClick={() => setAmount(String(Number(amount || 0) + Number(item?.bid_step || 0)))}>+</button>
-        </div>
-        {error ? <div className="status-line error">{error}</div> : null}
-        <button type="button" className="cta-primary" disabled={busy} onClick={submit}>
-          {busy ? 'Отправляем…' : 'Сделать ставку'}
-        </button>
-        <p className="story-hint">Ставка обязывает: отменить её нельзя.</p>
-      </div>
-    </div>
-  )
-}
-
-/* Карточка лота в списке */
-function AuctionCard({ item, onBid }) {
-  const price = auctionPriceText(item)
-  const bids = Number(item.bids_count || 0)
-  return (
-    <div className="auction-card glass-card">
-      <Link to={`/listing/${item.id}`} className="auction-thumb">
-        <MediaPlaceholder imageUrl={firstPhoto(item)} />
-      </Link>
-      <div className="auction-body">
-        <Link to={`/listing/${item.id}`} className="auction-title">{item.title}</Link>
-        <div className="auction-meta">
-          <strong>{price.value}</strong>
-          <span>{bids ? `${bids} ${bids === 1 ? 'ставка' : bids < 5 ? 'ставки' : 'ставок'}` : 'ставок нет'}</span>
-        </div>
-        <div className="auction-foot">
-          <Countdown seconds={item.time_left} className="auction-timer" />
-          {item.is_owner ? (
-            <span className="auction-own">Ваш лот</span>
-          ) : (
-            <button type="button" className="auction-bid-btn" onClick={() => onBid(item)}>
-              Ставка
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const BID_STATE_LABELS = {
-  leading: { text: 'Вы лидируете', tone: 'is-ok' },
-  outbid: { text: 'Ставку перебили', tone: 'is-warn' },
-  won: { text: 'Вы выиграли', tone: 'is-ok' },
-  lost: { text: 'Проиграна', tone: 'is-muted' },
-}
 
 /* «Поиск лотов» — критерии, по которым бот ищет дешёвое на Авито.
  * Раньше их можно было задать ТОЛЬКО командой /hunt в боте: в приложении
@@ -1168,104 +1023,6 @@ function FindingsView() {
   )
 }
 
-/* Содержимое аукционов без обёртки экрана: показывается переключателем
- * в ленте, поэтому Screen и TopBar здесь не нужны. */
-function AuctionsView() {
-  const [tab, setTab] = useState('lots')
-  const [items, setItems] = useState([])
-  const [myBids, setMyBids] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [sort, setSort] = useState('ending')
-  const [bidItem, setBidItem] = useState(null)
-
-  const load = async () => {
-    setLoading(true)
-    setError('')
-    try {
-      const [lots, bids] = await Promise.all([
-        api.getAuctions(sort),
-        api.getMyBids().catch(() => ({ items: [] })),
-      ])
-      setItems(lots.items || [])
-      setMyBids(bids.items || [])
-    } catch {
-      setError('Не удалось загрузить аукционы.')
-      setItems([])
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sort])
-
-  const onBidDone = (data) => {
-    if (!data?.ad) { load(); return }
-    setItems((prev) => prev.map((x) => (x.id === data.ad.id ? data.ad : x)))
-    if (data.ad.time_left <= 0) load()
-  }
-
-  return (
-    <>
-      <div className="segmented">
-        <button type="button" className={tab === 'lots' ? 'is-active' : ''} onClick={() => setTab('lots')}>
-          Лоты
-        </button>
-        <button type="button" className={tab === 'bids' ? 'is-active' : ''} onClick={() => setTab('bids')}>
-          Мои ставки{myBids.length ? ` · ${myBids.length}` : ''}
-        </button>
-      </div>
-
-      {tab === 'lots' ? (
-        <>
-          <div className="auction-sort">
-            <button type="button" className={sort === 'ending' ? 'is-active' : ''} onClick={() => setSort('ending')}>
-              Скоро закончатся
-            </button>
-            <button type="button" className={sort === 'new' ? 'is-active' : ''} onClick={() => setSort('new')}>
-              Новые
-            </button>
-          </div>
-          {error ? <ErrorBlock text={error} onRetry={load} /> : null}
-          {loading ? <div className="muted-line">Загружаем лоты…</div> : null}
-          {!loading && !error && !items.length ? (
-            <EmptyBlock text="Активных лотов пока нет. Выставьте первый — переключатель «Аукцион» в форме объявления." />
-          ) : null}
-          <div className="list-stack">
-            {items.map((item) => <AuctionCard key={item.id} item={item} onBid={setBidItem} />)}
-          </div>
-        </>
-      ) : (
-        <>
-          {!myBids.length ? <EmptyBlock text="Вы ещё не делали ставок." /> : null}
-          <div className="list-stack">
-            {myBids.map((b) => {
-              const state = BID_STATE_LABELS[b.state] || BID_STATE_LABELS.lost
-              return (
-                <Link to={`/listing/${b.ad_id}`} key={`${b.ad_id}-${b.created_at}`} className="mybid-row glass-card">
-                  <div className="mybid-thumb"><MediaPlaceholder imageUrl={b.photo} /></div>
-                  <div className="mybid-body">
-                    <strong>{b.title}</strong>
-                    <span className="mybid-amount">Моя ставка {Number(b.amount).toLocaleString('ru-RU')} ₽</span>
-                    <span className={`mybid-state ${state.tone}`}>{state.text}</span>
-                  </div>
-                  {b.ends_at ? <Countdown seconds={b.time_left} className="auction-timer" /> : null}
-                </Link>
-              )
-            })}
-          </div>
-        </>
-      )}
-
-      {bidItem ? (
-        <BidSheet item={bidItem} onClose={() => setBidItem(null)} onDone={onBidDone} />
-      ) : null}
-    </>
-  )
-}
 
 /* Рельс категорий в ленте — те же плашки, что и в форме, только
  * в горизонтальной прокрутке (в форме они в сетке 2 в ряд). */
@@ -1862,9 +1619,6 @@ function ListingPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState('')
   const [photoIndex, setPhotoIndex] = useState(0)
-  const [bidOpen, setBidOpen] = useState(false)
-  const [bidsOpen, setBidsOpen] = useState(false)
-  const [bidList, setBidList] = useState([])
   const galleryRef = useRef(null)
 
   const load = async () => {
@@ -1903,37 +1657,12 @@ function ListingPage() {
   }, [listingId])
 
   const isOwner = Boolean(item?.is_owner)
-  const isAuction = item?.sale_type === 'auction'
   // Лот с Авито: для него интерфейс другой — это чужая находка,
   // а не объявление пользователя. Доски это не касается.
   // item приходит null, пока объявление грузится — без ?. страница падала
   // с «null is not an object (evaluating 'a.source_url')»
   const isFinding = Boolean(item?.source_url)
 
-  const loadBids = async () => {
-    try {
-      const data = await api.getBids(listingId)
-      setBidList(data.items || [])
-    } catch {
-      setBidList([])
-    }
-  }
-
-  const handleBuyNow = async () => {
-    const price = Number(item?.buy_now_price || 0)
-    if (!window.confirm(`Выкупить лот сразу за ${price.toLocaleString('ru-RU')} ₽?`)) return
-    setActionLoading('buy')
-    try {
-      const data = await api.buyNow(listingId)
-      setItem(data.ad)
-      setError('')
-    } catch (err) {
-      const code = err?.detail || err?.message
-      setError(code === 'own_lot' ? 'Это ваш собственный лот.' : 'Не удалось выкупить лот.')
-    } finally {
-      setActionLoading('')
-    }
-  }
 
   /* Фото для галереи. Основной источник — photo_urls, но если бэкенд его не
    * заполнил, берём сырые photos и приводим к URL через photoDisplayUrl
@@ -2021,10 +1750,8 @@ function ListingPage() {
   /* Цена — крупно и сразу под галереей. Раньше её вообще не было видно:
      значение лежало только в скрытых плашках на фото (.hero-pins.is-hidden),
      а сами плашки закрывали товар и дублировали текст ниже — они убраны. */
-  const priceValue = isAuction
-    ? `${Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽`
-    : priceText(item)
-  const priceLabel = isAuction ? (item.bids_count ? 'Текущая ставка' : 'Стартовая цена') : 'Цена'
+  const priceValue = priceText(item)
+  const priceLabel = 'Цена'
 
   return (
     <Screen>
@@ -2081,61 +1808,6 @@ function ListingPage() {
             </div>
           ) : null}
         </div>
-
-        {/* Аукционный блок — сразу под заголовком: здесь важнее всего
-            текущая ставка и сколько осталось времени */}
-        {isAuction ? (
-          <div className="auction-panel glass-card">
-            <div className="auction-panel-top">
-              <div className="auction-panel-main">
-                <span className="auction-panel-label">
-                  {item.bids_count ? 'Текущая ставка' : 'Стартовая цена'}
-                </span>
-                <strong className="auction-panel-price">
-                  {Number(item.bids_count ? item.current_bid : item.start_price || 0).toLocaleString('ru-RU')} ₽
-                </strong>
-                <span className="auction-panel-sub">
-                  {item.bids_count
-                    ? `${item.bids_count} ${item.bids_count === 1 ? 'ставка' : item.bids_count < 5 ? 'ставки' : 'ставок'} · шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`
-                    : `шаг ${Number(item.bid_step || 0).toLocaleString('ru-RU')} ₽`}
-                </span>
-              </div>
-              <div className="auction-panel-timer">
-                <span className="auction-panel-label">{item.time_left > 0 ? 'До конца' : 'Статус'}</span>
-                <Countdown seconds={item.time_left} className="auction-timer big"
-                  doneText={item.winner_id ? 'Завершён' : 'Без ставок'} />
-              </div>
-            </div>
-
-            {item.buy_now_price && item.time_left > 0 ? (
-              <div className="auction-buynow">
-                <Icon name="sparkles" />
-                Можно забрать сразу за {Number(item.buy_now_price).toLocaleString('ru-RU')} ₽
-              </div>
-            ) : null}
-            {item.status === 'ended' && item.is_winner ? (
-              <div className="auction-result is-ok">
-                <Icon name="check" /> Вы выиграли этот лот. Напишите продавцу, чтобы договориться.
-              </div>
-            ) : null}
-            {isOwner && item.bids_count ? (
-              <button type="button" className="auction-history-toggle"
-                onClick={() => { setBidsOpen((v) => !v); if (!bidsOpen) loadBids() }}>
-                {bidsOpen ? 'Скрыть ставки' : `Показать ставки (${item.bids_count})`}
-              </button>
-            ) : null}
-            {bidsOpen ? (
-              <div className="auction-history">
-                {bidList.length ? bidList.map((b, i) => (
-                  <div className="auction-history-row" key={`${b.created_at}-${i}`}>
-                    <span>{b.is_me ? 'Ваша ставка' : b.name}</span>
-                    <b>{Number(b.amount).toLocaleString('ru-RU')} ₽</b>
-                  </div>
-                )) : <div className="muted-line">Ставок пока нет.</div>}
-              </div>
-            ) : null}
-          </div>
-        ) : null}
 
         {/* Чипы-характеристики — как Weather / Temp / Event в референсе */}
         <div className="spec-chips">
@@ -2233,35 +1905,22 @@ function ListingPage() {
             </>
           ) : (
             <>
-              {isAuction && item.time_left > 0 ? (
-                <button className="cta-primary" type="button" onClick={() => setBidOpen(true)}>
-                  <Icon name="gavel" />
-                  Сделать ставку
+              {isFinding ? (
+                <button className="cta-primary" type="button"
+                  onClick={() => {
+                    const tg = window.Telegram?.WebApp
+                    if (tg?.openLink) tg.openLink(item.source_url)
+                    else window.open(item.source_url, '_blank', 'noopener')
+                  }}>
+                  <Icon name="send" />
+                  Открыть
                 </button>
               ) : (
-                isFinding ? (
-                  <button className="cta-primary" type="button"
-                    onClick={() => {
-                      const tg = window.Telegram?.WebApp
-                      if (tg?.openLink) tg.openLink(item.source_url)
-                      else window.open(item.source_url, '_blank', 'noopener')
-                    }}>
-                    <Icon name="send" />
-                    Открыть
-                  </button>
-                ) : (
-                  <button className="cta-primary" type="button" onClick={handleStartChat}>
-                    <Icon name="chat" />
-                    {chatLoading ? 'Открываем…' : 'Написать'}
-                  </button>
-                )
-              )}
-              {isAuction && item.time_left > 0 && item.buy_now_price ? (
-                <button className="cta-dark" type="button" onClick={handleBuyNow}
-                  disabled={actionLoading === 'buy'}>
-                  {actionLoading === 'buy' ? '…' : 'Купить'}
+                <button className="cta-primary" type="button" onClick={handleStartChat}>
+                  <Icon name="chat" />
+                  {chatLoading ? 'Открываем…' : 'Написать'}
                 </button>
-              ) : null}
+              )}
               <button
                 className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
                 type="button"
@@ -2273,23 +1932,10 @@ function ListingPage() {
               <button className="cta-round" type="button" onClick={handleShare} aria-label="Поделиться">
                 <Icon name="share" />
               </button>
-              {isAuction && item.time_left > 0 ? (
-                <button className="cta-round" type="button" onClick={handleStartChat}
-                  aria-label="Написать продавцу">
-                  <Icon name="chat" />
-                </button>
-              ) : null}
             </>
           )}
         </div>
       </div>
-      {bidOpen && isAuction ? (
-        <BidSheet
-          item={item}
-          onClose={() => setBidOpen(false)}
-          onDone={(data) => { if (data?.ad) setItem(data.ad) }}
-        />
-      ) : null}
     </Screen>
   )
 }
@@ -2356,12 +2002,6 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
     delivery: initial?.delivery || '',
     contact_info: initial?.contact_info || '',
     photos: initial?.photos || [],
-    // Аукцион: по умолчанию обычная продажа
-    saleType: initial?.sale_type === 'auction' ? 'auction' : 'sale',
-    startPrice: initial?.start_price != null ? String(initial.start_price) : '',
-    bidStep: initial?.bid_step != null ? String(initial.bid_step) : '',
-    buyNowPrice: initial?.buy_now_price != null ? String(initial.buy_now_price) : '',
-    auctionDays: initial?.auction_days || 3,
     step: 1,
   }))
   const [cities, setCities] = useState([])
@@ -2421,9 +2061,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
     form.step === 1 ? !!form.category :
     form.step === 2 ? form.photos.length > 0 :
     form.step === 3 ? form.title.trim().length >= 3 && form.description.trim() :
-    form.step === 4 ? (form.saleType === 'auction'
-      ? form.startPrice && form.city.trim()
-      : form.price && form.city.trim()) :
+    form.step === 4 ? Boolean(form.price && form.city.trim()) :
     true
 
   const nextStep = () => { if (form.step < totalSteps && canNext) update('step', form.step + 1) }
@@ -2440,9 +2078,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
         : (!form.description.trim() ? 'Добавьте описание: состояние, особенности, комплектация' : '')
     ) :
     form.step === 4 ? (
-      form.saleType === 'auction'
-        ? (!form.startPrice ? 'Укажите стартовую цену' : (!form.city.trim() ? 'Укажите город' : ''))
-        : (!form.price ? 'Укажите цену' : (!form.city.trim() ? 'Укажите город' : ''))
+      !form.price ? 'Укажите цену' : (!form.city.trim() ? 'Укажите город' : '')
     ) : ''
 
   return (
@@ -2520,60 +2156,13 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
 
       {form.step === 4 && (
         <div className="form-stack">
-          {/* Режим продажи: обычная цена или аукцион. Аукцион — то же
-              объявление, просто с торгами, поэтому переключатель здесь. */}
-          <div className="segmented">
-            <button type="button" className={form.saleType !== 'auction' ? 'is-active' : ''}
-              onClick={() => update('saleType', 'sale')}>Продажа</button>
-            <button type="button" className={form.saleType === 'auction' ? 'is-active' : ''}
-              onClick={() => update('saleType', 'auction')}>Аукцион</button>
+          <div className="field-wrap">
+            <input className={`text-input glass-card ${touched.price && !form.price ? 'is-invalid' : ''}`} value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => { setFocusedField(''); markTouched('price') }} placeholder="Цена, ₽" />
+            <FieldHint text="Укажите цену в рублях" visible={focusedField === 'price'} />
+            {touched.price && !form.price ? (
+              <div className="field-error" role="alert">Укажите цену — без неё объявление не опубликуется</div>
+            ) : null}
           </div>
-
-          {form.saleType === 'auction' ? (
-            <>
-              <div className="field-wrap">
-                <input className={`text-input glass-card ${touched.start && !form.startPrice ? 'is-invalid' : ''}`} value={form.startPrice} inputMode="numeric"
-                  onChange={(e) => update('startPrice', e.target.value.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setFocusedField('start')} onBlur={() => { setFocusedField(''); markTouched('start') }}
-                  placeholder="Стартовая цена, ₽" />
-                <FieldHint text="Первая ставка не может быть ниже" visible={focusedField === 'start'} />
-                {touched.start && !form.startPrice ? (
-                  <div className="field-error" role="alert">Стартовая цена обязательна для аукциона</div>
-                ) : null}
-              </div>
-              <div className="field-wrap">
-                <input className="text-input glass-card" value={form.bidStep} inputMode="numeric"
-                  onChange={(e) => update('bidStep', e.target.value.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setFocusedField('step')} onBlur={() => setFocusedField('')}
-                  placeholder="Шаг ставки, ₽ (необязательно)" />
-                <FieldHint text="Если пусто — 5% от стартовой" visible={focusedField === 'step'} />
-              </div>
-              <div className="field-wrap">
-                <input className="text-input glass-card" value={form.buyNowPrice} inputMode="numeric"
-                  onChange={(e) => update('buyNowPrice', e.target.value.replace(/[^0-9]/g, ''))}
-                  onFocus={() => setFocusedField('buynow')} onBlur={() => setFocusedField('')}
-                  placeholder="Купить сразу, ₽ (необязательно)" />
-                <FieldHint text="Цена, по которой лот заберут немедленно" visible={focusedField === 'buynow'} />
-              </div>
-              <div className="field-label-row">Срок торгов</div>
-              <div className="auction-sort">
-                {[1, 3, 7].map((d) => (
-                  <button key={d} type="button" className={form.auctionDays === d ? 'is-active' : ''}
-                    onClick={() => update('auctionDays', d)}>
-                    {d === 1 ? '1 день' : `${d} дня`.replace('7 дня', '7 дней')}
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="field-wrap">
-              <input className={`text-input glass-card ${touched.price && !form.price ? 'is-invalid' : ''}`} value={form.price} inputMode="numeric" onChange={(e) => update('price', e.target.value.replace(/[^0-9]/g, ''))} onFocus={() => setFocusedField('price')} onBlur={() => { setFocusedField(''); markTouched('price') }} placeholder="Цена, ₽" />
-              <FieldHint text="Укажите цену в рублях" visible={focusedField === 'price'} />
-              {touched.price && !form.price ? (
-                <div className="field-error" role="alert">Укажите цену — без неё объявление не опубликуется</div>
-              ) : null}
-            </div>
-          )}
 
           <div className="field-wrap">
             <input className={`text-input glass-card ${touched.city && !form.city.trim() ? 'is-invalid' : ''}`} value={form.city} onChange={(e) => update('city', e.target.value)} onFocus={() => setFocusedField('city')} onBlur={() => { setFocusedField(''); markTouched('city') }} placeholder="Город" list="ad-city-options" />
@@ -2595,11 +2184,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
           <div className="preview-card glass-card">
             <div className="preview-media"><MediaPlaceholder imageUrl={photoDisplayUrl(form.photos[0])} /></div>
             <div className="preview-info">
-              <div className="product-price">
-                {form.saleType === 'auction'
-                  ? `от ${form.startPrice || 0} ₽ · аукцион`
-                  : `${form.price} ₽`}
-              </div>
+              <div className="product-price">{form.price} ₽</div>
               <div className="row-title">{form.title}</div>
               <div className="product-city">{form.city}{form.condition ? ` · ${form.condition}` : ''}</div>
             </div>
@@ -2641,15 +2226,7 @@ function CreatePage() {
     setStatus('saving')
     setError('')
     try {
-      // Аукционные поля уходят в snake_case: бэкенд ждёт именно такие имена
-      const payload = {
-        ...form,
-        sale_type: form.saleType === 'auction' ? 'auction' : 'sale',
-        start_price: form.startPrice,
-        bid_step: form.bidStep,
-        buy_now_price: form.buyNowPrice,
-        auction_days: form.auctionDays,
-      }
+      const payload = { ...form }
       const response = await api.createListing(payload)
       setCreated(response.ad)
       setStatus('success')

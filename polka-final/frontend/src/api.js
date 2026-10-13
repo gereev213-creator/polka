@@ -248,12 +248,4 @@ export const api = {
     { method: 'POST', body: JSON.stringify(draft) }),
   hideFinding: (adId) => request('/api/findings/hide',
     { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
-  getAuctions: (sort = 'ending') => request(`/api/auctions?sort=${encodeURIComponent(sort)}`),
-  getBids: (adId) => request(`/api/ads/${adId}/bids`),
-  placeBid: (adId, amount) => request(`/api/ads/${adId}/bid`, {
-    method: 'POST',
-    body: JSON.stringify({ amount }),
-  }),
-  buyNow: (adId) => request(`/api/ads/${adId}/buy-now`, { method: 'POST' }),
-  getMyBids: () => request('/api/my-bids'),
 }
