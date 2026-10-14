@@ -2,7 +2,9 @@
 FROM node:20-alpine AS frontend
 WORKDIR /build
 COPY polka-final/frontend/package.json polka-final/frontend/package-lock.json* ./
-RUN npm install
+# npm ci — установка строго по package-lock.json: быстрее и без сюрпризов
+# «сегодня в реестре вышла новая версия». Фолбэк на install, если лока нет.
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY polka-final/frontend/ ./
 RUN npm run build
 
