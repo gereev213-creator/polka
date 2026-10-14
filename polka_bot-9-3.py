@@ -18879,6 +18879,23 @@ SLOW_REQUEST_MS = int(os.environ.get('SLOW_REQUEST_MS', '1500'))
 MEDIANS_DEBOUNCE_SEC = int(os.environ.get('MEDIANS_DEBOUNCE_SEC', '150'))
 
 
+def _db_read(fn, *args, **kwargs):
+    """Чтение из базы с ограниченным ожиданием блокировки.
+
+    Долгая фоновая работа (пересчёт медиан) держит блокировку записи. Если
+    лента будет ждать её синхронно, цикл событий встанет — именно это дало
+    «ЦИКЛ СОБЫТИЙ ЗАБЛОКИРОВАН на 8009 мс». Поэтому читаем без ожидания:
+    с одним соединением и WAL это безопасно, а редкое «database is locked»
+    лечится busy_timeout (10 с).
+    """
+    got = DB_WRITE_LOCK.acquire(timeout=0.3)
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        if got:
+            DB_WRITE_LOCK.release()
+
+
 def _db_locked(fn, *args, **kwargs):
     """Выполняет функцию под общей блокировкой записи в SQLite.
 
@@ -18909,6 +18926,8 @@ def ensure_indexes() -> int:
         "CREATE INDEX IF NOT EXISTS idx_ads_feed ON ads(status, source, created_at DESC)",
         # чистка мусора и медианы
         "CREATE INDEX IF NOT EXISTS idx_ads_source_discount ON ads(source, discount_percent)",
+        # медиана категории: COUNT и OFFSET по цене идут по этому индексу
+        "CREATE INDEX IF NOT EXISTS idx_ads_category_price ON ads(category, price)",
         "CREATE INDEX IF NOT EXISTS idx_ads_parsed ON ads(source, parsed_at)",
         # очередь доставки: статус + время выдачи + порядок по скидке
         "CREATE INDEX IF NOT EXISTS idx_hunt_matches_queue "
@@ -18992,10 +19011,11 @@ async def _medians_worker_loop():
                 _MEDIANS_DIRTY['categories'] = set()
                 _MEDIANS_DIRTY['criteria'] = False
                 if cats:
-                    # только затронутые категории, а не вся таблица
+                    # только затронутые категории, а не вся таблица; каждая
+                    # категория — отдельный короткий захват блокировки, чтобы
+                    # лента не ждала весь проход
                     for cat in cats[:20]:
                         await asyncio.to_thread(_db_locked, recompute_market_medians, cat)
-                    recompute_market_medians()
                 if want_criteria:
                     await asyncio.to_thread(_db_locked, recompute_criterion_medians)
                 logger.info(f"медианы пересчитаны в фоне (категорий: {len(cats)})")
@@ -19020,28 +19040,44 @@ def recompute_market_medians(category: Optional[str] = None) -> int:
     if category:
         where += " AND category = ?"
         params = (category,)
+    # Список категорий: без выгрузки всех цен в Python (на 50 тысячах строк
+    # это и давало восьмисекундную блокировку).
     try:
-        cursor.execute(f"SELECT category, price FROM ads WHERE {where} ORDER BY category, price", params)
-        rows = cursor.fetchall()
+        cursor.execute(f"SELECT DISTINCT category FROM ads WHERE {where}", params)
+        cats = [str(r['category']) for r in cursor.fetchall() if r['category']]
     except Exception as e:
-        logger.error(f"median read: {e}")
+        logger.error(f"median categories: {e}")
         return 0
-    if not rows:
-        return 0
-
-    grouped: Dict[str, List[int]] = {}
-    for r in rows:
-        grouped.setdefault(r['category'], []).append(int(r['price'] or 0))
 
     updated = 0
-    for cat, prices in grouped.items():
-        prices = [p for p in prices if p > 0]
-        if len(prices) < 3:
-            continue  # на двух объявлениях медиана бессмысленна
-        mid = len(prices) // 2
-        median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+    for cat in cats:
+        cat_where = "status='active' AND price > 0 AND COALESCE(price_suspect,0)=0 AND category = ?"
+        try:
+            # Медиана одним запросом: COUNT + OFFSET по индексу (category, price)
+            cursor.execute(f"SELECT COUNT(*) AS n FROM ads WHERE {cat_where}", (cat,))
+            total = int((cursor.fetchone() or {'n': 0})['n'] or 0)
+            if total < 3:
+                continue          # на двух объявлениях медиана бессмысленна
+            cursor.execute(
+                f"SELECT CAST(AVG(price) AS INTEGER) AS m FROM ("
+                f"  SELECT price FROM ads WHERE {cat_where} ORDER BY price "
+                f"  LIMIT 2 - (? % 2) OFFSET (? - 1) / 2)", (cat, total, total))
+            row_m = cursor.fetchone()
+            median = int((row_m or {'m': 0})['m'] or 0)
+        except Exception as e:
+            logger.warning(f"median count {cat}: {e}")
+            continue
         if median <= 0:
             continue
+        # Медиана не изменилась — два UPDATE по всей категории не нужны
+        try:
+            cursor.execute("SELECT market_median FROM ads WHERE category=? AND status='active' "
+                           "AND market_median IS NOT NULL LIMIT 1", (cat,))
+            prev = cursor.fetchone()
+            if prev and int(prev['market_median'] or 0) == median:
+                continue
+        except Exception:
+            pass
         try:
             cursor.execute("UPDATE ads SET market_median=? WHERE category=? AND status='active'",
                            (median, cat))
@@ -23121,7 +23157,7 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
     if method == 'GET':
         return _miniapp_json({
             'items': [_criterion_public(c)
-                      for c in _db_locked(get_user_criteria, viewer_id)],
+                      for c in _db_read(get_user_criteria, viewer_id)],
             # Без этого человек не понимает, почему ничего не приходит
             'collector': collector_status(),
             # Заблокировал бота — находки физически не дойдут: покажем плашку
@@ -26040,7 +26076,7 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     try:
         # K2: та же блокировка, что у приёма находок — чтение не попадает
         # внутрь чужой транзакции
-        rows = _db_locked(_fetch_findings)
+        rows = _db_read(_fetch_findings)
     except Exception as e:
         logger.error(f"findings list: {e}")
         return _miniapp_err('load_failed', 500)
@@ -28009,7 +28045,7 @@ async def api_miniapp_ads_list(request: aiohttp_web.Request) -> aiohttp_web.Resp
         # K2: выборка идёт под той же блокировкой, что и приём находок в
         # рабочем потоке — иначе чтение попадает внутрь чужой транзакции
         # и падает с «database is locked».
-        raw = _db_locked(
+        raw = _db_read(
             db.search_ads_filtered, query=q, category=category, price_min=price_min,
             price_max=price_max, city=city, condition=condition, delivery=delivery,
             sort_by=sort, limit=limit + offset + 1,

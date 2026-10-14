@@ -63,7 +63,7 @@ CREATE TABLE ads (
     external_id TEXT, parsed_at TEXT, views INTEGER DEFAULT 0,
     published_hours_ago INTEGER, title_lower TEXT, age_estimated INTEGER DEFAULT 0,
     fingerprint TEXT, last_drop_notice_at TEXT, discount_percent INTEGER, prev_price INTEGER,
-    condition TEXT, delivery TEXT
+    condition TEXT, delivery TEXT, price_suspect INTEGER DEFAULT 0, market_median INTEGER
 );
 CREATE TABLE ads_dupes (id INTEGER PRIMARY KEY AUTOINCREMENT, ad_id INTEGER,
     source TEXT, external_id TEXT, seen_at TEXT, UNIQUE(ad_id, external_id));
@@ -310,5 +310,69 @@ print(f'   требование K7: p95 < 1500 мс, ни одного > 5000 м
       f'{"выполнено" if after_c[0] < 1500 and after_c[1] < 5000 else "НЕ выполнено"}')
 assert after_c[0] < 1500, f'p95 ленты {after_c[0]:.0f} мс'
 assert after_c[1] < 5000, f'максимум ленты {after_c[1]:.0f} мс'
+
+# ── 4. Медианы: скорость прохода и короткая блокировка
+print('\nмедианы категорий: проход по 9 категориям на 20 000 объявлений')
+MED_TOKENS = ('recompute_market_medians',)
+
+
+def build_med_ns(conn):
+    ns = build_ns(NEW_SRC, conn)
+    i = NEW_SRC.index('def recompute_market_medians(')
+    end = re.compile(r'^(async )?def ', re.M).search(NEW_SRC, i + 10)
+    exec(NEW_SRC[i:end.start()], ns)
+    return ns
+
+
+med_conn = sqlite3.connect(':memory:')
+med_conn.row_factory = sqlite3.Row
+med_conn.executescript(DDL + "CREATE INDEX idx_ads_category_price ON ads(category, price);")
+cats = ['Электроника', 'Одежда', 'Дом', 'Транспорт', 'Хобби', 'Детям', 'Красота', 'Спорт', 'Зоотовары']
+rows = []
+for i in range(20000):
+    rows.append((cats[i % len(cats)], 1000 + (i % 500) * 37, 'active', 0, 'avito'))
+med_conn.executemany("INSERT INTO ads (category, price, status, price_suspect, source) "
+                     "VALUES (?,?,?,?,?)", rows)
+med_conn.commit()
+med_ns = build_med_ns(med_conn)
+t0 = time.monotonic()
+updated = med_ns['recompute_market_medians']()
+first_ms = (time.monotonic() - t0) * 1000
+t0 = time.monotonic()
+again = med_ns['recompute_market_medians']()
+second_ms = (time.monotonic() - t0) * 1000
+print(f'   первый проход: {first_ms:.0f} мс (категорий {updated}), '
+      f'повтор без изменений: {second_ms:.0f} мс (категорий {again})')
+# медиана посчитана верно: цены в категории идут шагом 37 с повтором по кругу
+sample = [r['price'] for r in med_conn.execute(
+    "SELECT price FROM ads WHERE category=? AND status='active' ORDER BY price", (cats[0],))]
+mid = len(sample) // 2
+expect = sample[mid] if len(sample) % 2 else (sample[mid - 1] + sample[mid]) // 2
+got = med_conn.execute("SELECT market_median FROM ads WHERE category=? LIMIT 1",
+                       (cats[0],)).fetchone()['market_median']
+assert int(got) == expect, (got, expect)
+assert second_ms < first_ms, 'повторный проход не быстрее'
+print(f'   медиана категории «{cats[0]}»: {got} (совпадает с расчётом по списку цен)')
+assert first_ms < 3000, f'проход медиан слишком долгий: {first_ms:.0f} мс'
+
+# ── 5. Чтение не ждёт долгую блокировку (иначе цикл событий встанет)
+lock_ns_conn = sqlite3.connect(':memory:')
+lock_ns_conn.row_factory = sqlite3.Row
+lock_ns_conn.executescript(DDL)
+lock_ns = build_ns(NEW_SRC, lock_ns_conn)
+lock = __import__('threading').RLock()
+lock.acquire()
+lock_ns['DB_WRITE_LOCK'] = lock
+lock_ns['_db_read'] = None
+i = NEW_SRC.index('def _db_read(')
+end = re.compile(r'^(async )?def ', re.M).search(NEW_SRC, i + 5)
+exec(NEW_SRC[i:end.start()], lock_ns)
+t0 = time.monotonic()
+lock_ns['_db_read'](lambda: 42)
+waited_ms = (time.monotonic() - t0) * 1000
+lock.release()
+print(f'\nчтение при занятой блокировке: подождало {waited_ms:.0f} мс '
+      f'({"не блокирует цикл" if waited_ms < 500 else "БЛОКИРУЕТ"})')
+assert waited_ms < 500, f'чтение ждало {waited_ms:.0f} мс'
 
 print('\nK: все проверки пройдены')
