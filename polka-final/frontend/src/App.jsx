@@ -25,6 +25,7 @@ import { Button } from './components/Button'
 import { Card } from './components/Card'
 import { Chip } from './components/Chip'
 import { Badge } from './components/Badge'
+import { CriteriaList } from './components/CriteriaList'
 import { ListRow } from './components/ListRow'
 import { Input } from './components/Input'
 
@@ -938,40 +939,9 @@ function CriteriaPage() {
         </Button>
       </div>
 
-      <div className="section-head"><strong>Мои критерии</strong><span>{items.length}</span></div>
-      {/* Загрузка — skeleton, а не строка «Загружаем…»: видно, что список
-          появится, и он не «прыгает» по высоте, когда придёт ответ. */}
-      {loading ? <Skeleton text="Загружаем критерии" rows={2} /> : null}
-      {!loading && !items.length ? (
-        <EmptyBlock text="Пока ничего не ловим. Добавьте первый критерий — поле выше." />
-      ) : null}
-      <div className="list-stack">
-        {items.map((c) => (
-          <Card key={c.id} pad className="hunt-crit">
-            <div className="hunt-row">
-              <strong>{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
-              <span className="hunt-crit-status">
-                {c.ready
-                  ? `обычная цена ${Number(c.median_price).toLocaleString('ru-RU')} ₽ · ${c.sample_size} шт`
-                  : 'ищем подходящие'}
-              </span>
-              {/* Параметры критерия — чипами: длинная серая строка в 2–3
-                  строки не читалась, а так видно цену, свежесть и режим. */}
-              <div className="hunt-crit-chips">
-                <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>
-                {c.min_price ? <Badge>от {Number(c.min_price).toLocaleString('ru-RU')} ₽</Badge> : null}
-                {c.max_price ? <Badge>до {Number(c.max_price).toLocaleString('ru-RU')} ₽</Badge> : null}
-                {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
-                {c.with_photo ? <Badge>с фото</Badge> : null}
-              </div>
-            </div>
-            <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
-              onClick={() => remove(c.id)}>
-              <Icon name="trash" />
-            </button>
-          </Card>
-        ))}
-      </div>
+      {/* Список критериев — общий компонент: та же разметка, что в ИИ-поиске,
+          иначе один критерий выглядел на двух вкладках по-разному. */}
+      <CriteriaList items={items} loading={loading} onRemove={remove} />
     </Screen>
   )
 }

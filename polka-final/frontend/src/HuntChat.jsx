@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from './api'
+import { CriteriaList } from './components/CriteriaList'
 
 // ── Поиск лотов: чат с ИИ (этап G) ──────────────────────────────────────────
 // Единый диалог: состояние (draft и заданные слоты) хранит СЕРВЕР в
@@ -35,10 +36,15 @@ export default function HuntChat() {
   const [ready, setReady] = useState(false)
   const [notes, setNotes] = useState([])
   const [criteria, setCriteria] = useState([])
+  const [criteriaLoading, setCriteriaLoading] = useState(true)
   const [limitMsg, setLimitMsg] = useState('')
 
   const loadCriteria = () => {
-    api.getCriteria().then((d) => setCriteria((d && (d.items || d.criteria)) || [])).catch(() => {})
+    setCriteriaLoading(true)
+    api.getCriteria()
+      .then((d) => setCriteria((d && (d.items || d.criteria)) || []))
+      .catch(() => {})
+      .finally(() => setCriteriaLoading(false))
   }
   useEffect(() => { loadCriteria() }, [])
 
@@ -213,21 +219,11 @@ export default function HuntChat() {
         </div>
       ) : null}
 
+      {/* Тот же список, что на вкладке «Вручную»: один критерий должен
+          выглядеть одинаково на обеих вкладках (чипы цены, режима, свежести). */}
       {criteria.length ? (
         <div className="chat-crit">
-          <div className="chat-crit-head">Мои критерии<span>{criteria.length}</span></div>
-          {criteria.map((c) => (
-            <div key={c.id} className="chat-crit-card">
-              <div className="chat-crit-body">
-                <div className="chat-crit-title">{c.query}</div>
-                <div className="chat-crit-sub">
-                  {c.max_price ? `до ${money(c.max_price)} ₽` : 'без ограничения по цене'}
-                </div>
-              </div>
-              <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
-                onClick={() => remove(c.id)}>✕</button>
-            </div>
-          ))}
+          <CriteriaList items={criteria} loading={criteriaLoading} onRemove={remove} />
         </div>
       ) : null}
     </div>
