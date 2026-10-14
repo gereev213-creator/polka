@@ -6,6 +6,7 @@ SQLite: проверяем, что просим только нужные кар
 
 Запуск: python3 tests/test_need_details.py
 """
+import json
 import os
 import re
 import sqlite3
@@ -18,6 +19,11 @@ BOT = os.path.join(HERE, '..', 'polka_bot-9-3.py')
 SRC = open(BOT, encoding='utf-8').read()
 
 TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_description',
+          'HUNT_ACCESSORY_TITLE_WORDS', 'HUNT_ACCESSORY_CATEGORY_HINTS', '_CONDITION_RANK',
+          '_CONDITION_PARTS', '_CONDITION_BROKEN', '_CONDITION_WORN', '_CONDITION_EXCELLENT',
+          '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'classify_condition',
+          'extract_battery_percent', 'requirements_json_from_text', '_crit_requirements_json',
+          '_title_has_accessory', '_accessory_before_model', '_OPENED_MARKERS', '_opened_markers_hit',
           'evaluate_ad', '_condition_ok', '_query_alt_numbers', '_query_words_required',
           'query_word_variants', '_query_word_variants_orig', '_requirement_excludes',
           'HUNT_ACCESSORY_WORDS',
@@ -79,7 +85,7 @@ conn.executescript('''
                                 created_at TEXT, mode TEXT, requirements TEXT, condition TEXT);
 ''')
 
-ns = {'os': os, 're': re, 'sqlite3': sqlite3, 'NamedTuple': NamedTuple, 'Dict': Dict,
+ns = {'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'NamedTuple': NamedTuple, 'Dict': Dict,
       'List': List, 'Optional': Optional, 'Tuple': tuple, 'logger': FakeLog(),
       'db': type('D', (), {'conn': conn})(),
       'get_moscow_time': lambda: NOW,

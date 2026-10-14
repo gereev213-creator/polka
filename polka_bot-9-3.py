@@ -17351,6 +17351,7 @@ def ensure_hunt_matches():
                 send_attempts INTEGER DEFAULT 0,
                 send_error TEXT DEFAULT '',
                 fingerprint TEXT DEFAULT '',
+                unverified INTEGER DEFAULT 0,
                 notified_at TEXT,
                 UNIQUE(user_id, ad_id)
             )
@@ -17364,6 +17365,8 @@ def ensure_hunt_matches():
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_error TEXT DEFAULT ''")
         if 'fingerprint' not in cols:
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN fingerprint TEXT DEFAULT ''")
+        if 'unverified' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unverified INTEGER DEFAULT 0")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_fp "
                        "ON hunt_matches(user_id, fingerprint)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
@@ -17442,6 +17445,27 @@ def dedupe_existing(dry_run: bool = True) -> Dict:
     return report
 
 
+def ensure_requirements_json_backfill(limit: int = 500) -> int:
+    """Разбирает старые текстовые требования в requirements_json один раз."""
+    cursor = db.conn.cursor()
+    filled = 0
+    try:
+        cursor.execute("SELECT id, requirements FROM hunt_criteria "
+                       "WHERE COALESCE(requirements_json,'')='' "
+                       "AND COALESCE(requirements,'')<>'' LIMIT ?", (int(limit),))
+        rows = cursor.fetchall()
+        for row in rows:
+            parsed = requirements_json_from_text(str(row['requirements'] or ''))
+            cursor.execute("UPDATE hunt_criteria SET requirements_json=? WHERE id=?",
+                           (json.dumps(parsed, ensure_ascii=False), int(row['id'])))
+            filled += 1
+        if filled:
+            db.conn.commit()
+    except Exception as e:
+        logger.warning(f"requirements_json backfill: {e}")
+    return filled
+
+
 def ensure_quality_columns() -> None:
     """Колонки и таблица для качества данных (этапы D3, D5, D8).
 
@@ -17460,6 +17484,10 @@ def ensure_quality_columns() -> None:
             cursor.execute(sql)
         except Exception:
             pass
+    try:
+        cursor.execute("ALTER TABLE hunt_criteria ADD COLUMN requirements_json TEXT DEFAULT ''")
+    except Exception:
+        pass
     try:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS ads_price_history (
@@ -18634,6 +18662,198 @@ def hunt_shop_in_name(name: str) -> str:
     return m.group(0) if m else ''
 
 
+# ── ЭТАП F: категории, принадлежности, состояние, АКБ, требования ────────────
+# Раньше требования приходили текстом и сверялись только с заголовком; «Чехол
+# iPhone 14 Pro» проходил по запросу «iPhone 14 Pro». Теперь требования хранятся
+# структурой (requirements_json), состояние и АКБ читаются из описания, а
+# принадлежности отсекаются по позиции в названии и по цене.
+HUNT_ACCESSORY_TITLE_WORDS = (
+    'чехол*', 'защит*', 'стекл*', 'плёнк*', 'пленк*', 'кабел*', 'зарядк*',
+    'зарядное', 'ремешок*', 'держател*', 'корпус*', 'дисплей*', 'модул*',
+    'плата', 'платы', 'плату', 'шлейф*', 'на запчасти', 'для ремонта', 'запчаст*',
+)
+HUNT_ACCESSORY_CATEGORY_HINTS = ('аксессуар', 'запчаст', 'чехол', 'кабел')
+
+# Ранги состояния: чем больше, тем лучше. condition_min требует grade >= минимум.
+_CONDITION_RANK = {'parts': 0, 'broken': 1, 'worn': 2, 'good': 3,
+                   'excellent': 4, 'new': 5}
+
+_CONDITION_PARTS = ('на запчасти', 'на детали', 'на разбор', 'неисправн*', 'донор*')
+_CONDITION_BROKEN = ('трещин*', 'скол*', 'залит*', 'разбит*', 'битый', 'битые',
+                     'не включается', 'не работает', 'не заряжается',
+                     'требует ремонта', 'требуется ремонт', 'нет изображения')
+_CONDITION_WORN = ('потёртости', 'потертости', 'царапин*', 'следы использования',
+                   'б/у с дефектами', 'износ*')
+_CONDITION_EXCELLENT = ('идеальн*', 'отличн*', 'как новый', 'как новое',
+                        'без царапин', 'без дефектов', 'пользовался аккуратно')
+_CONDITION_GOOD = ('хорошее', 'хороший', 'хорошая', 'нормальн*', 'рабочее',
+                   'рабочий', 'рабочая')
+_CONDITION_NEW = ('новый', 'новая', 'новое', 'новые', 'запечатан*',
+                  'не вскрывал*', 'не вскрывалась', 'не вскрывалось')
+
+
+def _negated_window(text: str, pos: int, window: int = 3) -> bool:
+    """Есть ли отрицание в окне перед позицией («не», «без», «нет»)."""
+    before = re.findall(r'[\w]+', text[max(0, pos - 40):pos])[-window:]
+    return any(HUNT_RE_NEGATION.fullmatch(w) for w in before)
+
+
+def classify_condition(title: str, description: str = '') -> tuple:
+    """Оценка состояния: new / excellent / good / worn / broken / parts.
+
+    Возвращает (grade, confidence). Отрицания («не битый», «без царапин»)
+    учитываются в окне 3 слов. Без описания — только по заголовку,
+    confidence='low' (этап F5).
+    """
+    text = (str(title or '') + ' ' + str(description or '')).lower()
+    has_desc = bool(str(description or '').strip())
+    confidence = 'high' if has_desc else 'low'
+
+    def any_hit(markers):
+        pat = _hunt_word_pattern(markers)
+        for m in pat.finditer(text):
+            if not _negated_window(text, m.start()):
+                return True
+        return False
+
+    # «гарантия» считаем признаком нового только вместе с «новый»
+    if any_hit(_CONDITION_PARTS):
+        return ('parts', confidence)
+    if any_hit(_CONDITION_BROKEN):
+        return ('broken', confidence)
+    if any_hit(_CONDITION_WORN):
+        return ('worn', confidence)
+    if any_hit(_CONDITION_NEW):
+        return ('new', confidence)
+    if any_hit(_CONDITION_EXCELLENT):
+        return ('excellent', confidence)
+    if any_hit(_CONDITION_GOOD):
+        return ('good', confidence)
+    return ('good', confidence)
+
+
+def extract_battery_percent(title: str, description: str = '') -> Optional[int]:
+    """АКБ из текста: «акб 87%», «аккумулятор 92 %», «батарея 85», «АКБ: 91».
+
+    Возвращает число 0–100 или None (этап F6).
+    """
+    text = (str(title or '') + ' ' + str(description or '')).lower()
+    for pat in (r'акб[:\s]*(\d{1,3})', r'аккумулятор[:\s]*(\d{1,3})',
+                r'батаре[ия]{0,2}[:\s]*(\d{1,3})', r'ёмкость\s*акб[:\s]*(\d{1,3})',
+                r'здоровье\s*батаре[ия]{0,2}[:\s]*(\d{1,3})', r'емкость\s*акб[:\s]*(\d{1,3})'):
+        m = re.search(pat, text)
+        if m:
+            v = int(m.group(1))
+            if 0 <= v <= 100:
+                return v
+    return None
+
+
+def requirements_json_from_text(text: str) -> Dict:
+    """Разбирает старые требования словами в структурный JSON (этап F4).
+
+    Порядок важен: сначала более сильные требования, чтобы не перезаписать.
+    """
+    req = str(text or '').lower()
+    out: Dict = {}
+    if any(w in req for w in ('не вскрывал', 'не вскрывалась', 'не вскрывалось')):
+        out['not_opened'] = True
+    if any(w in req for w in ('оригинал', 'не реплика', 'без реплик', 'не копия')):
+        out['original_only'] = True
+    if any(w in req for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+        out['private_only'] = True
+    if any(w in req for w in ('идеальн', 'отличн', 'как нов')):
+        out['condition_min'] = 'excellent'
+    elif any(w in req for w in ('новое', 'новый', 'новая', 'запечатан')):
+        out['condition_min'] = 'new'
+    elif any(w in req for w in ('хорошее', 'хороший', 'хорошая', 'нормальн')):
+        out['condition_min'] = 'good'
+    m = (re.search(r'акб[:\s]*(?:от|не менее|>=|≥)?\s*(\d{1,3})', req)
+         or re.search(r'аккумулятор[:\s]*(?:от|не менее)?\s*(\d{1,3})', req)
+         or re.search(r'батаре[ия]{0,2}[:\s]*(?:от|не менее)?\s*(\d{1,3})', req)
+         or re.search(r'ёмкость\s*акб[:\s]*(\d{1,3})', req))
+    if m and 0 <= int(m.group(1)) <= 100:
+        out['battery_min'] = int(m.group(1))
+    return out
+
+
+def _crit_requirements_json(crit: Dict) -> Dict:
+    """Структурные требования критерия: из requirements_json или из текста."""
+    raw = crit.get('requirements_json')
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str) and raw.strip():
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    return requirements_json_from_text(str(crit.get('requirements') or ''))
+
+
+def _title_has_accessory(title: str, query: str = '') -> bool:
+    """Есть ли слово-принадлежность в названии (по границам слов, с отрицаниями)."""
+    low = str(title or '').lower()
+    if not low:
+        return False
+    asked = _hunt_asked_stems(query)
+    pat = _hunt_word_pattern(HUNT_ACCESSORY_TITLE_WORDS)
+    for m in pat.finditer(low):
+        if _hunt_marker_asked(m.group(0), asked):
+            continue
+        if _negated_window(low, m.start()):
+            continue
+        return True
+    return False
+
+
+_OPENED_MARKERS = ('вскрывал*', 'вскрывалась', 'вскрывалось', 'менялся экран',
+                   'меняли экран', 'замена экрана', 'заменялся экран', 'переклеен',
+                   'переклеивался', 'разбирался', 'разбиралась', 'неоригинальный экран')
+
+
+def _opened_markers_hit(text: str) -> bool:
+    """Признаки вскрытия/замены деталей (с учётом отрицаний)."""
+    low = str(text or '').lower()
+    pat = _hunt_word_pattern(_OPENED_MARKERS)
+    for m in pat.finditer(low):
+        if not _negated_window(low, m.start()):
+            return True
+    return False
+
+
+def _accessory_before_model(title: str, query: str) -> str:
+    """Принадлежность ПЕРЕД моделью из запроса → это не сам товар.
+
+    «Защита на камеру iPhone 15» — принадлежность; «iPhone 15 + чехол» —
+    товар. Возвращает слово-маркер или '' (этап F2).
+    """
+    low = str(title or '').lower()
+    if not low:
+        return ''
+    model_pos = None
+    for word in _query_words_required(query):
+        variants = (str(word),) if str(word).isdigit() else query_word_variants(word)
+        for v in variants:
+            pos = low.find(v)
+            if pos != -1 and (model_pos is None or pos < model_pos):
+                model_pos = pos
+    for n in _query_alt_numbers(query):
+        m = re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', low)
+        if m and (model_pos is None or m.start() < model_pos):
+            model_pos = m.start()
+    asked = _hunt_asked_stems(query)
+    pat = _hunt_word_pattern(HUNT_ACCESSORY_TITLE_WORDS)
+    for m in pat.finditer(low):
+        marker = m.group(0).lower()
+        if _hunt_marker_asked(marker, asked):
+            continue
+        if _negated_window(low, m.start()):
+            continue
+        if model_pos is None or m.start() < model_pos:
+            return marker
+    return ''
+
+
 # Совместимость со старым кодом (медианы и SQL-предфильтр)
 HUNT_ACCESSORY_WORDS = HUNT_MEDIAN_EXCLUDE_WORDS
 HUNT_TITLE_START_JUNK = HUNT_JUNK_START
@@ -19544,6 +19764,7 @@ class Decision(NamedTuple):
     label: str = ''
     discount: int = 0
     needs_description: bool = False
+    unverified: bool = False
 
 
 HUNT_REASON_LABELS = {
@@ -19575,6 +19796,13 @@ HUNT_REASON_LABELS = {
     'shop': 'магазин, а человек просил с рук',
     'replica': 'реплика или копия в описании',
     'requirement': 'не выполнено требование словами',
+    'accessory_title': 'принадлежность в названии («чехол», «защита»)',
+    'accessory_price': 'слишком дёшево — похоже, аксессуар',
+    'accessory_category': 'категория аксессуаров или запчастей',
+    'condition_below': 'состояние хуже требуемого',
+    'battery_low': 'АКБ ниже требуемого',
+    'opened': 'вскрывался или менялись детали',
+    'unverified': 'по описанию не проверено',
 }
 
 
@@ -19594,6 +19822,14 @@ def _hunt_needs_description(crit: Dict) -> bool:
     if str(crit.get('requirements') or '').strip():
         return True
     if str(crit.get('condition') or '').strip():
+        return True
+    # Этап F: состояние, АКБ и «не вскрывался» читаются из описания
+    rj = _crit_requirements_json(crit)
+    if rj.get('condition_min') and rj.get('condition_min') != 'any':
+        return True
+    if rj.get('battery_min'):
+        return True
+    if rj.get('not_opened'):
         return True
     return False
 
@@ -19629,6 +19865,12 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('price_too_low')
     if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
         return no('category_mismatch')
+    # F1: категория объявления — аксессуары/запчасти, а критерий их не просит
+    _ad_cat = str(ad.get('category') or '').lower()
+    if (any(h in _ad_cat for h in HUNT_ACCESSORY_CATEGORY_HINTS)
+            and not any(h in str(crit.get('category') or '').lower()
+                        for h in HUNT_ACCESSORY_CATEGORY_HINTS)):
+        return no('accessory_category')
     if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
         return no('city_mismatch')
 
@@ -19659,6 +19901,11 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         if str(junk).lower().startswith(('реплик', 'копи', '1:1', 'люкс', 'аналог')):
             return no('replica')
         return no('accessory')
+    # F2: принадлежность стоит ПЕРЕД моделью («Защита на камеру iPhone 15»),
+    # а «iPhone 15 + чехол» — товар с бонусом
+    acc_marker = _accessory_before_model(title_raw, query)
+    if acc_marker:
+        return no('accessory_title')
     bad_state = hunt_condition_word(
         title_raw + ' ' + str(ad.get('description') or ''), query)
     if bad_state:
@@ -19677,6 +19924,48 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             return no('shop')
         if hunt_shop_in_name(str(ad.get('seller_name') or '')):
             return no('shop')
+
+    # ── Этап F: структурные требования (requirements_json) ──────────────────
+    # Состояние, АКБ и «не вскрывался» читаются из ОПИСАНИЯ; без него эти
+    # условия не применяем, но помечаем объявление как «не проверено» (unverified).
+    rj = _crit_requirements_json(crit)
+    desc_ok = bool(description.strip())
+    unverified = False
+    if rj.get('original_only'):
+        if any(m in low_all for m in HUNT_REPLICA_MARKERS):
+            return no('replica')
+    if rj.get('private_only'):
+        if str(ad.get('seller_type') or '') == 'company':
+            return no('shop')
+        if hunt_shop_in_name(str(ad.get('seller_name') or '')):
+            return no('shop')
+    if rj.get('condition_min') and rj.get('condition_min') != 'any':
+        if desc_ok:
+            grade, conf = classify_condition(title_raw, description)
+            want = _CONDITION_RANK.get(rj['condition_min'], 3)
+            if _CONDITION_RANK.get(grade, 3) < want:
+                # Не можем подтвердить из заголовка — помечаем, а не отсекаем
+                if conf == 'low' and want > _CONDITION_RANK.get('good', 3):
+                    unverified = True
+                else:
+                    return no('condition_below')
+        else:
+            unverified = True
+    if rj.get('battery_min'):
+        if desc_ok:
+            batt = extract_battery_percent(title_raw, description)
+            if batt is None:
+                unverified = True          # значение не указано
+            elif batt < int(rj['battery_min']):
+                return no('battery_low')
+        else:
+            unverified = True
+    if rj.get('not_opened'):
+        if desc_ok:
+            if _opened_markers_hit(title_raw + ' ' + description):
+                return no('opened')
+        else:
+            unverified = True
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
     # но помечаем одинаково в чате и ленте (решение B1).
@@ -19697,14 +19986,18 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     if needs_description and not description.strip():
         reason = 'desc_needed'
         if require_description:
-            return Decision(False, reason, _hunt_reason_label(reason), 0, True)
-        return Decision(True, reason, _hunt_reason_label(reason), 0, True)
+            return Decision(False, reason, _hunt_reason_label(reason), 0, True, True)
+        return Decision(True, reason, _hunt_reason_label(reason), 0, True, True)
 
     median = int(crit.get('median_price') or 0)
     mode = str(crit.get('mode') or 'any')
     # Цена в разы ниже медианы — это другой товар, а не выгода: iPhone за 53 ₽
     # при медиане 24 990 в чат не уходит, а в ленте получает ВИДИМУЮ причину
     # (этап D покажет по ней серый бейдж вместо «ниже рынка»).
+    # F3: принадлежность по цене — дешевле 25% медианы и в названии есть
+    # слово-принадлежность → почти наверняка аксессуар, а не сам товар
+    if median and price < median * 0.25 and _title_has_accessory(title_raw, query):
+        return no('accessory_price')
     if median and price < median * HUNT_MIN_PRICE_SHARE:
         return no('price_below_floor')
     # Этап D3: скидка больше HUNT_SUSPECT_DISCOUNT процентов — почти всегда
@@ -19716,17 +20009,20 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         if mode == 'deal':
             return no('no_median')
         reason = date_reason or 'ok'
-        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description)
+        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description,
+                        unverified)
     if price >= median:
         if mode == 'deal':
             return no('not_cheaper')
         reason = date_reason or 'ok'
-        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description)
+        return Decision(True, reason, _hunt_reason_label(reason), 0, needs_description,
+                        unverified)
     discount = int(round((median - price) * 100.0 / median))
     if mode == 'deal' and discount < int(crit.get('min_discount') or 15):
         return no('discount_low')
     reason = date_reason or 'ok_discount'
-    return Decision(True, reason, _hunt_reason_label(reason), discount, needs_description)
+    return Decision(True, reason, _hunt_reason_label(reason), discount, needs_description,
+                    unverified)
 
 
 # ── Записи решений: hunt_matches ────────────────────────────────────────────
@@ -19735,7 +20031,8 @@ HUNT_STATUSES = ('pending_details', 'ready', 'sending', 'sent', 'rejected', 'sen
 
 def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                      desc_state: str = '', force_status: str = '',
-                     notified: bool = False, fingerprint: str = '') -> None:
+                     notified: bool = False, fingerprint: str = '',
+                     unverified: bool = False) -> None:
     """Записывает решение по паре (пользователь, объявление).
 
     Уже отправленное не перезаписываем: повторный пересчёт не должен
@@ -19780,18 +20077,18 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                 cursor.execute(
                     "UPDATE hunt_matches SET crit_id=?, status=?, reason=?, reject_reason=?, "
                     "discount=?, desc_state=COALESCE(NULLIF(?, ''), desc_state), updated_at=?, "
-                    "notified_at=COALESCE(?, notified_at), fingerprint=? WHERE id=?",
+                    "notified_at=COALESCE(?, notified_at), fingerprint=?, unverified=? WHERE id=?",
                     (crit_id, status, decision.reason, reject_reason, int(decision.discount or 0),
                      desc_state, now, now if notified else None, str(fingerprint or ''),
-                     int(row['id'])))
+                     1 if unverified else 0, int(row['id'])))
         else:
             cursor.execute(
                 "INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
-                "discount, desc_state, created_at, updated_at, notified_at, fingerprint) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "discount, desc_state, created_at, updated_at, notified_at, fingerprint, unverified) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (user_id, crit_id, ad_id, status, decision.reason, reject_reason,
                  int(decision.discount or 0), desc_state, now, now, now if notified else None,
-                 str(fingerprint or '')))
+                 str(fingerprint or ''), 1 if unverified else 0))
     except Exception as e:
         logger.warning(f"hunt_match_store: {e}")
 
@@ -19866,7 +20163,8 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             force = 'sent' if legacy_sent else ''
             hunt_match_store(uid, int(crit['id']), int(ad['id']), decision,
                              desc_state=desc_state, force_status=force,
-                             fingerprint=str(ad.get('fingerprint') or ''))
+                             fingerprint=str(ad.get('fingerprint') or ''),
+                             unverified=bool(decision.unverified))
             written += 1
         if saw_ok or saw_suspect:
             # Подходит хоть под один критерий — флаг снимаем: он нужен только
@@ -20972,6 +21270,7 @@ def _criterion_public(crit: Dict) -> Dict:
         'ready': bool(crit.get('median_price')),
         'active': bool(crit.get('active')),
         'mode': crit.get('mode') or 'any',
+        'requirements_json': _crit_requirements_json(crit),
     }
 
 
@@ -21015,7 +21314,8 @@ def normalize_category(value: str) -> str:
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
-                  mode: str = 'any', requirements: str = '') -> Optional[int]:
+                  mode: str = 'any', requirements: str = '',
+                  requirements_json: Optional[Dict] = None) -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -21029,15 +21329,21 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     for row in cursor.fetchall():
         if str(row['query'] or '').lower() == query.lower() and row['city'] == (city or ''):
             return None
+    # Этап F4: структурные требования; если их не передали — разбираем текст
+    if isinstance(requirements_json, dict):
+        req_json = requirements_json
+    else:
+        req_json = requirements_json_from_text(str(requirements or ''))
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
                                    min_price, max_hours, with_photo, requirements,
-                                   active, created_at, mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                   requirements_json, active, created_at, mode)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     ''', (user_id, query, category or '', city or '', int(max_price or 0),
           max(0, min(int(min_discount or 0), 90)),
           int(min_price or 0), int(max_hours or 0), int(with_photo or 0),
           str(requirements or '')[:400],
+          json.dumps(req_json, ensure_ascii=False),
           get_moscow_time().isoformat(),
           'deal' if str(mode) == 'deal' else 'any'))
     db.conn.commit()
@@ -23873,7 +24179,8 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         params.append(city)
     sql = (f"SELECT a.*, hm.status AS hunt_status, hm.reason AS hunt_reason, "
            f"hm.reject_reason AS hunt_reject, hm.discount AS hunt_discount, "
-           f"hm.desc_state AS hunt_desc_state, hm.delivery AS hunt_delivery "
+           f"hm.desc_state AS hunt_desc_state, hm.delivery AS hunt_delivery, "
+           f"hm.unverified AS hunt_unverified "
            f"FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
            f"WHERE {' AND '.join(where)} "
            f"ORDER BY CASE WHEN hm.reject_reason = 'price_below_floor' THEN 1 ELSE 0 END, "
@@ -23909,6 +24216,7 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         item['hunt_reason_label'] = _hunt_reason_label(item['hunt_reason'])
         item['hunt_discount'] = int(row.get('hunt_discount') or 0)
         item['desc_state'] = str(row.get('hunt_desc_state') or '')
+        item['unverified'] = 1 if int(row.get('hunt_unverified') or 0) else 0
         item['price_suspect'] = 1 if str(row.get('hunt_reject') or '') == 'price_below_floor' else 0
         if admin:
             item['reject_reason'] = str(row.get('hunt_reject') or '')
@@ -26925,6 +27233,7 @@ def main():
         ensure_description_lower()
         ensure_quality_columns()
         ensure_fingerprint_backfill()
+        ensure_requirements_json_backfill()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
