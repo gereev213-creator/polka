@@ -17667,6 +17667,183 @@ HUNT_AI_CATEGORIES = (
 )
 
 
+# ── ЭТАП G: единый диалог с ИИ (слоты и порядок задаёт КОД) ──────────────────
+# Раньше диалог вели три механизма одновременно (жёсткие шаги во фронтенде,
+# /api/hunt/ai без состояния и мастер в боте), модель каждый раз «понимала»
+# запрос заново, вопросы повторялись, а слова «любой» попадали в строку поиска.
+# Теперь: сервер хранит draft и список заданных слотов, порядок вопросов задаёт
+# таблица по категории, модель только извлекает слоты и формулирует одну реплику.
+HUNT_DIALOG_SLOT_ORDER = {
+    'telefony': ['memory_or_size', 'condition_min', 'battery_min', 'max_price',
+                 'original_only', 'private_only'],
+    'planshety_i_elektronnye_knigi': ['memory_or_size', 'condition_min', 'battery_min',
+                                      'max_price', 'original_only', 'private_only'],
+    'noutbuki': ['memory_or_size', 'condition_min', 'max_price', 'original_only', 'private_only'],
+    'nastolnye_kompyutery': ['memory_or_size', 'condition_min', 'max_price', 'private_only'],
+    'odezhda_obuv_aksessuary': ['memory_or_size', 'condition_min', 'max_price',
+                                'original_only', 'private_only'],
+    'avtomobili': ['memory_or_size', 'max_price', 'private_only'],
+    'audio_i_video': ['condition_min', 'max_price', 'original_only', 'private_only'],
+    'bytovaya_tehnika': ['condition_min', 'max_price', 'private_only'],
+    'velosipedy': ['condition_min', 'max_price', 'private_only'],
+    'hobbi_i_otdyh': ['condition_min', 'max_price'],
+}
+HUNT_DIALOG_DEFAULT_ORDER = ['condition_min', 'max_price']
+
+HUNT_SLOT_QUESTIONS = {
+    'memory_or_size': 'Какой объём (или размер) нужен?',
+    'battery_min': 'АКБ от скольки процентов?',
+    'condition_min': 'Какое состояние подойдёт?',
+    'original_only': 'Оригинал или реплика не важна?',
+    'private_only': 'Только с рук или магазины тоже?',
+    'max_price': 'До какой цены?',
+    'city': 'В каком городе искать?',
+}
+
+HUNT_SLOT_OPTIONS = {
+    'memory_or_size': {'telefony': ['64', '128', '256', '512'],
+                       'planshety_i_elektronnye_knigi': ['32', '64', '128', '256'],
+                       'odezhda_obuv_aksessuary': ['39', '40', '41', '42', '43', '44', '45', '46'],
+                       'avtomobili': ['2010', '2014', '2018', '2021'],
+                       'noutbuki': ['8', '16', '32'],
+                       'nastolnye_kompyutery': ['8', '16', '32']},
+    'battery_min': {'*': ['80', '85', '90']},
+    'condition_min': {'*': ['новое', 'хорошее', 'с износом']},
+    'original_only': {'*': ['оригинал', 'реплика']},
+    'private_only': {'*': ['с рук', 'магазины тоже']},
+    'max_price': {'*': ['5000', '10000', '20000']},
+    'city': {'*': []},
+}
+
+_ANY_ANSWERS = ('любой', 'любая', 'любое', 'без разницы', 'неважно', 'всё равно',
+                'пропустить', 'не надо', 'нет')
+
+_CONDITION_SYNONYMS = {'новое': 'new', 'новый': 'new', 'новая': 'new', 'запечатанное': 'new',
+                       'идеальное': 'excellent', 'отличное': 'excellent',
+                       'хорошее': 'good', 'нормальное': 'good',
+                       'с износом': 'worn', 'б/у': 'worn', 'любое': 'any', 'любой': 'any'}
+
+
+def _dialog_copy(draft: Dict) -> Dict:
+    return json.loads(json.dumps(draft or {}))
+
+
+def _dialog_next_slot(draft: Dict, category: str, verifiable=None):
+    """Следующий неотвеченный слот по порядку категории (или None).
+
+    Слоты, которые система не проверит для этого человека, пропускаем
+    (этап G6): лучше не спрашивать «АКБ от скольки?», если ответ потом не
+    будет использован.
+    """
+    order = HUNT_DIALOG_SLOT_ORDER.get(str(category or '').strip(),
+                                       HUNT_DIALOG_DEFAULT_ORDER)
+    for slot in order:
+        if slot in (draft.get('any') or []):
+            continue
+        if draft.get(slot) not in (None, '', []):
+            continue
+        if verifiable is not None and slot not in verifiable:
+            continue
+        return slot
+    return None
+
+
+def _dialog_apply_choice(draft: Dict, slot: str, choice: str) -> Dict:
+    """Детерминированно применяет нажатие кнопки к слоту."""
+    d = _dialog_copy(draft)
+    c = str(choice or '').strip().lower()
+    if c in _ANY_ANSWERS:
+        d.setdefault('any', []).append(slot)
+        d['any'] = list(dict.fromkeys(d['any']))
+        return d
+    if slot == 'memory_or_size':
+        d['memory_or_size'] = c
+    elif slot == 'battery_min':
+        m = re.search(r'\d{1,3}', c)
+        d['battery_min'] = int(m.group()) if m else None
+    elif slot == 'condition_min':
+        d['condition_min'] = _CONDITION_SYNONYMS.get(c, c)
+    elif slot == 'original_only':
+        d['original_only'] = c in ('оригинал', 'не реплика', 'ориг', 'только оригинал')
+    elif slot == 'private_only':
+        d['private_only'] = c in ('с рук', 'частник', 'не магазин', 'только с рук')
+    elif slot == 'max_price':
+        m = re.search(r'\d[\d\s\u00a0]*', c)
+        d['max_price'] = int(re.sub(r'[^0-9]', '', m.group())) if m else None
+    elif slot == 'city':
+        d['city'] = choice.strip()
+    return d
+
+
+def _dialog_item_word(w: str) -> bool:
+    """Можно ли слово класть в строку поиска."""
+    w = str(w or '').strip().lower()
+    if not w:
+        return False
+    if w in _ANY_ANSWERS or w in ('от', 'до', 'руб', 'рублей', 'тысяч', 'тыс'):
+        return False
+    if re.fullmatch(r'\d{1,3}%', w):
+        return False
+    # Голые числа НЕ отбрасываем: «14» в «iPhone 14 Pro» — номер модели.
+    # Память/размер модель кладёт в memory_or_size, а не в item_words.
+    if w in ('новый', 'новая', 'новое', 'хорошее', 'хороший', 'идеальное', 'отличное',
+             'оригинал', 'реплика', 'вскрывался', 'состояние', 'не', 'без', 'только',
+             'с', 'и', 'или'):
+        return False
+    return True
+
+
+def _dialog_apply_extract(draft: Dict, extract: Dict) -> Dict:
+    """Сливает извлечённые моделью слоты (не затирая заполненное null-ом)."""
+    d = _dialog_copy(draft)
+    ex = extract or {}
+    for slot in ('memory_or_size', 'battery_min', 'max_price', 'min_price', 'city'):
+        if ex.get(slot) is not None:
+            d[slot] = ex[slot]
+    if ex.get('condition_min') is not None:
+        c = str(ex['condition_min']).lower()
+        d['condition_min'] = _CONDITION_SYNONYMS.get(c, c)
+    if ex.get('original_only') is not None:
+        d['original_only'] = bool(ex['original_only'])
+    if ex.get('private_only') is not None:
+        d['private_only'] = bool(ex['private_only'])
+    if isinstance(ex.get('item_words'), list):
+        d['item_words'] = [w for w in ex['item_words'] if _dialog_item_word(w)]
+    for s in (ex.get('answered_any') or []):
+        if s and s not in (d.get('any') or []):
+            d.setdefault('any', []).append(s)
+    return d
+
+
+def _dialog_query(draft: Dict) -> str:
+    """Строка поиска: только слова товара (+ размер/память, если задан)."""
+    words = [w for w in (draft.get('item_words') or []) if w]
+    extra = draft.get('memory_or_size')
+    if extra and extra not in _ANY_ANSWERS:
+        words.append(str(extra))
+    return ' '.join(words)[:100]
+
+
+def _dialog_requirements(draft: Dict) -> Dict:
+    """Структурные требования из слотов."""
+    out: Dict = {}
+    if draft.get('condition_min') in ('good', 'excellent', 'new'):
+        out['condition_min'] = draft['condition_min']
+    if draft.get('battery_min') is not None:
+        out['battery_min'] = int(draft['battery_min'])
+    if draft.get('original_only') is True:
+        out['original_only'] = True
+    if draft.get('private_only') is True:
+        out['private_only'] = True
+    return out
+
+
+def _dialog_slot_options(slot: str, category: str) -> List[str]:
+    table = HUNT_SLOT_OPTIONS.get(slot) or {}
+    opts = table.get(str(category or '').strip()) or table.get('*') or []
+    return list(opts) + ['любой']
+
+
 def _hunt_ai_prompt(user_text: str) -> str:
     """Задача для ИИ. Чем точнее правила, тем меньше мусора в фильтрах."""
     return (
@@ -17862,6 +18039,276 @@ async def ai_parse_hunt(user_text: str) -> Dict:
         # «хорошее состояние». Скрипт разбирает их и отсеивает мусор.
         'requirements': str(data.get('requirements') or '')[:400].strip(),
     }
+
+
+# ── Диалог: промт модели, состояние, лимиты, эндпоинт ─────────────────────────
+HUNT_DIALOG_PROMPT = (
+    "Ты — помощник «Полки». Человек ищет дешёвые объявления на Авито, ты "
+    "превращаешь его слова в условия поиска. Пиши по-русски, коротко, как знакомый "
+    "продавец. Делаешь ТОЛЬКО два: (1) извлекаешь данные из нового сообщения, "
+    "(2) пишешь одну короткую реплику вокруг вопроса, который указал код (ask_slot).\n"
+    "Тебе дают JSON: state (уже собранные слоты и список any), category, ask_slot "
+    "(слот, о котором спросить; null — вопроса нет), verifiable (что система реально "
+    "проверит), message (новое сообщение).\n"
+    "Верни ТОЛЬКО JSON без markdown:\n"
+    '{"extract":{"item_words":["iPhone","14","Pro"],"memory_or_size":"128",'
+    '"battery_min":80,"condition_min":"good|excellent|new|any","original_only":true,'
+    '"private_only":true,"max_price":50000,"min_price":0,"city":"Москва",'
+    '"answered_any":[]},"say":"короткая реплика до 160 символов",'
+    '"intent":"answer|new_item|change|question|chitchat"}\n'
+    "Правила извлечения:\n"
+    "— item_words: только тип, бренд, модель. Бренд и модель ЛАТИНИЦЕЙ: "
+    "«айфон 14 про» → [\"iPhone\",\"14\",\"Pro\"]. Не клади «любой», проценты, цены, "
+    "слова состояния. Числа-размер/память — в memory_or_size, НЕ в item_words.\n"
+    "— «любой/без разницы/неважно/пропустить/не надо» — это ОТВЕТ на ask_slot: "
+    "добавь слот из ask_slot в answered_any и больше ничего не извлекай.\n"
+    "— «от 80», «80%», «от 80 процентов» на вопрос про АКБ → battery_min = 80.\n"
+    "— «оригинал/не реплика» → original_only=true; «реплику можно» → false.\n"
+    "— «с рук/не магазин» → private_only=true; «магазины тоже» → false.\n"
+    "— «хорошее/нормальное» → condition_min=\"good\"; «идеальное/отличное» → "
+    "\"excellent\"; «новое/запечатанное» → \"new\"; «любое» → \"any\".\n"
+    "— «до 50 тысяч» → max_price 50000; «20-30к» → min_price 20000, max_price 30000.\n"
+    "— Поменял условие — запиши новое, старое не повторяй. Не выдумывай; нет данных — null.\n"
+    "— Если сообщение не про товар («привет») — intent=chitchat, extract пустой.\n"
+    "Правила реплики say: одна фраза, откликнись и задай РОВНО ОДИН вопрос про ask_slot; "
+    "не переспрашивай то, что уже есть; не пиши кнопки; если условие не в verifiable — "
+    "скажи одной фразой, что его читает тщательный отбор."
+)
+
+
+def ensure_hunt_dialogs() -> None:
+    """Состояние диалога ИИ: draft и заданные слоты, TTL 2 часа (этап G1)."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hunt_dialogs (
+                session_id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                draft_json TEXT,
+                asked_json TEXT,
+                updated_at TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_dialogs_user "
+                       "ON hunt_dialogs(user_id)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_hunt_dialogs: {e}")
+
+
+_DIALOG_LLM_USED: Dict[int, List[float]] = {}
+_DIALOG_LLM_CACHE: Dict[str, Dict] = {}
+
+
+def _dialog_llm_ok(user_id: int, plan: str = 'free') -> bool:
+    """Лимит вызовов модели: 12/час (бесплатно 6/час), этап G8."""
+    limit = 6 if str(plan or 'free') == 'free' else 12
+    now = get_moscow_time().timestamp()
+    used = [ts for ts in _DIALOG_LLM_USED.get(int(user_id), []) if now - ts < 3600]
+    _DIALOG_LLM_USED[int(user_id)] = used
+    return len(used) < limit
+
+
+def _dialog_mark_llm(user_id: int) -> None:
+    _DIALOG_LLM_USED.setdefault(int(user_id), []).append(get_moscow_time().timestamp())
+
+
+def _dialog_detect_category(words: List[str]) -> str:
+    """Категория по словам товара (для порядка вопросов)."""
+    text = ' '.join(str(w or '') for w in (words or [])).lower()
+    if any(k in text for k in ('iphone', 'айфон', 'телефон', 'смартфон', 'samsung',
+                               'xiaomi', 'redmi', 'pixel', 'galaxy')):
+        return 'telefony'
+    if any(k in text for k in ('ноутбук', 'laptop', 'macbook', 'ноут')):
+        return 'noutbuki'
+    if any(k in text for k in ('планшет', 'ipad', 'айпад')):
+        return 'planshety_i_elektronnye_knigi'
+    if any(k in text for k in ('кроссовки', 'куртка', 'пальто', 'джинсы', 'платье',
+                               'футболка', 'ботинки', 'туфли', 'шапка', 'джемпер',
+                               'nike', 'adidas', 'puma')):
+        return 'odezhda_obuv_aksessuary'
+    if any(k in text for k in ('авто', 'машина', 'автомобиль', 'toyota', 'bmw', 'mers',
+                               'audi', 'кайен', 'лада')):
+        return 'avtomobili'
+    return ''
+
+
+def _dialog_notes(draft: Dict) -> List[str]:
+    """Честные пометки: что система проверит, а что — нет (этап G6)."""
+    notes: List[str] = []
+    if draft.get('battery_min') or draft.get('condition_min'):
+        notes.append("АКБ и состояние читаются из описания объявления, если оно есть")
+    return notes
+
+
+def _dialog_verifiable() -> list:
+    """Слоты, которые система реально проверит (до этапа H — всё, т.к. описания
+    собираются сборщиком; H сузит по плану)."""
+    if os.environ.get('HUNT_DIALOG_DEEP_CHECK', '1') != '1':
+        return ['memory_or_size', 'original_only', 'private_only', 'max_price', 'city']
+    return ['memory_or_size', 'battery_min', 'condition_min', 'original_only',
+            'private_only', 'max_price', 'city']
+
+
+def _dialog_extract_fallback(draft: Dict, message: str) -> tuple:
+    """Без модели: извлекаем только самое надёжное (числа по текущему слоту)."""
+    msg = str(message or '').strip()
+    extract: Dict = {}
+    if not (draft.get('item_words') or []):
+        extract['item_words'] = msg.split()
+    ask = draft.get('_ask')
+    if ask == 'battery_min':
+        m = re.search(r'\d{1,3}', msg)
+        if m:
+            extract['battery_min'] = int(m.group())
+    elif ask == 'max_price':
+        m = re.search(r'\d[\d\s\u00a0]*', msg)
+        if m:
+            extract['max_price'] = int(re.sub(r'[^0-9]', '', m.group()))
+    elif ask == 'condition_min':
+        for word, code in _CONDITION_SYNONYMS.items():
+            if word in msg.lower():
+                extract['condition_min'] = code
+                break
+    return extract, 'Понял.'
+
+
+async def _dialog_extract(user_id: int, draft: Dict, message: str) -> tuple:
+    """Извлекает слоты моделью (с лимитом и кэшем), иначе — фолбэк (этап G3/G8)."""
+    category = str(draft.get('category') or _dialog_detect_category(draft.get('item_words') or []))
+    ask_slot = draft.get('_ask')
+    cache_key = f"{category}|{ask_slot}|{str(message or '').strip()[:80]}".lower()
+    cached = _DIALOG_LLM_CACHE.get(cache_key)
+    if cached:
+        return cached['extract'], cached['say']
+
+    extract, say = _dialog_extract_fallback(draft, message)
+
+    if (LLM_API_KEY or GROQ_API_KEY) and _dialog_llm_ok(user_id):
+        state = {
+            'item_words': draft.get('item_words') or [],
+            'any': draft.get('any') or [],
+            'memory_or_size': draft.get('memory_or_size'),
+            'battery_min': draft.get('battery_min'),
+            'condition_min': draft.get('condition_min'),
+            'original_only': draft.get('original_only'),
+            'private_only': draft.get('private_only'),
+            'max_price': draft.get('max_price'),
+            'min_price': draft.get('min_price'),
+            'city': draft.get('city'),
+        }
+        payload = {'state': state, 'category': category, 'ask_slot': ask_slot,
+                   'verifiable': _dialog_verifiable(), 'message': message}
+        try:
+            raw = await _llm_completion(
+                messages=[{'role': 'user', 'content': json.dumps(payload, ensure_ascii=False)}],
+                max_tokens=300, temperature=0.1, system=HUNT_DIALOG_PROMPT)
+            data = _ai_json_from_text(raw)
+            if data and isinstance(data.get('extract'), dict):
+                extract = data['extract']
+                say = str(data.get('say') or '').strip()[:300] or say
+                _dialog_mark_llm(user_id)
+        except Exception as e:
+            logger.warning(f"dialog llm: {e}")
+    _DIALOG_LLM_CACHE[cache_key] = {'extract': extract, 'say': say}
+    if len(_DIALOG_LLM_CACHE) > 2000:
+        _DIALOG_LLM_CACHE.clear()
+    return extract, say
+
+
+async def api_hunt_dialog(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/dialog — единый диалог с ИИ, состояние на сервере (этап G1).
+
+    {session_id?, message?, choice?} → {session_id, say, ask:{slot,text,options}|null,
+    draft:{query,category,max_price,min_price,city,requirements_json}, ready, notes[]}
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    session_id = str((body or {}).get('session_id') or '').strip()
+    message = str((body or {}).get('message') or '').strip()
+    choice = (body or {}).get('choice')
+
+    cursor = db.conn.cursor()
+    draft: Dict = {'item_words': [], 'any': [], 'category': ''}
+    if session_id:
+        try:
+            cursor.execute("SELECT draft_json FROM hunt_dialogs WHERE session_id=? AND user_id=?",
+                           (session_id, int(viewer_id)))
+            row = cursor.fetchone()
+            if row and row['draft_json']:
+                try:
+                    draft = json.loads(row['draft_json'])
+                except Exception:
+                    draft = {'item_words': [], 'any': [], 'category': ''}
+        except Exception:
+            pass
+    if not session_id:
+        session_id = hashlib.md5(
+            f"{viewer_id}:{get_moscow_time().isoformat()}:{os.urandom(8).hex()}".encode()
+        ).hexdigest()[:20]
+
+    # Пустое сообщение без кнопки — просим товар (G9: 200, а не 500)
+    if not message and choice is None:
+        return _miniapp_json({'session_id': session_id, 'say': 'Напишите, что ищете — подберу фильтры сам',
+                              'ask': None, 'draft': {}, 'ready': False, 'notes': []})
+
+    say = 'Понял.'
+    if choice is not None:
+        slot = draft.get('_ask')
+        if slot:
+            draft = _dialog_apply_choice(draft, slot, str(choice))
+    else:
+        extract, say = await _dialog_extract(viewer_id, draft, message)
+        prev_slot = draft.get('_ask')
+        draft = _dialog_apply_extract(draft, extract)
+        # Модель не поняла ответ на предыдущий вопрос — не повторяем, помечаем any
+        if prev_slot and prev_slot not in draft.get('any', []) and draft.get(prev_slot) in (None, '', []):
+            draft.setdefault('any', []).append(prev_slot)
+
+    if not draft.get('category'):
+        draft['category'] = _dialog_detect_category(draft.get('item_words') or [])
+    category = str(draft.get('category') or '')
+    verifiable = _dialog_verifiable()
+    next_slot = _dialog_next_slot(draft, category, verifiable)
+    draft['_ask'] = next_slot
+
+    ask = None
+    if next_slot:
+        ask = {'slot': next_slot, 'text': HUNT_SLOT_QUESTIONS.get(next_slot, ''),
+               'options': _dialog_slot_options(next_slot, category)}
+    query = _dialog_query(draft)
+    req = _dialog_requirements(draft)
+    ready = (not next_slot) and bool(query)
+
+    now = get_moscow_time().isoformat()
+    try:
+        cursor.execute(
+            "INSERT INTO hunt_dialogs (session_id, user_id, draft_json, asked_json, updated_at) "
+            "VALUES (?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET "
+            "draft_json=excluded.draft_json, updated_at=excluded.updated_at",
+            (session_id, int(viewer_id), json.dumps(draft, ensure_ascii=False),
+             json.dumps(draft.get('any') or [], ensure_ascii=False), now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"dialog save: {e}")
+
+    return _miniapp_json({
+        'session_id': session_id,
+        'say': say,
+        'ask': ask,
+        'draft': {'query': query, 'category': category,
+                  'max_price': draft.get('max_price'),
+                  'min_price': draft.get('min_price'),
+                  'city': draft.get('city') or '',
+                  'requirements_json': req},
+        'ready': ready,
+        'notes': _dialog_notes(draft),
+    })
 
 
 async def api_hunt_check(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -26696,6 +27143,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/findings', api_miniapp_findings)
     app.router.add_post('/api/findings/hide', api_findings_hide)
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
+    app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
@@ -27234,6 +27682,7 @@ def main():
         ensure_quality_columns()
         ensure_fingerprint_backfill()
         ensure_requirements_json_backfill()
+        ensure_hunt_dialogs()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
