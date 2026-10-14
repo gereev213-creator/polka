@@ -17350,6 +17350,7 @@ def ensure_hunt_matches():
                 delivery TEXT DEFAULT '',
                 send_attempts INTEGER DEFAULT 0,
                 send_error TEXT DEFAULT '',
+                fingerprint TEXT DEFAULT '',
                 notified_at TEXT,
                 UNIQUE(user_id, ad_id)
             )
@@ -17361,6 +17362,10 @@ def ensure_hunt_matches():
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_attempts INTEGER DEFAULT 0")
         if 'send_error' not in cols:
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_error TEXT DEFAULT ''")
+        if 'fingerprint' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN fingerprint TEXT DEFAULT ''")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_fp "
+                       "ON hunt_matches(user_id, fingerprint)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
                        "ON hunt_matches(user_id, status)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_ad ON hunt_matches(ad_id)")
@@ -17368,6 +17373,73 @@ def ensure_hunt_matches():
         db.conn.commit()
     except Exception as e:
         logger.error(f"ensure_hunt_matches: {e}")
+
+
+def ensure_fingerprint_backfill(limit: int = 500) -> int:
+    """Заполняет ads.fingerprint у старых строк (в Python, порциями)."""
+    cursor = db.conn.cursor()
+    filled = 0
+    try:
+        cursor.execute("SELECT id, title, price, photos FROM ads "
+                       "WHERE COALESCE(fingerprint,'')='' AND source <> 'polka' "
+                       "LIMIT ?", (int(limit),))
+        rows = cursor.fetchall()
+        for row in rows:
+            fp = _ad_fingerprint(str(row['title']), int(row['price'] or 0), row['photos'])
+            cursor.execute("UPDATE ads SET fingerprint=? WHERE id=?", (fp, int(row['id'])))
+            filled += 1
+        if filled:
+            db.conn.commit()
+    except Exception as e:
+        logger.warning(f"fingerprint backfill: {e}")
+    return filled
+
+
+def dedupe_existing(dry_run: bool = True) -> Dict:
+    """Схлопывает существующие дубли по отпечатку (этап E2).
+
+    Оставляет самую раннюю строку группы, остальные помечает
+    status='duplicate' и переносит их отметки (рассылка, скрытие, избранное)
+    на оставленную. dry_run=True — только отчёт, ничего не меняет.
+    """
+    cursor = db.conn.cursor()
+    report = {'groups': 0, 'marked': 0, 'moved': 0, 'dry_run': bool(dry_run)}
+    try:
+        cursor.execute("SELECT fingerprint, COUNT(*) AS c, MIN(id) AS keep_id "
+                       "FROM ads WHERE source <> 'polka' AND COALESCE(fingerprint,'') <> '' "
+                       "GROUP BY fingerprint HAVING c > 1")
+        groups = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.warning(f"dedupe scan: {e}")
+        return {'error': str(e)}
+    report['groups'] = len(groups)
+    moved = 0
+    for g in groups:
+        keep = int(g['keep_id'])
+        fp = str(g['fingerprint'])
+        cursor.execute("SELECT id FROM ads WHERE fingerprint=? AND id<>? ORDER BY id", (fp, keep))
+        dup_ids = [int(r['id']) for r in cursor.fetchall()]
+        if not dry_run:
+            for dup_id in dup_ids:
+                for table in ('search_notifications_sent', 'hunt_hidden', 'favorites'):
+                    try:
+                        cursor.execute(f"UPDATE OR IGNORE {table} SET ad_id=? WHERE ad_id=?",
+                                       (keep, dup_id))
+                        moved += int(cursor.rowcount or 0)
+                    except Exception:
+                        pass
+                try:
+                    cursor.execute("UPDATE ads SET status='duplicate' WHERE id=?", (dup_id,))
+                except Exception:
+                    pass
+        report['marked'] += len(dup_ids)
+    report['moved'] = moved
+    if not dry_run:
+        try:
+            db.conn.commit()
+        except Exception:
+            pass
+    return report
 
 
 def ensure_quality_columns() -> None:
@@ -17382,6 +17454,7 @@ def ensure_quality_columns() -> None:
         "ALTER TABLE ads ADD COLUMN age_estimated INTEGER DEFAULT 0",
         "ALTER TABLE ads ADD COLUMN prev_price INTEGER DEFAULT 0",
         "ALTER TABLE ads ADD COLUMN last_drop_notice_at TEXT",
+        "ALTER TABLE ads ADD COLUMN fingerprint TEXT DEFAULT ''",
     ):
         try:
             cursor.execute(sql)
@@ -17399,6 +17472,18 @@ def ensure_quality_columns() -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_price_history_ad "
                        "ON ads_price_history(ad_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_suspect ON ads(price_suspect)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_fingerprint ON ads(fingerprint)")
+        # Этап E1: повторные публикации одного объявления — видно в отчёте
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS ads_dupes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ad_id INTEGER NOT NULL,
+                source TEXT,
+                external_id TEXT,
+                seen_at TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_ads_dupes_ad ON ads_dupes(ad_id)")
         db.conn.commit()
     except Exception as e:
         logger.warning(f"ensure_quality_columns: {e}")
@@ -17692,8 +17777,10 @@ async def ai_parse_hunt(user_text: str) -> Dict:
     """Разбирает фразу в фильтры. Возвращает готовый набор для критерия."""
     user_text = str(user_text or "").strip()
     if not user_text:
-        return {
-        'reply': str((data or {}).get('reply') or '')[:300],'ok': False, 'error': 'Пустой запрос'}
+        # Раньше здесь обращались к data до её создания — UnboundLocalError
+        # и 500 на пустом сообщении (этап G8)
+        return {'ok': False, 'error': 'Пустой запрос',
+                'reply': 'Напишите, что ищете — подберу фильтры сам'}
     if not (LLM_API_KEY or GROQ_API_KEY):
         return {'ok': False, 'need_key': True,
                 'error': 'ИИ не настроен: добавьте YANDEX_API_KEY в переменные Amvera'}
@@ -18093,6 +18180,64 @@ def _price_drop(cursor, ad_id: int, old_price: int, new_price: int, last_notice,
         return False
 
 
+# ── ЭТАП E: отпечаток объявления (дубли) ────────────────────────────────────
+# Одно и то же объявление приходит с разными external_id, из разных источников,
+# с пустым городом в одной карточке и «Москва» в другой, с ценой, которая чуть
+# изменилась. Раньше всё это было разными строками: в чат падало два сообщения,
+# в ленте висело два одинаковых лота. Отпечаток ловит их по названию, первому
+# фото и ведру цены.
+FINGERPRINT_TITLE_STOPWORDS = ('срочно', 'торг', 'недорого', 'дешево', 'дёшево',
+                               'продам', 'продаю', 'отдам', 'новый', 'новая',
+                               'новое', 'новые')
+
+
+def _normalize_title(title: str) -> str:
+    """Заголовок без знаков, лишних пробелов и слов-наполнителей."""
+    low = str(title or '').lower()
+    low = re.sub(r'[^\w\s]+', ' ', low)
+    words = [w for w in low.split() if w and w not in FINGERPRINT_TITLE_STOPWORDS]
+    return ' '.join(words)
+
+
+def _photo_name(photos) -> str:
+    """Имя файла первой фотографии без параметров URL (для отпечатка)."""
+    ph = photos or []
+    if isinstance(ph, str):
+        try:
+            ph = json.loads(ph)
+        except Exception:
+            ph = []
+    if not ph or not isinstance(ph, list):
+        return ''
+    url = str(ph[0])
+    base = url.split('?')[0].split('#')[0]
+    name = base.rstrip('/').split('/')[-1]
+    return name.lower()
+
+
+def _price_bucket(price: int) -> int:
+    """Ведро цены: то же объявление с 10 000 и 9 500 ₽ попадает в одно.
+
+    Фиксированный шаг (1000 ₽ до 100 тыс., 10 000 ₽ выше) — без скачков на
+    границах порядка числа. Цена в отпечатке — не точное число (иначе скидка
+    в 500 ₽ выглядела бы новым объявлением), но и не вся шкала.
+    """
+    p = max(1, int(price))
+    if p < 1000:
+        return p
+    if p < 100000:
+        return int(round(p / 1000.0))
+    return int(round(p / 10000.0))
+
+
+def _ad_fingerprint(title: str, price: int, photos) -> str:
+    """Отпечаток объявления: название + первое фото + ведро цены."""
+    norm = _normalize_title(title)
+    photo = _photo_name(photos)
+    bucket = _price_bucket(price)
+    return hashlib.md5(f"{norm}|{photo}|{bucket}".encode()).hexdigest()
+
+
 def ingest_findings(items: List[Dict], source: str) -> Dict:
     """Принимает находки от сборщика: дедуп, вставка, пересчёт скидок.
 
@@ -18129,6 +18274,10 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         if not ext:
             # Идентификатор не прислали — сделаем из ссылки, чтобы дедуп работал
             ext = hashlib.md5(url.encode()).hexdigest()[:32]
+        # Этап E1: отпечаток объявления (название + фото + ведро цены) — ловит
+        # повторные публикации с другим external_id, из другого источника или
+        # с чуть изменённой ценой
+        fp = _ad_fingerprint(title, price, photos)
 
         try:
             cursor.execute("SELECT id, price, last_drop_notice_at FROM ads "
@@ -18145,7 +18294,33 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             # Второй рубеж: тот же заголовок и цена в том же городе
             cursor.execute("SELECT id FROM ads WHERE source=? AND title=? AND price=? AND city=?",
                            (source, title, price, city))
-            if cursor.fetchone():
+            _exact = cursor.fetchone()
+            if _exact:
+                try:
+                    cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
+                                   "VALUES (?,?,?,?)", (int(_exact['id']), source, ext, now))
+                except Exception:
+                    pass
+                stats['duplicate'] += 1
+                continue
+            # Третий рубеж (этап E1): отпечаток. То же объявление за 14 дней
+            # с любым external_id/источником/городом/ценой — повторная
+            # публикация, а не новое объявление
+            _cutoff = (get_moscow_time() - timedelta(days=14)).isoformat()
+            cursor.execute("SELECT id, price, last_drop_notice_at FROM ads "
+                           "WHERE fingerprint=? AND parsed_at >= ? ORDER BY id LIMIT 1",
+                           (fp, _cutoff))
+            _fprow = cursor.fetchone()
+            if _fprow:
+                try:
+                    cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
+                                   "VALUES (?,?,?,?)",
+                                   (int(_fprow['id']), source, ext, now))
+                except Exception:
+                    pass
+                # Цена упала — это новость (этап D8), иначе просто повтор
+                _price_drop(cursor, int(_fprow['id']), int(_fprow['price'] or 0), price,
+                            _fprow['last_drop_notice_at'], now, stats)
                 stats['duplicate'] += 1
                 continue
             try:
@@ -18159,10 +18334,10 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
                                  external_id, parsed_at, views, published_hours_ago,
-                                 title_lower, age_estimated)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+                                 title_lower, age_estimated, fingerprint)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
             ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
-                  now, now, source, url, ext, now, ago, title.lower(), age_estimated))
+                  now, now, source, url, ext, now, ago, title.lower(), age_estimated, fp))
             cursor.execute("INSERT INTO ads_price_history (ad_id, price, seen_at) "
                            "VALUES (?, ?, ?)", (cursor.lastrowid, price, now))
             stats['accepted'] += 1
@@ -19560,7 +19735,7 @@ HUNT_STATUSES = ('pending_details', 'ready', 'sending', 'sent', 'rejected', 'sen
 
 def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                      desc_state: str = '', force_status: str = '',
-                     notified: bool = False) -> None:
+                     notified: bool = False, fingerprint: str = '') -> None:
     """Записывает решение по паре (пользователь, объявление).
 
     Уже отправленное не перезаписываем: повторный пересчёт не должен
@@ -19583,6 +19758,18 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
         cursor.execute("SELECT id, status, notified_at FROM hunt_matches "
                        "WHERE user_id=? AND ad_id=?", (user_id, ad_id))
         row = cursor.fetchone()
+        # Этап E3: у человека уже есть этот лот под другим ad_id (повторная
+        # публикация) — не создаём вторую находку в чат и ленту
+        if not row and fingerprint and status in ('ready', 'pending_details'):
+            try:
+                _dup = cursor.execute(
+                    "SELECT id FROM hunt_matches WHERE user_id=? AND fingerprint=? "
+                    "AND ad_id<>? AND status IN ('ready','sending','sent','pending_details') "
+                    "LIMIT 1", (user_id, fingerprint, ad_id)).fetchone()
+                if _dup:
+                    status, reject_reason = 'rejected', 'duplicate'
+            except Exception:
+                pass
         if row:
             old_status = str(row['status'] or '')
             if old_status in ('sent', 'sending') and not force_status:
@@ -19593,16 +19780,18 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                 cursor.execute(
                     "UPDATE hunt_matches SET crit_id=?, status=?, reason=?, reject_reason=?, "
                     "discount=?, desc_state=COALESCE(NULLIF(?, ''), desc_state), updated_at=?, "
-                    "notified_at=COALESCE(?, notified_at) WHERE id=?",
+                    "notified_at=COALESCE(?, notified_at), fingerprint=? WHERE id=?",
                     (crit_id, status, decision.reason, reject_reason, int(decision.discount or 0),
-                     desc_state, now, now if notified else None, int(row['id'])))
+                     desc_state, now, now if notified else None, str(fingerprint or ''),
+                     int(row['id'])))
         else:
             cursor.execute(
                 "INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
-                "discount, desc_state, created_at, updated_at, notified_at) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "discount, desc_state, created_at, updated_at, notified_at, fingerprint) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (user_id, crit_id, ad_id, status, decision.reason, reject_reason,
-                 int(decision.discount or 0), desc_state, now, now, now if notified else None))
+                 int(decision.discount or 0), desc_state, now, now, now if notified else None,
+                 str(fingerprint or '')))
     except Exception as e:
         logger.warning(f"hunt_match_store: {e}")
 
@@ -19676,7 +19865,8 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             # прислали, запись обязана быть sent
             force = 'sent' if legacy_sent else ''
             hunt_match_store(uid, int(crit['id']), int(ad['id']), decision,
-                             desc_state=desc_state, force_status=force)
+                             desc_state=desc_state, force_status=force,
+                             fingerprint=str(ad.get('fingerprint') or ''))
             written += 1
         if saw_ok or saw_suspect:
             # Подходит хоть под один критерий — флаг снимаем: он нужен только
@@ -20393,6 +20583,18 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
             return 'skipped'
     except Exception:
         pass
+    # Этап E3: тот же лот уже уходил под другим ad_id — второй раз не шлём
+    _fp = str(ad.get('fingerprint') or '')
+    if _fp:
+        try:
+            _fpc = db.conn.cursor()
+            _fpc.execute("SELECT 1 FROM hunt_matches WHERE user_id=? AND fingerprint=? "
+                         "AND status='sent' AND ad_id<>? LIMIT 1",
+                         (int(user_id), _fp, int(ad['id'])))
+            if _fpc.fetchone():
+                return 'skipped'
+        except Exception:
+            pass
     price = int(ad.get('price') or 0)
     # Несвежее не присылаем: недельное объявление — не находка. Если даты
     # нет вовсе — присылаем (у большинства карточек её нет), см. HUNT_ALLOW_UNDATED.
@@ -21530,6 +21732,22 @@ async def hunt_debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         lines.append(f"• «{_hunt_escape(str(r.get('query') or ''))}» "
                      f"[{_hunt_escape(str(r.get('mode') or 'any'))}] — " + ", ".join(parts))
     await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+async def dedupe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /dedupe [go] — отчёт о дублях; с «go» — схлопнуть (этап E2)."""
+    if not await is_admin(update.effective_user.id):
+        return
+    go = ' '.join(context.args or []).strip().lower() == 'go'
+    report = dedupe_existing(dry_run=not go)
+    if 'error' in report:
+        await update.message.reply_text(f"Ошибка: {_hunt_escape(str(report['error']))}")
+        return
+    mode = "СХЛОПНУТО" if go else "Только отчёт — добавьте «go», чтобы применить"
+    text = (f"<b>Дубли по отпечатку</b> — {mode}\n"
+            f"Групп: {report['groups']}, дублей: {report['marked']}, "
+            f"перенесено отметок: {report.get('moved', 0)}")
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
 async def hunt_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -23642,7 +23860,7 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     if show_suspect:
         # Показать подозрительно дешёвые (этап D3) — по запросу ?show_suspect=1
         statuses = f"({statuses} OR hm.reject_reason = 'price_suspect')"
-    where = ["hm.user_id = ?", statuses]
+    where = ["hm.user_id = ?", statuses, "a.status='active'"]
     params: List = [int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")
@@ -26294,6 +26512,7 @@ def main():
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
+    application.add_handler(CommandHandler("dedupe", dedupe_command))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
@@ -26705,6 +26924,7 @@ def main():
         ensure_desc_columns()
         ensure_description_lower()
         ensure_quality_columns()
+        ensure_fingerprint_backfill()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
