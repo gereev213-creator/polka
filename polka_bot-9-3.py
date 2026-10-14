@@ -21810,7 +21810,7 @@ def _cfg_coerce(key: str, value: Any):
         elif kind == 'bool':
             val = 1 if str(value).lower() in ('1', 'true', 'да', 'yes', 'on') else 0
         else:
-            val = str(value)[:500]
+            val = str(value)[:2000]
     except (TypeError, ValueError):
         return None, 'bad_type'
     if lo is not None and val < lo:
@@ -26578,6 +26578,31 @@ async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Не поменял: {_hunt_escape(str(res.get('error')))}{_hunt_escape(extra)}")
 
 
+async def banners_local_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /banners_local — отдавать баннеры бота с нашего домена.
+
+    Нужно, когда внешний хостинг картинок (i.ibb.co) недоступен: Telegram
+    скачает картинку у нас — /api/banner/{key} отдаёт кеш или нарисованный
+    баннер. Вернуть как было: /set banner.urls ""
+    """
+    if not await is_admin(update.effective_user.id):
+        return
+    base = str(SERVER_URL or '').rstrip('/')
+    if not base:
+        await update.message.reply_text("Не задан SERVER_URL — не знаю адрес сервера.")
+        return
+    data = {key: f"{base}/api/banner/{key}" for key in BANNERS}
+    res = cfg_set('banner.urls', json.dumps(data, ensure_ascii=False),
+                  by=update.effective_user.id, reason='баннеры с нашего домена')
+    if res.get('ok'):
+        await update.message.reply_text(
+            f"Баннеры теперь отдаём сами: <code>{_hunt_escape(base)}/api/banner/…</code>\n"
+            f"Вернуть прежние ссылки: <code>/set banner.urls ""</code>",
+            parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(f"Не вышло: {_hunt_escape(str(res.get('error')))}")
+
+
 async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """ /price 149 — цена «Плюса» в рублях """
     if not await is_admin(update.effective_user.id):
@@ -29065,6 +29090,7 @@ def main():
     application.add_handler(CommandHandler("promo", promo_command))
     application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CommandHandler("set", set_command))
+    application.add_handler(CommandHandler("banners_local", banners_local_command))
     application.add_handler(CommandHandler("price", price_command))
     application.add_handler(CommandHandler("limits", limits_command))
     application.add_handler(CommandHandler("grant", grant_command))
