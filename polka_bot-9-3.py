@@ -94,7 +94,7 @@ import html as _html
 from telegram import (
     Update, InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup,
     KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
-    InputMediaPhoto, BotCommand, Message, WebAppInfo
+    InputMediaPhoto, BotCommand, Message, WebAppInfo, LabeledPrice
 )
 from telegram.ext import PicklePersistence
 try:
@@ -116,7 +116,8 @@ class InlineKeyboardButton(_InlineKeyboardButton):
         return data
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
-    ContextTypes, ConversationHandler, filters, JobQueue, PicklePersistence
+    ContextTypes, ConversationHandler, filters, JobQueue, PicklePersistence,
+    PreCheckoutQueryHandler
 )
 from telegram.constants import ParseMode
 from telegram.request import HTTPXRequest
@@ -17352,6 +17353,9 @@ def ensure_hunt_matches():
                 send_error TEXT DEFAULT '',
                 fingerprint TEXT DEFAULT '',
                 unverified INTEGER DEFAULT 0,
+                deliver_after TEXT DEFAULT '',
+                unlocked_by_user INTEGER DEFAULT 0,
+                deep_check INTEGER DEFAULT 0,
                 notified_at TEXT,
                 UNIQUE(user_id, ad_id)
             )
@@ -17367,6 +17371,12 @@ def ensure_hunt_matches():
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN fingerprint TEXT DEFAULT ''")
         if 'unverified' not in cols:
             cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unverified INTEGER DEFAULT 0")
+        if 'deliver_after' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deliver_after TEXT DEFAULT ''")
+        if 'unlocked_by_user' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unlocked_by_user INTEGER DEFAULT 0")
+        if 'deep_check' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deep_check INTEGER DEFAULT 0")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_fp "
                        "ON hunt_matches(user_id, fingerprint)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
@@ -18309,6 +18319,175 @@ async def api_hunt_dialog(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'ready': ready,
         'notes': _dialog_notes(draft),
     })
+
+
+# ── Этап H: эндпоинты плана, монет и оплаты Stars ─────────────────────────────
+async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/plan — план, пробный период, лимит критериев, баланс монет."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    plan = _user_plan(viewer_id)
+    limit = _criteria_limit(viewer_id)
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=? AND active=1",
+                    (int(viewer_id),))
+        used = int(cur.fetchone()['n'] or 0)
+    except Exception:
+        used = 0
+    return _miniapp_json({
+        'plan': plan['name'],
+        'trial_days_left': plan['trial_days_left'],
+        'criteria_used': used,
+        'criteria_limit': limit,
+        'balance': coins_balance(viewer_id),
+        'plus_price': plan.get('show_price', PLAN_PLUS_SHOW_PRICE),
+        'plus_stars': PLUS_STARS,
+        'free_max_criteria': PLAN_FREE_MAX_CRITERIA,
+        'free_delay_min': PLAN_FREE_DELAY_MIN,
+    })
+
+
+async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/coins/spend {kind, ad_id?} — разовые покупки за монеты (H4)."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    kind = str((body or {}).get('kind') or '')
+    ad_id = (body or {}).get('ad_id')
+    now = get_moscow_time().isoformat()
+
+    if kind == 'unlock':
+        if not coins_spend(viewer_id, COIN_UNLOCK_PRICE, 'unlock'):
+            return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
+        if ad_id:
+            try:
+                cur = db.conn.cursor()
+                cur.execute("UPDATE hunt_matches SET deliver_after=?, unlocked_by_user=1 "
+                            "WHERE user_id=? AND ad_id=? AND status IN ('ready','pending_details','sending')",
+                            (now, int(viewer_id), int(ad_id)))
+                db.conn.commit()
+            except Exception:
+                pass
+        _plan_event(viewer_id, 'unlock_used', {'ad_id': ad_id})
+        hunt_wake()
+    elif kind == 'deep_check':
+        if not coins_spend(viewer_id, COIN_DEEP_CHECK_PRICE, 'deep_check'):
+            return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
+        if ad_id:
+            try:
+                cur = db.conn.cursor()
+                cur.execute("UPDATE hunt_matches SET deep_check=1 WHERE user_id=? AND ad_id=?",
+                            (int(viewer_id), int(ad_id)))
+                db.conn.commit()
+                # Просим сборщик дозагрузить описание этого лота (если его нет)
+                hunt_need_details(ad_ids=[int(ad_id)])
+            except Exception:
+                pass
+        _plan_event(viewer_id, 'deep_check_used', {'ad_id': ad_id})
+    elif kind == 'criterion_day':
+        if not coins_spend(viewer_id, COIN_CRITERION_DAY_PRICE, 'criterion_day'):
+            return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
+        try:
+            exp = (get_moscow_time() + timedelta(hours=24)).isoformat()
+            _setting_set(f'criterion_day:{int(viewer_id)}', exp)
+        except Exception:
+            pass
+    else:
+        return _miniapp_json({'ok': False, 'error': 'bad_kind'}, status=400)
+    return _miniapp_json({'ok': True, 'balance': coins_balance(viewer_id)})
+
+
+async def api_pay_invoice(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/pay/invoice {product} — ссылка на оплату Telegram Stars (H3).
+
+    Оплата цифровых услуг — через Stars (createInvoiceLink, валюта XTR).
+    Карточная PayAnyway для этих товаров не используется.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    product = str((body or {}).get('product') or '')
+    if product != 'plus_month':
+        return _miniapp_json({'ok': False, 'error': 'unknown_product'}, status=400)
+    app = _get_bot_app()
+    if not app:
+        return _miniapp_err('no_bot', 503)
+    payload = f"plus_month:{viewer_id}:{os.urandom(6).hex()}"
+    try:
+        link = await app.bot.create_invoice_link(
+            title="ПОЛКА Плюс на месяц",
+            description="10 критериев, без задержки, тщательный отбор по описанию и «цена снижена»",
+            payload=payload,
+            currency="XTR",
+            prices=[LabeledPrice("Плюс на месяц", PLUS_STARS)],
+            provider_token="",
+        )
+    except Exception as e:
+        logger.warning(f"create_invoice_link: {e}")
+        return _miniapp_err('invoice_failed', 502)
+    _plan_event(viewer_id, 'invoice_created', {'product': product})
+    return _miniapp_json({'ok': True, 'invoice_url': link})
+
+
+async def api_referral(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/referral — ссылка и число приглашённых (этап H1)."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM referrals WHERE referrer_id=?", (int(viewer_id),))
+        count = int(cur.fetchone()['n'] or 0)
+    except Exception:
+        count = 0
+    bonus = min(count, PLAN_REF_MAX_BONUS)
+    return _miniapp_json({'count': count, 'bonus_criteria': bonus,
+                          'link': f"https://t.me/{os.environ.get('BOT_USERNAME', '')}?start=ref{viewer_id}"})
+
+
+async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """PreCheckoutQuery: подтверждаем товар и цену за ≤10 секунд (этап H3)."""
+    query = update.pre_checkout_query
+    ok = bool(query.invoice_payload and str(query.invoice_payload).startswith('plus_month:'))
+    await query.answer(ok=ok, error_message='' if ok else 'Неизвестный товар')
+
+
+async def successful_payment_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """SuccessfulPayment: идемпотентное зачисление по charge id (этап H3)."""
+    msg = update.message
+    pay = msg.successful_payment
+    charge_id = str(pay.telegram_payment_charge_id)
+    user_id = int(msg.from_user.id)
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM purchases WHERE telegram_payment_charge_id=?", (charge_id,))
+        if cursor.fetchone():
+            return  # уже зачислено — не дублируем
+        now = get_moscow_time().isoformat()
+        expires = (get_moscow_time() + timedelta(days=30)).isoformat()
+        cursor.execute("INSERT INTO purchases (user_id, product, amount_stars, "
+                       "telegram_payment_charge_id, created_at) VALUES (?,?,?,?,?)",
+                       (user_id, 'plus_month', int(pay.total_amount), charge_id, now))
+        cursor.execute("INSERT INTO subscriptions (user_id, plan, started_at, expires_at) "
+                       "VALUES (?,?,?,?)", (user_id, 'plus', now, expires))
+        db.conn.commit()
+        try:
+            db.update_user(user_id, plan='plus')
+        except Exception:
+            pass
+        _plan_event(user_id, 'payment_ok', {'stars': int(pay.total_amount)})
+    except Exception as e:
+        logger.warning(f"successful_payment: {e}")
 
 
 async def api_hunt_check(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -20282,7 +20461,8 @@ def _hunt_needs_description(crit: Dict) -> bool:
 
 
 def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
-                hidden: bool = False, already_sent: bool = False) -> Decision:
+                hidden: bool = False, already_sent: bool = False,
+                deep_check: bool = True) -> Decision:
     """Подходит ли объявление под критерий. Без SQL и без сети.
 
     require_description=True — окончательное решение: если критерий опирается
@@ -20386,7 +20566,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             return no('shop')
         if hunt_shop_in_name(str(ad.get('seller_name') or '')):
             return no('shop')
-    if rj.get('condition_min') and rj.get('condition_min') != 'any':
+    if deep_check and rj.get('condition_min') and rj.get('condition_min') != 'any':
         if desc_ok:
             grade, conf = classify_condition(title_raw, description)
             want = _CONDITION_RANK.get(rj['condition_min'], 3)
@@ -20398,7 +20578,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                     return no('condition_below')
         else:
             unverified = True
-    if rj.get('battery_min'):
+    if deep_check and rj.get('battery_min'):
         if desc_ok:
             batt = extract_battery_percent(title_raw, description)
             if batt is None:
@@ -20407,12 +20587,16 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 return no('battery_low')
         else:
             unverified = True
-    if rj.get('not_opened'):
+    if deep_check and rj.get('not_opened'):
         if desc_ok:
             if _opened_markers_hit(title_raw + ' ' + description):
                 return no('opened')
         else:
             unverified = True
+    # Без тщательного отбора (free) эти условия не применяем — только пометка
+    if not deep_check and (rj.get('condition_min') or rj.get('battery_min')
+                           or rj.get('not_opened')):
+        unverified = True
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
     # но помечаем одинаково в чате и ленте (решение B1).
@@ -20479,7 +20663,8 @@ HUNT_STATUSES = ('pending_details', 'ready', 'sending', 'sent', 'rejected', 'sen
 def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                      desc_state: str = '', force_status: str = '',
                      notified: bool = False, fingerprint: str = '',
-                     unverified: bool = False) -> None:
+                     unverified: bool = False, deliver_after: str = '',
+                     deep_check: bool = False) -> None:
     """Записывает решение по паре (пользователь, объявление).
 
     Уже отправленное не перезаписываем: повторный пересчёт не должен
@@ -20524,18 +20709,21 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                 cursor.execute(
                     "UPDATE hunt_matches SET crit_id=?, status=?, reason=?, reject_reason=?, "
                     "discount=?, desc_state=COALESCE(NULLIF(?, ''), desc_state), updated_at=?, "
-                    "notified_at=COALESCE(?, notified_at), fingerprint=?, unverified=? WHERE id=?",
+                    "notified_at=COALESCE(?, notified_at), fingerprint=?, unverified=?, "
+                    "deliver_after=?, deep_check=? WHERE id=?",
                     (crit_id, status, decision.reason, reject_reason, int(decision.discount or 0),
                      desc_state, now, now if notified else None, str(fingerprint or ''),
-                     1 if unverified else 0, int(row['id'])))
+                     1 if unverified else 0, str(deliver_after or ''),
+                     1 if deep_check else 0, int(row['id'])))
         else:
             cursor.execute(
                 "INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
-                "discount, desc_state, created_at, updated_at, notified_at, fingerprint, unverified) "
-                "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "discount, desc_state, created_at, updated_at, notified_at, fingerprint, unverified, "
+                "deliver_after, deep_check) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (user_id, crit_id, ad_id, status, decision.reason, reject_reason,
                  int(decision.discount or 0), desc_state, now, now, now if notified else None,
-                 str(fingerprint or ''), 1 if unverified else 0))
+                 str(fingerprint or ''), 1 if unverified else 0,
+                 str(deliver_after or ''), 1 if deep_check else 0))
     except Exception as e:
         logger.warning(f"hunt_match_store: {e}")
 
@@ -20597,8 +20785,10 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
                 legacy_sent = db.is_search_notification_sent(uid, int(ad['id']))
             except Exception:
                 hidden, legacy_sent = False, False
+            plan = _user_plan(uid)
+            deep_check = bool(plan.get('deep_check'))
             decision = evaluate_ad(ad, crit, require_description=_hunt_needs_description(crit),
-                                   hidden=hidden, already_sent=False)
+                                   hidden=hidden, already_sent=False, deep_check=deep_check)
             if decision.ok:
                 saw_ok = True
             elif decision.reason == 'price_suspect':
@@ -20608,10 +20798,15 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             # Отметка прошлых отправок главнее решения: если человеку уже
             # прислали, запись обязана быть sent
             force = 'sent' if legacy_sent else ''
+            # Этап H: бесплатному находка уходит с задержкой (deliver_after)
+            deliver_after = ''
+            if decision.ok and decision.reason != 'desc_needed' and int(plan.get('delay_min') or 0) > 0:
+                deliver_after = (get_moscow_time() + timedelta(minutes=int(plan['delay_min']))).isoformat()
             hunt_match_store(uid, int(crit['id']), int(ad['id']), decision,
                              desc_state=desc_state, force_status=force,
                              fingerprint=str(ad.get('fingerprint') or ''),
-                             unverified=bool(decision.unverified))
+                             unverified=bool(decision.unverified),
+                             deliver_after=deliver_after, deep_check=deep_check)
             written += 1
         if saw_ok or saw_suspect:
             # Подходит хоть под один критерий — флаг снимаем: он нужен только
@@ -20703,7 +20898,8 @@ def hunt_claim_batch(limit: int = 0, statuses: tuple = ('ready',)) -> List[Dict]
         marks_st = ','.join('?' for _ in status_list)
         cursor.execute(
             f"SELECT id FROM hunt_matches WHERE status IN ({marks_st}) "
-            f"ORDER BY discount DESC, id LIMIT ?", (*status_list, int(limit)))
+            f"AND (deliver_after IS NULL OR deliver_after <= ?) "
+            f"ORDER BY discount DESC, id LIMIT ?", (*status_list, now, int(limit)))
         ids = [int(r['id']) for r in cursor.fetchall()]
         if not ids:
             return []
@@ -21137,6 +21333,238 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
 # лимитов. ИИ нужен только для того, чего нет в заголовке (АКБ, состояние
 # на странице). Включается одной переменной, если понадобится.
 HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
+# ── ЭТАП H: монетизация (значения в переменных окружения, не в коде) ──────────
+PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '1'))
+PLAN_FREE_DELAY_MIN = int(os.environ.get('FREE_DELAY_MIN', '10'))
+PLAN_TRIAL_DAYS = int(os.environ.get('TRIAL_DAYS', '7'))
+PLAN_TRIAL_MAX_CRITERIA = int(os.environ.get('TRIAL_MAX_CRITERIA', '5'))
+PLAN_PLUS_PRICE = int(os.environ.get('PLUS_PRICE', '99'))
+PLAN_PLUS_SHOW_PRICE = int(os.environ.get('PLUS_SHOW_PRICE', '149'))
+PLAN_PLUS_MAX_CRITERIA = int(os.environ.get('PLUS_MAX_CRITERIA', '10'))
+PLAN_REF_MAX_BONUS = int(os.environ.get('REF_MAX_BONUS', '3'))
+COIN_UNLOCK_PRICE = int(os.environ.get('COIN_UNLOCK_PRICE', '5'))
+COIN_DEEP_CHECK_PRICE = int(os.environ.get('COIN_DEEP_CHECK_PRICE', '3'))
+COIN_CRITERION_DAY_PRICE = int(os.environ.get('COIN_CRITERION_DAY_PRICE', '5'))
+PLUS_STARS = int(os.environ.get('PLUS_STARS', '99'))
+
+
+def ensure_monetization() -> None:
+    """Таблицы и колонки монетизации (этап H2). Всё идемпотентно."""
+    cursor = db.conn.cursor()
+    for sql in (
+        "ALTER TABLE users ADD COLUMN plan TEXT DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN trial_started_at TEXT",
+    ):
+        try:
+            cursor.execute(sql)
+        except Exception:
+            pass
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS subscriptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                plan TEXT NOT NULL,
+                started_at TEXT,
+                expires_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS coin_wallets (
+                user_id INTEGER PRIMARY KEY,
+                balance INTEGER NOT NULL DEFAULT 0
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS coin_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                delta INTEGER NOT NULL,
+                reason TEXT,
+                created_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS purchases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                product TEXT,
+                amount_stars INTEGER,
+                telegram_payment_charge_id TEXT UNIQUE,
+                created_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS referrals (
+                referrer_id INTEGER NOT NULL,
+                referred_id INTEGER PRIMARY KEY,
+                created_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                name TEXT,
+                data TEXT,
+                created_at TEXT
+            )
+        """)
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_monetization: {e}")
+
+
+def _plan_event(user_id: int, name: str, data: Dict = None) -> None:
+    """Событие воронки для /stats_money (этап H8)."""
+    try:
+        db.conn.execute("INSERT INTO events (user_id, name, data, created_at) VALUES (?,?,?,?)",
+                        (int(user_id), name, json.dumps(data or {}, ensure_ascii=False),
+                         get_moscow_time().isoformat()))
+        db.conn.commit()
+    except Exception:
+        pass
+
+
+def _referral_criteria_bonus(user_id: int) -> int:
+    """+1 критерий за каждого приглашённого, не больше PLAN_REF_MAX_BONUS."""
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM referrals WHERE referrer_id=?", (int(user_id),))
+        row = cur.fetchone()
+        return min(int(row['n'] or 0) if row else 0, PLAN_REF_MAX_BONUS)
+    except Exception:
+        return 0
+
+
+def _user_plan(user_id: int) -> Dict:
+    """План человека: free / trial / plus + лимиты, задержка, тщательный отбор."""
+    user = db.get_user(int(user_id)) or {}
+    plan = str(user.get('plan') or '')
+    now = get_moscow_time()
+    if plan not in ('trial', 'plus', 'free'):
+        plan = 'trial'  # пробный период с первого входа
+        trial_started = (user.get('trial_started_at') or user.get('registration_date')
+                         or now.isoformat())
+        try:
+            db.update_user(int(user_id), plan='trial', trial_started_at=trial_started)
+        except Exception:
+            pass
+    else:
+        trial_started = (user.get('trial_started_at') or user.get('registration_date')
+                         or now.isoformat())
+    if plan == 'trial':
+        hours = int(_hours_since(trial_started) or 0)
+        days_left = max(0, PLAN_TRIAL_DAYS - hours // 24)
+        if days_left <= 0:
+            # Пробный период закончился: переводим на free и приостанавливаем лишнее
+            plan = 'free'
+            try:
+                db.update_user(int(user_id), plan='free')
+            except Exception:
+                pass
+            _pause_extra_criteria(int(user_id), PLAN_FREE_MAX_CRITERIA)
+        else:
+            return {'name': 'trial', 'trial_days_left': days_left,
+                    'criteria_limit': PLAN_TRIAL_MAX_CRITERIA, 'delay_min': 0,
+                    'deep_check': True, 'price': 0, 'show_price': PLAN_PLUS_SHOW_PRICE}
+    if plan == 'plus':
+        return {'name': 'plus', 'trial_days_left': 0,
+                'criteria_limit': PLAN_PLUS_MAX_CRITERIA, 'delay_min': 0,
+                'deep_check': True, 'price': PLAN_PLUS_PRICE,
+                'show_price': PLAN_PLUS_SHOW_PRICE}
+    return {'name': 'free', 'trial_days_left': 0,
+            'criteria_limit': PLAN_FREE_MAX_CRITERIA, 'delay_min': PLAN_FREE_DELAY_MIN,
+            'deep_check': False, 'price': 0, 'show_price': PLAN_PLUS_SHOW_PRICE}
+
+
+def _criteria_limit(user_id: int) -> int:
+    p = _user_plan(int(user_id))
+    bonus = _referral_criteria_bonus(int(user_id))
+    # «Критерий на сутки» за монеты — временный +1 слот (этап H4)
+    try:
+        exp = _setting_get(f'criterion_day:{int(user_id)}', '')
+        if exp and str(exp) > get_moscow_time().isoformat():
+            bonus += 1
+    except Exception:
+        pass
+    return int(p['criteria_limit']) + bonus
+
+
+def _plan_deep_check(user_id: int) -> bool:
+    """Тщательный отбор (описание/АКБ/состояние) — только trial и plus."""
+    return bool(_user_plan(int(user_id)).get('deep_check'))
+
+
+def _pause_extra_criteria(user_id: int, limit: int) -> int:
+    """Лишние критерии приостанавливает, а не удаляет (этап H5)."""
+    cursor = db.conn.cursor()
+    n = 0
+    try:
+        cursor.execute("SELECT id FROM hunt_criteria WHERE user_id=? AND active=1 "
+                       "ORDER BY id", (int(user_id),))
+        ids = [int(r['id']) for r in cursor.fetchall()]
+        for extra in ids[int(limit):]:
+            cursor.execute("UPDATE hunt_criteria SET active=0, paused_reason='limit' WHERE id=?",
+                           (extra,))
+            n += 1
+        if n:
+            db.conn.commit()
+    except Exception as e:
+        logger.warning(f"pause criteria: {e}")
+    return n
+
+
+def coins_balance(user_id: int) -> int:
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT balance FROM coin_wallets WHERE user_id=?", (int(user_id),))
+        row = cur.fetchone()
+        return int(row['balance'] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def coins_add(user_id: int, amount: int, reason: str) -> int:
+    """Начисляет монеты атомарно; возвращает новый баланс."""
+    uid, amt = int(user_id), int(amount)
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("INSERT INTO coin_wallets (user_id, balance) VALUES (?,0) "
+                       "ON CONFLICT(user_id) DO NOTHING", (uid,))
+        cursor.execute("UPDATE coin_wallets SET balance=balance+? WHERE user_id=?", (amt, uid))
+        cursor.execute("INSERT INTO coin_transactions (user_id, delta, reason, created_at) "
+                       "VALUES (?,?,?,?)", (uid, amt, reason, get_moscow_time().isoformat()))
+        db.conn.commit()
+        return coins_balance(uid)
+    except Exception as e:
+        logger.warning(f"coins_add: {e}")
+        return coins_balance(uid)
+
+
+def coins_spend(user_id: int, amount: int, reason: str) -> bool:
+    """Списывает монеты атомарно; баланс не уходит в минус (этап H4)."""
+    uid, amt = int(user_id), int(amount)
+    if amt <= 0:
+        return False
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("INSERT INTO coin_wallets (user_id, balance) VALUES (?,0) "
+                       "ON CONFLICT(user_id) DO NOTHING", (uid,))
+        cursor.execute("UPDATE coin_wallets SET balance=balance-? "
+                       "WHERE user_id=? AND balance>=?", (amt, uid, amt))
+        if cursor.rowcount == 0:
+            db.conn.commit()
+            return False
+        cursor.execute("INSERT INTO coin_transactions (user_id, delta, reason, created_at) "
+                       "VALUES (?,?,?,?)", (uid, -amt, reason, get_moscow_time().isoformat()))
+        db.conn.commit()
+        return True
+    except Exception as e:
+        logger.warning(f"coins_spend: {e}")
+        return False
+
+
 # Этап A: сколько карточек за проход просит сборщик, как часто повторяем
 # неудачную попытку и сколько раз пробуем вообще
 HUNT_DESC_PER_PASS = int(os.environ.get('HUNT_DESC_PER_PASS', '25'))
@@ -21767,6 +22195,17 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
         return None
+    # Этап H5: лимит критериев по плану (с реферальным бонусом)
+    try:
+        _lim = _criteria_limit(user_id)
+        _chk = db.conn.cursor()
+        _chk.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=? AND active=1",
+                     (int(user_id),))
+        if int(_chk.fetchone()['n'] or 0) >= _lim:
+            _plan_event(int(user_id), 'limit_hit', {'limit': _lim})
+            return -1
+    except Exception as _e:
+        logger.warning(f"criteria limit check: {_e}")
     category = normalize_category(category)
     cursor = db.conn.cursor()
     # Сравниваем в Python: LOWER() в SQLite не понимает кириллицу, из-за чего
@@ -21887,6 +22326,12 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             min_discount=int((body or {}).get('min_discount') or 0),
             mode=str((body or {}).get('mode') or 'any'),
         )
+        if crit_id == -1:
+            _lim = _criteria_limit(viewer_id)
+            return _miniapp_json({'error': 'limit_reached', 'limit': _lim,
+                                  'detail': f'Достигнут лимит критериев ({_lim}). '
+                                            'Замените существующий или откройте ещё слоты в «Плюсе».'},
+                                 status=402)
         if not crit_id:
             return _miniapp_json({'error': 'duplicate',
                                   'detail': 'Такой критерий уже есть — он в списке ниже'},
@@ -22393,9 +22838,11 @@ async def hunt_chat_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception as e:
             logger.warning(f"podbor add_criterion: {e}")
         _HUNT_CHAT.pop(user_id, None)
-        if not created:
+        if not created or created == -1:
             try:
-                await query.message.edit_text("Такой критерий уже есть — ничего не менял.")
+                await query.message.edit_text(
+                    "Достигнут лимит критериев для бесплатного плана. "
+                    "Замените существующий или откройте ещё слоты в «Плюсе».")
             except Exception:
                 pass
             return
@@ -22573,6 +23020,11 @@ async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         max_price = int(digits) if digits else 0
 
     crit_id = add_criterion(user.id, query, city=city, max_price=max_price)
+    if crit_id == -1:
+        await update.message.reply_text(
+            "Достигнут лимит критериев бесплатного плана — замените существующий "
+            "или откройте ещё слоты в «Плюсе».", parse_mode=ParseMode.HTML)
+        return
     if not crit_id:
         await update.message.reply_text(
             "Такой критерий уже есть — или запрос слишком короткий.")
@@ -27144,6 +27596,10 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/findings/hide', api_findings_hide)
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
+    app.router.add_get('/api/plan', api_plan)
+    app.router.add_post('/api/coins/spend', api_coins_spend)
+    app.router.add_post('/api/pay/invoice', api_pay_invoice)
+    app.router.add_get('/api/referral', api_referral)
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
@@ -27269,6 +27725,8 @@ def main():
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
     application.add_handler(CommandHandler("dedupe", dedupe_command))
+    application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
     application.add_handler(CallbackQueryHandler(hunt_hide_button, pattern="^hunt_hide:"))
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
@@ -27683,6 +28141,7 @@ def main():
         ensure_fingerprint_backfill()
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
+        ensure_monetization()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

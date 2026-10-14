@@ -116,6 +116,8 @@ ensure, recompute = ns['ensure_hunt_matches'], ns['hunt_matches_recompute']
 store, mark_sent, ready_ids = ns['hunt_match_store'], ns['hunt_match_mark_sent'], ns['hunt_ready_ids']
 Decision = ns['Decision']
 
+# этап H: recompute зовёт _user_plan — заглушка: плюс, без задержки
+ns['_user_plan'] = lambda uid: {'deep_check': True, 'delay_min': 0}
 ensure()
 
 # ── Данные: три объявления и два критерия
