@@ -508,23 +508,103 @@ BANNERS = {
     "referral":      "https://i.ibb.co/WpD25C92/Frame-190.png",
     "admin":         "https://i.ibb.co/cKQX5bpD/Frame-184.png",
 }
+# ── Баннеры бота: без обязательной зависимости от внешнего хостинга ─────────
+# На Амвере исходящий доступ к i.ibb.co закрыт: прогрев падал с
+# «Cannot connect to host i.ibb.co:443» и засорял лог девятью строками при
+# каждом старте (по 15 с ожидания каждая). При этом сами баннеры продолжали
+# работать: Telegram скачивает картинку по ссылке со своей стороны. Теперь:
+# прогрев тихий, с одной сводкой, повтор не чаще раза в 6 часов, а если сети
+# нет совсем — рисуем баннер кодом, чтобы сообщение всё равно было с картинкой.
+BANNER_PRECACHE_ENABLED = os.environ.get('BANNER_PRECACHE', '1') == '1'
+BANNER_PRECACHE_RETRY_SEC = int(os.environ.get('BANNER_PRECACHE_RETRY_SEC', '21600'))
+_BANNER_PRECACHE = {'failed_at': 0.0, 'ok': False}
+_BANNER_LOCAL_CACHE: dict = {}
+
+
+def _banner_url(key: str) -> str:
+    """Ссылка на баннер: настройка админа (banner.urls) → встроенная."""
+    try:
+        raw = cfg_get('banner.urls') or ''
+        if raw:
+            data = json.loads(raw) if isinstance(raw, str) else raw
+            if isinstance(data, dict) and data.get(key):
+                return str(data[key])
+    except Exception:
+        pass
+    return BANNERS.get(key, '')
+
+
+def _banner_local_png(key: str, title: str = 'ПОЛКА', subtitle: str = '') -> bytes:
+    """Рисует баннер кодом — работает вообще без интернета."""
+    if _BANNER_LOCAL_CACHE.get(key):
+        return _BANNER_LOCAL_CACHE[key]
+    try:
+        import io as _io
+        from PIL import Image, ImageDraw
+        img = Image.new('RGB', (900, 383), (47, 107, 255))
+        draw = ImageDraw.Draw(img)
+        draw.ellipse([600, -120, 1030, 310], fill=(30, 63, 168))
+        draw.ellipse([-80, 250, 260, 560], fill=(38, 86, 214))
+        draw.text((48, 150), title, fill=(255, 255, 255))
+        if subtitle:
+            draw.text((48, 200), subtitle, fill=(226, 235, 255))
+        buf = _io.BytesIO()
+        img.save(buf, format='PNG')
+        data = buf.getvalue()
+        _BANNER_LOCAL_CACHE[key] = data
+        return data
+    except Exception as e:
+        logger.warning(f"banner local png: {e}")
+        return b''
+
+
+def banner_photo_src(key: str):
+    """Что отдать в reply_photo: байты из кеша → ссылка (её скачает Telegram)."""
+    cached = BANNER_CACHE.get(key)
+    if cached:
+        return cached
+    return _banner_url(key) or ''
+
+
 async def precache_banners():
-    """Скачивает баннеры при старте, сохраняет в BANNER_CACHE как bytes."""
+    """Тихий прогрев баннеров: одна сводка вместо строки на каждую ссылку."""
     import aiohttp
-    for key, url in BANNERS.items():
-        if not url:
-            continue
-        try:
-            async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as s:
-                async with s.get(url, timeout=aiohttp.ClientTimeout(total=15)) as r:
-                    if r.status == 200:
-                        data = await r.read()
-                        BANNER_CACHE[key] = data
-                        logger.info(f"precache_banners: {key} = {len(data)} bytes")
-                    else:
-                        logger.warning(f"precache_banners: {key} status={r.status}")
-        except Exception as e:
-            logger.warning(f"precache_banners: {key} error: {e}")
+    if not BANNER_PRECACHE_ENABLED:
+        return
+    if _BANNER_PRECACHE['failed_at'] and (
+            _time.time() - _BANNER_PRECACHE['failed_at'] < BANNER_PRECACHE_RETRY_SEC):
+        return
+    urls = {k: _banner_url(k) for k in BANNERS}
+    urls = {k: u for k, u in urls.items() if u}
+    if not urls:
+        return
+    done, failed = 0, 0
+    try:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=False)) as s:
+            for key, url in urls.items():
+                if BANNER_CACHE.get(key):
+                    continue
+                try:
+                    async with s.get(url, timeout=aiohttp.ClientTimeout(total=8)) as r:
+                        if r.status == 200:
+                            BANNER_CACHE[key] = await r.read()
+                            done += 1
+                        else:
+                            failed += 1
+                except Exception:
+                    failed += 1
+    except Exception as e:
+        logger.warning(f"precache_banners: {e}")
+        failed += len(urls)
+    if done:
+        _BANNER_PRECACHE['ok'] = True
+        logger.info(f"precache_banners: прогрето {done} баннеров")
+    if failed:
+        _BANNER_PRECACHE['failed_at'] = _time.time()
+        # Одна строка на все неудачи: это не ошибка приложения — Telegram
+        # скачает баннер по ссылке сам, а без сети нарисуем картинку кодом.
+        logger.info(f"precache_banners: {failed} ссылок недоступны с сервера "
+                    f"(баннеры уйдут по ссылке или локальной картинкой)")
 
 async def send_banner(target, banner_key: str, text: str, reply_markup=None, parse_mode=None):
     """Отправляет баннер с текстом. Пытается: кастом админа → кеш → URL → текст."""
@@ -549,10 +629,19 @@ async def send_banner(target, banner_key: str, text: str, reply_markup=None, par
                 return
         except Exception:
             pass
-    url = BANNERS.get(banner_key, "")
+    url = _banner_url(banner_key)
     if url:
         try:
             result = await target.reply_photo(photo=url, caption=text, **kwargs)
+            if result:
+                return
+        except Exception:
+            pass
+    # Последний шаг: картинка, нарисованная кодом — без интернета и хостингов
+    local = _banner_local_png(banner_key, title='ПОЛКА')
+    if local:
+        try:
+            result = await target.reply_photo(photo=local, caption=text, **kwargs)
             if result:
                 return
         except Exception:
@@ -7826,12 +7915,12 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     markup = InlineKeyboardMarkup(keyboard)
     if update.message:
         try:
-            await update.message.reply_photo(photo=BANNERS["welcome"], caption=text, reply_markup=markup, parse_mode="HTML")
+            await update.message.reply_photo(photo=banner_photo_src("welcome"), caption=text, reply_markup=markup, parse_mode="HTML")
         except Exception:
             await update.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
     else:
         try:
-            await update.callback_query.message.reply_photo(photo=BANNERS["welcome"], caption=text, reply_markup=markup, parse_mode="HTML")
+            await update.callback_query.message.reply_photo(photo=banner_photo_src("welcome"), caption=text, reply_markup=markup, parse_mode="HTML")
         except Exception:
             await update.callback_query.message.reply_text(text, reply_markup=markup, parse_mode="HTML")
         try:
@@ -8371,7 +8460,7 @@ async def favorites(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await query.message.reply_photo(
-                photo=BANNERS["favorites"],
+                photo=banner_photo_src("favorites"),
             caption=text,
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
@@ -10332,7 +10421,7 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Отправляем как документ для сохранения качества
         try:
             await query.message.reply_photo(
-                photo=BANNERS["profile"],
+                photo=banner_photo_src("profile"),
                 caption=text,
                 reply_markup=markup,
                 parse_mode=ParseMode.HTML
@@ -10635,7 +10724,7 @@ async def create_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tariff_label = TARIFF_LABELS.get(tariff, tariff)
     try:
         await query.message.reply_photo(
-                photo=BANNERS["create_ad"],
+                photo=banner_photo_src("create_ad"),
             caption=f"<b>Новое объявление</b>  {_ad_progress(1)}\n\n<b>Категория:</b>",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode=ParseMode.HTML
@@ -13173,7 +13262,7 @@ async def _admin_panel_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE
     
     try:
         await update.message.reply_photo(
-            photo=BANNERS["admin"],
+            photo=banner_photo_src("admin"),
             caption="Панель администратора\n\nВыберите раздел:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
@@ -21637,6 +21726,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'hunt.digest_after': ('int', 0, 1000, HUNT_DIGEST_AFTER, 'Сколько находок копить перед дайджестом'),
     'banner.enabled': ('bool', None, None, 0, 'Показывать баннер в ленте'),
     'banner.title': ('str', None, None, '', 'Заголовок баннера'),
+    'banner.urls': ('str', None, None, '',
+                    'Ссылки на картинки бота, JSON: {"welcome": "https://…"}'),
     'banner.text': ('str', None, None, '', 'Текст баннера'),
 }
 _SETTINGS_CACHE: Dict[str, Any] = {}
@@ -26565,6 +26656,28 @@ async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                                     parse_mode=ParseMode.HTML)
 
 
+async def api_banner_image(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/banner/{key} — баннер с нашего домена (кеш или нарисованный).
+
+    Нужен там, где внешний хостинг картинок недоступен: ссылку на этот адрес
+    можно положить в настройку banner.urls, и Telegram скачает картинку у нас.
+    """
+    key = str(request.match_info.get('key') or '').strip()
+    if key not in BANNERS:
+        return _miniapp_err('not_found', 404)
+    cached = BANNER_CACHE.get(key)
+    if cached:
+        return aiohttp_web.Response(body=cached, content_type='image/png',
+                                    headers={**_miniapp_cors_headers(),
+                                             'Cache-Control': 'public, max-age=86400'})
+    local = _banner_local_png(key)
+    if not local:
+        return _miniapp_err('not_found', 404)
+    return aiohttp_web.Response(body=local, content_type='image/png',
+                                headers={**_miniapp_cors_headers(),
+                                         'Cache-Control': 'public, max-age=86400'})
+
+
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """Эндпоинт проверки работоспособности сервера"""
     return aiohttp_web.Response(
@@ -28788,6 +28901,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/', api_root)
     app.router.add_get('/health', api_health)
     app.router.add_get('/api/diag', api_diag)
+    app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_get('/api/views_diag', api_views_diag)
     app.router.add_get('/chat', api_serve_html)
     app.router.add_get('/api/check_promo', api_check_promo)
@@ -28824,6 +28938,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/promo/redeem', api_promo_redeem)
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
+    app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_get('/api/diag/avito', api_diag_avito)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
@@ -29414,7 +29529,11 @@ def main():
         await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
         print(f"{EM_OK} Бот запущен")
         # Запускаем фоновые задачи
-        asyncio.create_task(precache_banners())
+        # Прогрев баннеров — в фоне и не сразу: старт не должен ждать сеть
+        async def _precache_later():
+            await asyncio.sleep(20)
+            await precache_banners()
+        asyncio.create_task(_precache_later())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:
