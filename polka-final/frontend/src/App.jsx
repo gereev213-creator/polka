@@ -2887,6 +2887,11 @@ function FavoritesPage() {
 function ProfilePage() {
   const { profile, tgUser, backendMode } = useApp()
   const avatarUrl = tgUser?.photo_url || ''
+  // Пункт «Админ» показываем только администратору (этап J3)
+  const [isAdmin, setIsAdmin] = useState(false)
+  useEffect(() => {
+    api.adminMe().then((d) => setIsAdmin(Boolean(d.is_admin))).catch(() => setIsAdmin(false))
+  }, [])
 
   return (
     <Screen>
@@ -2927,6 +2932,12 @@ function ProfilePage() {
           <span className="menu-left"><Icon name="crown" /><span>Тарифы и монеты</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
+        {isAdmin ? (
+          <Link to="/admin" className="setting-row glass-card menu-row">
+            <span className="menu-left"><Icon name="shield" /><span>Админ</span></span>
+            <span className="menu-arrow" aria-hidden="true">›</span>
+          </Link>
+        ) : null}
         <Link to="/create" className="setting-row glass-card menu-row">
           <span className="menu-left"><Icon name="plus" /><span>Разместить объявление</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
@@ -2942,6 +2953,7 @@ function TariffsPage() {
   const [ref, setRef] = useState(null)
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
+  const [promo, setPromo] = useState('')
 
   const load = () => {
     api.getPlan().then(setPlan).catch(() => {})
@@ -2961,6 +2973,21 @@ function TariffsPage() {
       }
     } catch (e) {
       setMsg((e && e.detail) || 'Не удалось открыть оплату')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const applyPromo = async () => {
+    if (!promo.trim()) return
+    setBusy(true); setMsg('')
+    try {
+      const r = await api.redeemPromo(promo.trim())
+      setMsg(r.granted ? `Промокод активирован: ${r.granted}` : 'Промокод принят')
+      setPromo('')
+      load()
+    } catch (e) {
+      setMsg((e && e.detail) || 'Промокод не подошёл')
     } finally {
       setBusy(false)
     }
@@ -3033,6 +3060,18 @@ function TariffsPage() {
       </div>
 
       <div className="glass-card mt-14">
+        <div className="plan-name">Промокод</div>
+        <div className="plan-desc">Введите код — он даст монеты, дни «Плюса» или слот</div>
+        <div className="admin-actions mt-8">
+          <input className="text-input" placeholder="КОД" value={promo}
+            onChange={(e) => setPromo(e.target.value.toUpperCase())} />
+          <button type="button" className="cta-primary" disabled={busy} onClick={applyPromo}>
+            Применить
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-card mt-14">
         <div className="plan-name">Реферальная программа</div>
         <div className="plan-desc">
           +1 критерий вам и другу за каждого приглашённого (до 3). Приглашено: {ref?.count || 0}.
@@ -3041,6 +3080,225 @@ function TariffsPage() {
       </div>
 
       {msg ? <div className="chat-note mt-8">{msg}</div> : null}
+    </Screen>
+  )
+}
+
+function AdminPage() {
+  const navigate = useNavigate()
+  const [tab, setTab] = useState('settings')
+  const [allowed, setAllowed] = useState(null)
+  const [settings, setSettings] = useState({})
+  const [draft, setDraft] = useState({})
+  const [history, setHistory] = useState([])
+  const [metrics, setMetrics] = useState(null)
+  const [promo, setPromo] = useState({ items: [], titles: {} })
+  const [promoForm, setPromoForm] = useState({ code: '', kind: 'coins', value: 100, max_uses: 0 })
+  const [grant, setGrant] = useState({ user: '', kind: 'coins', amount: 100 })
+  const [msg, setMsg] = useState('')
+
+  const loadAll = () => {
+    api.adminSettings().then((d) => setSettings(d.items || {})).catch(() => {})
+    api.adminHistory().then((d) => setHistory(d.items || [])).catch(() => {})
+    api.adminMetrics().then(setMetrics).catch(() => {})
+    api.adminPromo().then((d) => setPromo({ items: d.items || [], titles: d.titles || {} })).catch(() => {})
+  }
+
+  useEffect(() => {
+    api.adminMe()
+      .then((d) => {
+        setAllowed(Boolean(d.is_admin))
+        if (d.is_admin) loadAll()
+      })
+      .catch(() => setAllowed(false))
+  }, [])
+
+  const save = async (key) => {
+    const value = draft[key] !== undefined ? draft[key] : settings[key]?.value
+    try {
+      const r = await api.adminSet(key, value, 'экран админа')
+      setMsg(r.ok ? `${key}: ${r.old} → ${r.new}` : `Не сохранил: ${r.error}`)
+      api.adminSettings().then((d) => setSettings(d.items || {}))
+      api.adminHistory().then((d) => setHistory(d.items || []))
+    } catch (e) {
+      setMsg((e && e.detail) || 'Ошибка сохранения')
+    }
+  }
+
+  const rollback = async (key) => {
+    try {
+      const r = await api.adminRollback(key)
+      setMsg(r.ok ? `${key} возвращён к ${r.rolled_back_to}` : `Откат не вышел: ${r.error}`)
+      api.adminSettings().then((d) => setSettings(d.items || {}))
+      api.adminHistory().then((d) => setHistory(d.items || []))
+    } catch (e) {
+      setMsg((e && e.detail) || 'Ошибка отката')
+    }
+  }
+
+  const doGrant = async () => {
+    try {
+      const r = await api.adminGrant(grant.user, grant.kind, Number(grant.amount))
+      setMsg(r.ok ? `Выдано: ${grant.kind} ${grant.amount} → ${r.user_id}` : `Не выдал: ${r.error}`)
+    } catch (e) {
+      setMsg((e && e.detail) || 'Ошибка выдачи')
+    }
+  }
+
+  const createPromo = async () => {
+    try {
+      const r = await api.adminPromoCreate({ ...promoForm, value: Number(promoForm.value) })
+      setMsg(r.ok ? `Промокод ${r.code} создан` : `Не создал: ${r.error}`)
+      api.adminPromo().then((d) => setPromo({ items: d.items || [], titles: d.titles || {} }))
+    } catch (e) {
+      setMsg((e && e.detail) || 'Ошибка создания промокода')
+    }
+  }
+
+  if (allowed === false) {
+    return (
+      <Screen>
+        <TopBar left={<Logo />} />
+        <ErrorBlock text="Раздел только для администраторов" />
+      </Screen>
+    )
+  }
+
+  const tabs = [['settings', 'Условия'], ['grant', 'Выдача'], ['promo', 'Промокоды'],
+    ['metrics', 'Метрики'], ['history', 'История']]
+
+  return (
+    <Screen>
+      <TopBar left={<Logo />} />
+      <h2 className="section-title">Админ</h2>
+      <div className="chat-tabs">
+        {tabs.map(([key, label]) => (
+          <button key={key} type="button"
+            className={tab === key ? 'chat-tab is-active' : 'chat-tab'}
+            onClick={() => setTab(key)}>{label}</button>
+        ))}
+      </div>
+      {msg ? <div className="chat-note">{msg}</div> : null}
+
+      {tab === 'settings' ? (
+        <div className="list-stack mt-8">
+          {Object.entries(settings).map(([key, s]) => (
+            <div key={key} className="plan-row glass-card">
+              <div className="plan-left">
+                <div className="plan-name">{s.title || key}</div>
+                <div className="plan-desc">
+                  {key} · сейчас {String(s.value)}
+                  {s.min !== null && s.min !== undefined ? ` · допустимо ${s.min}…${s.max}` : ''}
+                </div>
+              </div>
+              <div className="admin-actions">
+                <input className="text-input admin-input" type="number"
+                  value={draft[key] !== undefined ? draft[key] : s.value}
+                  onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+                <button type="button" className="chat-chip" onClick={() => save(key)}>Сохранить</button>
+                <button type="button" className="link-btn" onClick={() => rollback(key)}>Откат</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'grant' ? (
+        <div className="list-stack mt-8">
+          <div className="glass-card plan-row">
+            <div className="plan-left">
+              <div className="plan-name">Выдать пользователю</div>
+              <div className="plan-desc">id или @username · Плюс, монеты, слот, пробный</div>
+            </div>
+          </div>
+          <input className="text-input" placeholder="id или @username"
+            value={grant.user} onChange={(e) => setGrant({ ...grant, user: e.target.value })} />
+          <select className="text-input" value={grant.kind}
+            onChange={(e) => setGrant({ ...grant, kind: e.target.value })}>
+            <option value="coins">монеты</option>
+            <option value="plus_days">дней «Плюса»</option>
+            <option value="criterion_days">дней доп. критерия</option>
+            <option value="trial_days">дней пробного</option>
+            <option value="plan_free">сбросить на бесплатный</option>
+          </select>
+          <input className="text-input" type="number" value={grant.amount}
+            onChange={(e) => setGrant({ ...grant, amount: e.target.value })} />
+          <button type="button" className="cta-primary" onClick={doGrant}>Выдать</button>
+        </div>
+      ) : null}
+
+      {tab === 'promo' ? (
+        <div className="list-stack mt-8">
+          <input className="text-input" placeholder="КОД"
+            value={promoForm.code} onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value })} />
+          <select className="text-input" value={promoForm.kind}
+            onChange={(e) => setPromoForm({ ...promoForm, kind: e.target.value })}>
+            <option value="coins">монеты</option>
+            <option value="plus_days">дни «Плюса»</option>
+            <option value="criterion_days">дни доп. критерия</option>
+            <option value="trial_days">дни пробного</option>
+          </select>
+          <input className="text-input" type="number" value={promoForm.value}
+            onChange={(e) => setPromoForm({ ...promoForm, value: e.target.value })} />
+          <input className="text-input" type="number" placeholder="сколько активаций (0 — без предела)"
+            value={promoForm.max_uses}
+            onChange={(e) => setPromoForm({ ...promoForm, max_uses: e.target.value })} />
+          <button type="button" className="cta-primary" onClick={createPromo}>Создать промокод</button>
+          {(promo.items || []).map((c) => (
+            <div key={c.id} className="plan-row glass-card">
+              <div className="plan-left">
+                <div className="plan-name">{c.code}</div>
+                <div className="plan-desc">
+                  {promo.titles?.[c.kind] || c.kind}: {c.value} · активаций {c.uses}
+                  {c.max_uses ? ` из ${c.max_uses}` : ''} · {c.active ? 'включён' : 'выключен'}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {tab === 'metrics' && metrics ? (
+        <div className="list-stack mt-8">
+          {[['Пользователей', metrics.users], ['Критериев активно', metrics.criteria_active],
+            ['Решений', metrics.matches], ['Отправлено', metrics.sent],
+            ['Находок в базе', metrics.findings], ['Монет на руках', metrics.coins_left],
+            ['Покупок', metrics.payments], ['Звёзд получено', metrics.stars],
+            ['Приём, мс', metrics.ingest?.last_ms], ['Лаг цикла, мс', metrics.loop_lag?.max_ms]].map(
+            ([label, value]) => (
+              <div key={label} className="plan-row glass-card">
+                <div className="plan-left"><div className="plan-name">{label}</div></div>
+                <div className="plan-balance">{String(value ?? 0)}</div>
+              </div>
+            ))}
+          {metrics.plans ? (
+            <div className="plan-row glass-card">
+              <div className="plan-left">
+                <div className="plan-name">Планы</div>
+                <div className="plan-desc">
+                  {Object.entries(metrics.plans).map(([k, v]) => `${k || 'новые'}: ${v}`).join(' · ')}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {tab === 'history' ? (
+        <div className="list-stack mt-8">
+          {history.map((h) => (
+            <div key={h.id} className="plan-row glass-card">
+              <div className="plan-left">
+                <div className="plan-name">{h.key}</div>
+                <div className="plan-desc">
+                  {h.old_json} → {h.new_json} · {String(h.changed_at || '').slice(0, 16)}
+                  {h.reason ? ` · ${h.reason}` : ''}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
     </Screen>
   )
 }
@@ -3086,6 +3344,7 @@ function Layout() {
         <Route path="/hunt/manual" element={<CriteriaPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/tariffs" element={<TariffsPage />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/chats" element={<ChatsPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
       </Routes>

@@ -365,3 +365,8 @@
 .plan-price { margin-left: var(--space-2); font-weight: 600; }
 .plan-price s { color: var(--text-tertiary); font-weight: 400; }
 .plan-balance { font-size: 17px; font-weight: 800; color: var(--accent); }
+
+/* Админка (этап J): строка настройки с полем и кнопками */
+.admin-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
+.admin-input { width: 92px; }
+.chat-tab { cursor: pointer; }

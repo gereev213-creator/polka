@@ -337,6 +337,24 @@ export const api = {
   payInvoice: (product) => request('/api/pay/invoice',
     { method: 'POST', body: JSON.stringify({ product }) }),
   getReferral: () => request('/api/referral'),
+  // Промокод: активировать (этап J)
+  redeemPromo: (code) => request('/api/promo/redeem',
+    { method: 'POST', body: JSON.stringify({ code }) }),
+
+  // ── Админка (этап J): доступ только администраторам ──────────────────────
+  adminMe: () => request('/api/admin/me'),
+  adminSettings: () => request('/api/admin/settings'),
+  adminSet: (key, value, reason) => request('/api/admin/settings',
+    { method: 'POST', body: JSON.stringify({ key, value, reason }) }),
+  adminRollback: (key) => request('/api/admin/settings/rollback',
+    { method: 'POST', body: JSON.stringify({ key }) }),
+  adminHistory: (key = '') => request(`/api/admin/history?key=${encodeURIComponent(key)}`),
+  adminGrant: (user, kind, amount) => request('/api/admin/grant',
+    { method: 'POST', body: JSON.stringify({ user, kind, amount }) }),
+  adminPromo: () => request('/api/admin/promo'),
+  adminPromoCreate: (body) => request('/api/admin/promo', { method: 'POST', body: JSON.stringify(body) }),
+  adminMetrics: () => request('/api/admin/metrics'),
+  adminPurchases: () => request('/api/admin/purchases'),
 }
 
 // Открывает ссылку оплаты Telegram Stars (XTR) в WebApp

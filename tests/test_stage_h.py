@@ -81,7 +81,15 @@ ns = {'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'Dict': Dict, 'List'
       'ZoneInfo': ZoneInfo, 'db': FakeDb(conn), 'logger': FakeLog(),
       'get_moscow_time': lambda: NOW,
       '_setting_get': lambda k, d='': settings.get(k, d),
-      '_setting_set': lambda k, v: settings.__setitem__(k, v)}
+      '_setting_set': lambda k, v: settings.__setitem__(k, v),
+      # этап J: значения по умолчанию из схемы настроек
+      'cfg_get': lambda key, default=None: {
+          'free.max_criteria': 1, 'trial.max_criteria': 5, 'plus.max_criteria': 10,
+          'free.delay_min': 10, 'trial.days': 7, 'plus.price_rub': 99,
+          'plus.price_display_old': 149, 'ref.max_bonus': 3}.get(key, default),
+      '_plus_subscription': lambda uid: None,
+      'cfg_ab_free_limit': lambda: 0,
+      '_cfg_ab_bucket': lambda uid: False}
 picked = []
 for chunk in chunks(SRC):
     n = name_of(chunk)

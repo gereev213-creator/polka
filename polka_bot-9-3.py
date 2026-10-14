@@ -12736,8 +12736,8 @@ async def recover_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             pass
 
-async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Выдача лимитов пользователю (/grant user_id [service] [amount])"""
+async def _grant_limits_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Прежняя выдача лимитов (/grant user_id service amount): фото, объявления, ИИ."""
     user = update.effective_user
     if not await is_admin(user.id):
         await update.message.reply_text(f"{EM_FAIL} У вас нет доступа")
@@ -13144,7 +13144,8 @@ async def _do_republish(ad_id: int, context: ContextTypes.DEFAULT_TYPE, msg, use
         await msg.reply_text(f"{EM_FAIL} Не удалось опубликовать #{ad_id} в MAX.\n\nПроверьте MAX_BOT_TOKEN и MAX_CHANNEL_ID.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]]))
 
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _admin_panel_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Прежняя панель разделов (/admin): модерация, платежи, рассылка, промокоды."""
     user = update.effective_user
     
     if not await is_admin(user.id):
@@ -18339,8 +18340,16 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         used = int(cur.fetchone()['n'] or 0)
     except Exception:
         used = 0
+    is_admin_flag = False
+    try:
+        is_admin_flag = bool(await is_admin(viewer_id))
+    except Exception:
+        is_admin_flag = False
+    if not is_admin_flag and int(viewer_id) in ADMIN_TELEGRAM_IDS:
+        is_admin_flag = True
     return _miniapp_json({
         'plan': plan['name'],
+        'is_admin': is_admin_flag,
         'trial_days_left': plan['trial_days_left'],
         'criteria_used': used,
         'criteria_limit': limit,
@@ -18366,7 +18375,7 @@ async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
     now = get_moscow_time().isoformat()
 
     if kind == 'unlock':
-        if not coins_spend(viewer_id, COIN_UNLOCK_PRICE, 'unlock'):
+        if not coins_spend(viewer_id, int(cfg_get('unlock.coins')), 'unlock'):
             return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
         if ad_id:
             try:
@@ -18380,7 +18389,7 @@ async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
         _plan_event(viewer_id, 'unlock_used', {'ad_id': ad_id})
         hunt_wake()
     elif kind == 'deep_check':
-        if not coins_spend(viewer_id, COIN_DEEP_CHECK_PRICE, 'deep_check'):
+        if not coins_spend(viewer_id, int(cfg_get('deep_check.coins')), 'deep_check'):
             return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
         if ad_id:
             try:
@@ -18394,7 +18403,7 @@ async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
                 pass
         _plan_event(viewer_id, 'deep_check_used', {'ad_id': ad_id})
     elif kind == 'criterion_day':
-        if not coins_spend(viewer_id, COIN_CRITERION_DAY_PRICE, 'criterion_day'):
+        if not coins_spend(viewer_id, int(cfg_get('day_slot.coins')), 'criterion_day'):
             return _miniapp_json({'ok': False, 'error': 'insufficient_coins'}, status=402)
         try:
             exp = (get_moscow_time() + timedelta(hours=24)).isoformat()
@@ -18424,7 +18433,10 @@ async def api_pay_invoice(request: aiohttp_web.Request) -> aiohttp_web.Response:
     if not app:
         return _miniapp_err('no_bot', 503)
     if product == 'plus_month':
-        title, desc, stars = "ПОЛКА Плюс на месяц",             "10 критериев, без задержки, тщательный отбор по описанию и «цена снижена»", PLUS_STARS
+        title = "ПОЛКА Плюс на месяц"
+        desc = (f"{int(cfg_get('plus.max_criteria'))} критериев, без задержки, "
+                "тщательный отбор по описанию и «цена снижена»")
+        stars = int(cfg_get('plus.stars'))
     elif product in COIN_PACKS:
         coins, stars = COIN_PACKS[product]
         title, desc = f"{coins} монет", "Монеты для «Открыть сейчас» и «Тщательной проверки»"
@@ -18595,9 +18607,19 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
     Токен тот же, что у сборщика (INGEST_TOKEN): посторонним не отдаём.
     """
+    # Доступ: токен сборщика (как было) ИЛИ администратор из Mini App (K1)
     expected = os.environ.get('INGEST_TOKEN', '')
     got = _ingest_token_ok(request)
-    if not expected or not hmac.compare_digest(str(got), str(expected)):
+    allowed = bool(expected) and hmac.compare_digest(str(got), str(expected))
+    if not allowed:
+        _viewer = _miniapp_viewer(request)
+        try:
+            allowed = bool(_viewer) and bool(await is_admin(_viewer))
+        except Exception:
+            allowed = False
+        if not allowed and int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
+            allowed = True
+    if not allowed:
         return _miniapp_err('forbidden', 403)
 
     out: Dict = {}
@@ -18700,6 +18722,17 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
         out['criteria_error'] = str(e)[:200]
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
+    # ── Этап K1: задержки запросов и блокировки цикла событий ──────────────
+    out['loop_lag'] = dict(_LOOP_LAG)
+    out['ingest_last'] = dict(_INGEST_STATS)
+    out['ingest_async'] = os.environ.get('INGEST_ASYNC', '1') == '1'
+    out['medians_debounce_sec'] = MEDIANS_DEBOUNCE_SEC
+    out['slow_ms'] = SLOW_REQUEST_MS
+    out['slow_paths'] = [
+        {'path': _p, 'n': _v['n'], 'avg_ms': int(_v['total_ms'] / max(1, _v['n'])),
+         'max_ms': _v['max_ms'], 'slow': _v['slow']}
+        for _p, _v in sorted(_API_STATS.items(), key=lambda kv: -kv[1]['total_ms'])[:12]
+    ]
     return _miniapp_json(out)
 
 
@@ -21574,6 +21607,428 @@ COIN_PACKS = {
 }
 
 
+# ── ЭТАП J: настройки, которые админ меняет без релиза ──────────────────────
+# Значения по умолчанию живут в коде (константы выше) и применяются, если
+# ключа нет в settings_kv. Кэш в памяти инвалидируется мгновенно при записи.
+SETTINGS_SCHEMA: Dict[str, tuple] = {
+    # ключ: (тип, минимум, максимум, значение по умолчанию, подпись)
+    'plus.price_rub': ('int', 0, 100000, PLAN_PLUS_PRICE, 'Цена «Плюса», ₽ в месяц'),
+    'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
+    'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
+    'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
+    'free.max_criteria': ('int', 0, 100, PLAN_FREE_MAX_CRITERIA, 'Критериев на бесплатном'),
+    'trial.max_criteria': ('int', 1, 100, PLAN_TRIAL_MAX_CRITERIA, 'Критериев в пробном'),
+    'plus.max_criteria': ('int', 1, 200, PLAN_PLUS_MAX_CRITERIA, 'Критериев в «Плюсе»'),
+    'ref.max_bonus': ('int', 0, 50, PLAN_REF_MAX_BONUS, 'Бонусных критериев за рефералов'),
+    'free.delay_min': ('int', 0, 1440, PLAN_FREE_DELAY_MIN, 'Задержка находок, минут'),
+    'unlock.coins': ('int', 0, 10000, COIN_UNLOCK_PRICE, '«Открыть сейчас», монет'),
+    'deep_check.coins': ('int', 0, 10000, COIN_DEEP_CHECK_PRICE, '«Тщательная проверка», монет'),
+    'day_slot.coins': ('int', 0, 10000, COIN_CRITERION_DAY_PRICE, '«Критерий на сутки», монет'),
+    'ab.free_max_criteria': ('int', 0, 100, 0, 'A/B: альтернативный лимит (0 — выключено)'),
+    'ab.share_percent': ('int', 0, 100, 50, 'A/B: доля людей на альтернативе, %'),
+    'hunt.fresh_hours': ('int', 1, 8760, HUNT_FRESH_HOURS, 'Свежесть находки, часов'),
+    'hunt.min_discount': ('int', 0, 100, HUNT_MIN_DISCOUNT, 'Мин. скидка для находки, %'),
+    'hunt.min_price_share': ('float', 0.0, 1.0, HUNT_MIN_PRICE_SHARE,
+                             'Мин. доля цены от медианы (0.15 = 15%)'),
+    # константа объявлена ниже по файлу — читаем то же значение из окружения
+    'hunt.suspect_discount': ('int', 0, 100,
+                              int(os.environ.get('HUNT_SUSPECT_DISCOUNT', '70')),
+                              'Скидка «подозрительно дёшево», %'),
+    'hunt.digest_after': ('int', 0, 1000, HUNT_DIGEST_AFTER, 'Сколько находок копить перед дайджестом'),
+    'banner.enabled': ('bool', None, None, 0, 'Показывать баннер в ленте'),
+    'banner.title': ('str', None, None, '', 'Заголовок баннера'),
+    'banner.text': ('str', None, None, '', 'Текст баннера'),
+}
+_SETTINGS_CACHE: Dict[str, Any] = {}
+_SETTINGS_LOADED = False
+
+
+def ensure_admin() -> None:
+    """Таблицы настроек и истории изменений (этап J1). Идемпотентно."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings_kv (
+                key TEXT PRIMARY KEY,
+                value_json TEXT,
+                type TEXT,
+                min_value REAL,
+                max_value REAL,
+                description TEXT,
+                updated_by INTEGER,
+                updated_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS settings_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT,
+                old_json TEXT,
+                new_json TEXT,
+                changed_by INTEGER,
+                changed_at TEXT,
+                reason TEXT
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_settings_history_key "
+                       "ON settings_history(key, id DESC)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_admin: {e}")
+
+
+def _settings_load() -> None:
+    """Читает настройки из базы в кэш (один раз на процесс)."""
+    global _SETTINGS_LOADED
+    _SETTINGS_LOADED = True
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT key, value_json FROM settings_kv")
+        for row in cursor.fetchall():
+            try:
+                _SETTINGS_CACHE[str(row['key'])] = json.loads(row['value_json'])
+            except Exception:
+                continue
+    except Exception as e:
+        logger.warning(f"settings load: {e}")
+
+
+def cfg_get(key: str, default: Any = None) -> Any:
+    """Значение настройки: из базы, иначе — значение по умолчанию из схемы."""
+    if not _SETTINGS_LOADED:
+        _settings_load()
+    if key in _SETTINGS_CACHE:
+        return _SETTINGS_CACHE[key]
+    spec = SETTINGS_SCHEMA.get(key)
+    if spec:
+        return spec[3]
+    return default
+
+
+def _cfg_coerce(key: str, value: Any):
+    """Приводит значение к типу схемы и проверяет диапазон. None — ошибка."""
+    spec = SETTINGS_SCHEMA.get(key)
+    if not spec:
+        return None, 'unknown_key'
+    kind, lo, hi = spec[0], spec[1], spec[2]
+    try:
+        if kind == 'int':
+            val = int(value)
+        elif kind == 'float':
+            val = float(value)
+        elif kind == 'bool':
+            val = 1 if str(value).lower() in ('1', 'true', 'да', 'yes', 'on') else 0
+        else:
+            val = str(value)[:500]
+    except (TypeError, ValueError):
+        return None, 'bad_type'
+    if lo is not None and val < lo:
+        return None, 'too_low'
+    if hi is not None and val > hi:
+        return None, 'too_high'
+    return val, ''
+
+
+def cfg_set(key: str, value: Any, by: int = 0, reason: str = '') -> Dict:
+    """Меняет настройку: проверка диапазона, история, мгновенный кэш (J1/J3)."""
+    spec = SETTINGS_SCHEMA.get(key)
+    if not spec:
+        return {'ok': False, 'error': 'unknown_key'}
+    val, err = _cfg_coerce(key, value)
+    if err:
+        return {'ok': False, 'error': err, 'min': spec[1], 'max': spec[2]}
+    old = cfg_get(key)
+    now = get_moscow_time().isoformat()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "INSERT INTO settings_kv (key, value_json, type, min_value, max_value, description,"
+            " updated_by, updated_at) VALUES (?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, "
+            "updated_by=excluded.updated_by, updated_at=excluded.updated_at",
+            (key, json.dumps(val, ensure_ascii=False), spec[0], spec[1], spec[2], spec[4],
+             int(by or 0), now))
+        cursor.execute("INSERT INTO settings_history (key, old_json, new_json, changed_by,"
+                       " changed_at, reason) VALUES (?,?,?,?,?,?)",
+                       (key, json.dumps(old, ensure_ascii=False), json.dumps(val, ensure_ascii=False),
+                        int(by or 0), now, str(reason or '')[:200]))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"cfg_set {key}: {e}")
+        return {'ok': False, 'error': 'save_failed'}
+    _SETTINGS_CACHE[key] = val          # мгновенная инвалидация — без перезапуска
+    _plan_event(int(by or 0), 'setting_changed', {'key': key, 'old': old, 'new': val})
+    return {'ok': True, 'key': key, 'old': old, 'new': val}
+
+
+def cfg_history(key: str = '', limit: int = 30) -> List[Dict]:
+    cursor = db.conn.cursor()
+    try:
+        if key:
+            cursor.execute("SELECT * FROM settings_history WHERE key=? ORDER BY id DESC LIMIT ?",
+                           (key, int(limit)))
+        else:
+            cursor.execute("SELECT * FROM settings_history ORDER BY id DESC LIMIT ?", (int(limit),))
+        return [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        return []
+
+
+def cfg_rollback(key: str, by: int = 0) -> Dict:
+    """Откат настройки к предыдущему значению из истории (J6)."""
+    rows = cfg_history(key, 2)
+    if not rows:
+        return {'ok': False, 'error': 'no_history'}
+    prev = rows[0].get('old_json')
+    try:
+        value = json.loads(prev) if isinstance(prev, str) else prev
+    except Exception:
+        return {'ok': False, 'error': 'bad_history'}
+    res = cfg_set(key, value, by=by, reason='откат')
+    res['rolled_back_to'] = value
+    return res
+
+
+def cfg_public() -> Dict:
+    """Все настройки со схемой — для админ-экрана."""
+    out = {}
+    for key, spec in SETTINGS_SCHEMA.items():
+        out[key] = {'value': cfg_get(key), 'type': spec[0], 'min': spec[1],
+                    'max': spec[2], 'default': spec[3], 'title': spec[4]}
+    return out
+
+
+def cfg_ab_free_limit() -> int:
+    """A/B-лимит для бесплатных (J2): часть людей видит другой лимит."""
+    alt = int(cfg_get('ab.free_max_criteria') or 0)
+    if alt <= 0:
+        return 0
+    return alt
+
+
+def _cfg_ab_bucket(user_id: int) -> bool:
+    """Попал ли человек в альтернативную группу A/B."""
+    share = int(cfg_get('ab.share_percent') or 0)
+    if share <= 0:
+        return False
+    return (int(user_id) % 100) < share
+
+
+# ── Промокоды под текущую модель (Плюс, монеты, слот, пробный период) ───────
+PROMO_KINDS = ('plus_days', 'coins', 'criterion_days', 'trial_days')
+PROMO_KIND_TITLES = {
+    'plus_days': 'дней «Плюса»',
+    'coins': 'монет',
+    'criterion_days': 'дней дополнительного критерия',
+    'trial_days': 'дней пробного периода',
+}
+
+
+def ensure_promo() -> None:
+    """Таблицы промокодов. Идемпотентно."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS promo_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                kind TEXT NOT NULL,
+                value INTEGER NOT NULL,
+                max_uses INTEGER DEFAULT 0,
+                uses INTEGER DEFAULT 0,
+                per_user INTEGER DEFAULT 1,
+                expires_at TEXT,
+                active INTEGER DEFAULT 1,
+                note TEXT,
+                created_by INTEGER,
+                created_at TEXT
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS promo_redemptions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code_id INTEGER NOT NULL,
+                code TEXT,
+                user_id INTEGER NOT NULL,
+                kind TEXT,
+                value INTEGER,
+                created_at TEXT,
+                UNIQUE(code_id, user_id)
+            )
+        """)
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_promo_redemptions_user "
+                       "ON promo_redemptions(user_id)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_promo: {e}")
+
+
+def promo_create(code: str, kind: str, value: int, max_uses: int = 0, per_user: int = 1,
+                 expires_at: str = '', note: str = '', by: int = 0) -> Dict:
+    """Создаёт промокод. Повтор того же кода — ошибка exists."""
+    code = str(code or '').strip().upper()[:32]
+    if len(code) < 3:
+        return {'ok': False, 'error': 'short_code'}
+    if kind not in PROMO_KINDS:
+        return {'ok': False, 'error': 'bad_kind'}
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        return {'ok': False, 'error': 'bad_value'}
+    if value <= 0:
+        return {'ok': False, 'error': 'bad_value'}
+    value = min(value, 3650 if kind != 'coins' else 100000)
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "INSERT INTO promo_codes (code, kind, value, max_uses, per_user, expires_at, active,"
+            " note, created_by, created_at) VALUES (?,?,?,?,?,?,1,?,?,?)",
+            (code, kind, value, max(0, int(max_uses or 0)), max(1, int(per_user or 1)),
+             str(expires_at or ''), str(note or '')[:200], int(by or 0),
+             get_moscow_time().isoformat()))
+        db.conn.commit()
+        _plan_event(int(by or 0), 'promo_created', {'code': code, 'kind': kind, 'value': value})
+        return {'ok': True, 'code': code, 'id': int(cursor.lastrowid)}
+    except sqlite3.IntegrityError:
+        return {'ok': False, 'error': 'exists'}
+    except Exception as e:
+        logger.warning(f"promo_create: {e}")
+        return {'ok': False, 'error': 'save_failed'}
+
+
+def promo_list(limit: int = 50) -> List[Dict]:
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM promo_codes ORDER BY id DESC LIMIT ?", (int(limit),))
+        return [dict(r) for r in cursor.fetchall()]
+    except Exception:
+        return []
+
+
+def promo_deactivate(code: str, by: int = 0) -> Dict:
+    code = str(code or '').strip().upper()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("UPDATE promo_codes SET active=0 WHERE code=?", (code,))
+        db.conn.commit()
+        if not cursor.rowcount:
+            return {'ok': False, 'error': 'not_found'}
+        _plan_event(int(by or 0), 'promo_off', {'code': code})
+        return {'ok': True, 'code': code}
+    except Exception as e:
+        logger.warning(f"promo_deactivate: {e}")
+        return {'ok': False, 'error': 'save_failed'}
+
+
+def _grant_plus_days(user_id: int, days: int) -> str:
+    """Продлевает «Плюс» на N дней от текущей даты окончания."""
+    now = get_moscow_time()
+    base = now
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT expires_at FROM subscriptions WHERE user_id=? "
+                       "ORDER BY id DESC LIMIT 1", (int(user_id),))
+        row = cursor.fetchone()
+        exp = str(row['expires_at'] or '') if row else ''
+        if exp and exp > now.isoformat():
+            parsed = _safe_isoparse(exp)
+            if parsed is not None:
+                base = parsed
+        expires = (base + timedelta(days=int(days))).isoformat()
+        cursor.execute("INSERT INTO subscriptions (user_id, plan, started_at, expires_at) "
+                       "VALUES (?,?,?,?)", (int(user_id), 'plus', now.isoformat(), expires))
+        db.conn.commit()
+        db.update_user(int(user_id), plan='plus')
+        return expires
+    except Exception as e:
+        logger.warning(f"grant plus days: {e}")
+        return ''
+
+
+def promo_redeem(user_id: int, code: str) -> Dict:
+    """Активирует промокод: проверки, выдача, отметка. Повтор — ошибка."""
+    code = str(code or '').strip().upper()[:32]
+    if not code:
+        return {'ok': False, 'error': 'empty', 'detail': 'Введите промокод'}
+    cursor = db.conn.cursor()
+    now = get_moscow_time()
+    try:
+        cursor.execute("SELECT * FROM promo_codes WHERE code=?", (code,))
+        row = cursor.fetchone()
+    except Exception:
+        return {'ok': False, 'error': 'db_failed'}
+    if not row:
+        return {'ok': False, 'error': 'not_found', 'detail': 'Промокод не найден'}
+    promo = dict(row)
+    if not int(promo.get('active') or 0):
+        return {'ok': False, 'error': 'inactive', 'detail': 'Промокод отключён'}
+    exp = str(promo.get('expires_at') or '')
+    if exp and exp < now.isoformat():
+        return {'ok': False, 'error': 'expired', 'detail': 'Срок промокода истёк'}
+    max_uses = int(promo.get('max_uses') or 0)
+    if max_uses and int(promo.get('uses') or 0) >= max_uses:
+        return {'ok': False, 'error': 'used_up', 'detail': 'Промокод уже разобрали'}
+    try:
+        cursor.execute("SELECT 1 FROM promo_redemptions WHERE code_id=? AND user_id=?",
+                       (int(promo['id']), int(user_id)))
+        if cursor.fetchone():
+            return {'ok': False, 'error': 'already_used',
+                    'detail': 'Вы уже использовали этот промокод'}
+    except Exception:
+        pass
+
+    kind, value = str(promo['kind']), int(promo['value'])
+    granted = ''
+    try:
+        if kind == 'plus_days':
+            _grant_plus_days(int(user_id), value)
+            granted = f'«Плюс» на {value} дн.'
+        elif kind == 'coins':
+            coins_add(int(user_id), value, f'promo:{code}')
+            granted = f'{value} монет'
+        elif kind == 'criterion_days':
+            exp_iso = (now + timedelta(days=value)).isoformat()
+            _setting_set(f'criterion_day:{int(user_id)}', exp_iso)
+            granted = f'дополнительный критерий на {value} дн.'
+        elif kind == 'trial_days':
+            user = db.get_user(int(user_id)) or {}
+            base = user.get('trial_started_at') or now.isoformat()
+            hours = int(_hours_since(base) or 0)
+            new_start = (now - timedelta(hours=max(0, hours - value * 24))).isoformat()
+            db.update_user(int(user_id), plan='trial', trial_started_at=new_start)
+            granted = f'пробный период +{value} дн.'
+        else:
+            return {'ok': False, 'error': 'bad_kind'}
+        cursor.execute("INSERT INTO promo_redemptions (code_id, code, user_id, kind, value,"
+                       " created_at) VALUES (?,?,?,?,?,?)",
+                       (int(promo['id']), code, int(user_id), kind, value, now.isoformat()))
+        cursor.execute("UPDATE promo_codes SET uses=uses+1 WHERE id=?", (int(promo['id']),))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"promo_redeem {code}: {e}")
+        return {'ok': False, 'error': 'grant_failed'}
+    _plan_event(int(user_id), 'promo_used', {'code': code, 'kind': kind, 'value': value})
+    logger.info(f"промокод {code} активирован пользователем {user_id}: {granted}")
+    return {'ok': True, 'code': code, 'kind': kind, 'value': value, 'granted': granted,
+            'balance': coins_balance(int(user_id))}
+
+
+async def api_promo_redeem(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/promo/redeem {code} — активировать промокод."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    res = await asyncio.to_thread(_db_locked, promo_redeem, viewer_id,
+                                  str((body or {}).get('code') or ''))
+    if not res.get('ok'):
+        return _miniapp_json(res, status=400)
+    return _miniapp_json(res)
+
+
 def ensure_monetization() -> None:
     """Таблицы и колонки монетизации (этап H2). Всё идемпотентно."""
     cursor = db.conn.cursor()
@@ -21658,16 +22113,48 @@ def _referral_criteria_bonus(user_id: int) -> int:
         cur = db.conn.cursor()
         cur.execute("SELECT COUNT(*) AS n FROM referrals WHERE referrer_id=?", (int(user_id),))
         row = cur.fetchone()
-        return min(int(row['n'] or 0) if row else 0, PLAN_REF_MAX_BONUS)
+        return int(row['n'] or 0) if row else 0
     except Exception:
         return 0
 
 
+def _plus_subscription(user_id: int):
+    """True/False — активна ли платная подписка, None — подписки нет вовсе.
+
+    Купленный «Плюс» живёт до expires_at: без этого оплаченный месяц был бы
+    вечным (J5/H3). План, выданный админом, подписки не имеет и не сгорает.
+    """
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT expires_at FROM subscriptions WHERE user_id=? "
+                       "ORDER BY id DESC LIMIT 1", (int(user_id),))
+        row = cursor.fetchone()
+    except Exception:
+        return None
+    if not row:
+        return None
+    exp = str(row['expires_at'] or '')
+    return bool(exp) and exp > get_moscow_time().isoformat()
+
+
 def _user_plan(user_id: int) -> Dict:
-    """План человека: free / trial / plus + лимиты, задержка, тщательный отбор."""
+    """План человека: free / trial / plus + лимиты, задержка, тщательный отбор.
+
+    Все числа берутся из настроек (этап J): админ меняет их без релиза.
+    """
     user = db.get_user(int(user_id)) or {}
     plan = str(user.get('plan') or '')
     now = get_moscow_time()
+    # Купленная подписка: кончилась — снимаем «Плюс» и приостанавливаем лишнее
+    if plan == 'plus':
+        active = _plus_subscription(int(user_id))
+        if active is False:
+            plan = 'free'
+            try:
+                db.update_user(int(user_id), plan='free')
+            except Exception:
+                pass
+            _pause_extra_criteria(int(user_id), int(cfg_get('free.max_criteria')))
     if plan not in ('trial', 'plus', 'free'):
         plan = 'trial'  # пробный период с первого входа
         trial_started = (user.get('trial_started_at') or user.get('registration_date')
@@ -21679,9 +22166,10 @@ def _user_plan(user_id: int) -> Dict:
     else:
         trial_started = (user.get('trial_started_at') or user.get('registration_date')
                          or now.isoformat())
+    trial_days = int(cfg_get('trial.days'))
     if plan == 'trial':
         hours = int(_hours_since(trial_started) or 0)
-        days_left = max(0, PLAN_TRIAL_DAYS - hours // 24)
+        days_left = max(0, trial_days - hours // 24)
         if days_left <= 0:
             # Пробный период закончился: переводим на free и приостанавливаем лишнее
             plan = 'free'
@@ -21689,24 +22177,31 @@ def _user_plan(user_id: int) -> Dict:
                 db.update_user(int(user_id), plan='free')
             except Exception:
                 pass
-            _pause_extra_criteria(int(user_id), PLAN_FREE_MAX_CRITERIA)
+            _pause_extra_criteria(int(user_id), int(cfg_get('free.max_criteria')))
         else:
             return {'name': 'trial', 'trial_days_left': days_left,
-                    'criteria_limit': PLAN_TRIAL_MAX_CRITERIA, 'delay_min': 0,
-                    'deep_check': True, 'price': 0, 'show_price': PLAN_PLUS_SHOW_PRICE}
+                    'criteria_limit': int(cfg_get('trial.max_criteria')), 'delay_min': 0,
+                    'deep_check': True, 'price': 0,
+                    'show_price': int(cfg_get('plus.price_display_old'))}
     if plan == 'plus':
         return {'name': 'plus', 'trial_days_left': 0,
-                'criteria_limit': PLAN_PLUS_MAX_CRITERIA, 'delay_min': 0,
-                'deep_check': True, 'price': PLAN_PLUS_PRICE,
-                'show_price': PLAN_PLUS_SHOW_PRICE}
+                'criteria_limit': int(cfg_get('plus.max_criteria')), 'delay_min': 0,
+                'deep_check': True, 'price': int(cfg_get('plus.price_rub')),
+                'show_price': int(cfg_get('plus.price_display_old'))}
+    # A/B: часть бесплатных видит другой лимит (J2)
+    free_limit = int(cfg_get('free.max_criteria'))
+    alt = cfg_ab_free_limit()
+    if alt and _cfg_ab_bucket(int(user_id)):
+        free_limit = alt
     return {'name': 'free', 'trial_days_left': 0,
-            'criteria_limit': PLAN_FREE_MAX_CRITERIA, 'delay_min': PLAN_FREE_DELAY_MIN,
-            'deep_check': False, 'price': 0, 'show_price': PLAN_PLUS_SHOW_PRICE}
+            'criteria_limit': free_limit, 'delay_min': int(cfg_get('free.delay_min')),
+            'deep_check': False, 'price': 0,
+            'show_price': int(cfg_get('plus.price_display_old'))}
 
 
 def _criteria_limit(user_id: int) -> int:
     p = _user_plan(int(user_id))
-    bonus = _referral_criteria_bonus(int(user_id))
+    bonus = min(_referral_criteria_bonus(int(user_id)), int(cfg_get('ref.max_bonus')))
     # «Критерий на сутки» за монеты — временный +1 слот (этап H4)
     try:
         exp = _setting_get(f'criterion_day:{int(user_id)}', '')
@@ -25659,29 +26154,415 @@ async def _loop_lag_loop():
             pass
 
 
-async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/diag — задержки запросов, приём находок, блокировки цикла (K1).
+# ── ЭТАП J: админ-доступ и ограничение частоты ──────────────────────────────
+ADMIN_TELEGRAM_IDS = [int(x.strip()) for x in
+                      os.environ.get('ADMIN_TELEGRAM_IDS', '').split(',')
+                      if x.strip().isdigit()]
+_ADMIN_OPS: Dict[int, List[float]] = {}
+ADMIN_OPS_PER_MIN = int(os.environ.get('ADMIN_OPS_PER_MIN', '60'))
 
-    Только для администратора: показывает, что именно тормозит сервис.
-    """
+
+def _admin_rate_ok(user_id: int) -> bool:
+    """Ограничение частоты админ-запросов: не больше ADMIN_OPS_PER_MIN в минуту."""
+    now = _time.time()
+    ops = [ts for ts in _ADMIN_OPS.get(int(user_id), []) if now - ts < 60]
+    ops.append(now)
+    _ADMIN_OPS[int(user_id)] = ops
+    return len(ops) <= ADMIN_OPS_PER_MIN
+
+
+async def _admin_guard(request):
+    """Возвращает (user_id, None) для админа или (None, ответ с ошибкой)."""
     viewer_id = _miniapp_viewer(request)
     if not viewer_id:
-        return _miniapp_err('forbidden', 403)
+        return None, _miniapp_err('unauthorized', 401)
+    ok = False
     try:
-        if not await is_admin(viewer_id):
-            return _miniapp_err('forbidden', 403)
+        ok = bool(await is_admin(viewer_id))
     except Exception:
-        return _miniapp_err('forbidden', 403)
-    rows = sorted(_API_STATS.items(), key=lambda kv: -kv[1]['total_ms'])[:15]
-    return _miniapp_json({
-        'loop_lag': dict(_LOOP_LAG),
-        'ingest': dict(_INGEST_STATS),
-        'slow_ms': SLOW_REQUEST_MS,
-        'requests': [{'path': p, 'n': v['n'], 'avg_ms': int(v['total_ms'] / max(1, v['n'])),
-                      'max_ms': v['max_ms'], 'slow': v['slow']} for p, v in rows],
-        'ingest_async': os.environ.get('INGEST_ASYNC', '1') == '1',
-        'medians_debounce_sec': MEDIANS_DEBOUNCE_SEC,
-    })
+        ok = False
+    if not ok and int(viewer_id) in ADMIN_TELEGRAM_IDS:
+        ok = True
+    if not ok:
+        return None, _miniapp_err('forbidden', 403)
+    if not _admin_rate_ok(viewer_id):
+        return None, _miniapp_json({'error': 'too_many', 'detail': 'Слишком часто, подождите'},
+                                   status=429)
+    return int(viewer_id), None
+
+
+async def api_admin_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/admin/me — админ ли текущий пользователь."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    ok = False
+    try:
+        ok = bool(await is_admin(viewer_id))
+    except Exception:
+        ok = False
+    if not ok and int(viewer_id) in ADMIN_TELEGRAM_IDS:
+        ok = True
+    return _miniapp_json({'is_admin': ok, 'user_id': int(viewer_id)})
+
+
+async def api_admin_settings(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET/POST /api/admin/settings — чтение и изменение условий без релиза."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    if request.method == 'GET':
+        return _miniapp_json({'items': cfg_public()})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    res = cfg_set(str((body or {}).get('key') or ''), (body or {}).get('value'),
+                  by=admin_id, reason=str((body or {}).get('reason') or ''))
+    if not res.get('ok'):
+        return _miniapp_json(res, status=400)
+    return _miniapp_json(res)
+
+
+async def api_admin_rollback(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/settings/rollback {key} — вернуть прежнее значение."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    res = cfg_rollback(str((body or {}).get('key') or ''), by=admin_id)
+    if not res.get('ok'):
+        return _miniapp_json(res, status=400)
+    return _miniapp_json(res)
+
+
+async def api_admin_history(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/admin/history — кто и что менял."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    key = request.query.get('key', '')
+    try:
+        limit = min(max(int(request.query.get('limit', 30) or 30), 1), 200)
+    except ValueError:
+        limit = 30
+    return _miniapp_json({'items': cfg_history(key, limit)})
+
+
+async def _admin_find_user(raw: str) -> int:
+    """Ищет пользователя по id или @username."""
+    text = str(raw or '').strip().lstrip('@')
+    if not text:
+        return 0
+    if text.isdigit():
+        return int(text)
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT user_id FROM users WHERE username=? "
+                       "OR username=? LIMIT 1", (text, '@' + text))
+        row = cursor.fetchone()
+        return int(row['user_id']) if row else 0
+    except Exception:
+        return 0
+
+
+async def api_admin_grant(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/grant {user, kind, amount} — выдать подписку или монеты."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    target = await _admin_find_user(str((body or {}).get('user') or ''))
+    if not target:
+        return _miniapp_json({'ok': False, 'error': 'user_not_found'}, status=404)
+    kind = str((body or {}).get('kind') or '')
+    try:
+        amount = int((body or {}).get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    if kind == 'plus_days':
+        if amount <= 0:
+            return _miniapp_json({'ok': False, 'error': 'bad_amount'}, status=400)
+        expires = _grant_plus_days(target, amount)
+        res = {'ok': True, 'kind': kind, 'amount': amount, 'expires_at': expires}
+    elif kind == 'coins':
+        if amount == 0:
+            return _miniapp_json({'ok': False, 'error': 'bad_amount'}, status=400)
+        balance = coins_add(target, amount, f'admin:{admin_id}')
+        res = {'ok': True, 'kind': kind, 'amount': amount, 'balance': balance}
+    elif kind == 'criterion_days':
+        if amount <= 0:
+            return _miniapp_json({'ok': False, 'error': 'bad_amount'}, status=400)
+        exp = (get_moscow_time() + timedelta(days=amount)).isoformat()
+        _setting_set(f'criterion_day:{target}', exp)
+        res = {'ok': True, 'kind': kind, 'amount': amount, 'until': exp}
+    elif kind == 'trial_days':
+        user = db.get_user(target) or {}
+        now = get_moscow_time()
+        base = user.get('trial_started_at') or now.isoformat()
+        hours = int(_hours_since(base) or 0)
+        new_start = (now - timedelta(hours=max(0, hours - amount * 24))).isoformat()
+        db.update_user(target, plan='trial', trial_started_at=new_start)
+        res = {'ok': True, 'kind': kind, 'amount': amount}
+    elif kind == 'plan_free':
+        db.update_user(target, plan='free')
+        _pause_extra_criteria(target, int(cfg_get('free.max_criteria')))
+        res = {'ok': True, 'kind': kind, 'amount': 0}
+    else:
+        return _miniapp_json({'ok': False, 'error': 'bad_kind'}, status=400)
+    _plan_event(admin_id, 'admin_grant', {'target': target, 'kind': kind, 'amount': amount})
+    logger.info(f"админ {admin_id} выдал {kind} {amount} пользователю {target}")
+    res['user_id'] = target
+    return _miniapp_json(res)
+
+
+async def api_admin_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET/POST /api/admin/promo — список и создание промокодов."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    if request.method == 'GET':
+        return _miniapp_json({'items': promo_list(100), 'kinds': list(PROMO_KINDS),
+                              'titles': PROMO_KIND_TITLES})
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if str((body or {}).get('action') or '') == 'deactivate':
+        res = promo_deactivate(str((body or {}).get('code') or ''), by=admin_id)
+        return _miniapp_json(res, status=200 if res.get('ok') else 400)
+    res = promo_create(
+        code=str((body or {}).get('code') or ''),
+        kind=str((body or {}).get('kind') or ''),
+        value=(body or {}).get('value') or 0,
+        max_uses=(body or {}).get('max_uses') or 0,
+        per_user=(body or {}).get('per_user') or 1,
+        expires_at=str((body or {}).get('expires_at') or ''),
+        note=str((body or {}).get('note') or ''),
+        by=admin_id)
+    return _miniapp_json(res, status=200 if res.get('ok') else 400)
+
+
+async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/admin/metrics — воронка, деньги, задержки (J4, H8)."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+
+    def _collect():
+        cursor = db.conn.cursor()
+        out: Dict[str, Any] = {}
+        def one(sql, params=()):
+            try:
+                cursor.execute(sql, params)
+                row = cursor.fetchone()
+                return int(row[0] or 0) if row else 0
+            except Exception:
+                return 0
+        out['users'] = one("SELECT COUNT(*) FROM users")
+        out['criteria_active'] = one("SELECT COUNT(*) FROM hunt_criteria WHERE active=1")
+        out['matches'] = one("SELECT COUNT(*) FROM hunt_matches")
+        out['sent'] = one("SELECT COUNT(*) FROM hunt_matches WHERE status='sent'")
+        out['findings'] = one("SELECT COUNT(*) FROM ads WHERE source IS NOT NULL "
+                              "AND source <> 'polka'")
+        out['coins_left'] = one("SELECT COALESCE(SUM(balance),0) FROM coin_wallets")
+        out['payments'] = one("SELECT COUNT(*) FROM purchases")
+        out['stars'] = one("SELECT COALESCE(SUM(amount_stars),0) FROM purchases")
+        try:
+            cursor.execute("SELECT plan, COUNT(*) AS n FROM users GROUP BY plan")
+            out['plans'] = {str(r['plan'] or 'новые'): int(r['n']) for r in cursor.fetchall()}
+        except Exception:
+            out['plans'] = {}
+        try:
+            cursor.execute("SELECT name, COUNT(*) AS n FROM events GROUP BY name "
+                           "ORDER BY n DESC LIMIT 20")
+            out['events'] = {str(r['name']): int(r['n']) for r in cursor.fetchall()}
+        except Exception:
+            out['events'] = {}
+        return out
+
+    metrics = await asyncio.to_thread(_db_locked, _collect)
+    metrics['ingest'] = dict(_INGEST_STATS)
+    metrics['loop_lag'] = dict(_LOOP_LAG)
+    metrics['ingest_async'] = os.environ.get('INGEST_ASYNC', '1') == '1'
+    return _miniapp_json(metrics)
+
+
+async def api_admin_purchases(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/admin/purchases — список покупок с фильтром по статусу."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    try:
+        limit = min(max(int(request.query.get('limit', 50) or 50), 1), 200)
+    except ValueError:
+        limit = 50
+
+    def _rows():
+        cursor = db.conn.cursor()
+        try:
+            cursor.execute("SELECT * FROM purchases ORDER BY id DESC LIMIT ?", (limit,))
+            return [dict(r) for r in cursor.fetchall()]
+        except Exception:
+            return []
+
+    return _miniapp_json({'items': await asyncio.to_thread(_db_locked, _rows)})
+
+
+# ── Команды бота: промокод и админские (J4) ────────────────────────────────
+async def promo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /promo КОД — активировать промокод """
+    args = context.args or []
+    code = str(args[0] if args else '').strip()
+    if not code:
+        await update.message.reply_text(
+            "Напишите код так: <code>/promo ПОЛКА2026</code>", parse_mode=ParseMode.HTML)
+        return
+    res = await asyncio.to_thread(_db_locked, promo_redeem, update.effective_user.id, code)
+    if res.get('ok'):
+        await update.message.reply_text(
+            f"Промокод активирован: <b>{_hunt_escape(res.get('granted') or '')}</b>.",
+            parse_mode=ParseMode.HTML)
+    else:
+        await update.message.reply_text(res.get('detail') or 'Промокод не подошёл.')
+
+
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /admin — условия сейчас + прежняя панель разделов """
+    if not await is_admin(update.effective_user.id):
+        return
+    rows = [
+        ('Цена «Плюса»', f"{cfg_get('plus.price_rub')} ₽ (показываем {cfg_get('plus.price_display_old')} ₽)"),
+        ('Пробный период', f"{cfg_get('trial.days')} дн., {cfg_get('trial.max_criteria')} критериев"),
+        ('Лимиты критериев', f"бесплатно {cfg_get('free.max_criteria')}, "
+                             f"плюс {cfg_get('plus.max_criteria')}"),
+        ('Задержка бесплатным', f"{cfg_get('free.delay_min')} мин"),
+        ('Монеты', f"открыть {cfg_get('unlock.coins')}, проверка {cfg_get('deep_check.coins')}, "
+                   f"слот {cfg_get('day_slot.coins')}"),
+        ('Пороги отбора', f"скидка {cfg_get('hunt.min_discount')}%, "
+                          f"свежесть {cfg_get('hunt.fresh_hours')} ч"),
+    ]
+    text = '<b>Условия сейчас</b>\n' + '\n'.join(
+        f"• {_hunt_escape(k)}: <b>{_hunt_escape(str(v))}</b>" for k, v in rows)
+    text += ('\n\nМенять: <code>/set ключ значение</code>, например '
+             '<code>/set plus.price_rub 149</code>.\nВсе ключи — в приложении, '
+             'экран «Админ».')
+    await update.message.reply_text(text, parse_mode=ParseMode.HTML)
+    # Прежняя панель разделов остаётся: модерация, платежи, рассылка, промокоды
+    try:
+        await _admin_panel_legacy(update, context)
+    except Exception as e:
+        logger.warning(f"admin panel: {e}")
+
+
+async def set_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /set ключ значение [причина] — поменять условие без релиза """
+    if not await is_admin(update.effective_user.id):
+        return
+    args = context.args or []
+    if len(args) < 2:
+        keys = ', '.join(f'<code>{_hunt_escape(k)}</code>' for k in list(SETTINGS_SCHEMA)[:12])
+        await update.message.reply_text(
+            f"Формат: <code>/set ключ значение</code>\nКлючи: {keys}",
+            parse_mode=ParseMode.HTML)
+        return
+    key = str(args[0]).strip()
+    value = str(args[1]).strip()
+    reason = ' '.join(args[2:])[:200]
+    res = cfg_set(key, value, by=update.effective_user.id, reason=reason or 'через бота')
+    if res.get('ok'):
+        await update.message.reply_text(
+            f"<b>{_hunt_escape(key)}</b>: было {_hunt_escape(str(res['old']))}, "
+            f"стало {_hunt_escape(str(res['new']))}", parse_mode=ParseMode.HTML)
+    else:
+        spec = SETTINGS_SCHEMA.get(key) or ()
+        extra = f" (допустимо {spec[1]}…{spec[2]})" if len(spec) > 2 and spec[1] is not None else ''
+        await update.message.reply_text(
+            f"Не поменял: {_hunt_escape(str(res.get('error')))}{_hunt_escape(extra)}")
+
+
+async def price_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /price 149 — цена «Плюса» в рублях """
+    if not await is_admin(update.effective_user.id):
+        return
+    args = context.args or []
+    if args:
+        cfg_set('plus.price_rub', args[0], by=update.effective_user.id, reason='команда /price')
+    await update.message.reply_text(
+        f"Цена «Плюса»: <b>{cfg_get('plus.price_rub')} ₽</b> "
+        f"(зачёркнуто {cfg_get('plus.price_display_old')} ₽)",
+        parse_mode=ParseMode.HTML)
+
+
+async def limits_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /limits 1 5 10 — критериев: бесплатно, пробный, плюс """
+    if not await is_admin(update.effective_user.id):
+        return
+    args = context.args or []
+    if len(args) >= 3:
+        for key, val in (('free.max_criteria', args[0]), ('trial.max_criteria', args[1]),
+                         ('plus.max_criteria', args[2])):
+            cfg_set(key, val, by=update.effective_user.id, reason='команда /limits')
+    await update.message.reply_text(
+        f"Лимиты критериев: бесплатно <b>{cfg_get('free.max_criteria')}</b>, "
+        f"пробный <b>{cfg_get('trial.max_criteria')}</b>, "
+        f"плюс <b>{cfg_get('plus.max_criteria')}</b>",
+        parse_mode=ParseMode.HTML)
+
+
+async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """ /grant @user coins 100 | plus_days 30 | criterion_days 1 """
+    if not await is_admin(update.effective_user.id):
+        return
+    args = context.args or []
+    if len(args) < 3:
+        await update.message.reply_text(
+            "Формат: <code>/grant @user coins 100</code>\n"
+            "Что можно: plus_days, coins, criterion_days, trial_days, plan_free",
+            parse_mode=ParseMode.HTML)
+        return
+    target = await _admin_find_user(args[0])
+    if not target:
+        await update.message.reply_text("Пользователь не найден (нужен id или @username).")
+        return
+    try:
+        amount = int(args[2])
+    except ValueError:
+        amount = 0
+    kind = str(args[1]).strip()
+    if kind == 'plus_days':
+        expires = _grant_plus_days(target, amount)
+        text = f"«Плюс» на {amount} дн. до {_hunt_escape(expires[:10])}"
+    elif kind == 'coins':
+        text = f"монет начислено: {amount}, баланс {coins_add(target, amount, 'admin_bot')}"
+    elif kind == 'criterion_days':
+        exp = (get_moscow_time() + timedelta(days=amount)).isoformat()
+        _setting_set(f'criterion_day:{target}', exp)
+        text = f"доп. критерий на {amount} дн."
+    elif kind == 'trial_days':
+        user = db.get_user(target) or {}
+        now = get_moscow_time()
+        hours = int(_hours_since(user.get('trial_started_at') or now.isoformat()) or 0)
+        db.update_user(target, plan='trial',
+                       trial_started_at=(now - timedelta(hours=max(0, hours - amount * 24))).isoformat())
+        text = f"пробный период +{amount} дн."
+    elif kind == 'plan_free':
+        db.update_user(target, plan='free')
+        text = "план сброшен на бесплатный"
+    else:
+        # Не наш тип — отдаём прежней команде (фото, объявления, ИИ)
+        await _grant_limits_legacy(update, context)
+        return
+    _plan_event(update.effective_user.id, 'admin_grant',
+                {'target': target, 'kind': kind, 'amount': amount})
+    await update.message.reply_text(f"Пользователю <code>{target}</code>: {text}",
+                                    parse_mode=ParseMode.HTML)
 
 
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -27927,9 +28808,20 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_get('/api/plan', api_plan)
+    app.router.add_get('/api/admin/me', api_admin_me)
+    app.router.add_get('/api/admin/settings', api_admin_settings)
+    app.router.add_post('/api/admin/settings', api_admin_settings)
+    app.router.add_post('/api/admin/settings/rollback', api_admin_rollback)
+    app.router.add_get('/api/admin/history', api_admin_history)
+    app.router.add_post('/api/admin/grant', api_admin_grant)
+    app.router.add_get('/api/admin/promo', api_admin_promo)
+    app.router.add_post('/api/admin/promo', api_admin_promo)
+    app.router.add_get('/api/admin/metrics', api_admin_metrics)
+    app.router.add_get('/api/admin/purchases', api_admin_purchases)
     app.router.add_post('/api/coins/spend', api_coins_spend)
     app.router.add_post('/api/pay/invoice', api_pay_invoice)
     app.router.add_get('/api/referral', api_referral)
+    app.router.add_post('/api/promo/redeem', api_promo_redeem)
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/diag/avito', api_diag_avito)
@@ -28055,6 +28947,12 @@ def main():
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
     application.add_handler(CommandHandler("dedupe", dedupe_command))
+    application.add_handler(CommandHandler("promo", promo_command))
+    application.add_handler(CommandHandler("admin", admin_command))
+    application.add_handler(CommandHandler("set", set_command))
+    application.add_handler(CommandHandler("price", price_command))
+    application.add_handler(CommandHandler("limits", limits_command))
+    application.add_handler(CommandHandler("grant", grant_command))
     application.add_handler(PreCheckoutQueryHandler(precheckout_callback))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_callback))
     application.add_handler(CallbackQueryHandler(hunt_show_button, pattern="^hunt_show$"))
@@ -28063,10 +28961,8 @@ def main():
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
     application.add_handler(CommandHandler("city",    city_command))
-    application.add_handler(CommandHandler("admin", admin_command))
     application.add_handler(CommandHandler("reindex", reindex_photos_command))
     application.add_handler(CommandHandler("recover", recover_db_command))
-    application.add_handler(CommandHandler("grant", grant_command))
 
     # ─── WebApp & платежи ────────────────────────────────────────────────────────
     application.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp_data))
@@ -28473,6 +29369,8 @@ def main():
         ensure_hunt_dialogs()
         ensure_monetization()
         ensure_indexes()
+        ensure_admin()
+        ensure_promo()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
