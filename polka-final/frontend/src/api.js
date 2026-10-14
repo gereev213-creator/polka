@@ -248,4 +248,29 @@ export const api = {
     { method: 'POST', body: JSON.stringify(draft) }),
   hideFinding: (adId) => request('/api/findings/hide',
     { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
+
+  // ── Диалог с ИИ (этап G): единый движок, состояние на сервере ───────────
+  huntDialog: (payload) => request('/api/hunt/dialog', { method: 'POST', body: JSON.stringify(payload) }),
+
+  // ── Монетизация (этап H) ────────────────────────────────────────────────
+  getPlan: () => request('/api/plan'),
+  coinsSpend: (kind, adId) => request('/api/coins/spend',
+    { method: 'POST', body: JSON.stringify({ kind, ad_id: adId }) }),
+  payInvoice: (product) => request('/api/pay/invoice',
+    { method: 'POST', body: JSON.stringify({ product }) }),
+  getReferral: () => request('/api/referral'),
+}
+
+// Открывает ссылку оплаты Telegram Stars (XTR) в WebApp
+export function openInvoice(url, onClose) {
+  try {
+    const tg = window.Telegram?.WebApp
+    if (tg && typeof tg.openInvoice === 'function') {
+      tg.openInvoice(url, (status) => { if (onClose) onClose(status) })
+      return true
+    }
+  } catch {
+    // ignore
+  }
+  return false
 }

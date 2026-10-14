@@ -1,55 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from './api'
-import { Button } from './components/Button'
 
-// ── Поиск лотов: чат с ИИ ──────────────────────────────────────────────────
-// Два способа в одном экране, переключатель сверху. Здесь — ИИ-поиск:
-// человек пишет фразу, бот уточняет кнопками и собирает критерий.
-// Ручной ввод — на соседней вкладке (/hunt/manual).
-//
-// Ниже чата список созданных критериев: видно, что поиск действительно идёт.
-
-const FIRST_QUESTION = {
-  odezhda_obuv_aksessuary: { title: 'Какой размер?', options: ['39', '40', '41', '42', '43', '44', '45'], skip: 'любой' },
-  telefony: { title: 'Сколько памяти?', options: ['64', '128', '256', '512'], skip: 'любая' },
-  planshety_i_elektronnye_knigi: { title: 'Сколько памяти?', options: ['32', '64', '128', '256'], skip: 'любая' },
-  noutbuki: { title: 'Сколько оперативной памяти?', options: ['8', '16', '32'], skip: 'любая' },
-  avtomobili: { title: 'Какой год или новее?', options: ['2010', '2014', '2018', '2021'], skip: 'любой' },
-}
-
-// Телефонам мало памяти: перекупу важны батарея и вскрытие.
-// Спрашиваем после памяти, до цены.
-const PHONE_STEPS = {
-  battery: { title: 'АКБ от скольки процентов?', options: ['80', '85', '90'], skip: 'любая' },
-  opened: { title: 'Вскрывался или менялись детали?', options: ['не вскрывался'], skip: 'без разницы' },
-}
-
-const PHONE_CATEGORIES = ['telefony', 'planshety_i_elektronnye_knigi']
-
-// Обуви и одежде важно состояние, машине — пробег.
-const CLOTHES_STEP = {
-  title: 'Состояние вещи?',
-  options: ['новое', 'хорошее', 'с износом'],
-  skip: 'любое',
-}
-const MILEAGE_STEP = {
-  title: 'Пробег до скольки тысяч километров?',
-  options: ['50', '100', '150', '200'],
-  skip: 'любой',
-}
-const CLOTHES_CATEGORIES = ['odezhda_obuv_aksessuary']
-
-const PRICES = [
-  { label: 'до 5 000', value: 5000 },
-  { label: 'до 10 000', value: 10000 },
-  { label: 'до 20 000', value: 20000 },
-  { label: 'без ограничения', value: 0 },
-]
+// ── Поиск лотов: чат с ИИ (этап G) ──────────────────────────────────────────
+// Единый диалог: состояние (draft и заданные слоты) хранит СЕРВЕР в
+// /api/hunt/dialog. Здесь только: отправляем message/choice, рисуем say и
+// кнопки ask.options, показываем итоговую карточку и создаём критерий.
+// Жёсткие шаги (память→батарея→вскрытие→цена) убраны — порядок задаёт сервер.
 
 const EXAMPLES = ['iPhone 15 pro, до 55 000 ₽', 'Кроссовки Nike, размер 43', 'Ноутбук, до 80 000 ₽']
 
 const money = (n) => Number(n || 0).toLocaleString('ru-RU')
+
+const COND_LABEL = { good: 'хорошее', excellent: 'идеальное', new: 'новое', worn: 'с износом' }
+
+function reqChips(req = {}) {
+  const chips = []
+  if (req.condition_min && COND_LABEL[req.condition_min]) chips.push(COND_LABEL[req.condition_min])
+  if (req.battery_min) chips.push(`АКБ ≥ ${req.battery_min}%`)
+  if (req.original_only) chips.push('оригинал')
+  if (req.private_only) chips.push('с рук')
+  return chips
+}
 
 export default function HuntChat() {
   const navigate = useNavigate()
@@ -57,9 +29,13 @@ export default function HuntChat() {
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sessionId, setSessionId] = useState('')
+  const [ask, setAsk] = useState(null)
   const [draft, setDraft] = useState(null)
+  const [ready, setReady] = useState(false)
+  const [notes, setNotes] = useState([])
   const [criteria, setCriteria] = useState([])
-  const [preview, setPreview] = useState(null)
+  const [limitMsg, setLimitMsg] = useState('')
 
   const loadCriteria = () => {
     api.getCriteria().then((d) => setCriteria((d && (d.items || d.criteria)) || [])).catch(() => {})
@@ -68,237 +44,49 @@ export default function HuntChat() {
 
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = listRef.current.scrollHeight
-  }, [messages, draft])
-
-  // Модель проверяет после КАЖДОГО ответа: хватает ли данных, чтобы искать.
-  // Если хватает — оставшиеся вопросы пропускаем. Так диалог ведёт она,
-  // а не мой список шагов.
-  useEffect(() => {
-    if (!draft || draft.step === 'done' || !draft.query) return
-    if (busy) return          // предыдущий запрос ещё в работе — не наслаиваем
-    const summary = [draft.query, draft.req,
-      draft.max_price ? `до ${draft.max_price} рублей` : ''].filter(Boolean).join(', ')
-    if (summary.length < 10) return
-    let alive = true
-    const t = setTimeout(() => {
-      api.parseHunt(summary).then((p) => {
-        if (!alive || !p || !p.ok || !p.ready) return
-        setDraft({ ...draft, step: 'done', max_price: p.max_price || draft.max_price })
-        say('ai', p.reply || 'Данных достаточно — проверьте и нажмите «Найти лоты»')
-      }).catch(() => {})
-    }, 400)
-    return () => { alive = false; clearTimeout(t) }
-  }, [draft && draft.step, draft && draft.req, draft && draft.max_price, busy])
-
-  // Считаем совпадения ДО сохранения критерия: человек видит цифру и может
-  // подкрутить запрос, если он слишком узкий или слишком широкий.
-  useEffect(() => {
-    if (!draft || draft.step !== 'done') { setPreview(null); return }
-    const t = setTimeout(() => {
-      api.checkHunt({
-        query: draft.query, category: draft.category,
-        max_price: draft.max_price, min_price: draft.min_price,
-      }).then((d) => setPreview(d)).catch(() => setPreview(null))
-    }, 500)
-    return () => clearTimeout(t)
-  }, [draft && draft.step, draft && draft.query, draft && draft.max_price])
+  }, [messages, draft, ready, ask])
 
   const say = (from, value) => setMessages((prev) => [...prev, { from, text: value }])
 
-  // Разбор фразы словами
-  const parse = async (value, showMe = true) => {
-    const phrase = String(value || '').trim()
-    if (!phrase || busy) return
-    if (showMe) say('me', phrase)
-    setBusy(true)
-    try {
-      const parsed = await api.parseHunt(phrase)
-      if (!parsed || !parsed.ok) {
-        say('ai', (parsed && parsed.error) || 'Не получилось разобрать запрос')
-        return
-      }
-      // Модель поняла, что это не про товар: поздоровались или спросили.
-      // Раньше на «Привет» она спрашивала цену — выглядело абсурдно.
-      if (!String(parsed.query || '').trim()) {
-        say('ai', parsed.reply || 'Напишите, что ищете — подберу фильтры сам')
-        return
-      }
-      // Требования от модели («только оригинал», «не магазин») плюс то, что
-      // человек уже ответил в диалоге. Скрипт их разбирает и отсеивает мусор,
-      // поэтому важно не потерять сказанное раньше.
-      const reqParts = [String(parsed.requirements || ''), String((draft && draft.req) || '')]
-        .join(',')
-        .split(',')
-        .map((v) => v.trim())
-        .filter(Boolean)
-      const reqMerged = Array.from(new Set(reqParts)).join(', ').slice(0, 400)
-      const next = {
-        query: parsed.query || phrase,
-        req: reqMerged,
-        max_price: Number(parsed.max_price) || 0,
-        min_price: Number(parsed.min_price) || 0,
-        category: parsed.category || '',
-        // Варианты ответа предложила модель — покажем их кнопками
-        options: Array.isArray(parsed.options) ? parsed.options : [],
-        step: 'first',
-      }
-      // Модель решила, что данных уже достаточно: не задаём вопросы вовсе,
-      // а сразу показываем итог. Это и есть «ведёт диалог сам».
-      if (parsed.ready) {
-        next.step = 'done'
-        setDraft(next)
-        say('ai', parsed.reply || `Понял: ${next.query}. Проверьте и нажмите «Найти лоты»`)
-        return
-      }
-      // Защита от зацикливания: модель иногда отвечает ТЕМ ЖЕ вопросом, хотя
-      // человек уже ответил («Любой»). Для неё запрос не изменился — и она
-      // повторяет. Тогда считаем, что данных достаточно, и показываем итог.
-      const lastAi = [...messages].reverse().find((mm) => mm.from === 'ai')
-      if (lastAi && String(parsed.reply || '').trim() === lastAi.text.trim()) {
-        next.step = 'done'
-        setDraft(next)
-        say('ai', 'Понял, без ограничений. Проверьте и нажмите «Найти лоты»')
-        return
-      }
+  const applyResponse = (res) => {
+    if (res.session_id) setSessionId(res.session_id)
+    if (res.say) say('ai', res.say)
+    setAsk(res.ask || null)
+    setDraft(res.draft || null)
+    setReady(Boolean(res.ready))
+    setNotes(res.notes || [])
+  }
 
-      const question = FIRST_QUESTION[next.category]
-      if (question) {
-        setDraft(next)
-        const live = parsed.reply || (parsed.follow_up
-          ? `Понял: ${next.query}. ${parsed.follow_up}`
-          : '')
-        say('ai', live || `Понял: ${next.query}. ${question.title}`)
-      } else {
-        next.step = 'price'
-        setDraft(next)
-        say('ai', parsed.reply || `Понял: ${next.query}. До какой цены?`)
-      }
+  const send = async () => {
+    const value = text.trim()
+    if (!value || busy) return
+    setText('')
+    say('me', value)
+    setBusy(true)
+    setLimitMsg('')
+    try {
+      const res = await api.huntDialog({ session_id: sessionId || undefined, message: value })
+      applyResponse(res)
     } catch (e) {
-      say('ai', (e && e.message) || 'Ошибка связи с сервером')
+      say('ai', (e && e.message) || 'Не удалось понять запрос')
     } finally {
       setBusy(false)
     }
   }
 
-  const answerFirst = (value) => {
-    if (!draft) return
-    const next = { ...draft, step: 'price' }
-    const word = String(value || '').trim()
-    const parts = String(next.query || '').split(/\s+/).filter(Boolean)
-    // Дописываем только то, чего ещё нет: иначе размер попадал в запрос дважды
-    if (word && !parts.includes(word)) next.query = [...parts, word].join(' ')
-    setDraft(next)
-    say('me', word || 'любой')
-    // Второй вопрос зависит от категории: у техники батарея, у вещей состояние,
-    // у машины пробег. Перекупу нужны детали, а не одно название.
-    if (PHONE_CATEGORIES.includes(next.category)) {
-      next.step = 'battery'
-      say('ai', 'АКБ от скольки процентов?')
-    } else if (CLOTHES_CATEGORIES.includes(next.category)) {
-      next.step = 'wear'
-      say('ai', CLOTHES_STEP.title)
-    } else if (next.category === 'avtomobili') {
-      next.step = 'mileage'
-      say('ai', MILEAGE_STEP.title)
-    } else {
-      askModel(next, 'До какой цены?')
-    }
-  }
-
-  const answerBattery = (value) => {
-    if (!draft) return
-    const next = { ...draft, step: 'opened' }
-    const pct = String(value || '').replace(/[^0-9]/g, '')
-    if (pct) next.req = `${next.req || ''}${next.req ? ', ' : ''}АКБ от ${pct}%`
-    setDraft(next)
-    say('me', pct ? `от ${pct}%` : 'любая')
-    askModel(next, 'Вскрывался или менялись детали?')
-  }
-
-  const answerWear = (value) => {
-    if (!draft) return
-    const next = { ...draft, step: 'price' }
-    if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}состояние: ${value}`
-    setDraft(next)
-    say('me', value || 'любое')
-    askModel(next, 'До какой цены?')
-  }
-
-  const answerMileage = (value) => {
-    if (!draft) return
-    const next = { ...draft, step: 'price' }
-    const km = String(value || '').replace(/[^0-9]/g, '')
-    if (km) next.req = `${next.req || ''}${next.req ? ', ' : ''}пробег до ${km} тыс. км`
-    setDraft(next)
-    say('me', km ? `до ${km} тыс.` : 'любой')
-    askModel(next, 'До какой цены?')
-  }
-
-  const answerOpened = (value) => {
-    if (!draft) return
-    const next = { ...draft, step: 'price' }
-    if (value) next.req = `${next.req || ''}${next.req ? ', ' : ''}не вскрывался`
-    setDraft(next)
-    say('me', value || 'без разницы')
-    askModel(next, 'До какой цены?')
-  }
-
-  // Нажатие кнопки: вариант мог предложить ИИ — ведём его тем же путём,
-  // что и ввод текстом. Раньше каждая кнопка знала свой шаг.
-  const answerWith = (value) => {
-    const step = draft && draft.step
-    if (step === 'first') return answerFirst(value)
-    if (step === 'battery') return answerBattery(value)
-    if (step === 'opened') return answerOpened(value)
-    if (step === 'wear') return answerWear(value)
-    if (step === 'mileage') return answerMileage(value)
-    if (step === 'price') {
-      const d = (String(value).match(/\d+/g) || []).map(Number)
-      return answerPrice(d.length ? Math.max(...d) : 0)
-    }
-    return parse(value)
-  }
-
-  const answerPrice = (value) => {
-    if (!draft) return
-    const next = { ...draft, max_price: Number(value) || 0, step: 'done' }
-    setDraft(next)
-    const label = PRICES.find((p) => p.value === (Number(value) || 0))
-    say('me', label ? label.label : 'без ограничения')
-    say('ai', 'Готово — проверьте и нажмите «Найти лоты»')
-  }
-
-  // Спрашиваем МОДЕЛЬ, что сказать дальше — вместо моей заготовки.
-  // Если она не ответит за 8 секунд, показываем заготовку: чат не должен молчать.
-  const askModel = (d, fallback) => {
-    const summary = [d.query, d.req, d.max_price ? `до ${d.max_price} рублей` : '']
-      .filter(Boolean).join(', ')
-    let answered = false
-    const guard = setTimeout(() => {
-      if (!answered) { answered = true; say('ai', fallback) }
-    }, 8000)
-    const finish = (txt) => {
-      if (answered) return
-      answered = true
-      clearTimeout(guard)
-      say('ai', txt)
-    }
-    api.parseHunt(summary)
-      .then((p) => finish(p && p.ok && p.reply ? p.reply : fallback))
-      .catch(() => finish(fallback))
-  }
-
-  const send = () => {
-    const value = text.trim()
-    if (!value || busy) return
-    setText('')
+  const tap = async (value) => {
+    if (busy) return
     say('me', value)
-    // Отдаём ВЕСЬ диалог: и ваши фразы, и ответы модели. Без её собственных
-    // реплик она не видит, что уже спрашивала, и повторяет вопрос ДОСЛОВНО.
-    const dialog = messages.slice(-8).map((m) =>
-      (m.from === 'me' ? 'Человек: ' : 'Ты: ') + m.text)
-    const said = [...dialog, 'Человек: ' + value].join('\n')
-    parse(said, false)
+    setBusy(true)
+    setLimitMsg('')
+    try {
+      const res = await api.huntDialog({ session_id: sessionId || undefined, choice: value })
+      applyResponse(res)
+    } catch (e) {
+      say('ai', (e && e.message) || 'Ошибка связи')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const create = async () => {
@@ -308,68 +96,62 @@ export default function HuntChat() {
       await api.addCriterion({
         query: draft.query,
         category: draft.category,
-        max_price: draft.max_price,
-        min_price: draft.min_price,
+        max_price: draft.max_price || 0,
+        min_price: draft.min_price || 0,
+        city: draft.city || '',
         mode: 'any',
-        // Требования словами: «АКБ от 85%, не вскрывался». ИИ сверит с ними
-        // описание и отсеет то, что не подходит.
-        requirements: draft.req || '',
+        requirements: '',
+        requirements_json: draft.requirements_json || {},
       })
       say('ai', 'Критерий создан. Пришлю, как только появится подходящее.')
-      setDraft(null)
+      setDraft(null); setReady(false); setAsk(null); setNotes([]); setSessionId('')
       loadCriteria()
     } catch (e) {
-      say('ai', (e && e.message) || 'Не удалось создать критерий')
+      if (e && (e.code === 'limit_reached' || e.status === 402)) {
+        setLimitMsg((e && e.detail) || 'Достигнут лимит критериев — откройте ещё слоты в «Плюсе»')
+      } else {
+        say('ai', (e && e.detail) || 'Не удалось создать критерий')
+      }
     } finally {
       setBusy(false)
     }
   }
 
   const remove = async (id) => {
-    try {
-      await api.removeCriterion(id)
-      loadCriteria()
-    } catch (e) {
-      loadCriteria()
-    }
+    try { await api.removeCriterion(id) } catch { /* ignore */ }
+    loadCriteria()
   }
 
-  const restart = () => { setDraft(null); setMessages([]) }
+  const restart = () => {
+    setMessages([]); setDraft(null); setReady(false); setAsk(null)
+    setNotes([]); setSessionId(''); setLimitMsg('')
+  }
 
-  const question = draft && draft.step === 'first' ? FIRST_QUESTION[draft.category] : null
-  const empty = messages.length === 0 && !draft
+  const chips = draft ? reqChips(draft.requirements_json) : []
+  const showFinal = ready && draft && draft.query
 
   return (
     <div className="chat-wrap">
-      {/* Такая же шапка, как на вкладке «Вручную»: раньше в чате её не было,
-          и экран выглядел обрубленным сверху. */}
       <div className="chat-header">
         <button type="button" className="chat-back" onClick={() => navigate('/')} aria-label="Назад">
-          <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true">
-            <path d="M15 4l-8 8 8 8" />
-          </svg>
+          <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true"><path d="M15 4l-8 8 8 8" /></svg>
         </button>
         <div className="page-title chat-header-title">Поиск лотов</div>
       </div>
       <div className="chat-tabs">
-        {/* Плашка-указатель: въезжает в позицию активной вкладки,
-            а не появляется рывком */}
         <span className="chat-tabs-pill" aria-hidden="true" />
         <button type="button" className="chat-tab is-active">ИИ-поиск</button>
         <button type="button" className="chat-tab" onClick={() => navigate('/hunt/manual')}>Вручную</button>
       </div>
 
       <div className="chat-list" ref={listRef}>
-        {empty ? (
+        {messages.length === 0 && !showFinal ? (
           <div className="chat-start">
             <div className="chat-hello">Найду дешёвые лоты по твоим условиям</div>
             <div className="chat-hello-sub">Напиши словами — подберу фильтры сам</div>
-            <div className="chat-examples-label">Например</div>
             <div className="chat-examples">
               {EXAMPLES.map((ex) => (
-                <button key={ex} type="button" className="chat-example" onClick={() => parse(ex)}>
-                  {ex}
-                </button>
+                <button key={ex} type="button" className="chat-example" onClick={() => setText(ex)}>{ex}</button>
               ))}
             </div>
           </div>
@@ -381,136 +163,52 @@ export default function HuntChat() {
           </div>
         ))}
 
-        {question ? (
+        {ask && !showFinal ? (
           <div className="chat-replies">
-            {question.options.map((opt) => (
-              <button key={opt} type="button" className="chat-chip" onClick={() => answerFirst(opt)}>
-                {opt}
-              </button>
-            ))}
-            <button type="button" className="chat-chip" onClick={() => answerFirst('')}>
-              {question.skip}
-            </button>
-          </div>
-        ) : null}
-
-        {draft && (draft.step === 'battery' || draft.step === 'opened') ? (
-          <div className="chat-replies">
-            {PHONE_STEPS[draft.step].options.map((opt) => (
-              <button key={opt} type="button" className="chat-chip"
-                onClick={() => (draft.step === 'battery' ? answerBattery(opt) : answerOpened(opt))}>
-                {opt}
-              </button>
-            ))}
-            <button type="button" className="chat-chip"
-              onClick={() => (draft.step === 'battery' ? answerBattery('') : answerOpened(''))}>
-              {PHONE_STEPS[draft.step].skip}
-            </button>
-          </div>
-        ) : null}
-
-        {draft && draft.options && draft.options.length ? (
-          <div className="chat-replies">
-            {draft.options.map((opt) => (
-              <button key={opt} type="button" className="chat-chip"
-                onClick={() => answerWith(opt)}>{opt}</button>
+            {ask.text ? <div className="chat-bubble">{ask.text}</div> : null}
+            {(ask.options || []).map((opt) => (
+              <button key={opt} type="button" className="chat-chip" onClick={() => tap(opt)}>{opt}</button>
             ))}
           </div>
         ) : null}
 
-        {draft && draft.step === 'wear' ? (
-          <div className="chat-replies">
-            {CLOTHES_STEP.options.map((opt) => (
-              <button key={opt} type="button" className="chat-chip" onClick={() => answerWear(opt)}>{opt}</button>
-            ))}
-            <button type="button" className="chat-chip" onClick={() => answerWear('')}>{CLOTHES_STEP.skip}</button>
-          </div>
-        ) : null}
-
-        {draft && draft.step === 'mileage' ? (
-          <div className="chat-replies">
-            {MILEAGE_STEP.options.map((opt) => (
-              <button key={opt} type="button" className="chat-chip" onClick={() => answerMileage(opt)}>{`до ${opt} тыс.`}</button>
-            ))}
-            <button type="button" className="chat-chip" onClick={() => answerMileage('')}>{MILEAGE_STEP.skip}</button>
-          </div>
-        ) : null}
-
-        {draft && draft.step === 'price' ? (
-          <div className="chat-replies">
-            {PRICES.map((p) => (
-              <button key={p.label} type="button" className="chat-chip" onClick={() => answerPrice(p.value)}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-        ) : null}
-
-        {/* Пока модель разбирает фразу — живой индикатор вместо серой строки:
-            видно, что запрос ушёл и ответ будет. Класс .chat-bubble.is-typing
-            оставлен: он был в разметке и задаёт цвет и размер системной строки. */}
-        {busy ? (
-          <div className="chat-row" role="status">
-            <div className="chat-bubble is-typing">
-              <span className="chat-typing-dot" aria-hidden="true" />
-              <span className="chat-typing-dot" aria-hidden="true" />
-              <span className="chat-typing-dot" aria-hidden="true" />
-              <span className="chat-typing-text">Разбираю…</span>
+        {showFinal ? (
+          <div className="chat-final">
+            <div className="chat-crit-card">
+              <div className="chat-crit-body">
+                <div className="chat-crit-title">Буду искать: {draft.query}</div>
+                {draft.max_price ? <div className="chat-crit-sub">до {money(draft.max_price)} ₽</div> : null}
+                {draft.city ? <div className="chat-crit-sub">{draft.city}</div> : null}
+                {chips.length ? (
+                  <div className="chat-replies">
+                    {chips.map((c) => <span key={c} className="chat-chip">{c}</span>)}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
-        ) : null}
-
-        {draft && draft.step === 'done' ? (
-          <div className="chat-summary">
-            <div className="chat-summary-title">Буду искать</div>
-            {/* Формулировку можно поправить руками: ИИ разбирает фразу
-                приблизительно, а точность здесь важнее всего. */}
-            <input
-              className="text-input chat-summary-input"
-              value={draft.query}
-              onChange={(e) => setDraft({ ...draft, query: e.target.value })}
-              placeholder="Что искать в заголовках"
-            />
-            <div className="chat-summary-hint">
-              Ищем эти слова в названии. Модель пишите латиницей: «iPhone 15 Pro», «Camry»
-            </div>
-            {preview && preview.ok ? (
-              <div className="chat-summary-count">
-                {preview.total > 0
-                  ? `Сейчас подойдёт ${preview.total}, из них свежих ${preview.fresh}`
-                  : 'Сейчас таких нет — пришлю, как появятся'}
+            {notes.map((n, i) => <div key={i} className="chat-note">{n}</div>)}
+            {limitMsg ? (
+              <div className="chat-note chat-note-warn">
+                {limitMsg}{' '}
+                <button type="button" className="link-btn" onClick={() => navigate('/tariffs')}>Тарифы</button>
               </div>
             ) : null}
-            <div className="chat-summary-line muted">
-              {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'без ограничения по цене'}
-            </div>
-            {draft.req ? <div className="chat-summary-line muted">{draft.req}</div> : null}
-            {/оригинал|реплик/i.test(draft.req || '') ? (
-              <div className="hint-note">
-                Оригинал не проверяем: убираем только то, где продавец сам признал
-                реплику. Молчит — значит пройдёт. Смотрите фото и цену.
-              </div>
-            ) : null}
-            <div className="chat-summary-actions">
-              <Button variant="primary" wide disabled={busy} onClick={create}>
-                {busy ? 'Создаю…' : 'Найти лоты'}
-              </Button>
-              <Button variant="ghost" onClick={restart}>Заново</Button>
+            <div className="chat-final-actions">
+              <button type="button" className="cta-primary" onClick={create} disabled={busy}>Найти лоты</button>
+              <button type="button" className="chat-chip" onClick={restart}>Заново</button>
             </div>
           </div>
         ) : null}
       </div>
 
-      {(!draft || draft.step !== 'done') ? (
+      {!showFinal ? (
         <div className="chat-input">
           <input className="text-input" value={text} placeholder="Напиши, что ищешь…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send() }} />
           <button type="button" className="chat-send" aria-label="Отправить"
             disabled={busy || !text.trim()} onClick={send}>
-            <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true">
-              <path d="M3 20l18-8L3 4v6l12 2-12 2z" />
-            </svg>
+            <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true"><path d="M3 20l18-8L3 4v6l12 2-12 2z" /></svg>
           </button>
         </div>
       ) : null}
@@ -523,10 +221,7 @@ export default function HuntChat() {
               <div className="chat-crit-body">
                 <div className="chat-crit-title">{c.query}</div>
                 <div className="chat-crit-sub">
-                  {(c.matches || c['подходит'])
-                    ? `нашлось ${c.matches || c['подходит']}`
-                    : 'пока пусто — как появится, пришлю'}
-                  {c.max_price ? ` · до ${money(c.max_price)} ₽` : ''}
+                  {c.max_price ? `до ${money(c.max_price)} ₽` : 'без ограничения по цене'}
                 </div>
               </div>
               <button type="button" className="chat-crit-x" aria-label="Убрать критерий"

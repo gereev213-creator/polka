@@ -18417,21 +18417,21 @@ async def api_pay_invoice(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception:
         body = {}
     product = str((body or {}).get('product') or '')
-    if product != 'plus_month':
-        return _miniapp_json({'ok': False, 'error': 'unknown_product'}, status=400)
     app = _get_bot_app()
     if not app:
         return _miniapp_err('no_bot', 503)
-    payload = f"plus_month:{viewer_id}:{os.urandom(6).hex()}"
+    if product == 'plus_month':
+        title, desc, stars = "ПОЛКА Плюс на месяц",             "10 критериев, без задержки, тщательный отбор по описанию и «цена снижена»", PLUS_STARS
+    elif product in COIN_PACKS:
+        coins, stars = COIN_PACKS[product]
+        title, desc = f"{coins} монет", "Монеты для «Открыть сейчас» и «Тщательной проверки»"
+    else:
+        return _miniapp_json({'ok': False, 'error': 'unknown_product'}, status=400)
+    payload = f"{product}:{viewer_id}:{os.urandom(6).hex()}"
     try:
         link = await app.bot.create_invoice_link(
-            title="ПОЛКА Плюс на месяц",
-            description="10 критериев, без задержки, тщательный отбор по описанию и «цена снижена»",
-            payload=payload,
-            currency="XTR",
-            prices=[LabeledPrice("Плюс на месяц", PLUS_STARS)],
-            provider_token="",
-        )
+            title=title, description=desc, payload=payload,
+            currency="XTR", prices=[LabeledPrice(title, stars)], provider_token="")
     except Exception as e:
         logger.warning(f"create_invoice_link: {e}")
         return _miniapp_err('invoice_failed', 502)
@@ -18458,7 +18458,8 @@ async def api_referral(request: aiohttp_web.Request) -> aiohttp_web.Response:
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """PreCheckoutQuery: подтверждаем товар и цену за ≤10 секунд (этап H3)."""
     query = update.pre_checkout_query
-    ok = bool(query.invoice_payload and str(query.invoice_payload).startswith('plus_month:'))
+    payload = str(query.invoice_payload or '')
+    ok = payload.startswith('plus_month:') or any(payload.startswith(f'{k}:') for k in COIN_PACKS)
     await query.answer(ok=ok, error_message='' if ok else 'Неизвестный товар')
 
 
@@ -18474,18 +18475,28 @@ async def successful_payment_callback(update: Update, context: ContextTypes.DEFA
         if cursor.fetchone():
             return  # уже зачислено — не дублируем
         now = get_moscow_time().isoformat()
-        expires = (get_moscow_time() + timedelta(days=30)).isoformat()
+        payload = str(pay.invoice_payload or '')
+        product = payload.split(':')[0] if ':' in payload else ''
+        if product == 'plus_month':
+            expires = (get_moscow_time() + timedelta(days=30)).isoformat()
+            cursor.execute("INSERT INTO subscriptions (user_id, plan, started_at, expires_at) "
+                           "VALUES (?,?,?,?)", (user_id, 'plus', now, expires))
+            try:
+                db.update_user(user_id, plan='plus')
+            except Exception:
+                pass
+        elif product in COIN_PACKS:
+            coins, _stars = COIN_PACKS[product]
+            cursor.execute("INSERT INTO coin_wallets (user_id, balance) VALUES (?,?) "
+                           "ON CONFLICT(user_id) DO UPDATE SET balance=balance+?",
+                           (user_id, coins, coins))
+            cursor.execute("INSERT INTO coin_transactions (user_id, delta, reason, created_at) "
+                           "VALUES (?,?,?,?)", (user_id, coins, 'stars', now))
         cursor.execute("INSERT INTO purchases (user_id, product, amount_stars, "
                        "telegram_payment_charge_id, created_at) VALUES (?,?,?,?,?)",
-                       (user_id, 'plus_month', int(pay.total_amount), charge_id, now))
-        cursor.execute("INSERT INTO subscriptions (user_id, plan, started_at, expires_at) "
-                       "VALUES (?,?,?,?)", (user_id, 'plus', now, expires))
+                       (user_id, product, int(pay.total_amount), charge_id, now))
         db.conn.commit()
-        try:
-            db.update_user(user_id, plan='plus')
-        except Exception:
-            pass
-        _plan_event(user_id, 'payment_ok', {'stars': int(pay.total_amount)})
+        _plan_event(user_id, 'payment_ok', {'product': product, 'stars': int(pay.total_amount)})
     except Exception as e:
         logger.warning(f"successful_payment: {e}")
 
@@ -21346,6 +21357,12 @@ COIN_UNLOCK_PRICE = int(os.environ.get('COIN_UNLOCK_PRICE', '5'))
 COIN_DEEP_CHECK_PRICE = int(os.environ.get('COIN_DEEP_CHECK_PRICE', '3'))
 COIN_CRITERION_DAY_PRICE = int(os.environ.get('COIN_CRITERION_DAY_PRICE', '5'))
 PLUS_STARS = int(os.environ.get('PLUS_STARS', '99'))
+# Пакеты монет за звёзды: product -> (монеты, звёзды)
+COIN_PACKS = {
+    'coins_50': (50, 55),
+    'coins_150': (150, 149),
+    'coins_500': (500, 449),
+}
 
 
 def ensure_monetization() -> None:

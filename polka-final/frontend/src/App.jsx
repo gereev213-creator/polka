@@ -11,7 +11,7 @@ import {
 } from 'react-router-dom'
 import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
 import HuntChat from './HuntChat'
-import { api, resolveAssetUrl } from './api'
+import { api, resolveAssetUrl, openInvoice } from './api'
 
 import { Skeleton } from './components/Skeleton'
 import { EmptyState } from './components/EmptyState'
@@ -2895,11 +2895,124 @@ function ProfilePage() {
           <span className="menu-left"><Icon name="chat" /><span>Сообщения</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
+        <Link to="/tariffs" className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="crown" /><span>Тарифы и монеты</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </Link>
         <Link to="/create" className="setting-row glass-card menu-row">
           <span className="menu-left"><Icon name="plus" /><span>Разместить объявление</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
       </div>
+    </Screen>
+  )
+}
+
+function TariffsPage() {
+  const navigate = useNavigate()
+  const [plan, setPlan] = useState(null)
+  const [ref, setRef] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState('')
+
+  const load = () => {
+    api.getPlan().then(setPlan).catch(() => {})
+    api.getReferral().then(setRef).catch(() => {})
+  }
+  useEffect(() => { load() }, [])
+
+  const buy = async (product) => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await api.payInvoice(product)
+      if (!r.invoice_url) throw new Error('нет ссылки оплаты')
+      if (!openInvoice(r.invoice_url, (status) => {
+        if (status === 'paid') { setMsg('Оплачено — обновляем…'); setTimeout(load, 1500) }
+      })) {
+        window.open(r.invoice_url, '_blank')
+      }
+    } catch (e) {
+      setMsg((e && e.detail) || 'Не удалось открыть оплату')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const planName = plan?.plan || '…'
+  const isTrial = planName === 'trial'
+  const isPlus = planName === 'plus'
+  const money = (n) => Number(n || 0).toLocaleString('ru-RU')
+
+  return (
+    <Screen>
+      <TopBar left={<Logo />} />
+      <h2 className="section-title">Тарифы и монеты</h2>
+
+      {isTrial ? (
+        <div className="glass-card banner-card">
+          <div className="banner-title">Пробный период</div>
+          <div className="banner-text">
+            Осталось дней: {plan.trial_days_left}. Без задержки, до {plan.criteria_limit} критериев,
+            тщательный отбор по описанию включён.
+          </div>
+        </div>
+      ) : null}
+
+      <div className="list-stack mt-14">
+        <div className="glass-card plan-row">
+          <div className="plan-left">
+            <div className="plan-name">Бесплатно</div>
+            <div className="plan-desc">1 критерий, находки с задержкой {plan?.free_delay_min || 10} мин</div>
+          </div>
+          {planName === 'free' ? <span className="badge">Сейчас</span> : null}
+        </div>
+
+        <div className="glass-card plan-row">
+          <div className="plan-left">
+            <div className="plan-name">
+              ПОЛКА Плюс
+              <span className="plan-price"><s>{plan?.plus_price || 149} ₽</s> 99 ₽/мес</span>
+            </div>
+            <div className="plan-desc">
+              10 критериев, без задержки, тщательный отбор по описанию, «цена снижена»
+            </div>
+          </div>
+          {isPlus
+            ? <span className="badge">Активен</span>
+            : <button type="button" className="cta-primary" disabled={busy}
+                onClick={() => buy('plus_month')}>Оформить</button>}
+        </div>
+
+        <div className="glass-card plan-row">
+          <div className="plan-left">
+            <div className="plan-name">Баланс монет</div>
+            <div className="plan-desc">Монеты на «Открыть сейчас» (5) и «Тщательную проверку» (3)</div>
+          </div>
+          <div className="plan-balance">{plan?.balance ?? 0} ⦿</div>
+        </div>
+      </div>
+
+      <h3 className="section-title mt-14">Пополнить монеты</h3>
+      <div className="list-stack mt-8">
+        {[['coins_50', '50 монет', '55 ⭐'], ['coins_150', '150 монет', '149 ⭐'],
+          ['coins_500', '500 монет', '449 ⭐']].map(([prod, label, stars]) => (
+          <button key={prod} type="button" className="glass-card plan-row" disabled={busy}
+            onClick={() => buy(prod)}>
+            <span className="plan-left"><span className="plan-name">{label}</span></span>
+            <span className="plan-balance">{stars}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="glass-card mt-14">
+        <div className="plan-name">Реферальная программа</div>
+        <div className="plan-desc">
+          +1 критерий вам и другу за каждого приглашённого (до 3). Приглашено: {ref?.count || 0}.
+        </div>
+        <div className="plan-desc mt-8">{ref?.link || ''}</div>
+      </div>
+
+      {msg ? <div className="chat-note mt-8">{msg}</div> : null}
     </Screen>
   )
 }
@@ -2944,6 +3057,7 @@ function Layout() {
         <Route path="/hunt" element={<HuntChat />} />
         <Route path="/hunt/manual" element={<CriteriaPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/tariffs" element={<TariffsPage />} />
         <Route path="/chats" element={<ChatsPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
       </Routes>
