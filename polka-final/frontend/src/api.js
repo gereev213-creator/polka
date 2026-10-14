@@ -34,14 +34,63 @@ function buildHeaders(extraHeaders = {}) {
   }
 }
 
-async function request(path, options = {}) {
-  // Ограничение по времени. Без него запрос к ИИ мог висеть бесконечно:
-  // на экране оставался залипший «AI анализирует ваш запрос», и человек
-  // не понимал, ждать ему или нет.
+// ── Этап K6: честные таймауты, повторы и классификация ошибок ───────────────
+// Раньше на ЛЮБУЮ ошибку показывалось «Проверь подключение к интернету», хотя
+// чаще виноват медленный сервер: запрос не отменялся, автоповтора не было.
+const DEFAULT_TIMEOUT = 20000       // лента, списки, карточки
+const AI_TIMEOUT = 60000            // ответ модели идёт 5–15 с и дольше
+const RETRY_DELAYS = [1500, 4000]   // паузы между повторами (только GET)
+const CACHE_TTL_MS = 5 * 60 * 1000
+
+export function isOffline() {
+  if (typeof navigator === 'undefined') return false
+  return navigator.onLine === false
+}
+
+/** Человеческий текст: «нет интернета» — только когда интернета правда нет. */
+export function friendlyError(err) {
+  if (err && err.kind === 'offline') return 'Нет интернета'
+  if (err && err.kind === 'timeout') return 'Сервер отвечает медленно — пробуем ещё раз…'
+  if (err && err.kind === 'server') return 'Сервер перегружен — пробуем ещё раз…'
+  return (err && (err.detail || err.message)) || 'Не удалось загрузить данные'
+}
+
+/** Кэш последней удачной ленты: показываем сразу, обновляем в фоне (K6). */
+export function cacheGet(key) {
+  try {
+    const raw = sessionStorage.getItem(`polka:${key}`)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || Date.now() - (parsed.at || 0) > CACHE_TTL_MS) return null
+    return parsed.data
+  } catch {
+    return null
+  }
+}
+
+export function cacheSet(key, data) {
+  try {
+    sessionStorage.setItem(`polka:${key}`, JSON.stringify({ at: Date.now(), data }))
+  } catch {
+    // приватный режим или переполнение — не критично
+  }
+}
+
+/** Обновление при возврате в приложение и при появлении сети (K6). */
+export function onResume(cb) {
+  if (typeof document === 'undefined') return () => {}
+  const onVisible = () => { if (document.visibilityState === 'visible') cb() }
+  document.addEventListener('visibilitychange', onVisible)
+  window.addEventListener('online', cb)
+  return () => {
+    document.removeEventListener('visibilitychange', onVisible)
+    window.removeEventListener('online', cb)
+  }
+}
+
+async function requestOnce(path, options, timeout) {
   const controller = new AbortController()
-  // 75 секунд: модель отвечает за 5-15 с, а в диалоге запросов
-  // несколько — на 30 секундах начались обрывы.
-  const timer = setTimeout(() => controller.abort(), 75000)
+  const timer = setTimeout(() => controller.abort(), timeout)
   let response
   try {
     response = await fetch(`${API_BASE}${path}`, {
@@ -50,10 +99,14 @@ async function request(path, options = {}) {
       ...options,
     })
   } catch (err) {
+    const error = new Error(err && err.name === 'AbortError' ? 'timeout' : 'network')
     if (err && err.name === 'AbortError') {
-      throw new Error('Сервер не ответил вовремя — попробуйте ещё раз')
+      error.kind = 'timeout'
+    } else {
+      error.kind = isOffline() ? 'offline' : 'network'
     }
-    throw err
+    error.retryable = true
+    throw error
   } finally {
     clearTimeout(timer)
   }
@@ -74,10 +127,33 @@ async function request(path, options = {}) {
     error.code = code
     error.detail = detail
     error.status = response.status
+    error.kind = response.status >= 500 ? 'server' : 'http'
+    error.retryable = response.status >= 500
     throw error
   }
 
   return response.json()
+}
+
+async function request(path, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase()
+  // Повторяем только безопасные запросы: POST повторять нельзя — на сервере
+  // он уже мог изменить состояние (создать критерий, списать монеты).
+  const attempts = method === 'GET' ? RETRY_DELAYS.length + 1 : 1
+  const timeout = options.timeout || DEFAULT_TIMEOUT
+  let lastError
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      return await requestOnce(path, options, timeout)
+    } catch (err) {
+      lastError = err
+      const canRetry = method === 'GET' && err.retryable && !isOffline()
+        && i < attempts - 1
+      if (!canRetry) throw err
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS[i]))
+    }
+  }
+  throw lastError
 }
 
 export const api = {
@@ -168,6 +244,7 @@ export const api = {
   generateDescription: (title, category, condition, city) => request('/api/ai/generate-description', {
     method: 'POST',
     body: JSON.stringify({ title, category, condition, city }),
+    timeout: AI_TIMEOUT,
   }),
   createListing: (payload) => request('/api/ads', { method: 'POST', body: JSON.stringify(payload) }),
   updateListing: (id, payload) => request(`/api/ads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
@@ -241,7 +318,7 @@ export const api = {
   // Убрать лот из находок: пропадёт из ленты и больше не придёт в чат
   // ИИ разбирает фразу словами в те же фильтры, что задаются руками
   parseHunt: (text) => request('/api/hunt/ai',
-    { method: 'POST', body: JSON.stringify({ text }) }),
+    { method: 'POST', body: JSON.stringify({ text }), timeout: AI_TIMEOUT }),
   // Проверка критерия ДО сохранения: сколько объявлений подойдёт сейчас.
   // Видно, не слишком ли узкий запрос — иначе человек ждёт тишины.
   checkHunt: (draft) => request('/api/hunt/check',
@@ -250,7 +327,8 @@ export const api = {
     { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
 
   // ── Диалог с ИИ (этап G): единый движок, состояние на сервере ───────────
-  huntDialog: (payload) => request('/api/hunt/dialog', { method: 'POST', body: JSON.stringify(payload) }),
+  huntDialog: (payload) => request('/api/hunt/dialog',
+    { method: 'POST', body: JSON.stringify(payload), timeout: AI_TIMEOUT }),
 
   // ── Монетизация (этап H) ────────────────────────────────────────────────
   getPlan: () => request('/api/plan'),

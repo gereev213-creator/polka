@@ -11,7 +11,7 @@ import {
 } from 'react-router-dom'
 import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
 import HuntChat from './HuntChat'
-import { api, resolveAssetUrl, openInvoice } from './api'
+import { api, resolveAssetUrl, openInvoice, cacheGet, cacheSet, friendlyError, onResume } from './api'
 
 import { Skeleton } from './components/Skeleton'
 import { EmptyState } from './components/EmptyState'
@@ -1222,6 +1222,8 @@ function FeedPage() {
   const loadMoreRef = useRef(null)
   const PAGE = 20
   const [mounted, setMounted] = useState(false)
+  // K6: stale — показываем сохранённую ленту, пока идёт обновление
+  const [stale, setStale] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -1240,24 +1242,41 @@ function FeedPage() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Этап K6: убран жёсткий Promise.race с 8 с (он показывал «проверь интернет»
+  // даже когда виноват медленный сервер). Теперь: таймаут и повторы внутри
+  // api.js, а здесь — показ сохранённой ленты и честный текст ошибки.
   const load = async (category, offset, append) => {
+    const key = `feed:${category || 'all'}`
     if (append) {
       setLoadingMore(true)
     } else {
-      setLoading(true)
+      const cached = cacheGet(key)
+      if (cached && (cached.items || []).length) {
+        setItems(cached.items)
+        setHasMore(Boolean(cached.has_more))
+        setLoading(false)
+        setStale(true)
+      } else {
+        setLoading(true)
+      }
       setError('')
     }
     try {
-      const data = await Promise.race([
-        api.getFeed({ category: categoryQuery(category), limit: PAGE, offset }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
-      ])
+      const data = await api.getFeed({ category: categoryQuery(category), limit: PAGE, offset })
       setItems((prev) => (append ? [...prev, ...(data.items || [])] : (data.items || [])))
       setHasMore(Boolean(data.has_more))
-    } catch {
+      setStale(false)
+      if (!append) cacheSet(key, { items: data.items || [], has_more: Boolean(data.has_more) })
+    } catch (e) {
       if (!append) {
-        setError('Не удалось загрузить ленту. Проверь подключение к интернету.')
-        setItems([])
+        const cached = cacheGet(key)
+        if (cached && (cached.items || []).length) {
+          // уже показываем сохранённое — не стираем его из-за сбоя обновления
+          setStale(true)
+        } else {
+          setError(friendlyError(e))
+          setItems([])
+        }
       }
     } finally {
       setLoading(false)
@@ -1267,6 +1286,12 @@ function FeedPage() {
 
   useEffect(() => {
     load(activeCategory, 0, false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeCategory])
+
+  // K6: возврат в приложение и появление сети — обновляем сами
+  useEffect(() => {
+    return onResume(() => { load(activeCategory, 0, false) })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeCategory])
 
@@ -1322,7 +1347,7 @@ function FeedPage() {
     return (
       <div className="screen padded feed-screen">
         <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
-        <ErrorBlock text="Не удалось загрузить ленту. Проверь подключение к интернету." onRetry={() => load(activeCategory, 0, false)} />
+        <ErrorBlock text={error || 'Не удалось загрузить ленту'} onRetry={() => load(activeCategory, 0, false)} />
       </div>
     )
   }
@@ -1369,6 +1394,9 @@ function FeedPage() {
       <RecommendCard items={items} />
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
+      {stale && !error ? (
+        <div className="chat-note">Показываем сохранённое. Обновляем…</div>
+      ) : null}
       {!loading && !error && items.length === 0 ? <EmptyBlock text="Объявлений пока нет." /> : null}
       {/* Одна сетка на всю ленту: раньше её разрезал блок «Последние
           объявления», и вторая половина карточек оставалась двухколоночной

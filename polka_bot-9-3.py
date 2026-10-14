@@ -279,6 +279,7 @@ EM_WARN      = "!"    # предупреждение
 #  RATE LIMITING — защита от флуда
 # ═══════════════════════════════════════════════════════════════════════
 import time as _time
+import threading
 from collections import defaultdict as _defaultdict
 
 class RateLimiter:
@@ -2358,6 +2359,7 @@ class Database:
         # TG-бота, чтобы MAX-бот использовал то же самое, без второго connect().
         if shared_conn is not None:
             self.conn = shared_conn
+            self.db_path = getattr(shared_conn, 'db_path', '')
         else:
             if db_path is None:
                 # /data — это persistenceMount из amvera.yml: единственная папка,
@@ -2371,6 +2373,7 @@ class Database:
             if directory:
                 os.makedirs(directory, exist_ok=True)
 
+            self.db_path = db_path
             self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA synchronous=NORMAL")
@@ -18738,6 +18741,147 @@ FINDING_SOURCES = ('avito', 'yula', 'vk', 'telegram', 'other')
 FINDING_TTL_DAYS = 14
 
 
+# ── ЭТАП K: стабильность загрузки ───────────────────────────────────────────
+# Диагноз: приём находок выполнялся синхронно в обработчике aiohttp и внутри
+# себя пересчитывал медианы ПО ВСЕЙ таблице. Пока это шло, цикл событий был
+# заблокирован: не отвечали ни лента, ни бот (человек видел «плохое
+# подключение к интернету»). Здесь: блокировка записи, пакетная вставка,
+# медианы — в фоне с дебаунсом, тяжёлая работа — в рабочем потоке.
+DB_WRITE_LOCK = threading.RLock()
+# K1: счётчики для /api/diag — видно, что именно тормозит
+_INGEST_STATS: Dict[str, Any] = {'last_ms': 0, 'last_n': 0, 'last_at': ''}
+_API_STATS: Dict[str, Dict] = {}
+_LOOP_LAG: Dict[str, Any] = {'max_ms': 0, 'count': 0, 'last_ms': 0, 'at': ''}
+# Один запрос к SQLite не должен держать блокировку дольше этого времени
+SLOW_REQUEST_MS = int(os.environ.get('SLOW_REQUEST_MS', '1500'))
+MEDIANS_DEBOUNCE_SEC = int(os.environ.get('MEDIANS_DEBOUNCE_SEC', '150'))
+
+
+def _db_locked(fn, *args, **kwargs):
+    """Выполняет функцию под общей блокировкой записи в SQLite.
+
+    Соединение одно (check_same_thread=False), и его используют и цикл
+    событий, и рабочие потоки. Без блокировки два писателя дают
+    «database is locked» и портят данные.
+    """
+    with DB_WRITE_LOCK:
+        return fn(*args, **kwargs)
+
+
+def ensure_indexes() -> int:
+    """Индексы под горячие запросы (этап K5).
+
+    Без них пакетный дедуп приёма находок и очередь доставки идут полным
+    сканом таблицы: на 50 тысячах строк каждый приём — сотни миллисекунд,
+    и цикл событий занят. Создаётся идемпотентно, на старте процесса.
+    """
+    cursor = db.conn.cursor()
+    made = 0
+    for sql in (
+        # пакетный дедуп приёма: external_id, точный дубль, отпечаток
+        "CREATE INDEX IF NOT EXISTS idx_ads_source_ext ON ads(source, external_id)",
+        "CREATE INDEX IF NOT EXISTS idx_ads_source_title ON ads(source, title)",
+        "CREATE INDEX IF NOT EXISTS idx_ads_fingerprint ON ads(fingerprint)",
+        "CREATE INDEX IF NOT EXISTS idx_ads_fp_parsed ON ads(fingerprint, parsed_at)",
+        # лента доски: status + source + порядок по дате
+        "CREATE INDEX IF NOT EXISTS idx_ads_feed ON ads(status, source, created_at DESC)",
+        # чистка мусора и медианы
+        "CREATE INDEX IF NOT EXISTS idx_ads_source_discount ON ads(source, discount_percent)",
+        "CREATE INDEX IF NOT EXISTS idx_ads_parsed ON ads(source, parsed_at)",
+        # очередь доставки: статус + время выдачи + порядок по скидке
+        "CREATE INDEX IF NOT EXISTS idx_hunt_matches_queue "
+        "ON hunt_matches(status, deliver_after, discount DESC)",
+        # история цен (D8)
+        "CREATE INDEX IF NOT EXISTS idx_ads_price_history_ad ON ads_price_history(ad_id)",
+    ):
+        try:
+            cursor.execute(sql)
+            made += 1
+        except Exception as e:
+            logger.warning(f"ensure_indexes {sql[:64]}: {e}")
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    return made
+
+
+def _chunked(seq, size: int = 400):
+    seq = list(seq)
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
+
+
+_MEDIANS_DIRTY = {'at': 0.0, 'categories': set(), 'criteria': False}
+
+
+def schedule_medians(categories=None, criteria: bool = True) -> None:
+    """Помечает медианы «грязными»: пересчёт сделает фоновая задача (K4).
+
+    Раньше ingest сам вызывал recompute_* по всей таблице прямо в обработчике.
+    """
+    _MEDIANS_DIRTY['at'] = _time.time()
+    for c in (categories or []):
+        if c:
+            _MEDIANS_DIRTY['categories'].add(str(c))
+    if criteria:
+        _MEDIANS_DIRTY['criteria'] = True
+
+
+def recompute_one_criterion_median(crit: Dict) -> int:
+    """Медиана ОДНОГО критерия — один запрос, без прохода по всем (K4)."""
+    cursor = db.conn.cursor()
+    try:
+        where, params = _criterion_where(crit)
+        cursor.execute(f"SELECT price FROM ads WHERE {where} ORDER BY price", params)
+        prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
+    except Exception as e:
+        logger.warning(f"median for criterion {crit.get('id')}: {e}")
+        return 0
+    if len(prices) < HUNT_MIN_SAMPLE:
+        cursor.execute("UPDATE hunt_criteria SET median_price=NULL, sample_size=? WHERE id=?",
+                       (len(prices), crit.get('id')))
+    else:
+        mid = len(prices) // 2
+        median = prices[mid] if len(prices) % 2 else (prices[mid - 1] + prices[mid]) // 2
+        cursor.execute("UPDATE hunt_criteria SET median_price=?, sample_size=? WHERE id=?",
+                       (median, len(prices), crit.get('id')))
+    try:
+        db.conn.commit()
+    except Exception:
+        pass
+    return len(prices)
+
+
+async def _medians_worker_loop():
+    """Пересчитывает медианы не чаще раза в MEDIANS_DEBOUNCE_SEC (этап K4).
+
+    Считаем в рабочем потоке под блокировкой БД: цикл событий остаётся
+    свободным, и лента отвечает, пока идёт пересчёт.
+    """
+    await asyncio.sleep(20)
+    while True:
+        try:
+            at = float(_MEDIANS_DIRTY.get('at') or 0)
+            if at and (_time.time() - at) >= MEDIANS_DEBOUNCE_SEC:
+                cats = sorted(c for c in (_MEDIANS_DIRTY.get('categories') or set()) if c)
+                want_criteria = bool(_MEDIANS_DIRTY.get('criteria'))
+                _MEDIANS_DIRTY['at'] = 0.0
+                _MEDIANS_DIRTY['categories'] = set()
+                _MEDIANS_DIRTY['criteria'] = False
+                if cats:
+                    # только затронутые категории, а не вся таблица
+                    for cat in cats[:20]:
+                        await asyncio.to_thread(_db_locked, recompute_market_medians, cat)
+                    recompute_market_medians()
+                if want_criteria:
+                    await asyncio.to_thread(_db_locked, recompute_criterion_medians)
+                logger.info(f"медианы пересчитаны в фоне (категорий: {len(cats)})")
+        except Exception as e:
+            logger.warning(f"medians worker: {e}")
+        await asyncio.sleep(10)
+
+
 def recompute_market_medians(category: Optional[str] = None) -> int:
     """Пересчитывает медиану цены по категориям и скидку для находок.
 
@@ -18906,8 +19050,10 @@ def _ad_fingerprint(title: str, price: int, photos) -> str:
 def ingest_findings(items: List[Dict], source: str) -> Dict:
     """Принимает находки от сборщика: дедуп, вставка, пересчёт скидок.
 
-    Храним только публичное: заголовок, цена, город, категория, фото, ссылка.
-    Никаких имён и телефонов — и по закону о персональных данных, и по совести.
+    Этап K3: пакетный режим. Раньше на каждую карточку шло по два SELECT, и на
+    партии в 500 объявлений это давало тысячи запросов, блокируя цикл событий.
+    Теперь три выборки на всю партию (external_id, точный дубль, отпечаток)
+    и одна вставка executemany в одной транзакции.
     """
     if source not in FINDING_SOURCES:
         source = 'other'
@@ -18915,6 +19061,8 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
     now = get_moscow_time().isoformat()
     stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'price_drop': 0}
 
+    # ── 1. Разбор и проверка партии (без обращений к базе)
+    prepared: List[Dict] = []
     for raw in (items or [])[:500]:
         if not isinstance(raw, dict):
             stats['skipped'] += 1
@@ -18930,106 +19078,153 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             price = 0
         photos = raw.get('photos') or []
         if isinstance(photos, list):
-            photos = [str(p) for p in photos if isinstance(p, str) and p.startswith('http')][:5]
+            photos = [str(pp) for pp in photos if isinstance(pp, str) and pp.startswith('http')][:5]
         else:
             photos = []
         if not title or price <= 0 or not url.startswith('http'):
             stats['skipped'] += 1
             continue
         if not ext:
-            # Идентификатор не прислали — сделаем из ссылки, чтобы дедуп работал
             ext = hashlib.md5(url.encode()).hexdigest()[:32]
-        # Этап E1: отпечаток объявления (название + фото + ведро цены) — ловит
-        # повторные публикации с другим external_id, из другого источника или
-        # с чуть изменённой ценой
-        fp = _ad_fingerprint(title, price, photos)
-
         try:
-            cursor.execute("SELECT id, price, last_drop_notice_at FROM ads "
-                           "WHERE source=? AND external_id=? ORDER BY id LIMIT 1",
-                           (source, ext))
-            _known = cursor.fetchone()
-            if _known:
-                # Этап D8: то же объявление подешевело — это новость, а не дубль
-                if _price_drop(cursor, int(_known['id']), int(_known['price'] or 0), price,
-                               _known['last_drop_notice_at'], now, stats):
-                    continue
-                stats['duplicate'] += 1
-                continue
-            # Второй рубеж: тот же заголовок и цена в том же городе
-            cursor.execute("SELECT id FROM ads WHERE source=? AND title=? AND price=? AND city=?",
-                           (source, title, price, city))
-            _exact = cursor.fetchone()
-            if _exact:
+            ago = int(raw.get('hours_ago')) if raw.get('hours_ago') is not None else None
+        except (TypeError, ValueError):
+            ago = None
+        prepared.append({
+            'title': title, 'url': url, 'ext': ext, 'city': city, 'cat': cat,
+            'price': price, 'photos': photos, 'ago': ago,
+            'age_estimated': 1 if (ago is None and raw.get('age_estimated')) else 0,
+            'fp': _ad_fingerprint(title, price, photos),
+            'title_lower': title.lower(),
+        })
+    if not prepared:
+        return stats
+
+    # ── 2. Три выборки на всю партию
+    known_ext: Dict[str, Dict] = {}
+    exact_ids: Dict[tuple, int] = {}
+    known_fp: Dict[str, Dict] = {}
+    try:
+        for chunk in _chunked({pp['ext'] for pp in prepared}):
+            marks = ','.join('?' for _ in chunk)
+            cursor.execute(f"SELECT id, external_id, price, last_drop_notice_at FROM ads "
+                           f"WHERE source=? AND external_id IN ({marks})", (source, *chunk))
+            for row in cursor.fetchall():
+                known_ext[str(row['external_id'])] = dict(row)
+        for chunk in _chunked({pp['title'] for pp in prepared}):
+            marks = ','.join('?' for _ in chunk)
+            cursor.execute(f"SELECT id, title, price, city FROM ads WHERE source=? "
+                           f"AND title IN ({marks})", (source, *chunk))
+            for row in cursor.fetchall():
+                exact_ids[(str(row['title']), int(row['price'] or 0),
+                           str(row['city'] or ''))] = int(row['id'])
+        cutoff = (get_moscow_time() - timedelta(days=14)).isoformat()
+        for chunk in _chunked({pp['fp'] for pp in prepared if pp['fp']}):
+            marks = ','.join('?' for _ in chunk)
+            cursor.execute(f"SELECT id, fingerprint, price, last_drop_notice_at FROM ads "
+                           f"WHERE fingerprint IN ({marks}) AND parsed_at >= ?",
+                           (*chunk, cutoff))
+            for row in cursor.fetchall():
+                known_fp.setdefault(str(row['fingerprint']), dict(row))
+    except sqlite3.Error as e:
+        # Только ошибки самой базы: если упало что-то другое (например, NameError
+        # из-за неполного деплоя), молча отключить дедуп нельзя — это тихая
+        # вставка дублей. Пусть падает громко, сборщик повторит партию.
+        logger.error(f"ingest lookups: {e}")
+        known_ext, exact_ids, known_fp = {}, {}, {}
+
+    # ── 3. Судьба каждой карточки
+    to_insert: List[tuple] = []
+    seen_ext, seen_fp, seen_exact = set(), set(), set()
+    changed_categories: set = set()
+    for pp in prepared:
+        known = known_ext.get(pp['ext'])
+        if known:
+            # Этап D8: то же объявление подешевело — это новость, а не дубль
+            _price_drop(cursor, int(known['id']), int(known['price'] or 0), pp['price'],
+                        known['last_drop_notice_at'], now, stats)
+            stats['duplicate'] += 1
+            continue
+        exact_key = (pp['title'], pp['price'], pp['city'])
+        if exact_key in exact_ids or exact_key in seen_exact:
+            kept = exact_ids.get(exact_key)
+            if kept:
                 try:
                     cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
-                                   "VALUES (?,?,?,?)", (int(_exact['id']), source, ext, now))
+                                   "VALUES (?,?,?,?)", (kept, source, pp['ext'], now))
                 except Exception:
                     pass
-                stats['duplicate'] += 1
-                continue
-            # Третий рубеж (этап E1): отпечаток. То же объявление за 14 дней
-            # с любым external_id/источником/городом/ценой — повторная
-            # публикация, а не новое объявление
-            _cutoff = (get_moscow_time() - timedelta(days=14)).isoformat()
-            cursor.execute("SELECT id, price, last_drop_notice_at FROM ads "
-                           "WHERE fingerprint=? AND parsed_at >= ? ORDER BY id LIMIT 1",
-                           (fp, _cutoff))
-            _fprow = cursor.fetchone()
-            if _fprow:
+            stats['duplicate'] += 1
+            seen_exact.add(exact_key)
+            continue
+        fp_known = known_fp.get(pp['fp'])
+        if fp_known or pp['fp'] in seen_fp:
+            if fp_known:
                 try:
                     cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
                                    "VALUES (?,?,?,?)",
-                                   (int(_fprow['id']), source, ext, now))
+                                   (int(fp_known['id']), source, pp['ext'], now))
                 except Exception:
                     pass
-                # Цена упала — это новость (этап D8), иначе просто повтор
-                _price_drop(cursor, int(_fprow['id']), int(_fprow['price'] or 0), price,
-                            _fprow['last_drop_notice_at'], now, stats)
-                stats['duplicate'] += 1
-                continue
-            try:
-                ago = int(raw.get('hours_ago')) if raw.get('hours_ago') is not None else None
-            except (TypeError, ValueError):
-                ago = None
-            # Этап D5: даты нет, но выдача была отсортирована по дате —
-            # считаем возраст от первого показа (parsed_at)
-            age_estimated = 1 if (ago is None and raw.get('age_estimated')) else 0
-            cursor.execute('''
+                _price_drop(cursor, int(fp_known['id']), int(fp_known['price'] or 0), pp['price'],
+                            fp_known['last_drop_notice_at'], now, stats)
+            stats['duplicate'] += 1
+            seen_fp.add(pp['fp'])
+            continue
+        to_insert.append((pp['title'], pp['price'], json.dumps(pp['photos'], ensure_ascii=False),
+                          pp['cat'], pp['city'], now, now, source, pp['url'], pp['ext'], now,
+                          pp['ago'], pp['title_lower'], pp['age_estimated'], pp['fp']))
+        seen_ext.add(pp['ext'])
+        seen_fp.add(pp['fp'])
+        seen_exact.add(exact_key)
+        if pp['cat']:
+            changed_categories.add(pp['cat'])
+
+    # ── 4. Одна вставка и один commit на партию
+    if to_insert:
+        try:
+            cursor.executemany("""
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
                                  external_id, parsed_at, views, published_hours_ago,
                                  title_lower, age_estimated, fingerprint)
                 VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-            ''', (title, price, json.dumps(photos, ensure_ascii=False), cat, city,
-                  now, now, source, url, ext, now, ago, title.lower(), age_estimated, fp))
-            cursor.execute("INSERT INTO ads_price_history (ad_id, price, seen_at) "
-                           "VALUES (?, ?, ?)", (cursor.lastrowid, price, now))
-            stats['accepted'] += 1
-            stats['ids'].append(cursor.lastrowid)
+            """, to_insert)
+            stats['accepted'] = len(to_insert)
+            inserted: List[tuple] = []
+            for chunk in _chunked([row[9] for row in to_insert]):
+                marks = ','.join('?' for _ in chunk)
+                cursor.execute(f"SELECT id, external_id FROM ads WHERE source=? "
+                               f"AND external_id IN ({marks})", (source, *chunk))
+                for row in cursor.fetchall():
+                    inserted.append((int(row['id']), str(row['external_id'])))
+            stats['ids'] = [i for i, _e in inserted]
+            price_by_ext = {pp['ext']: pp['price'] for pp in prepared}
+            try:
+                cursor.executemany("INSERT INTO ads_price_history (ad_id, price, seen_at) "
+                                   "VALUES (?,?,?)",
+                                   [(i, price_by_ext.get(e, 0), now) for i, e in inserted])
+            except Exception:
+                pass
         except Exception as e:
-            logger.warning(f"ingest item: {e}")
-            stats['skipped'] += 1
+            logger.warning(f"ingest batch insert: {e}")
+            stats['skipped'] += len(to_insert)
+            stats['accepted'] = 0
+            stats['ids'] = []
     try:
         db.conn.commit()
     except Exception:
         pass
+
+    # ── 5. Медианы — в фон с дебаунсом (K4); решения — по новым строкам
     if stats['accepted']:
-        recompute_market_medians()
-        # Медианы критериев пересчитываем ДО рассылки: иначе скидка
-        # считалась бы по устаревшей выборке
-        recompute_criterion_medians()
-        # Решения по новым объявлениям — в hunt_matches: из неё читает лента,
-        # и по ней же будет работать очередь отправки (этап C)
+        schedule_medians(categories=changed_categories, criteria=True)
         try:
-            # Ограничиваем порцию: при массовом приёме (500 карточек) пересчёт
-            # всех подряд держал бы цикл событий, а приложение в это время не
-            # отвечает. Остальное доберёт фоновый цикл.
+            # Ограничиваем порцию: при массовом приёме пересчёт всех подряд
+            # держал бы цикл событий, а приложение в это время не отвечает
             hunt_matches_recompute(ad_ids=(stats.get('ids') or [])[:100])
         except Exception as e:
             logger.error(f"hunt_matches ingest: {e}")
-        # Этап A3: просим сборщика открыть карточки, где описание меняет
-        # решение. Сервер этого сделать не может — его IP Авито блокирует.
         try:
             stats['need_details'] = hunt_need_details(stats.get('ids') or [])
         except Exception as e:
@@ -19071,8 +19266,22 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     items = (body or {}).get('items') or []
     if not isinstance(items, list):
         return _miniapp_err('bad_items', 400)
-    stats = ingest_findings(items, source)
+    started = _time.monotonic()
+    if os.environ.get('INGEST_ASYNC', '1') == '1':
+        # Этап K2: разбор, дедуп и вставка — в рабочем потоке. Синхронный
+        # вызов блокировал цикл событий: пока шла партия, не отвечали ни
+        # лента, ни бот, и человек видел «плохое подключение к интернету».
+        stats = await asyncio.to_thread(_db_locked, ingest_findings, items, source)
+    else:
+        # Откат (K8): старое поведение — синхронно в обработчике
+        stats = ingest_findings(items, source)
     _touch_collector(source)
+    took_ms = int((_time.monotonic() - started) * 1000)
+    _INGEST_STATS['last_ms'] = took_ms
+    _INGEST_STATS['last_n'] = len(items)
+    _INGEST_STATS['last_at'] = get_moscow_time().isoformat()
+    if took_ms > SLOW_REQUEST_MS:
+        logger.warning(f"ingest {source}: {len(items)} шт. заняли {took_ms} мс")
     logger.info(f"ingest {source}: принято {stats['accepted']}, "
                 f"дублей {stats['duplicate']}, пропущено {stats['skipped']}")
     # Рассылка уходит в ФОН. Раньше она выполнялась прямо в обработчике
@@ -22086,7 +22295,10 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
     ready_ids: List[int] = []
     if touched:
         try:
-            recompute_criterion_medians()
+            # K4: медианы — в фон с дебаунсом, решения — сразу
+            schedule_medians(categories=[a.get('category') for a in
+                                         [db.get_ad(i) for i in touched[:20]] if a],
+                             criteria=True)
             hunt_matches_recompute(ad_ids=touched)
             # Готовые к отправке по этим объявлениям — тем же путём, что и
             # обычная рассылка: одно сообщение на находку
@@ -22251,8 +22463,16 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
           'deal' if str(mode) == 'deal' else 'any'))
     db.conn.commit()
     crit_id = cursor.lastrowid
-    # Сразу считаем медиану, чтобы критерий начал работать не «когда-нибудь»
-    recompute_criterion_medians()
+    # K4: медиана ТОЛЬКО этого критерия — один запрос вместо прохода по всем.
+    # Полный пересчёт ушёл в фон с дебаунсом и цикл событий не держит.
+    try:
+        cursor.execute("SELECT * FROM hunt_criteria WHERE id=?", (crit_id,))
+        _row = cursor.fetchone()
+        if _row:
+            recompute_one_criterion_median(dict(_row))
+    except Exception as e:
+        logger.warning(f"median on create: {e}")
+    schedule_medians(criteria=True)
     # Сразу отправляем то, что уже собрано и подходит: иначе критерий
     # создан, находки в ленте есть, а в чате тишина — объявления попали
     # в базу РАНЬШЕ, чем человек задал критерий.
@@ -22314,7 +22534,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
 
     if method == 'GET':
         return _miniapp_json({
-            'items': [_criterion_public(c) for c in get_user_criteria(viewer_id)],
+            'items': [_criterion_public(c)
+                      for c in _db_locked(get_user_criteria, viewer_id)],
             # Без этого человек не понимает, почему ничего не приходит
             'collector': collector_status(),
             # Заблокировал бота — находки физически не дойдут: покажем плашку
@@ -22460,8 +22681,8 @@ def cleanup_findings() -> Dict:
         logger.warning(f"cleanup findings: {e}")
     if removed:
         logger.info(f"Чистка базы: удалено старых находок {removed} (старше {HUNT_KEEP_DAYS} дн.)")
-        recompute_market_medians()
-        recompute_criterion_medians()
+        # K4: пересчёт — фоновой задачей, а не в этом вызове
+        schedule_medians(categories=[], criteria=True)
     return {'removed': removed, 'keep_days': HUNT_KEEP_DAYS}
 
 
@@ -22492,7 +22713,7 @@ async def _hunt_catchup_loop():
     await asyncio.sleep(60)
     while True:
         try:
-            recompute_criterion_medians()
+            await asyncio.to_thread(_db_locked, recompute_criterion_medians)
             # only_missing: решения по уже посчитанным не пересчитываем —
             # это дешёвая страховка, а не полный проход по базе
             written = await hunt_matches_recompute_async(limit_ads=100, only_missing=True)
@@ -25220,7 +25441,7 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     if city:
         where.append("a.city = ?")
         params.append(city)
-    try:
+    def _fetch_findings():
         cursor = db.conn.cursor()
         cursor.execute(
             f"SELECT a.*, (SELECT COUNT(*) FROM search_notifications_sent s2 "
@@ -25228,7 +25449,12 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
             f"FROM ads a WHERE {' AND '.join(where)} "
             f"ORDER BY COALESCE(a.discount_percent, 0) DESC, a.id DESC LIMIT ? OFFSET ?",
             (viewer_id, *params, limit + 1, offset))
-        rows = [dict(r) for r in cursor.fetchall()]
+        return [dict(r) for r in cursor.fetchall()]
+
+    try:
+        # K2: та же блокировка, что у приёма находок — чтение не попадает
+        # внутрь чужой транзакции
+        rows = _db_locked(_fetch_findings)
     except Exception as e:
         logger.error(f"findings list: {e}")
         return _miniapp_err('load_failed', 500)
@@ -25391,6 +25617,71 @@ async def api_check_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'duration_days': promo.get('duration_days', 30),
         'crypto_url': crypto_url,
     }, headers=cors)
+
+
+def _diag_path_key(path: str) -> str:
+    """Схлопывает пути с id, чтобы счётчики не распухали: /api/ads/123 → /api/ads/{id}."""
+    parts = [p for p in str(path or '/').split('/') if p]
+    out = []
+    for p in parts:
+        if p.isdigit() or (len(p) > 16 and p.replace('-', '').isalnum()):
+            out.append('{id}')
+        else:
+            out.append(p)
+    return '/' + '/'.join(out)
+
+
+async def _loop_lag_loop():
+    """K1: следит за блокировками цикла событий.
+
+    Каждые 100 мс проверяем, вовремя ли проснулись. Опоздание больше 500 мс
+    означает, что какой-то обработчик занял цикл событиями — именно это
+    человек видит как «приложение зависло».
+    """
+    interval = 0.1
+    while True:
+        try:
+            t0 = _time.monotonic()
+            await asyncio.sleep(interval)
+            lag_ms = int((_time.monotonic() - t0 - interval) * 1000)
+            if lag_ms < 0:
+                lag_ms = 0
+            _LOOP_LAG['last_ms'] = lag_ms
+            if lag_ms > 500:
+                _LOOP_LAG['count'] += 1
+                if lag_ms > _LOOP_LAG['max_ms']:
+                    _LOOP_LAG['max_ms'] = lag_ms
+                _LOOP_LAG['at'] = get_moscow_time().isoformat()
+                logger.warning(f"ЦИКЛ СОБЫТИЙ ЗАБЛОКИРОВАН на {lag_ms} мс")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            pass
+
+
+async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/diag — задержки запросов, приём находок, блокировки цикла (K1).
+
+    Только для администратора: показывает, что именно тормозит сервис.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('forbidden', 403)
+    try:
+        if not await is_admin(viewer_id):
+            return _miniapp_err('forbidden', 403)
+    except Exception:
+        return _miniapp_err('forbidden', 403)
+    rows = sorted(_API_STATS.items(), key=lambda kv: -kv[1]['total_ms'])[:15]
+    return _miniapp_json({
+        'loop_lag': dict(_LOOP_LAG),
+        'ingest': dict(_INGEST_STATS),
+        'slow_ms': SLOW_REQUEST_MS,
+        'requests': [{'path': p, 'n': v['n'], 'avg_ms': int(v['total_ms'] / max(1, v['n'])),
+                      'max_ms': v['max_ms'], 'slow': v['slow']} for p, v in rows],
+        'ingest_async': os.environ.get('INGEST_ASYNC', '1') == '1',
+        'medians_debounce_sec': MEDIANS_DEBOUNCE_SEC,
+    })
 
 
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -25906,17 +26197,35 @@ async def _request_logging_middleware(request: aiohttp_web.Request, handler):
     PayAnyWay/moneta.ru, DNS, firewall и т.п.).
     """
     peer = request.remote or "?"
+    started = _time.monotonic()
     logger.info(f"HTTP IN: {request.method} {request.path}?{request.query_string} from {peer}")
+    status = 0
     try:
         response = await handler(request)
+        status = int(response.status)
         logger.info(f"HTTP OUT: {request.method} {request.path} -> {response.status}")
         return response
     except aiohttp_web.HTTPException as _he:
+        status = int(_he.status)
         logger.info(f"HTTP OUT: {request.method} {request.path} -> {_he.status} (HTTPException)")
         raise
     except Exception as _e:
+        status = 500
         logger.error(f"HTTP ERROR: {request.method} {request.path}: {_e}", exc_info=True)
         raise
+    finally:
+        # K1: длительность каждого запроса; всё дольше SLOW_REQUEST_MS — в warning
+        dur_ms = int((_time.monotonic() - started) * 1000)
+        key = _diag_path_key(request.path)
+        st = _API_STATS.setdefault(key, {'n': 0, 'total_ms': 0, 'max_ms': 0, 'slow': 0})
+        st['n'] += 1
+        st['total_ms'] += dur_ms
+        if dur_ms > st['max_ms']:
+            st['max_ms'] = dur_ms
+        if dur_ms > SLOW_REQUEST_MS:
+            st['slow'] += 1
+            logger.warning(f"МЕДЛЕННЫЙ ЗАПРОС {request.method} {request.path}: "
+                           f"{dur_ms} мс (статус {status})")
 
 
 async def api_views_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -26678,10 +26987,13 @@ async def api_miniapp_ads_list(request: aiohttp_web.Request) -> aiohttp_web.Resp
     except ValueError:
         offset = 0
     try:
-        raw = db.search_ads_filtered(
-            query=q, category=category, price_min=price_min, price_max=price_max,
-            city=city, condition=condition, delivery=delivery, sort_by=sort,
-            limit=limit + offset + 1,
+        # K2: выборка идёт под той же блокировкой, что и приём находок в
+        # рабочем потоке — иначе чтение попадает внутрь чужой транзакции
+        # и падает с «database is locked».
+        raw = _db_locked(
+            db.search_ads_filtered, query=q, category=category, price_min=price_min,
+            price_max=price_max, city=city, condition=condition, delivery=delivery,
+            sort_by=sort, limit=limit + offset + 1,
         )
     except Exception as e:
         logger.error(f"miniapp ads_list: {e}")
@@ -27594,6 +27906,7 @@ def create_api_app() -> aiohttp_web.Application:
     )
     app.router.add_get('/', api_root)
     app.router.add_get('/health', api_health)
+    app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/views_diag', api_views_diag)
     app.router.add_get('/chat', api_serve_html)
     app.router.add_get('/api/check_promo', api_check_promo)
@@ -28159,6 +28472,7 @@ def main():
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
         ensure_monetization()
+        ensure_indexes()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)
@@ -28174,6 +28488,9 @@ def main():
             asyncio.ensure_future(_hunt_catchup_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())
+            # Этап K1/K4: наблюдатель блокировок цикла и фоновый пересчёт медиан
+            asyncio.ensure_future(_loop_lag_loop())
+            asyncio.ensure_future(_medians_worker_loop())
             print(f"   Health check:      {SERVER_URL}/health")
         except Exception as _srv_err:
             print(f"{EM_FAIL} ОШИБКА запуска API-сервера на порту {WEBAPP_PORT}: {_srv_err}")

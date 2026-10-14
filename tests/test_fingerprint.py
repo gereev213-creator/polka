@@ -20,7 +20,8 @@ TOKENS = ('Decision', 'FINGERPRINT_TITLE_STOPWORDS', '_normalize_title', '_photo
           '_price_bucket', '_ad_fingerprint', 'FINDING_SOURCES', 'HUNT_PRICE_DROP_PERCENT',
           'ingest_findings', '_price_drop', '_miniapp_display_category', '_hours_since',
           '_safe_isoparse', 'ensure_quality_columns', 'ensure_fingerprint_backfill',
-          'ensure_hunt_matches', 'dedupe_existing', 'hunt_match_store')
+          'ensure_hunt_matches', 'dedupe_existing', 'hunt_match_store',
+          '_chunked', '_MEDIANS_DIRTY', 'schedule_medians')
 
 
 def chunks(src):
@@ -95,7 +96,7 @@ class FakeDb:
 ns = {'os': os, 're': re, 'json': json, 'hashlib': hashlib, 'sqlite3': sqlite3,
       'NamedTuple': NamedTuple, 'Dict': Dict, 'List': List, 'Optional': Optional,
       'Tuple': tuple, 'Any': object, 'datetime': datetime, 'timedelta': timedelta,
-      'ZoneInfo': ZoneInfo, 'logger': FakeLog(), 'db': FakeDb(conn),
+      'ZoneInfo': ZoneInfo, 'logger': FakeLog(), 'db': FakeDb(conn), '_time': __import__('time'),
       'get_moscow_time': lambda: NOW,
       # заглушки: пересчёт и очереди тестируются отдельно
       'recompute_market_medians': lambda *a, **k: 0,
