@@ -19131,10 +19131,21 @@ def _price_drop(cursor, ad_id: int, old_price: int, new_price: int, last_notice,
             pass
         if notify:
             cursor.execute("UPDATE ads SET last_drop_notice_at=? WHERE id=?", (now, int(ad_id)))
-            # Находка с новой ценой должна уйти в чат заново
+            # Будим только те решения, где объявление РАНЬШЕ подошло
+            # (sent/ready/send_failed): человеку сообщаем новую цену.
+            #
+            # Раньше здесь был и статус 'rejected' — и это была грубая ошибка:
+            # отклонённых решений в базе сотни тысяч (по одному на каждую пару
+            # «объявление × критерий»), и любое подешевевшее объявление
+            # рассылалось по ВСЕМ критериям подряд. В чат падало худи по
+            # критерию «iPhone 13 Pro» и системный блок по «Пуховик lacoste».
+            #
+            # Отклонённые пересчитает hunt_matches_recompute ниже в этом же
+            # приёме: если объявление подешевело и теперь проходит по цене,
+            # решение честно станет ready, а не «просто потому что подешевело».
             cursor.execute("UPDATE hunt_matches SET status='ready', reason='price_drop', "
                            "reject_reason='', updated_at=? WHERE ad_id=? "
-                           "AND status IN ('rejected','sent','ready','send_failed')",
+                           "AND status IN ('sent','ready','send_failed')",
                            (now, int(ad_id)))
         stats['price_drop'] = int(stats.get('price_drop') or 0) + 1
         if int(ad_id) not in stats['ids']:
@@ -21175,7 +21186,20 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             desc_state = 'ok' if desc else ('pending' if decision.needs_description else '')
             # Отметка прошлых отправок главнее решения: если человеку уже
             # прислали, запись обязана быть sent
-            force = 'sent' if legacy_sent else ''
+            # Этап D8: объявление подешевело только что. Если оно подходит,
+            # сообщаем заново, даже если раньше уже отправляли — иначе отметка
+            # «уже отправляли» навсегда заглушила бы новость о снижении цены.
+            # Не чаще раза в сутки: это стережёт last_drop_notice_at.
+            fresh_drop = False
+            if decision.ok:
+                try:
+                    _hrs = _hours_since(ad.get('last_drop_notice_at'))
+                    fresh_drop = _hrs is not None and _hrs < 1
+                except Exception:
+                    fresh_drop = False
+            force = '' if fresh_drop else ('sent' if legacy_sent else '')
+            if fresh_drop:
+                decision = decision._replace(reason='price_drop')
             # Этап H: бесплатному находка уходит с задержкой (deliver_after)
             deliver_after = ''
             if decision.ok and decision.reason != 'desc_needed' and int(plan.get('delay_min') or 0) > 0:
@@ -21323,6 +21347,42 @@ def hunt_release(rows: List[Dict], status: str, error: str = '') -> None:
         db.conn.commit()
     except Exception:
         pass
+
+
+def hunt_flush_stale_sending(minutes: int = 15) -> int:
+    """Зависшие в «sending» возвращает в очередь.
+
+    Воркер забирает только ready, поэтому запись, застрявшая в sending
+    (например, контейнер перезапустили посреди отправки — это видно в базе:
+    десять записей с одинаковым временем), не уходила человеку НИКОГДА.
+    После нескольких попыток помечаем неудачей, чтобы не крутить вечно.
+    """
+    now = get_moscow_time()
+    before = (now - timedelta(minutes=minutes)).isoformat()
+    cursor = db.conn.cursor()
+    returned = failed = 0
+    try:
+        cursor.execute(
+            "UPDATE hunt_matches SET status='ready', updated_at=?, "
+            "send_attempts=COALESCE(send_attempts,0)+1 "
+            "WHERE status='sending' AND COALESCE(updated_at,'') < ? "
+            "AND COALESCE(send_attempts,0) < ?",
+            (now.isoformat(), before, HUNT_SEND_MAX_TRIES))
+        returned = int(cursor.rowcount or 0)
+        cursor.execute(
+            "UPDATE hunt_matches SET status='send_failed', send_error='stuck_sending', "
+            "updated_at=? WHERE status='sending' AND COALESCE(updated_at,'') < ? "
+            "AND COALESCE(send_attempts,0) >= ?",
+            (now.isoformat(), before, HUNT_SEND_MAX_TRIES))
+        failed = int(cursor.rowcount or 0)
+        db.conn.commit()
+        if returned or failed:
+            logger.warning(f"зависшие отправки: вернули в очередь {returned}, "
+                           f"пометили неудачей {failed}")
+        return returned + failed
+    except Exception as e:
+        logger.warning(f"flush sending: {e}")
+        return 0
 
 
 def hunt_retry_failed() -> int:
@@ -22793,9 +22853,11 @@ async def _hunt_delivery_loop():
             if app:
                 retried = hunt_retry_failed()
                 flushed = hunt_flush_stale_pending()
-                if retried or flushed:
+                stuck = hunt_flush_stale_sending()
+                if retried or flushed or stuck:
                     logger.info(f'очередь находок: возвращено {retried}, '
-                                f'отправляем с пометкой {flushed}')
+                                f'отправляем с пометкой {flushed}, '
+                                f'зависших поправлено {stuck}')
                 rows = hunt_claim_batch()
                 if rows:
                     sent = await _hunt_deliver_rows(app, rows)
@@ -23340,11 +23402,12 @@ async def _hunt_catchup_loop():
             # это дешёвая страховка, а не полный проход по базе
             written = await hunt_matches_recompute_async(limit_ads=100, only_missing=True)
             flushed = hunt_flush_stale_pending()
+            stuck = hunt_flush_stale_sending()
             ready = len(hunt_ready_ids(limit=200))
             _HUNT_SEND_STATS['criteria'] = written
             _HUNT_SEND_STATS['last_ids'] = ready
             logger.info(f"Пересчёт находок: решений {written}, готово к отправке {ready}, "
-                        f"без описания {flushed}")
+                        f"без описания {flushed}, зависших поправлено {stuck}")
             if ready:
                 hunt_wake()
         except Exception as e:
@@ -29611,6 +29674,7 @@ def main():
         ensure_indexes()
         ensure_admin()
         ensure_promo()
+        hunt_flush_stale_sending()
         _prepare_upload_dir()
         api_app = create_api_app()
         runner = aiohttp_web.AppRunner(api_app)

@@ -375,4 +375,66 @@ print(f'\nчтение при занятой блокировке: подожд�
       f'({"не блокирует цикл" if waited_ms < 500 else "БЛОКИРУЕТ"})')
 assert waited_ms < 500, f'чтение ждало {waited_ms:.0f} мс'
 
+# ── 6. Снижение цены не будит отклонённые решения (иначе спам по всем критериям)
+print('\nснижение цены: кого будим повторно')
+drop_ns = build_ns(NEW_SRC, conn)
+for name in ('_price_drop', 'hunt_flush_stale_sending'):
+    i = NEW_SRC.index(f'def {name}(')
+    end = re.compile(r'^(async )?def ', re.M).search(NEW_SRC, i + 5)
+    exec(NEW_SRC[i:end.start()], drop_ns)
+drop_ns['HUNT_PRICE_DROP_PERCENT'] = 5
+drop_ns['HUNT_SEND_MAX_TRIES'] = 3
+drop_ns['_hours_since'] = lambda iso: 100.0
+
+dconn = sqlite3.connect(':memory:')
+dconn.row_factory = sqlite3.Row
+dconn.executescript(DDL + """
+CREATE TABLE hunt_matches (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER,
+    crit_id INTEGER, ad_id INTEGER, status TEXT, reason TEXT DEFAULT '',
+    reject_reason TEXT DEFAULT '', discount INTEGER DEFAULT 0, desc_state TEXT DEFAULT '',
+    created_at TEXT, updated_at TEXT, delivery TEXT DEFAULT '', send_attempts INTEGER DEFAULT 0,
+    send_error TEXT DEFAULT '', fingerprint TEXT DEFAULT '', unverified INTEGER DEFAULT 0,
+    deliver_after TEXT DEFAULT '', unlocked_by_user INTEGER DEFAULT 0,
+    deep_check INTEGER DEFAULT 0, notified_at TEXT, UNIQUE(user_id, ad_id, crit_id));
+""")
+dconn.execute("INSERT INTO ads (id, title, price, status, last_drop_notice_at, source) "
+              "VALUES (7, 'Худи bape', 5000, 'active', '', 'avito')")
+# четыре решения по одному объявлению: отклонённое и три принятых
+for crit_id, status in ((7, 'rejected'), (8, 'sent'), (9, 'ready'), (10, 'send_failed')):
+    dconn.execute("INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, updated_at) "
+                  "VALUES (1, ?, 7, ?, ?)", (crit_id, status, NOW_ISO))
+dconn.commit()
+dns = build_ns(NEW_SRC, dconn)
+for name in ('_price_drop', 'hunt_flush_stale_sending'):
+    i = NEW_SRC.index(f'def {name}(')
+    end = re.compile(r'^(async )?def ', re.M).search(NEW_SRC, i + 5)
+    exec(NEW_SRC[i:end.start()], dns)
+dns['HUNT_PRICE_DROP_PERCENT'] = 5
+dns['HUNT_SEND_MAX_TRIES'] = 3
+dns['_hours_since'] = lambda iso: 100.0
+stats = {'ids': [], 'price_drop': 0}
+dns['_price_drop'](dconn.cursor(), 7, 5000, 3000, '', NOW_ISO, stats)
+dconn.commit()
+states = {r['crit_id']: (r['status'], r['reason']) for r in
+          dconn.execute("SELECT crit_id, status, reason FROM hunt_matches WHERE ad_id=7")}
+assert states[7][0] == 'rejected', f'отклонённое решение разбудили: {states[7]}'
+assert states[8][0] == 'ready' and states[8][1] == 'price_drop', states[8]
+assert states[9][0] == 'ready', states[9]
+assert states[10][0] == 'ready', states[10]
+print('   отклонённое решение осталось rejected (пересчитает пересчёт, а не «подешевело»)')
+
+# ── 7. Зависшие в sending возвращаются в очередь
+old_ts = '2026-10-14T11:00:00+03:00'   # раньше NOW минус 15 минут
+dconn.execute("INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, updated_at, send_attempts) "
+              "VALUES (1, 100, 7, 'sending', ?, 0)", (old_ts,))
+dconn.execute("INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, updated_at, send_attempts) "
+              "VALUES (1, 101, 7, 'sending', ?, 3)", (old_ts,))
+dconn.commit()
+fixed = dns['hunt_flush_stale_sending'](minutes=15)
+after = {r['crit_id']: r['status'] for r in
+         dconn.execute("SELECT crit_id, status FROM hunt_matches WHERE crit_id IN (100,101)")}
+assert after[100] == 'ready' and after[101] == 'send_failed', after
+print(f'   зависшие: вернули в очередь {after[100]}, после 3 попыток — {after[101]} '
+      f'(всего поправлено {fixed})')
+
 print('\nK: все проверки пройдены')
