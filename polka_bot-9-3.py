@@ -29882,6 +29882,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings/rollback', api_admin_rollback)
     app.router.add_post('/api/admin/collector-filter', api_admin_collector_filter)
+    app.router.add_post('/api/admin/collector-filter', api_admin_collector_filter)
     app.router.add_get('/api/admin/history', api_admin_history)
     app.router.add_post('/api/admin/grant', api_admin_grant)
     app.router.add_get('/api/admin/promo', api_admin_promo)
