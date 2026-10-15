@@ -47,7 +47,7 @@ from html.parser import HTMLParser
 # Включить: POLKA_SEARCH_BY_QUERY=1 (или свой шаблон url_template со своим q) —
 # если Авито изменит поведение либо если у вас прокси, с которого поиск идёт.
 # Проверка формы ссылки:  python3 collect.py --check-query "iphone 13 pro"
-SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') == '1'
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -942,11 +942,23 @@ CATEGORY_BY_WORD = {
 # не трогая код. Зачем: форму ссылки и фильтры Авито надёжнее всего взять
 # из браузера (поиск → нужные фильтры → скопировать адрес из строки).
 # Подстановки: {category} {query} {pmin} {pmax} {page}
+# ПРОВЕРЕНО 15.10.2026 на живом сайте (ссылка владельца из браузера):
+#   /all/odezhda_obuv_aksessuary?cd=1&localPriority=0&q=пуховик&user=1&s=104
+# даёт 75–81 карточку ровно по запросу. Разница с прежними попытками —
+# параметры cd=1, user=1 и localPriority=0: без них Авито отбивал запрос
+# (429/439), и я решил, что поиск недоступен. Он доступен.
+#   q={query}  — слова критерия, ищет сам Авито (точность вместо перебора)
+#   user=1     — только частные объявления (фильтр продавца со стороны Авито)
+#   cd=1       — как в браузерной ссылке, без него не работает
+#   {filters}  — необязательный набор фильтров (f=...) из ссылки браузера:
+#                состояние, доставка, память. Задаётся в config.json.
 DEFAULT_URL_TEMPLATE = ("https://www.avito.ru/all/{category}"
-                        "?q={query}&s=104&pmin={pmin}&pmax={pmax}")
+                        "?cd=1&localPriority=0&q={query}&user=1{filters}"
+                        "&s=104&pmin={pmin}&pmax={pmax}")
 
 
-def search_url(template: str, slug: str, query: str, pmin: int, pmax: int) -> str:
+def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
+               filters: str = '') -> str:
     """Собирает ссылку поиска по шаблону и убирает пустые параметры.
 
     Пустые pmin/pmax и отсутствие категории не должны оставлять в ссылке
@@ -956,6 +968,7 @@ def search_url(template: str, slug: str, query: str, pmin: int, pmax: int) -> st
     url = str(template or DEFAULT_URL_TEMPLATE)
     for key, value in (('{category}', slug or ''),
                        ('{query}', quote_plus(query or '')),
+                       ('{filters}', str(filters or '')),
                        ('{pmin}', str(int(pmin)) if pmin else ''),
                        ('{pmax}', str(int(pmax)) if pmax else '')):
         url = url.replace(key, value)
@@ -1026,7 +1039,8 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             # Категория не узнана: цель всё равно создаём (поиск по площадке),
             # но считаем такие критерии — по ним раздел не определён.
             no_slug += 1
-        url = search_url(template_here, slug or '', query, pmin, pmax)
+        url = search_url(template_here, slug or '', query, pmin, pmax,
+                         filters=(cfg or {}).get('filters') or os.environ.get('POLKA_FILTERS', ''))
         if url in seen:
             continue
         seen.add(url)
@@ -1450,6 +1464,44 @@ def selftest() -> int:
     return 0 if ok else 1
 
 
+def check_url(url: str) -> int:
+    """Проверяет ЛЮБУЮ ссылку Авито: открывается ли и сколько карточек разобралось.
+
+    Зачем: фильтры Авито (только частные, состояние, доставка, память) живут в
+    самой ссылке. Форму этой ссылки знает только браузер — скопируйте адрес из
+    строки браузера с нужными фильтрами и покажите его здесь. Если страница
+    открывается и карточки разбираются, эту ссылку можно смело ставить
+    сборщику как источник: фильтры будет применять сам Авито.
+    """
+    url = str(url or '').strip()
+    if not url.startswith('http'):
+        print("Укажите полную ссылку: --check-url \"https://www.avito.ru/...\"")
+        return 2
+    print(f"Проверяю: {url}")
+    try:
+        html = fetch(url, timeout=45)
+    except Exception as exc:
+        print(f"  ✖ не открылась: {str(exc)[:140]}")
+        print("    Если это 429/439 — Авито отбил запрос: подождите 10–15 минут")
+        print("    и повторите (частые проверки он считает поведением бота).")
+        return 1
+    items = parse_page(html)
+    print(f"  страница открылась, символов {len(html)}, карточек разобрано: {len(items)}")
+    if not items:
+        print("  ⚠ карточек нет: возможно, в ссылке ноль объявлений или другая вёрстка")
+        return 1
+    sellers = {}
+    for it in items:
+        st = it.get('seller_type') or 'не определён'
+        sellers[st] = sellers.get(st, 0) + 1
+    for it in items[:5]:
+        print(f"    {str(it.get('title'))[:46]:48} {it.get('price')} ₽  "
+              f"{it.get('city') or ''}  продавец: {it.get('seller_type') or '—'}")
+    print(f"  типы продавца в выдаче: {sellers}")
+    print("  ✅ ссылку можно использовать как источник для сборщика")
+    return 0
+
+
 def check_query(text: str) -> int:
     """Сравнивает две ссылки поиска на живом Авито: без q и с q.
 
@@ -1501,6 +1553,8 @@ def main() -> int:
                     help='проверить, пускает ли Авито через прокси')
     ap.add_argument('--check', action='store_true',
                     help='перепроверить лоты: продано или ещё висит')
+    ap.add_argument('--check-url', metavar='ССЫЛКА',
+                    help='проверить ссылку Авито с фильтрами из браузера')
     ap.add_argument('--check-query', metavar='ТЕКСТ',
                     help='сравнить поиск по тексту запроса и по категории')
     ap.add_argument('--details-only', metavar='N', nargs='?', const='0',
@@ -1512,6 +1566,9 @@ def main() -> int:
 
     if args.selftest:
         return selftest()
+
+    if args.check_url:
+        return check_url(args.check_url)
 
     if args.check_query is not None:
         return check_query(args.check_query)
