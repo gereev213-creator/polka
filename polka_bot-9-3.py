@@ -22314,6 +22314,239 @@ async def api_promo_redeem(request: aiohttp_web.Request) -> aiohttp_web.Response
     return _miniapp_json(res)
 
 
+# ── Универсальные шаблоны критериев ────────────────────────────────────────
+# Готовые условия для частых покупок: точные слова, категория Авито (по ней
+# сборщик выбирает раздел), ориентир цены и типовые требования. Смысл — чтобы
+# человек выбирал из списка, а не писал словами: «пуховик» вместо «зип 158»
+# находит в разы точнее, а для телефонов сразу включается проверка АКБ.
+# Ключи слов обязаны быть в словаре сборщика CATEGORY_BY_WORD, иначе раздел
+# не определится и цель не создастся.
+HUNT_TEMPLATES = [
+    # телефоны: для них важна АКБ, поэтому требование ставим сразу
+    ('telefony', 'iPhone 13', 'iPhone 13', 30000, {'battery_min': 80}),
+    ('telefony', 'iPhone 13 Pro', 'iPhone 13 Pro', 45000, {'battery_min': 80}),
+    ('telefony', 'iPhone 14', 'iPhone 14', 45000, {'battery_min': 80}),
+    ('telefony', 'iPhone 15', 'iPhone 15', 55000, {'battery_min': 80}),
+    ('telefony', 'iPhone 15 Pro', 'iPhone 15 Pro', 70000, {'battery_min': 80}),
+    ('telefony', 'Samsung Galaxy S23', 'Samsung Galaxy S23', 45000, {'battery_min': 80}),
+    ('telefony', 'Xiaomi Redmi Note', 'Xiaomi Redmi Note', 15000, {'battery_min': 80}),
+    ('telefony', 'Google Pixel', 'Google Pixel', 30000, {'battery_min': 80}),
+    # ноутбуки и планшеты
+    ('noutbuki', 'MacBook Air M1', 'MacBook Air M1', 50000, {}),
+    ('noutbuki', 'MacBook Pro 13', 'MacBook Pro 13', 60000, {}),
+    ('noutbuki', 'Ноутбук для учёбы', 'ноутбук', 25000, {}),
+    ('noutbuki', 'Игровой ноутбук', 'игровой ноутбук RTX', 60000, {}),
+    ('planshety', 'iPad', 'iPad', 25000, {}),
+    ('planshety', 'Планшет Android', 'планшет', 15000, {}),
+    # приставки и игры
+    ('igry', 'PlayStation 5', 'PlayStation 5', 45000, {}),
+    ('igry', 'Xbox Series', 'Xbox Series', 30000, {}),
+    ('igry', 'Nintendo Switch', 'Nintendo Switch', 20000, {}),
+    # аудио и видео
+    ('audio', 'AirPods Pro', 'AirPods Pro', 12000, {}),
+    ('audio', 'Наушники Sony', 'наушники Sony', 15000, {}),
+    ('audio', 'Колонка JBL', 'колонка JBL', 8000, {}),
+    ('audio', 'Телевизор', 'телевизор', 25000, {}),
+    # комплектующие
+    ('kompyutery', 'Видеокарта RTX', 'видеокарта RTX', 30000, {}),
+    ('kompyutery', 'Монитор 27', 'монитор 27', 15000, {}),
+    ('kompyutery', 'Клавиатура механическая', 'клавиатура механическая', 6000, {}),
+    ('kompyutery', 'SSD 1TB', 'SSD 1TB', 8000, {}),
+    # бытовая техника
+    ('bytovaya', 'Робот-пылесос', 'робот-пылесос', 15000, {}),
+    ('bytovaya', 'Пылесос Dyson', 'пылесос Dyson', 20000, {}),
+    ('bytovaya', 'Микроволновка', 'микроволновка', 5000, {}),
+    ('bytovaya', 'Стиральная машина', 'стиральная машина', 15000, {}),
+    ('bytovaya', 'Холодильник', 'холодильник', 20000, {}),
+    # одежда и обувь: состояние важно, поэтому требуем «хорошее»
+    ('odezhda', 'Пуховик мужской', 'пуховик мужской', 6000, {'condition_min': 'good'}),
+    ('odezhda', 'Пуховик женский', 'пуховик женский', 6000, {'condition_min': 'good'}),
+    ('odezhda', 'Зимние ботинки', 'ботинки зимние', 5000, {'condition_min': 'good'}),
+    ('odezhda', 'Кроссовки Nike', 'кроссовки Nike', 6000, {'condition_min': 'good'}),
+    ('odezhda', 'Куртка утеплённая', 'куртка утеплённая', 5000, {'condition_min': 'good'}),
+    ('odezhda', 'Джинсы', 'джинсы', 3000, {'condition_min': 'good'}),
+    ('odezhda', 'Худи', 'худи', 3000, {'condition_min': 'good'}),
+    # дом, мебель, инструменты
+    ('mebel', 'Диван', 'диван', 20000, {}),
+    ('mebel', 'Стол компьютерный', 'стол компьютерный', 6000, {}),
+    ('mebel', 'Шкаф', 'шкаф', 10000, {}),
+    ('instrument', 'Перфоратор', 'перфоратор', 6000, {}),
+    ('instrument', 'Шуруповёрт', 'шуруповёрт', 5000, {}),
+    # спорт, велосипеды, красота
+    ('velosipedy', 'Велосипед горный', 'велосипед горный', 20000, {}),
+    ('velosipedy', 'Самокат', 'самокат', 8000, {}),
+    ('sport', 'Гантели', 'гантели', 4000, {}),
+    ('sport', 'Беговая дорожка', 'беговая дорожка', 20000, {}),
+    ('krasota', 'Фен Dyson', 'фен Dyson', 15000, {}),
+    # автозапчасти и авто
+    ('avto', 'Автомобиль', 'автомобиль', 400000, {}),
+    ('avto', 'Зимние шины', 'шины зимние', 25000, {}),
+]
+
+HUNT_TEMPLATE_GROUPS = {
+    'telefony': 'Телефоны',
+    'noutbuki': 'Ноутбуки',
+    'planshety': 'Планшеты',
+    'igry': 'Приставки и игры',
+    'audio': 'Аудио и видео',
+    'kompyutery': 'Комплектующие',
+    'bytovaya': 'Бытовая техника',
+    'odezhda': 'Одежда и обувь',
+    'mebel': 'Мебель',
+    'instrument': 'Инструменты',
+    'velosipedy': 'Велосипеды',
+    'sport': 'Спорт',
+    'krasota': 'Красота и здоровье',
+    'avto': 'Авто и шины',
+}
+
+
+def _template_slug(title: str, index: int) -> str:
+    """Идентификатор шаблона: читаемый, но уникальный и для русских названий.
+
+    Раньше слаг делался только из латиницы, и «Ноутбук для учёбы» давал
+    пустую строку: несколько шаблонов получали один и тот же ключ и
+    затирали друг друга — из 49 шаблонов до базы доходили 24.
+    """
+    base = str(title or '').lower()
+    for ru, en in _TRANSLIT_RU_EN.items():
+        base = base.replace(ru, en)
+    base = re.sub(r'[^a-z0-9]+', '-', base).strip('-')
+    if not base:
+        base = f'tpl{index:03d}'
+    return base[:60]
+
+
+def ensure_templates() -> None:
+    """Таблица шаблонов + наполнение из кода (идемпотентно), этап J5."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS criteria_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                slug TEXT UNIQUE,
+                grp TEXT,
+                title TEXT,
+                query TEXT,
+                max_price INTEGER DEFAULT 0,
+                requirements_json TEXT DEFAULT '{}',
+                active INTEGER DEFAULT 1,
+                sort_order INTEGER DEFAULT 0,
+                updated_at TEXT
+            )
+        """)
+        now = get_moscow_time().isoformat()
+        for order, (grp, title, query, max_price, req) in enumerate(HUNT_TEMPLATES):
+            slug = _template_slug(title, order)
+            cursor.execute(
+                "INSERT INTO criteria_templates (slug, grp, title, query, max_price,"
+                " requirements_json, active, sort_order, updated_at) VALUES (?,?,?,?,?,?,1,?,?) "
+                "ON CONFLICT(slug) DO UPDATE SET grp=excluded.grp, title=excluded.title, "
+                "query=excluded.query, max_price=excluded.max_price, "
+                "requirements_json=excluded.requirements_json, sort_order=excluded.sort_order, "
+                "updated_at=excluded.updated_at",
+                (slug, grp, title, query, int(max_price),
+                 json.dumps(req, ensure_ascii=False), order, now))
+        db.conn.commit()
+    except sqlite3.Error as e:
+        # Ловим только ошибки базы: если в наполнении опечатка в коде
+        # (как было с пустыми слагами), молчать нельзя — шаблоны исчезнут.
+        logger.error(f"ensure_templates: {e}")
+
+
+def templates_public(group: str = '') -> List[Dict]:
+    """Шаблоны для приложения: сгруппированные, с человеческими названиями."""
+    cursor = db.conn.cursor()
+    try:
+        if group:
+            cursor.execute("SELECT * FROM criteria_templates WHERE active=1 AND grp=? "
+                           "ORDER BY sort_order", (group,))
+        else:
+            cursor.execute("SELECT * FROM criteria_templates WHERE active=1 ORDER BY sort_order")
+        rows = [dict(r) for r in cursor.fetchall()]
+    except Exception as e:
+        logger.warning(f"templates_public: {e}")
+        return []
+    out = []
+    for r in rows:
+        try:
+            req = json.loads(r.get('requirements_json') or '{}')
+        except Exception:
+            req = {}
+        out.append({'slug': r['slug'], 'group': r['grp'],
+                    'group_title': HUNT_TEMPLATE_GROUPS.get(r['grp'], r['grp']),
+                    'title': r['title'], 'query': r['query'],
+                    'max_price': int(r['max_price'] or 0), 'requirements_json': req})
+    return out
+
+
+async def api_hunt_templates(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/hunt/templates — готовые критерии для выбора (универсальные)."""
+    group = str(request.query.get('group') or '')
+    items = await asyncio.to_thread(_db_read, templates_public, group)
+    return _miniapp_json({'items': items, 'groups': HUNT_TEMPLATE_GROUPS,
+                          'count': len(items)})
+
+
+async def api_hunt_template_use(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/templates/use {slug} — создать критерий из шаблона.
+
+    Одно нажатие вместо набора слов: категория и требования уже правильные,
+    поэтому и сборщик ищет в нужном разделе, и отбор не врёт.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    slug = str((body or {}).get('slug') or '').strip()
+    if not slug:
+        return _miniapp_json({'ok': False, 'error': 'no_slug'}, status=400)
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM criteria_templates WHERE slug=? AND active=1", (slug,))
+        row = cursor.fetchone()
+    except Exception:
+        row = None
+    if not row:
+        return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+    tpl = dict(row)
+    try:
+        req = json.loads(tpl.get('requirements_json') or '{}')
+    except Exception:
+        req = {}
+    crit_id = await asyncio.to_thread(
+        _db_locked, add_criterion, int(viewer_id), str(tpl['query']),
+        _crit_category_for_template(tpl.get('grp') or ''), '',
+        int(tpl.get('max_price') or 0), 15, 0, 0, 0, 'any', '', req)
+    if crit_id == -1:
+        limit = _criteria_limit(viewer_id)
+        return _miniapp_json({'ok': False, 'error': 'limit_reached', 'limit': limit,
+                              'detail': f'Достигнут лимит критериев ({limit}). '
+                                        'Замените существующий или откройте «Плюс».'},
+                             status=402)
+    if not crit_id:
+        return _miniapp_json({'ok': False, 'error': 'duplicate',
+                              'detail': 'Такой критерий уже есть'}, status=409)
+    _plan_event(int(viewer_id), 'template_used', {'slug': slug})
+    return _miniapp_json({'ok': True, 'id': int(crit_id), 'title': tpl['title'],
+                          'query': tpl['query']})
+
+
+def _crit_category_for_template(group: str) -> str:
+    """Категория объявления для шаблона: по ней идёт отбор в evaluate_ad."""
+    return {
+        'telefony': 'Электроника', 'noutbuki': 'Электроника', 'planshety': 'Электроника',
+        'igry': 'Электроника', 'audio': 'Электроника', 'kompyutery': 'Электроника',
+        'bytovaya': 'Бытовая техника', 'odezhda': 'Одежда, обувь, аксессуары',
+        'mebel': 'Мебель', 'instrument': 'Ремонт и строительство',
+        'velosipedy': 'Велосипеды', 'sport': 'Спорт и отдых',
+        'krasota': 'Красота и здоровье', 'avto': 'Автомобили',
+    }.get(group, '')
+
+
 def ensure_monetization() -> None:
     """Таблицы и колонки монетизации (этап H2). Всё идемпотентно."""
     cursor = db.conn.cursor()
@@ -29243,6 +29476,8 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/pay/invoice', api_pay_invoice)
     app.router.add_get('/api/referral', api_referral)
     app.router.add_post('/api/promo/redeem', api_promo_redeem)
+    app.router.add_get('/api/hunt/templates', api_hunt_templates)
+    app.router.add_post('/api/hunt/templates/use', api_hunt_template_use)
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
@@ -29795,6 +30030,7 @@ def main():
         ensure_indexes()
         ensure_admin()
         ensure_promo()
+        ensure_templates()
         hunt_flush_stale_sending()
         _prepare_upload_dir()
         api_app = create_api_app()

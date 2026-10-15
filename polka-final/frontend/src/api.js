@@ -341,6 +341,11 @@ export const api = {
   redeemPromo: (code) => request('/api/promo/redeem',
     { method: 'POST', body: JSON.stringify({ code }) }),
 
+  // Готовые шаблоны критериев (универсальные условия под частые покупки)
+  getTemplates: (group = '') => request(`/api/hunt/templates${group ? `?group=${group}` : ''}`),
+  useTemplate: (slug) => request('/api/hunt/templates/use',
+    { method: 'POST', body: JSON.stringify({ slug }) }),
+
   // ── Админка (этап J): доступ только администраторам ──────────────────────
   adminMe: () => request('/api/admin/me'),
   adminSettings: () => request('/api/admin/settings'),

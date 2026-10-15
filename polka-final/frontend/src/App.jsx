@@ -636,6 +636,11 @@ function CategoryArt({ label }) {
  * входа не было вовсе, поэтому человек его и не находил. */
 function CriteriaPage() {
   const [items, setItems] = useState([])
+  // Готовые шаблоны: условия под частые покупки с уже правильной категорией
+  // и требованиями — человек выбирает, а не пишет словами
+  const [templates, setTemplates] = useState([])
+  const [tplGroup, setTplGroup] = useState('')
+  const [tplMsg, setTplMsg] = useState('')
   const [cities, setCities] = useState([])
   const [query, setQuery] = useState('')
   // Категория для ручного поиска: сужает выдачу на самом Авито
@@ -683,7 +688,36 @@ function CriteriaPage() {
     }
   }
 
+  // Готовые шаблоны грузим отдельно и тихо: если эндпоинт недоступен,
+  // форма всё равно работает — человек просто введёт условия сам
+  const loadTemplates = () => {
+    api.getTemplates()
+      .then((d) => setTemplates(d.items || []))
+      .catch(() => setTemplates([]))
+  }
+
+  const applyTemplate = async (slug) => {
+    setTplMsg('')
+    setBusy(true)
+    try {
+      const r = await api.useTemplate(slug)
+      setTplMsg(r.ok ? `Критерий «${r.title}» создан` : 'Не получилось')
+      await load()
+    } catch (e) {
+      if (e && (e.code === 'limit_reached' || e.status === 402)) {
+        setTplMsg((e && e.detail) || 'Достигнут лимит критериев')
+      } else if (e && e.code === 'duplicate') {
+        setTplMsg('Такой критерий уже есть')
+      } else {
+        setTplMsg((e && e.detail) || 'Не удалось создать критерий')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
   useEffect(() => {
+    loadTemplates()
     load()
     api.getFilters().then((d) => setCities(d.cities || [])).catch(() => {})
   }, [])
@@ -938,6 +972,39 @@ function CriteriaPage() {
           {busy ? 'Добавляем…' : 'Найти лоты'}
         </Button>
       </div>
+
+      {/* Готовые шаблоны: одно нажатие вместо набора слов. Категория и
+          требования уже правильные, поэтому сборщик ищет в нужном разделе,
+          а отбор не врёт (для телефонов сразу проверка АКБ). */}
+      {templates.length ? (
+        <div className="list-stack mt-14">
+          <div className="section-head"><strong>Готовые шаблоны</strong><span>{templates.length}</span></div>
+          <div className="chat-replies">
+            <button type="button"
+              className={tplGroup === '' ? 'chat-chip is-active' : 'chat-chip'}
+              onClick={() => setTplGroup('')}>все</button>
+            {[...new Set(templates.map((x) => x.group))].map((g) => (
+              <button key={g} type="button"
+                className={tplGroup === g ? 'chat-chip is-active' : 'chat-chip'}
+                onClick={() => setTplGroup(g)}>
+                {templates.find((x) => x.group === g)?.group_title || g}
+              </button>
+            ))}
+          </div>
+          <div className="chat-replies">
+            {templates
+              .filter((x) => !tplGroup || x.group === tplGroup)
+              .map((x) => (
+                <button key={x.slug} type="button" className="chat-chip" disabled={busy}
+                  onClick={() => applyTemplate(x.slug)}>
+                  {x.title}
+                  {x.max_price ? ` · до ${Number(x.max_price).toLocaleString('ru-RU')} ₽` : ''}
+                </button>
+              ))}
+          </div>
+          {tplMsg ? <div className="chat-note">{tplMsg}</div> : null}
+        </div>
+      ) : null}
 
       {/* Список критериев — общий компонент: та же разметка, что в ИИ-поиске,
           иначе один критерий выглядел на двух вкладках по-разному. */}

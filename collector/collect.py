@@ -904,6 +904,13 @@ CATEGORY_BY_WORD = {
     # прочее
     'велосипед': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
     'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+    # инструменты, спорт, красота, авто-запчасти и прочее
+    'перфоратор': 'instrumenty', 'шуруповёрт': 'instrumenty', 'шуруповерт': 'instrumenty',
+    'дрель': 'instrumenty', 'болгарка': 'instrumenty', 'компрессор': 'instrumenty',
+    'гантели': 'sport_i_otdyh', 'дорожка': 'sport_i_otdyh', 'тренажёр': 'sport_i_otdyh',
+    'фен': 'krasota_i_zdorovie', 'эпилятор': 'krasota_i_zdorovie', 'массажёр': 'krasota_i_zdorovie',
+    'шины': 'zapchasti_i_aksessuary', 'диски': 'zapchasti_i_aksessuary',
+    'ssd': 'tovary_dlya_kompyutera', 'процессор': 'tovary_dlya_kompyutera',
     'infinix': 'telefony', 'oppo': 'telefony', 'vivo': 'telefony',
     'tecno': 'telefony', 'nothing': 'telefony', 'чехол': 'telefony',
     'компьютер': 'tovary_dlya_kompyutera', 'пк': 'tovary_dlya_kompyutera',
@@ -977,12 +984,12 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         if not query:
             no_query += 1
             continue
-        words = [w for w in query.lower().split() if w]
+        # Разбиваем и по дефису: «робот-пылесос» должен найтись словом «пылесос»
+        words = [w for w in re.split(r'[^\w]+', query.lower()) if w]
         slug = None
         for word in words:
-            clean = word.strip('.,!?()"\'')
-            if clean in CATEGORY_BY_WORD:
-                slug = CATEGORY_BY_WORD[clean]
+            if word in CATEGORY_BY_WORD:
+                slug = CATEGORY_BY_WORD[word]
                 break
         try:
             pmin = int(crit.get('min_price') or 0)
@@ -1012,6 +1019,9 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         print(f"  Целей из критериев: {built} — {mode}")
     if no_query:
         print(f"  Критериев без текста: {no_query}")
+    if skipped:
+        print(f"  ⚠ Критериев без узнаваемого слова категории: {skipped} — они НЕ ищутся.")
+        print("    Добавьте в запрос слово категории (куртка, телефон, ноутбук)")
     skipped = len(data.get('items', [])) - built - no_query
     if skipped > 0:
         print(f"  Пропущено критериев: {skipped}")
