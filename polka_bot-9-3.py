@@ -19259,9 +19259,19 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             ago = int(raw.get('hours_ago')) if raw.get('hours_ago') is not None else None
         except (TypeError, ValueError):
             ago = None
+        # Тип продавца сборщик теперь умеет брать прямо из карточки списка
+        # (у магазина ссылка /brands/ или подпись «Компания»), поэтому условие
+        # «только с рук» проверяется без захода на страницу объявления —
+        # то есть без домашнего IP и прокси.
+        try:
+            stype = str(raw.get('seller_type') or '').lower()
+        except Exception:
+            stype = ''
+        if stype not in ('private', 'company'):
+            stype = ''
         prepared.append({
             'title': title, 'url': url, 'ext': ext, 'city': city, 'cat': cat,
-            'price': price, 'photos': photos, 'ago': ago,
+            'price': price, 'photos': photos, 'ago': ago, 'seller_type': stype,
             'age_estimated': 1 if (ago is None and raw.get('age_estimated')) else 0,
             'fp': _ad_fingerprint(title, price, photos),
             'title_lower': title.lower(),
@@ -19342,7 +19352,8 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
             continue
         to_insert.append((pp['title'], pp['price'], json.dumps(pp['photos'], ensure_ascii=False),
                           pp['cat'], pp['city'], now, now, source, pp['url'], pp['ext'], now,
-                          pp['ago'], pp['title_lower'], pp['age_estimated'], pp['fp']))
+                          pp['ago'], pp['title_lower'], pp['age_estimated'], pp['fp'],
+                          pp['seller_type']))
         seen_ext.add(pp['ext'])
         seen_fp.add(pp['fp'])
         seen_exact.add(exact_key)
@@ -19356,8 +19367,8 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
                                  external_id, parsed_at, views, published_hours_ago,
-                                 title_lower, age_estimated, fingerprint)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+                                 title_lower, age_estimated, fingerprint, seller_type)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
             """, to_insert)
             stats['accepted'] = len(to_insert)
             inserted: List[tuple] = []

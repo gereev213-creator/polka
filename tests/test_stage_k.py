@@ -63,7 +63,8 @@ CREATE TABLE ads (
     external_id TEXT, parsed_at TEXT, views INTEGER DEFAULT 0,
     published_hours_ago INTEGER, title_lower TEXT, age_estimated INTEGER DEFAULT 0,
     fingerprint TEXT, last_drop_notice_at TEXT, discount_percent INTEGER, prev_price INTEGER,
-    condition TEXT, delivery TEXT, price_suspect INTEGER DEFAULT 0, market_median INTEGER
+    condition TEXT, delivery TEXT, price_suspect INTEGER DEFAULT 0, market_median INTEGER,
+    seller_type TEXT DEFAULT ''
 );
 CREATE TABLE ads_dupes (id INTEGER PRIMARY KEY AUTOINCREMENT, ad_id INTEGER,
     source TEXT, external_id TEXT, seen_at TEXT, UNIQUE(ad_id, external_id));
@@ -436,5 +437,30 @@ after = {r['crit_id']: r['status'] for r in
 assert after[100] == 'ready' and after[101] == 'send_failed', after
 print(f'   зависшие: вернули в очередь {after[100]}, после 3 попыток — {after[101]} '
       f'(всего поправлено {fixed})')
+
+# ── 8. Тип продавца из карточки списка (без страницы объявления)
+print('\nтип продавца из списка: «только с рук» без прокси')
+sconn = sqlite3.connect(':memory:')
+sconn.row_factory = sqlite3.Row
+sconn.executescript(DDL)
+sns = build_ns(NEW_SRC, sconn)
+n = 0
+for ext, stype in (('s1', 'company'), ('s2', 'private'), ('s3', '')):
+    it = {'title': f'Куртка Zara {ext}', 'price': 2450, 'url': f'https://www.avito.ru/x_{ext}',
+          'external_id': ext, 'city': 'Ижевск', 'category': 'Одежда',
+          'photos': ['https://img.avito.st/1.jpg'], 'hours_ago': 2, 'seller_type': stype}
+    sns['ingest_findings']([it], 'avito')
+    row = sconn.execute("SELECT seller_type FROM ads WHERE external_id=?", (ext,)).fetchone()
+    got = (row['seller_type'] or '') if row else 'нет строки'
+    assert got == stype, (ext, stype, got)
+    n += 1
+# кривой тип не должен попадать в базу
+sns['ingest_findings']([{'title': 'Куртка Zara s4', 'price': 2450,
+                         'url': 'https://www.avito.ru/x_s4', 'external_id': 's4',
+                         'city': 'Ижевск', 'category': 'Одежда', 'seller_type': 'магазин'},
+                        ], 'avito')
+bad = sconn.execute("SELECT seller_type FROM ads WHERE external_id='s4'").fetchone()['seller_type']
+assert (bad or '') == '', bad
+print(f'   сохранено типов продавца: {n} (company/private/пусто), мусорный отброшен')
 
 print('\nK: все проверки пройдены')
