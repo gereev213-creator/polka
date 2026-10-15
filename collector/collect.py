@@ -391,6 +391,42 @@ def items_from_jsonld(html: str) -> list:
     return out
 
 
+def seller_type_from_node(node: dict) -> str:
+    """Частник или магазин — по данным КАРТОЧКИ СПИСКА, без захода на страницу.
+
+    Раньше тип продавца доставался только со страницы объявления, а она
+    требует домашнего IP или прокси (520/429 с дата-центров). Из-за этого
+    условие «только с рук» не проверялось вовсе.
+    """
+    if not isinstance(node, dict):
+        return ''
+    for key in ('sellerType', 'seller_type'):
+        value = str(node.get(key) or '').lower()
+        if value in ('company', 'shop', 'brand'):
+            return 'company'
+        if value in ('private', 'person', 'individual'):
+            return 'private'
+    if node.get('isCompany') is True or node.get('companyName'):
+        return 'company'
+    for key in ('seller', 'sellerInfo', 'iva', 'sellerData'):
+        sub = node.get(key)
+        if isinstance(sub, dict):
+            found = seller_type_from_node(sub)
+            if found:
+                return found
+    return ''
+
+
+def seller_type_from_card(chunk: str) -> str:
+    """То же по разметке карточки: у магазина есть ссылка /brands/ или подпись."""
+    low = chunk.lower()
+    if '/brands/' in low or '>компания<' in low or 'магазин' in low:
+        return 'company'
+    if 'частное лицо' in low or '>частник<' in low:
+        return 'private'
+    return ''
+
+
 def items_from_initial_data(html: str) -> list:
     """Второй путь: Авито кладёт данные страницы в window.__initialData__."""
     out = []
@@ -425,6 +461,7 @@ def items_from_initial_data(html: str) -> list:
                     'photos': photos[:5],
                     'external_id': str(node.get('id') or '') or external_id_from_url(str(url)),
                     'city': str(node.get('location') or node.get('geo') or '')[:100],
+                    'seller_type': seller_type_from_node(node),
                 })
             for value in node.values():
                 walk(value)
@@ -562,6 +599,7 @@ def items_from_html(html: str) -> list:
                 'photos': [img.group(1)] if img else [],
                 'external_id': external_id_from_url(url),
                 'city': unescape(city.group(1)).strip() if city else '',
+                'seller_type': seller_type_from_card(chunk),
             })
     return out
 
