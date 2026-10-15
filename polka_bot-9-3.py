@@ -27273,9 +27273,15 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
     достаёт из неё категорию и набор, и складывает в настройку
     collector.filters. Дальше сборщик получает набор вместе с критерием.
     """
-    admin_id, err = await _admin_guard(request)
-    if err:
-        return err
+    # Доступ: администратор из Mini App ИЛИ токен сборщика — чтобы владелец
+    # мог добавить набор одной командой curl, без входа в приложение.
+    admin_id = 0
+    expected = os.environ.get('INGEST_TOKEN', '')
+    got = _ingest_token_ok(request)
+    if not (expected and hmac.compare_digest(str(got), str(expected))):
+        admin_id, err = await _admin_guard(request)
+        if err:
+            return err
     try:
         body = await request.json()
     except Exception:
