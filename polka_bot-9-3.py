@@ -21537,11 +21537,23 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             cursor.execute(f"SELECT * FROM ads WHERE id IN ({marks})", ids)
         else:
             sql = "SELECT * FROM ads WHERE source <> 'polka' AND price > 0"
+            params = []
             if only_missing:
-                sql += (" AND NOT EXISTS (SELECT 1 FROM hunt_matches hm "
-                        "WHERE hm.ad_id = ads.id)")
+                # «Решений ещё нет» считаем ПО ЭТОМУ критерию, а не по всем
+                # сразу: раньше условие было общим (hm.ad_id = ads.id), и для
+                # нового критерия почти все объявления выглядели «уже
+                # обработанными» — то есть новый критерий получал пустой
+                # список кандидатов и не работал вовсе (0 решений).
+                if crit_id:
+                    sql += (" AND NOT EXISTS (SELECT 1 FROM hunt_matches hm "
+                            "WHERE hm.ad_id = ads.id AND hm.crit_id = ?)")
+                    params.append(int(crit_id))
+                else:
+                    sql += (" AND NOT EXISTS (SELECT 1 FROM hunt_matches hm "
+                            "WHERE hm.ad_id = ads.id)")
             sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
-            cursor.execute(sql, (int(batch or limit_ads), int(offset)))
+            params.extend([int(batch or limit_ads), int(offset)])
+            cursor.execute(sql, tuple(params))
         ads = [dict(r) for r in cursor.fetchall()]
         if counter is not None:
             counter['ads'] = len(ads)
