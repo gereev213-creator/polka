@@ -32,8 +32,14 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from urllib.parse import quote_plus
 from html import unescape
 from html.parser import HTMLParser
+
+# Искать у Авито по тексту запроса (q=), а не перебирать всю категорию.
+# Флаг на случай, если Авито изменит формат: POLKA_SEARCH_BY_QUERY=0 вернёт
+# прежнее поведение (категория + цена), ничего больше править не нужно.
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -835,12 +841,54 @@ CATEGORY_BY_WORD = {
 }
 
 
-def targets_from_criteria(server: str, token: str) -> list:
+# Шаблон ссылки поиска. Задан по умолчанию, но его можно переопределить
+# в config.json ("url_template": "…") или переменной POLKA_URL_TEMPLATE —
+# не трогая код. Зачем: форму ссылки и фильтры Авито надёжнее всего взять
+# из браузера (поиск → нужные фильтры → скопировать адрес из строки).
+# Подстановки: {category} {query} {pmin} {pmax} {page}
+DEFAULT_URL_TEMPLATE = ("https://www.avito.ru/all/{category}"
+                        "?q={query}&s=104&pmin={pmin}&pmax={pmax}")
+
+
+def search_url(template: str, slug: str, query: str, pmin: int, pmax: int) -> str:
+    """Собирает ссылку поиска по шаблону и убирает пустые параметры.
+
+    Пустые pmin/pmax и отсутствие категории не должны оставлять в ссылке
+    «хвосты» вида «&pmin=&pmax=» или «/all/»: Авито на такое отвечает
+    ошибкой, а не пустой выдачей.
+    """
+    url = str(template or DEFAULT_URL_TEMPLATE)
+    for key, value in (('{category}', slug or ''),
+                       ('{query}', quote_plus(query or '')),
+                       ('{pmin}', str(int(pmin)) if pmin else ''),
+                       ('{pmax}', str(int(pmax)) if pmax else '')):
+        url = url.replace(key, value)
+    # Категории нет → путь /all/, превращаем в /all
+    url = url.replace('/all/?', '/all?').replace('/all/&', '/all&')
+    url = re.sub(r'[?&](pmin|pmax)=(?=&|$)', '', url)
+    url = url.replace('?&', '?').replace('&&', '&')
+    if url.endswith('/all/'):
+        url = url[:-1]
+    return url.rstrip('?&')
+
+
+def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 
-    Так перекупу достаточно написать боту «/hunt iphone 13» — сборщик сам
-    начнёт обходить нужный запрос, ничего править в конфиге не надо.
+    Главное здесь — параметр q: это САМ ЗАПРОС, который Авито ищет своей
+    выдачей. Раньше в ссылке были только категория и цена, поэтому сборщик
+    качал ВСЮ категорию (десятки тысяч карточек), а нужное отсеивалось уже
+    на сервере. Замер на живом сайте: в ссылке без q из 50 карточек по
+    словам «iphone 13» подходили 3 — 94% трафика впустую. И критерии, чьи
+    слова не попали в справочник категорий («пуховик lacoste», «зип кофта»),
+    не искались ВООБЩЕ: для них цель просто не создавалась.
+
+    Ещё это щадит Авито: один точный запрос вместо перебора категории —
+    меньше запросов, реже ловим 429 (Too Many Requests).
     """
+    template = (os.environ.get('POLKA_URL_TEMPLATE')
+                or (cfg or {}).get('url_template')
+                or DEFAULT_URL_TEMPLATE)
     try:
         data = fetch_json(f"{server.rstrip('/')}/api/hunt?for_collector=1", token)
     except Exception as exc:
@@ -849,38 +897,47 @@ def targets_from_criteria(server: str, token: str) -> list:
     targets = []
     seen = set()
     built = 0
+    no_query = 0
     for crit in data.get('items', []):
-        words = [w for w in str(crit.get('query') or '').lower().split() if w]
+        query = " ".join(str(crit.get('query') or '').split())[:80]
+        if not query:
+            no_query += 1
+            continue
+        words = [w for w in query.lower().split() if w]
         slug = None
         for word in words:
             clean = word.strip('.,!?()"\'')
             if clean in CATEGORY_BY_WORD:
                 slug = CATEGORY_BY_WORD[clean]
                 break
-        if not slug:
-            continue
-        # Родные параметры Авито: цена и сортировка по дате
-        params = ['s=104']
         try:
-            if int(crit.get('min_price') or 0) > 0:
-                params.append(f"pmin={int(crit['min_price'])}")
-            if int(crit.get('max_price') or 0) > 0:
-                params.append(f"pmax={int(crit['max_price'])}")
+            pmin = int(crit.get('min_price') or 0)
         except Exception:
-            pass
-        url = f"https://www.avito.ru/all/{slug}?" + "&".join(params)
+            pmin = 0
+        try:
+            pmax = int(crit.get('max_price') or 0)
+        except Exception:
+            pmax = 0
+        if not SEARCH_BY_QUERY:
+            # Откат: прежнее поведение — только категория и цена
+            template_here = "https://www.avito.ru/all/{category}?s=104&pmin={pmin}&pmax={pmax}"
+        else:
+            template_here = template
+        url = search_url(template_here, slug or '', query, pmin, pmax)
         if url in seen:
             continue
         seen.add(url)
-        all_word = " ".join(words)
-        targets.append({'url': url, 'category': crit.get('category') or slug,
-                        'query': all_word, 'page': 1})
+        targets.append({'url': url, 'category': crit.get('category') or slug or '',
+                        'query': query, 'page': 1})
         built += 1
     if built:
-        print(f"  Целей из критериев: {built} — Авито фильтрует сам по категории и цене")
-    skipped = len(data.get('items', [])) - built
+        print(f"  Целей из критериев: {built} — Авито ищет сам по тексту запроса"
+              f"{'' if SEARCH_BY_QUERY else ' (q= выключен: POLKA_SEARCH_BY_QUERY=0)'}")
+    if no_query:
+        print(f"  Критериев без текста: {no_query}")
+    skipped = len(data.get('items', [])) - built - no_query
     if skipped > 0:
-        print(f"  Критериев без узнаваемой категории: {skipped} (ищут по общим страницам)")
+        print(f"  Пропущено критериев: {skipped}")
     return targets
 
 
@@ -1135,7 +1192,7 @@ def run_once(cfg: dict) -> int:
         # На сервере config.json нет — иначе сборщик шёл бы в пустоту
         targets = default_targets()
         print(f"Цели не заданы — берём встроенный список: {len(targets)} категорий по всей России")
-    from_crit = targets_from_criteria(server, token)
+    from_crit = targets_from_criteria(server, token, cfg)
     if from_crit:
         known = {t.get('url') for t in targets}
         targets += [t for t in from_crit if t['url'] not in known]
@@ -1240,6 +1297,48 @@ def selftest() -> int:
     return 0 if ok else 1
 
 
+def check_query(text: str) -> int:
+    """Сравнивает две ссылки поиска на живом Авито: без q и с q.
+
+    Нужна, чтобы убедиться, что Авито принимает текст запроса: одна точная
+    выдача вместо перебора всей категории. Запускать со своего компьютера —
+    у сервера может не быть доступа или он уже получил 429.
+    """
+    text = " ".join(str(text or '').split())
+    if not text:
+        print("Укажите текст: --check-query \"iphone 13 pro\"")
+        return 2
+    words = [w for w in text.lower().split() if w]
+    slug = None
+    for w in words:
+        clean = w.strip('.,!?()"\'')
+        if clean in CATEGORY_BY_WORD:
+            slug = CATEGORY_BY_WORD[clean]
+            break
+    base = f"https://www.avito.ru/all/{slug}" if slug else "https://www.avito.ru/all"
+    variants = [("без q (как было)", f"{base}?s=104"),
+                ("с q (как стало)", f"{base}?s=104&q=" + quote_plus(text))]
+    for title, url in variants:
+        print(f"\n{title}: {url}")
+        try:
+            html = fetch(url, timeout=45)
+        except Exception as exc:
+            print(f"  ✖ не получилось: {str(exc)[:120]}")
+            time.sleep(random.uniform(4.0, 7.0))
+            continue
+        items = parse_page(html)
+        rel = [it for it in items
+               if all(w in (it.get('title') or '').lower() for w in words)]
+        print(f"  карточек {len(items)}, из них по словам {words}: {len(rel)}")
+        for it in rel[:4]:
+            print(f"     {it.get('title')} — {it.get('price')} ₽")
+        time.sleep(random.uniform(4.0, 7.0))
+    print("\nЕсли «с q» даёт заметно больше подходящих — формат верный, "
+          "сборщик уже так и работает. Если Авито не понял q, запустите "
+          "сборщик с POLKA_SEARCH_BY_QUERY=0 (вернётся прежнее поведение).")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Сборщик находок для «Полки»")
     ap.add_argument('--config', default=os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -1249,12 +1348,17 @@ def main() -> int:
                     help='проверить, пускает ли Авито через прокси')
     ap.add_argument('--check', action='store_true',
                     help='перепроверить лоты: продано или ещё висит')
+    ap.add_argument('--check-query', metavar='ТЕКСТ',
+                    help='сравнить поиск по тексту запроса и по категории')
     ap.add_argument('--loop', action='store_true', help='работать постоянно')
     ap.add_argument('--every', type=int, default=900, help='пауза между проходами, сек')
     args = ap.parse_args()
 
     if args.selftest:
         return selftest()
+
+    if args.check_query is not None:
+        return check_query(args.check_query)
 
     # Проверка прокси — отдельная диагностика: сервер и токен тут не нужны,
     # иначе проверить прокси до покупки было бы невозможно
