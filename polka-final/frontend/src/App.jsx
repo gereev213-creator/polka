@@ -712,7 +712,16 @@ function CriteriaPage() {
       } else if (e && e.code === 'duplicate') {
         setTplMsg('Такой критерий уже есть')
       } else {
-        setTplMsg((e && e.detail) || 'Не удалось создать критерий')
+        // Ответ мог не дойти по таймауту, хотя критерий уже создан:
+        // проверяем, вырос ли список критериев, и считаем это успехом
+        try {
+          const data = await api.getCriteria()
+          const grew = (data.items || []).length > items.length
+          setTplMsg(grew ? 'Критерий создан' : ((e && e.detail) || 'Не удалось создать критерий'))
+          if (grew) await load()
+        } catch {
+          setTplMsg((e && e.detail) || 'Не удалось создать критерий')
+        }
       }
     } finally {
       setBusy(false)

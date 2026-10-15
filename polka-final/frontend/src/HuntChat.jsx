@@ -117,11 +117,33 @@ export default function HuntChat() {
     } catch (e) {
       if (e && (e.code === 'limit_reached' || e.status === 402)) {
         setLimitMsg((e && e.detail) || 'Достигнут лимит критериев — откройте ещё слоты в «Плюсе»')
+      } else if (await createdDespiteError()) {
+        // Ответ не дошёл (таймаут), но критерий на сервере уже создан:
+        // раньше в этом случае показывали ошибку, хотя всё сработало.
+        say('ai', 'Критерий создан. Пришлю, как только появится подходящее.')
+        setDraft(null); setReady(false); setAsk(null); setNotes([]); setSessionId('')
+        loadCriteria()
       } else {
         say('ai', (e && e.detail) || 'Не удалось создать критерий')
       }
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Даже если запрос упал по таймауту, критерий мог создаться на сервере.
+  // Проверяем список и считаем это успехом — иначе человек видит ошибку
+  // и жмёт снова, хотя всё уже работает.
+  const createdDespiteError = async () => {
+    try {
+      const data = await api.getCriteria()
+      const want = (draft?.query || '').trim().toLowerCase()
+      if (!want) return false
+      return (data.items || []).some(
+        (c) => (c.query || '').trim().toLowerCase() === want,
+      )
+    } catch {
+      return false
     }
   }
 
