@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import { Icon } from './Icon'
 
-// Меню уезжает при листании ВНИЗ и возвращается при листании ВВЕРХ —
+// Меню уезжает при листании ВНИЗ и возвращается при листании ВВЕРХ:
 // на телефоне док иначе закрывает объявления на пол-экрана.
-// Порог 8 пикселей убирает дрожание от инерционного скролла,
-// в самом верху меню всегда на месте.
 function useHideOnScroll() {
   const [hidden, setHidden] = useState(false)
   useEffect(() => {
@@ -28,9 +26,9 @@ function useHideOnScroll() {
         const y = position(event.target)
         const delta = y - last
         if (y < 80) {
-          setHidden(false)
+          setHidden(false)          // в самом верху меню всегда на месте
         } else if (delta > 8) {
-          setHidden(true)
+          setHidden(true)           // порог 8 px против дрожания
         } else if (delta < -8) {
           setHidden(false)
         }
@@ -46,10 +44,39 @@ function useHideOnScroll() {
   return hidden
 }
 
+// Плавный уход считаем САМИ, по кадрам, а не через CSS-transition: правило из
+// файла стилей перебивалось другими объявлениями .dock, а на части
+// Android-браузеров анимация transform вместе с размытием фона вообще не
+// запускалась — меню исчезало рывком. Здесь позиция меняется каждый кадр.
+function useDockAnimation(hidden) {
+  const [progress, setProgress] = useState(0) // 0 — видно, 1 — уехало
+  const state = useRef({ value: 0, raf: 0 })
+
+  useEffect(() => {
+    const target = hidden ? 1 : 0
+    const from = state.current.value
+    const duration = 380
+    const start = performance.now()
+    cancelAnimationFrame(state.current.raf)
+    const step = (now) => {
+      const p = Math.min(1, (now - start) / duration)
+      const eased = 1 - Math.pow(1 - p, 3) // мягкое торможение к концу
+      const value = from + (target - from) * eased
+      state.current.value = value
+      setProgress(value)
+      if (p < 1) state.current.raf = requestAnimationFrame(step)
+    }
+    state.current.raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(state.current.raf)
+  }, [hidden])
+
+  return progress
+}
 
 export function BottomNav() {
   const location = useLocation()
   const hidden = useHideOnScroll()
+  const progress = useDockAnimation(hidden)
   // Пять ОДНОРОДНЫХ пунктов, как в Avito: раньше было четыре подписанных
   // плюс кнопка и отдельный градиентный аватар — вместе шесть элементов,
   // и док выглядел перегруженным. Поиск убран: он и так крупным полем
@@ -74,18 +101,20 @@ export function BottomNav() {
   )
 
   return (
-    // Анимация задана ПРЯМО на элементе: правило из файла стилей может
-    // перебить другое объявление .dock (их несколько), а inline-стиль — нет.
-    // Размытие фона на время ухода выключаем: часть Android-браузеров
-    // не анимирует элемент с backdrop-filter, и движение выглядит рывком.
+    // Позицию и прозрачность задаём из покадровой анимации. Перенос по Y —
+    // 140% высоты меню, то есть полностью за край экрана. Размытие фона при
+    // движении выключаем: с ним часть браузеров не перерисовывает кадры.
     <nav
-      className={hidden ? 'dock hidden' : 'dock'}
+      className="dock"
+      data-dock={progress.toFixed(2)}
       style={{
-        transition: 'transform 380ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease',
-        willChange: 'transform, opacity',
-        transform: hidden ? 'translate3d(-50%, 140%, 0)' : 'translate3d(-50%, 0, 0)',
-        opacity: hidden ? 0 : 1,
-        ...(hidden ? { backdropFilter: 'none', WebkitBackdropFilter: 'none' } : null),
+        transform: `translate3d(-50%, ${(progress * 140).toFixed(2)}%, 0)`,
+        opacity: (1 - progress).toFixed(2),
+        pointerEvents: progress > 0.5 ? 'none' : 'auto',
+        transition: 'none',
+        ...(progress > 0.01
+          ? { backdropFilter: 'none', WebkitBackdropFilter: 'none' }
+          : null),
       }}
     >
       {items.slice(0, 2).map(renderItem)}
