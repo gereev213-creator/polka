@@ -2797,3 +2797,20 @@ html, body, #root {
 }
 .app-footer-sep { opacity: 0.5; }
 .app-footer-links a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ── Плавный уход нижнего меню ───────────────────────────────────────────
+   Правило стоит в самом конце файла: выше есть второе объявление .dock
+   (стекло и тень), и из-за него прежняя анимация перебивалась — меню
+   уходило рывком. Длительность 0.38 с и мягкая кривая: уход виден глазу,
+   но не задерживает. will-change держит анимацию на видеокарте, чтобы
+   на слабом телефоне не дёргалось. */
+.dock {
+  transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease;
+  will-change: transform, opacity;
+}
+.dock.hidden {
+  transform: translateX(-50%) translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
