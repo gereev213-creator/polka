@@ -1043,6 +1043,10 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # живут в параметре f=…, который генерирует браузер. Наборы задаются
         # в config.json: {"filters_by_category": {"odezhda_obuv_aksessuary": "&f=…"}}
         # Общий набор — "filters" или POLKA_FILTERS.
+        # Набор может прийти от СЕРВЕРА вместе с критерием — тогда ни файлы,
+        # ни переменные окружения не нужны (так его и добавляют на будущее:
+        # одна ссылка из браузера на категорию).
+        server_filters = str(crit.get('filters') or '')
         by_cat = dict((cfg or {}).get('filters_by_category') or {})
         # То же самое можно задать переменной окружения (на сервере это проще,
         # чем править config.json): POLKA_FILTERS_BY_CATEGORY='{"telefony":"&f=…"}'
@@ -1074,6 +1078,8 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             if key and by_cat.get(key):
                 filters_here = str(by_cat[key])
                 break
+        if not filters_here:
+            filters_here = server_filters
         if not filters_here:
             filters_here = str((cfg or {}).get('filters') or os.environ.get('POLKA_FILTERS', ''))
         url = search_url(template_here, slug or '', query, pmin, pmax, filters=filters_here)
