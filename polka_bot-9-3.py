@@ -17912,6 +17912,14 @@ def _dialog_apply_extract(draft: Dict, extract: Dict) -> Dict:
         d['private_only'] = bool(ex['private_only'])
     if isinstance(ex.get('item_words'), list):
         d['item_words'] = [w for w in ex['item_words'] if _dialog_item_word(w)]
+    if isinstance(ex.get('exclude'), list):
+        # Слова-исключения: их присылать не нужно («без чехлов», «не запчасти»)
+        current = [str(x) for x in (d.get('exclude') or [])]
+        for w in ex['exclude']:
+            word = ' '.join(str(w).split()).lower().strip()
+            if 2 <= len(word) <= 30 and word not in current:
+                current.append(word)
+        d['exclude'] = current[:8]
     for s in (ex.get('answered_any') or []):
         if s and s not in (d.get('any') or []):
             d.setdefault('any', []).append(s)
@@ -18157,7 +18165,7 @@ HUNT_DIALOG_PROMPT = (
     '{"extract":{"item_words":["iPhone","14","Pro"],"memory_or_size":"128",'
     '"battery_min":80,"condition_min":"good|excellent|new|any","original_only":true,'
     '"private_only":true,"max_price":50000,"min_price":0,"city":"Москва",'
-    '"answered_any":[]},"say":"короткая реплика до 160 символов",'
+    '"exclude":[],"answered_any":[]},"say":"короткая реплика до 160 символов",'
     '"intent":"answer|new_item|change|question|chitchat"}\n'
     "Правила извлечения:\n"
     "— item_words: только тип, бренд, модель. Бренд и модель ЛАТИНИЦЕЙ: "
@@ -18173,6 +18181,9 @@ HUNT_DIALOG_PROMPT = (
     "— «до 50 тысяч» → max_price 50000; «20-30к» → min_price 20000, max_price 30000.\n"
     "— Поменял условие — запиши новое, старое не повторяй. Не выдумывай; нет данных — null.\n"
     "— Если сообщение не про товар («привет») — intent=chitchat, extract пустой.\n"
+    "— «без чехлов», «не запчасти», «копии не надо», «кроме разбора» → "
+    "exclude: [\"чехол\",\"запчасти\",\"копия\"]. Это слова-исключения: "
+    "объявления с ними присылать не нужно.\n"
     "Правила реплики say: одна фраза, откликнись и задай РОВНО ОДИН вопрос про ask_slot; "
     "не переспрашивай то, что уже есть; не пиши кнопки; если условие не в verifiable — "
     "скажи одной фразой, что его читает тщательный отбор."

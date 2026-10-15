@@ -108,6 +108,8 @@ export default function HuntChat() {
         mode: 'any',
         requirements: '',
         requirements_json: draft.requirements_json || {},
+        // Слова-исключения из диалога: «без чехлов», «не запчасти»
+        exclude: (draft.exclude || []).join(', '),
       })
       say('ai', 'Критерий создан. Пришлю, как только появится подходящее.')
       setDraft(null); setReady(false); setAsk(null); setNotes([]); setSessionId('')
@@ -185,6 +187,11 @@ export default function HuntChat() {
                 <div className="chat-crit-title">Буду искать: {draft.query}</div>
                 {draft.max_price ? <div className="chat-crit-sub">до {money(draft.max_price)} ₽</div> : null}
                 {draft.city ? <div className="chat-crit-sub">{draft.city}</div> : null}
+                {(draft.exclude || []).length ? (
+                  <div className="chat-replies">
+                    <span className="chat-chip">не: {(draft.exclude || []).join(', ')}</span>
+                  </div>
+                ) : null}
                 {chips.length ? (
                   <div className="chat-replies">
                     {chips.map((c) => <span key={c} className="chat-chip">{c}</span>)}
