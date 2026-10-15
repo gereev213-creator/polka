@@ -979,6 +979,7 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     seen = set()
     built = 0
     no_query = 0
+    no_slug = 0
     for crit in data.get('items', []):
         query = " ".join(str(crit.get('query') or '').split())[:80]
         if not query:
@@ -1006,6 +1007,10 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             # Точность обеспечивает сервер: он отсеивает по словам заголовка,
             # категории, городу и цене (этапы B и F).
             template_here = "https://www.avito.ru/all/{category}?s=104&pmin={pmin}&pmax={pmax}"
+        if not slug:
+            # Категория не узнана: цель всё равно создаём (поиск по площадке),
+            # но считаем такие критерии — по ним раздел не определён.
+            no_slug += 1
         url = search_url(template_here, slug or '', query, pmin, pmax)
         if url in seen:
             continue
@@ -1019,12 +1024,10 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         print(f"  Целей из критериев: {built} — {mode}")
     if no_query:
         print(f"  Критериев без текста: {no_query}")
-    if skipped:
-        print(f"  ⚠ Критериев без узнаваемого слова категории: {skipped} — они НЕ ищутся.")
-        print("    Добавьте в запрос слово категории (куртка, телефон, ноутбук)")
-    skipped = len(data.get('items', [])) - built - no_query
-    if skipped > 0:
-        print(f"  Пропущено критериев: {skipped}")
+    if no_slug:
+        print(f"  ⚠ Критериев без узнаваемого слова категории: {no_slug} — "
+              f"ищутся по всей площадке")
+        print("    Точнее будет добавить слово категории (куртка, телефон, ноутбук)")
     return targets
 
 
