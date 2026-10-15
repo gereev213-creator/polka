@@ -3440,29 +3440,21 @@ function Layout() {
 
 function AppFooter() {
   const [docs, setDocs] = useState(null)
-  const [open, setOpen] = useState(false)
   useEffect(() => {
     api.getLegal().then(setDocs).catch(() => setDocs(null))
   }, [])
   const year = new Date().getFullYear()
   return (
     <div className="app-footer">
-      {/* Внизу всегда только копирайт. Ссылки на документы раскрываются
-          по нажатию — чтобы не занимать место на каждом экране. */}
-      <div className="app-footer-row">
-        <span className="app-footer-copy">Полка © {year} — все права защищены</span>
-        {docs && docs.privacy_url ? (
-          <button type="button" className="app-footer-toggle"
-            aria-expanded={open} onClick={() => setOpen(!open)}>
-            Документы <span className={open ? 'app-footer-arrow is-open' : 'app-footer-arrow'}>▾</span>
-          </button>
-        ) : null}
-      </div>
-      {open && docs && docs.privacy_url ? (
+      {/* Внизу копирайт и сразу ссылки на документы — без промежуточной
+          надписи «Документы»: лишний клик на ровном месте. */}
+      <div className="app-footer-copy">Полка © {year} — все права защищены</div>
+      {docs && docs.privacy_url ? (
         <div className="app-footer-links">
           <a href={docs.privacy_url} target="_blank" rel="noreferrer">
             Политика конфиденциальности
           </a>
+          <span className="app-footer-sep">·</span>
           <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer">
             Условия пользования
           </a>
