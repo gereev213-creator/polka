@@ -19,7 +19,7 @@ TOKENS = ('HUNT_DIALOG_SLOT_ORDER', 'HUNT_DIALOG_DEFAULT_ORDER', 'HUNT_SLOT_QUES
           'HUNT_SLOT_OPTIONS', '_ANY_ANSWERS', '_CONDITION_SYNONYMS', '_dialog_copy',
           '_dialog_next_slot', '_dialog_apply_choice', '_dialog_apply_extract',
           '_dialog_item_word', '_dialog_query', '_dialog_requirements',
-          '_dialog_slot_options', '_dialog_detect_category', '_dialog_extract_fallback')
+          '_dialog_slot_options', '_dialog_detect_category', 'CATEGORY_BY_WORD', '_dialog_extract_fallback')
 
 
 def chunks(src):
@@ -70,7 +70,12 @@ ok = 0
 assert detect(['iPhone', '14', 'Pro']) == 'telefony'
 assert detect(['кроссовки', 'Nike']) == 'odezhda_obuv_aksessuary'
 assert detect(['Toyota', 'Camry']) == 'avtomobili'
-assert detect(['диван']) == ''
+# После подключения общего словаря категорий мебель тоже распознаётся —
+# раньше «диван» попадал в порядок вопросов по умолчанию, и бот спрашивал
+# не то (например город), как и было на скриншотах владельца.
+assert detect(['диван']) == 'mebel'
+assert detect(['кофта', 'мальчика', '158']) == 'odezhda_obuv_aksessuary'
+assert detect(['неведомоеслово']) == ''
 ok += 1
 print('1) детектор категории: telefony/odezhda/avtomobili/пусто')
 

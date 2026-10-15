@@ -17824,7 +17824,7 @@ HUNT_DIALOG_SLOT_ORDER = {
 HUNT_DIALOG_DEFAULT_ORDER = ['condition_min', 'max_price']
 
 HUNT_SLOT_QUESTIONS = {
-    'memory_or_size': 'Какой объём (или размер) нужен?',
+    'memory_or_size': 'Какой размер (или рост) нужен?',
     'battery_min': 'АКБ от скольки процентов?',
     'condition_min': 'Какое состояние подойдёт?',
     'original_only': 'Оригинал или реплика не важна?',
@@ -18258,8 +18258,18 @@ def _dialog_mark_llm(user_id: int) -> None:
 
 
 def _dialog_detect_category(words: List[str]) -> str:
-    """Категория по словам товара (для порядка вопросов)."""
+    """Категория по словам товара (для порядка вопросов).
+
+    Сначала общий словарь (в нём 126 слов: кофта, худи, пуховик, свитшот…),
+    и только потом собственный список ниже. Раньше «кофта» не распознавалась,
+    и для одежды применялся порядок вопросов по умолчанию — отсюда вопросы
+    не по делу.
+    """
     text = ' '.join(str(w or '') for w in (words or [])).lower()
+    for word in text.split():
+        clean = word.strip('.,!?()\"\'')
+        if clean in CATEGORY_BY_WORD:
+            return CATEGORY_BY_WORD[clean]
     if any(k in text for k in ('iphone', 'айфон', 'телефон', 'смартфон', 'samsung',
                                'xiaomi', 'redmi', 'pixel', 'galaxy')):
         return 'telefony'
@@ -18407,9 +18417,17 @@ async def api_hunt_dialog(request: aiohttp_web.Request) -> aiohttp_web.Response:
         if slot:
             draft = _dialog_apply_choice(draft, slot, str(choice))
     else:
-        extract, say = await _dialog_extract(viewer_id, draft, message)
         prev_slot = draft.get('_ask')
-        draft = _dialog_apply_extract(draft, extract)
+        # «любой», «неважно», «без разницы» — это ОТВЕТ на заданный вопрос.
+        # Раньше такие слова уходили в разбор как текст, слот оставался пустым,
+        # и бот спрашивал то же самое второй раз (например город).
+        low = ' '.join(str(message or '').lower().split())
+        if prev_slot and low in _ANY_ANSWERS:
+            draft = _dialog_apply_choice(draft, prev_slot, 'любой')
+            extract, say = {}, 'Понял.'
+        else:
+            extract, say = await _dialog_extract(viewer_id, draft, message)
+            draft = _dialog_apply_extract(draft, extract)
         # Модель не поняла ответ на предыдущий вопрос — не повторяем, помечаем any
         if prev_slot and prev_slot not in draft.get('any', []) and draft.get(prev_slot) in (None, '', []):
             draft.setdefault('any', []).append(prev_slot)
