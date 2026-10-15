@@ -323,8 +323,9 @@ export const api = {
   // Видно, не слишком ли узкий запрос — иначе человек ждёт тишины.
   checkHunt: (draft) => request('/api/hunt/check',
     { method: 'POST', body: JSON.stringify(draft) }),
-  hideFinding: (adId) => request('/api/findings/hide',
-    { method: 'POST', body: JSON.stringify({ ad_id: adId }) }),
+  // exclude — слова, которые больше не присылать по этому критерию
+  hideFinding: (adId, exclude) => request('/api/findings/hide',
+    { method: 'POST', body: JSON.stringify({ ad_id: adId, exclude: exclude || undefined }) }),
 
   // ── Диалог с ИИ (этап G): единый движок, состояние на сервере ───────────
   huntDialog: (payload) => request('/api/hunt/dialog',

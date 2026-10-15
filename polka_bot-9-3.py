@@ -18662,7 +18662,14 @@ async def api_hunt_ai(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 async def api_findings_hide(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/findings/hide — убрать лот из ленты."""
+    """POST /api/findings/hide — убрать лот из ленты.
+
+    Заодно учимся на «это не то»: если человек убрал находку, подсказываем
+    слово, которого не было в его запросе (обычно это и есть лишнее —
+    «чехол», «копия», «запчасти»), и по его согласию добавляем слово
+    в исключения критерия. Раньше находку просто скрывали, и то же самое
+    приходило снова.
+    """
     viewer_id = _miniapp_viewer(request)
     try:
         body = await request.json()
@@ -18672,7 +18679,19 @@ async def api_findings_hide(request: aiohttp_web.Request) -> aiohttp_web.Respons
     if not ad_id:
         return _miniapp_err('bad_request', 400)
     hide_finding(viewer_id, ad_id)
-    return _miniapp_json({'ok': True, 'ad_id': ad_id})
+    applied = []
+    try:
+        applied = _apply_exclude_suggestion(viewer_id, ad_id, (body or {}).get('exclude'))
+    except Exception as e:
+        logger.warning(f"hide exclude: {e}")
+    suggestions = []
+    if not (body or {}).get('exclude'):
+        try:
+            suggestions = _suggest_exclude_words(viewer_id, ad_id)
+        except Exception:
+            suggestions = []
+    return _miniapp_json({'ok': True, 'ad_id': ad_id,
+                          'suggest_exclude': suggestions, 'applied': applied})
 
 
 async def hunt_hide_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -19826,7 +19845,7 @@ HUNT_STRICT_MODEL_HINTS = ('электрон', 'telefon', 'planshet', 'noutbuk',
                            'приставк')
 
 
-def _hunt_extra_qualifier(query: str, title: str) -> str:
+def _hunt_extra_qualifier(query: str, title: str, strict: bool = False) -> str:
     """Лишний уточнитель модели в заголовке, которого не было в запросе.
 
     Запрос «iPhone 15 Pro», заголовок «iPhone 15 Pro Max» — это ДРУГАЯ модель
@@ -19840,7 +19859,8 @@ def _hunt_extra_qualifier(query: str, title: str) -> str:
         return ''
     # Если в запросе нет ни одного уточнителя, человек не уточнял модель:
     # «айфон 13» должен находить и «iPhone 13 Pro». Иначе терялись находки.
-    if not any(re.search(r'(?<![a-z])' + re.escape(x) + r'(?![a-z])', q)
+    # Строгий режим (галочка в критерии) требует ровно ту модель, что в запросе.
+    if not strict and not any(re.search(r'(?<![a-z])' + re.escape(x) + r'(?![a-z])', q)
                or any(ru in q for ru in (QUALIFIER_RU.get(x) or []))
                for x in HUNT_MODEL_QUALIFIERS):
         return ''
@@ -20533,7 +20553,199 @@ FILTER_COLUMNS = [
     ('min_price', 'INTEGER DEFAULT 0', 0),
     ('max_hours', 'INTEGER DEFAULT 0', 0),
     ('with_photo', 'INTEGER DEFAULT 0', 0),
+    # Свои исключения словами: «не присылать чехлы, запчасти, копии».
+    # Общий список мусора в коде покрывает не всё, а у каждого товара
+    # лишние слова свои — поэтому это поле критерия, а не константа.
+    ('exclude_words', "TEXT DEFAULT ''", ''),
+    # 1 — требовать ровно ту модель, что в запросе (без «+ Pro Max»)
+    ('strict_model', 'INTEGER DEFAULT 0', 0),
 ]
+
+
+def _crit_exclude_words(crit: Dict) -> List[str]:
+    """Слова-исключения критерия: что человек не хочет видеть."""
+    raw = str((crit or {}).get('exclude_words') or '')
+    out = []
+    for part in re.split(r'[,;\n]+', raw):
+        word = ' '.join(str(part).split()).lower().strip()
+        if 2 <= len(word) <= 30 and word not in out:
+            out.append(word)
+    return out[:12]
+
+
+# Слова, которые не стоит предлагать в исключения: они есть почти везде
+# и отсекли бы вообще всё.
+_HINT_NEUTRAL_WORDS = ('продам', 'продаю', 'продаётся', 'срочно', 'торг', 'новый',
+                       'новая', 'новое', 'б/у', 'бу', 'размер', 'цвет', 'шт', 'см')
+
+
+def _suggest_exclude_words(user_id: int, ad_id: int, limit: int = 3) -> List[str]:
+    """Слова из заголовка, которых нет в запросе критерия: кандидаты в исключения."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT crit_id FROM hunt_matches WHERE user_id=? AND ad_id=? "
+                       "ORDER BY id DESC LIMIT 1", (int(user_id), int(ad_id)))
+        row = cursor.fetchone()
+        ad = db.get_ad(int(ad_id)) or {}
+        if not row:
+            return []
+        cursor.execute("SELECT * FROM hunt_criteria WHERE id=?", (int(row['crit_id']),))
+        crit_row = cursor.fetchone()
+    except Exception:
+        return []
+    if not crit_row:
+        return []
+    crit = dict(crit_row)
+    asked = set(_hunt_asked_stems(crit.get('query') or ''))
+    have = set(_crit_exclude_words(crit))
+    out = []
+    for word in re.split(r'[^\w]+', str(ad.get('title') or '').lower()):
+        if len(word) < 4 or word.isdigit():
+            continue
+        if word in _HINT_NEUTRAL_WORDS or word in have:
+            continue
+        if any(word.startswith(stem) for stem in asked if stem):
+            continue
+        if query_has(word, crit.get('query') or ''):
+            continue
+        if word not in out:
+            out.append(word)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def query_has(word: str, query: str) -> bool:
+    """Есть ли слово (или его основа) в запросе критерия."""
+    q = str(query or '').lower()
+    return bool(word) and (word in q or (len(word) >= 4 and word[:4] in q))
+
+
+def _apply_exclude_suggestion(user_id: int, ad_id: int, words) -> List[str]:
+    """Добавляет слова в исключения критерия, по которому пришла находка."""
+    if not words:
+        return []
+    if isinstance(words, str):
+        words = [words]
+    clean = []
+    for w in words:
+        word = ' '.join(str(w).split()).lower().strip()
+        if 2 <= len(word) <= 30 and word not in clean:
+            clean.append(word)
+    if not clean:
+        return []
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT crit_id FROM hunt_matches WHERE user_id=? AND ad_id=? "
+                       "ORDER BY id DESC LIMIT 1", (int(user_id), int(ad_id)))
+        row = cursor.fetchone()
+        if not row:
+            return []
+        crit_id = int(row['crit_id'])
+        cursor.execute("SELECT exclude_words FROM hunt_criteria WHERE id=?", (crit_id,))
+        crow = cursor.fetchone()
+        current = _crit_exclude_words({'exclude_words': (crow['exclude_words'] if crow else '')})
+        for word in clean:
+            if word not in current:
+                current.append(word)
+        cursor.execute("UPDATE hunt_criteria SET exclude_words=? WHERE id=?",
+                       (','.join(current[:12])[:200], crit_id))
+        db.conn.commit()
+        logger.info(f"критерий {crit_id}: исключения пополнены {clean}")
+        return clean
+    except Exception as e:
+        logger.warning(f"apply exclude: {e}")
+        return []
+
+
+def _criteria_stats_map(crit_ids: List[int]) -> Dict[int, Dict]:
+    """Сколько находок ушло по каждому критерию и что чаще всего отсекало.
+
+    Один запрос на весь список: по одному на критерий было бы N обращений
+    к базе на каждое открытие экрана.
+    """
+    if not crit_ids:
+        return {}
+    out: Dict[int, Dict] = {}
+    cursor = db.conn.cursor()
+    marks = ','.join('?' for _ in crit_ids)
+    try:
+        cursor.execute(f"SELECT crit_id, status, COUNT(*) AS n FROM hunt_matches "
+                       f"WHERE crit_id IN ({marks}) GROUP BY crit_id, status", tuple(crit_ids))
+        for r in cursor.fetchall():
+            cid = int(r['crit_id'])
+            row = out.setdefault(cid, {'sent': 0, 'total': 0, 'sent_day': 0})
+            row['total'] += int(r['n'] or 0)
+            if str(r['status']) == 'sent':
+                row['sent'] += int(r['n'] or 0)
+        day_ago = (get_moscow_time() - timedelta(days=1)).isoformat()
+        cursor.execute(f"SELECT crit_id, COUNT(*) AS n FROM hunt_matches "
+                       f"WHERE crit_id IN ({marks}) AND status='sent' AND updated_at >= ? "
+                       f"GROUP BY crit_id", (*crit_ids, day_ago))
+        for r in cursor.fetchall():
+            out.setdefault(int(r['crit_id']), {'sent': 0, 'total': 0, 'sent_day': 0})['sent_day'] = int(r['n'] or 0)
+        cursor.execute(f"SELECT crit_id, reject_reason, COUNT(*) AS n FROM hunt_matches "
+                       f"WHERE crit_id IN ({marks}) AND status='rejected' "
+                       f"GROUP BY crit_id, reject_reason", tuple(crit_ids))
+        tops: Dict[int, tuple] = {}
+        for r in cursor.fetchall():
+            cid = int(r['crit_id'])
+            n = int(r['n'] or 0)
+            if cid not in tops or n > tops[cid][1]:
+                tops[cid] = (str(r['reject_reason'] or ''), n)
+        for cid, (reason, _n) in tops.items():
+            out.setdefault(cid, {'sent': 0, 'total': 0, 'sent_day': 0})['top_reason'] = reason
+    except Exception as e:
+        logger.warning(f"criteria stats: {e}")
+    return out
+
+
+def _criterion_hint(crit: Dict, stats: Dict) -> str:
+    """Подсказка по критерию: слишком узко, слишком широко или ждём данные.
+
+    Универсальные правила, без привязки к товару: человек не должен сам
+    догадываться, почему критерий молчит неделю или сыплет 140 находок.
+    """
+    sent = int(stats.get('sent') or 0)
+    sent_day = int(stats.get('sent_day') or 0)
+    total = int(stats.get('total') or 0)
+    top = str(stats.get('top_reason') or '')
+    if sent_day > 40:
+        return (f'Слишком широко: {sent_day} находок за сутки. '
+                f'Сузьте цену или добавьте слова')
+    if not int(crit.get('median_price') or 0) and total > 3:
+        return 'Мало данных для «обычной цены» — находки придут, но без оценки выгоды'
+    if sent == 0 and total > 0:
+        advice = {
+            'price_too_high': 'Поднимите верхнюю цену — отказов по цене больше всего',
+            'title_words': 'Уберите лишние слова из запроса или добавьте слово категории',
+            'category_mismatch': 'Проверьте категорию: объявления идут из другого раздела',
+            'accessory': 'Добавьте в исключения лишние слова (чехол, запчасти, копия)',
+            'model_mismatch': 'Если «Pro Max» тоже подходит — снимите строгую модель',
+            'excluded': 'Ваши исключения отсекают всё — проверьте список',
+        }.get(top, '')
+        base = f'Пока ничего не нашлось ({total} проверок)'
+        return f'{base}. {advice}' if advice else base
+    return ''
+
+def _crit_excluded(crit: Dict, title: str) -> str:
+    """Слово-исключение из заголовка, если оно там есть (и не отрицается).
+
+    Слово из самого запроса исключением не считается: критерий про чехол
+    с исключением «чехол» отверг бы вообще всё.
+    """
+    low = str(title or '').lower()
+    if not low:
+        return ''
+    query = str((crit or {}).get('query') or '').lower()
+    for word in _crit_exclude_words(crit):
+        if word and word in query:
+            continue
+        pattern = r'(?<![\w])' + re.escape(word) + r'[а-яёa-z]{0,4}(?![\w])'
+        for m in re.finditer(pattern, low):
+            if not _negated_window(low, m.start()):
+                return word
+    return ''
 
 
 def ensure_filter_columns():
@@ -20878,6 +21090,7 @@ HUNT_REASON_LABELS = {
     'desc_needed': 'нужна проверка по описанию',
     'desc_failed': 'описание не получено',
     'model_mismatch': 'другая модель (Pro против Pro Max и подобное)',
+    'excluded': 'слово из ваших исключений',
     'no_price': 'нет цены',
     'hidden': 'человек убрал этот лот',
     'already_sent': 'уже отправляли',
@@ -21000,8 +21213,9 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # (это другая модель и другая цена), но «найк» по-прежнему находит
     # «Nike Air Max» — уточнители проверяем только в технике.
     _cats = f"{ad.get('category') or ''} {crit.get('category') or ''}".lower()
-    if any(h in _cats for h in HUNT_STRICT_MODEL_HINTS):
-        _extra = _hunt_extra_qualifier(crit.get('query'), title)
+    _strict = bool(int(crit.get('strict_model') or 0))
+    if _strict or any(h in _cats for h in HUNT_STRICT_MODEL_HINTS):
+        _extra = _hunt_extra_qualifier(crit.get('query'), title, strict=_strict)
         if _extra:
             return no('model_mismatch')
     # Мусор и признаки состояния — по границам слов и с учётом отрицаний
@@ -21009,6 +21223,11 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # больше не отсеиваются.
     query = str(crit.get('query') or '')
     title_raw = str(ad.get('title') or '')
+    # Свои исключения человека: «не присылать чехлы, запчасти, копии».
+    # Проверяются по заголовку и с учётом отрицаний («не чехол» не считается).
+    excluded = _crit_excluded(crit, title_raw)
+    if excluded:
+        return no('excluded')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
     if junk:
         # Реплика и «1:1» — это не аксессуар, а подделка: причина другая
@@ -23412,6 +23631,8 @@ def _criterion_public(crit: Dict) -> Dict:
         'active': bool(crit.get('active')),
         'mode': crit.get('mode') or 'any',
         'requirements_json': _crit_requirements_json(crit),
+        'exclude': _crit_exclude_words(crit),
+        'strict_model': int(crit.get('strict_model') or 0),
     }
 
 
@@ -23456,7 +23677,8 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
                   mode: str = 'any', requirements: str = '',
-                  requirements_json: Optional[Dict] = None) -> Optional[int]:
+                  requirements_json: Optional[Dict] = None,
+                  exclude: str = '', strict_model: int = 0) -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -23489,15 +23711,18 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     cursor.execute('''
         INSERT INTO hunt_criteria (user_id, query, category, city, max_price, min_discount,
                                    min_price, max_hours, with_photo, requirements,
-                                   requirements_json, active, created_at, mode)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                                   requirements_json, active, created_at, mode,
+                                   exclude_words, strict_model)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
     ''', (user_id, query, category or '', city or '', int(max_price or 0),
           max(0, min(int(min_discount or 0), 90)),
           int(min_price or 0), int(max_hours or 0), int(with_photo or 0),
           str(requirements or '')[:400],
           json.dumps(req_json, ensure_ascii=False),
           get_moscow_time().isoformat(),
-          'deal' if str(mode) == 'deal' else 'any'))
+          'deal' if str(mode) == 'deal' else 'any',
+          ','.join(_crit_exclude_words({'exclude_words': exclude}))[:200],
+          1 if int(strict_model or 0) else 0))
     db.conn.commit()
     crit_id = cursor.lastrowid
     # K4: медиана ТОЛЬКО этого критерия — один запрос вместо прохода по всем.
@@ -23570,9 +23795,17 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         return _miniapp_err('unauthorized', 401)
 
     if method == 'GET':
+        crits = _db_read(get_user_criteria, viewer_id)
+        stats = _db_read(_criteria_stats_map, [int(c.get('id') or 0) for c in crits])
+        items = []
+        for c in crits:
+            pub = _criterion_public(c)
+            st = stats.get(int(c.get('id') or 0)) or {}
+            pub['sent_total'] = int(st.get('sent') or 0)
+            pub['hint'] = _criterion_hint(c, st)
+            items.append(pub)
         return _miniapp_json({
-            'items': [_criterion_public(c)
-                      for c in _db_read(get_user_criteria, viewer_id)],
+            'items': items,
             # Без этого человек не понимает, почему ничего не приходит
             'collector': collector_status(),
             # Заблокировал бота — находки физически не дойдут: покажем плашку
@@ -23600,6 +23833,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             with_photo=1 if (body or {}).get('with_photo') else 0,
             min_discount=int((body or {}).get('min_discount') or 0),
             mode=str((body or {}).get('mode') or 'any'),
+            exclude=str((body or {}).get('exclude') or ''),
+            strict_model=1 if (body or {}).get('strict_model') else 0,
         )
         if crit_id == -1:
             _lim = _criteria_limit(viewer_id)

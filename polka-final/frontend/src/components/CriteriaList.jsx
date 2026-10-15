@@ -44,7 +44,14 @@ export function CriteriaList({ items = [], loading = false, onRemove, title = '�
                 {c.max_price ? <Badge>до {money(c.max_price)} ₽</Badge> : null}
                 {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
                 {c.with_photo ? <Badge>с фото</Badge> : null}
+                {c.strict_model ? <Badge>строго эта модель</Badge> : null}
+                {(c.exclude || []).length
+                  ? <Badge>не: {(c.exclude || []).join(', ')}</Badge>
+                  : null}
               </div>
+              {/* Подсказка по здоровью критерия: почему молчит или почему
+                  сыплет слишком многим. Без неё человек не понимает причину. */}
+              {c.hint ? <div className="chat-note">{c.hint}</div> : null}
             </div>
             <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
               onClick={() => onRemove && onRemove(c.id)}>

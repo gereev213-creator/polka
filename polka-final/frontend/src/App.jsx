@@ -655,6 +655,9 @@ function CriteriaPage() {
   // Требования словами — то же, что ИИ пишет в критерий: «размер 43»,
   // «АКБ от 85%», «не вскрывался». Скрипт разбирает их и отсеивает.
   const [huntNotes, setHuntNotes] = useState('')
+  // Свои исключения и строгая модель — универсальные поля любого критерия
+  const [huntExclude, setHuntExclude] = useState('')
+  const [huntStrict, setHuntStrict] = useState(false)
   const [city, setCity] = useState('')
   const [maxPrice, setMaxPrice] = useState('')
   // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
@@ -749,6 +752,8 @@ function CriteriaPage() {
         with_photo: withPhoto ? 1 : 0,
         min_discount: mode === 'deal' ? minDiscount : 0,
         mode,
+        exclude: huntExclude.trim(),
+        strict_model: huntStrict ? 1 : 0,
       })
       setQuery('')
       setCity('')
@@ -1008,6 +1013,21 @@ function CriteriaPage() {
 
       {/* Список критериев — общий компонент: та же разметка, что в ИИ-поиске,
           иначе один критерий выглядел на двух вкладках по-разному. */}
+      {/* Свои исключения и строгая модель: универсальные поля любого критерия.
+          Исключения спасают от «чехол», «копия», «запчасти»; строгая модель —
+          от «Pro Max» вместо «Pro». */}
+      <div className="glass-card mt-14">
+        <div className="plan-name">Чего не присылать</div>
+        <div className="plan-desc">слова через запятую: чехол, запчасти, копия</div>
+        <input className="text-input mt-8" placeholder="чехол, запчасти"
+          value={huntExclude} onChange={(e) => setHuntExclude(e.target.value)} />
+        <label className="plan-desc mt-8" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input type="checkbox" checked={huntStrict}
+            onChange={(e) => setHuntStrict(e.target.checked)} />
+          строго эта модель (без «Pro Max» и подобных)
+        </label>
+      </div>
+
       <CriteriaList items={items} loading={loading} onRemove={remove} />
     </Screen>
   )
@@ -1683,6 +1703,7 @@ function ListingPage() {
   const navigate = useNavigate()
   const listingId = Number(id)
   const { favoriteIds, toggleFavorite, profile } = useApp()
+  const [excludeSuggest, setExcludeSuggest] = useState([])
   const [item, setItem] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1944,12 +1965,29 @@ function ListingPage() {
           <button type="button" className="danger-text-btn mt-12"
             onClick={async () => {
               try {
-                await api.hideFinding(item.id)
+                // Сервер подсказывает слово, которого не было в запросе
+                // («чехол», «копия»): его можно сразу внести в исключения,
+                // чтобы такое больше не приходило.
+                const r = await api.hideFinding(item.id)
+                const words = (r && r.suggest_exclude) || []
+                if (words.length) {
+                  setExcludeSuggest(words)
+                  return
+                }
                 window.history.back()
               } catch (e) {
                 setError('Не удалось убрать лот')
               }
             }}>Удалить лот из находок</button>
+        ) : null}
+        {isFinding && excludeSuggest.length ? (
+          <button type="button" className="ghost-btn wide mt-8"
+            onClick={async () => {
+              try {
+                await api.hideFinding(item.id, excludeSuggest)
+              } catch (e) { /* находка уже скрыта — не мешает */ }
+              window.history.back()
+            }}>Больше не присылать: {excludeSuggest.join(', ')}</button>
         ) : null}
 
         {/* Липкая нижняя панель действий: главный сценарий всегда под рукой,
