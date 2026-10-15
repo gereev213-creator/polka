@@ -36,10 +36,18 @@ from urllib.parse import quote_plus
 from html import unescape
 from html.parser import HTMLParser
 
-# Искать у Авито по тексту запроса (q=), а не перебирать всю категорию.
-# Флаг на случай, если Авито изменит формат: POLKA_SEARCH_BY_QUERY=0 вернёт
-# прежнее поведение (категория + цена), ничего больше править не нужно.
-SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
+# Искать у Авито по тексту запроса (q=)?
+#
+# По умолчанию ВЫКЛЮЧЕНО — проверено на живом сайте 15.10.2026: обычный
+# раздел Авито отдаёт (48 карточек), а ссылки с текстом запроса, подкатегорией
+# или моделью в пути Авито отбивает кодами 429/439, причём сразу первым же
+# запросом, а не из-за количества. Домашний IP не помогает: проверено и с него.
+# Включённый по умолчанию q= означал бы, что сбор перестанет работать совсем.
+#
+# Включить: POLKA_SEARCH_BY_QUERY=1 (или свой шаблон url_template со своим q) —
+# если Авито изменит поведение либо если у вас прокси, с которого поиск идёт.
+# Проверка формы ссылки:  python3 collect.py --check-query "iphone 13 pro"
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') == '1'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -835,9 +843,37 @@ CATEGORY_BY_WORD = {
     'сапоги': 'odezhda_obuv_aksessuary', 'платье': 'odezhda_obuv_aksessuary',
     'сумка': 'odezhda_obuv_aksessuary', 'джинсы': 'odezhda_obuv_aksessuary',
     'худи': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    # одежда и обувь: слова, которых не хватало — из-за них критерии вроде
+    # «Зип кофта мальчика 158» не искались ВООБЩЕ (категория не узнавалась)
+    'кофта': 'odezhda_obuv_aksessuary', 'свитер': 'odezhda_obuv_aksessuary',
+    'джемпер': 'odezhda_obuv_aksessuary', 'толстовка': 'odezhda_obuv_aksessuary',
+    'лонгслив': 'odezhda_obuv_aksessuary', 'рубашка': 'odezhda_obuv_aksessuary',
+    'брюки': 'odezhda_obuv_aksessuary', 'шорты': 'odezhda_obuv_aksessuary',
+    'пальто': 'odezhda_obuv_aksessuary', 'кардиган': 'odezhda_obuv_aksessuary',
+    'ветровка': 'odezhda_obuv_aksessuary', 'дубленка': 'odezhda_obuv_aksessuary',
+    'шапка': 'odezhda_obuv_aksessuary', 'шарф': 'odezhda_obuv_aksessuary',
+    'перчатки': 'odezhda_obuv_aksessuary', 'туфли': 'odezhda_obuv_aksessuary',
+    'сандалии': 'odezhda_obuv_aksessuary', 'рюкзак': 'odezhda_obuv_aksessuary',
+    'часы': 'odezhda_obuv_aksessuary', 'очки': 'odezhda_obuv_aksessuary',
+    # бренды одежды и обуви — их пишут в критерии вместо слова «куртка»
+    'nike': 'odezhda_obuv_aksessuary', 'adidas': 'odezhda_obuv_aksessuary',
+    'puma': 'odezhda_obuv_aksessuary', 'zara': 'odezhda_obuv_aksessuary',
+    'lacoste': 'odezhda_obuv_aksessuary', 'columbia': 'odezhda_obuv_aksessuary',
+    'salomon': 'odezhda_obuv_aksessuary', 'timberland': 'odezhda_obuv_aksessuary',
+    'bape': 'odezhda_obuv_aksessuary', 'ugg': 'odezhda_obuv_aksessuary',
+    'alpha': 'odezhda_obuv_aksessuary', 'the north face': 'odezhda_obuv_aksessuary',
+    'stone island': 'odezhda_obuv_aksessuary', 'uniqlo': 'odezhda_obuv_aksessuary',
     # прочее
     'велосипед': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
     'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+    'infinix': 'telefony', 'oppo': 'telefony', 'vivo': 'telefony',
+    'tecno': 'telefony', 'nothing': 'telefony', 'чехол': 'telefony',
+    'компьютер': 'tovary_dlya_kompyutera', 'пк': 'tovary_dlya_kompyutera',
+    'системный': 'tovary_dlya_kompyutera', 'keychron': 'tovary_dlya_kompyutera',
+    'nuphy': 'tovary_dlya_kompyutera', 'процессор': 'tovary_dlya_kompyutera',
+    'диван': 'mebel', 'стол': 'mebel', 'стул': 'mebel', 'шкаф': 'mebel',
+    'книга': 'knigi_i_zhurnaly', 'самокат': 'velosipedy',
+    'кровать': 'mebel', 'комод': 'mebel', 'матрас': 'mebel',
 }
 
 
@@ -918,11 +954,13 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             pmax = int(crit.get('max_price') or 0)
         except Exception:
             pmax = 0
-        if not SEARCH_BY_QUERY:
-            # Откат: прежнее поведение — только категория и цена
-            template_here = "https://www.avito.ru/all/{category}?s=104&pmin={pmin}&pmax={pmax}"
-        else:
+        if SEARCH_BY_QUERY:
             template_here = template
+        else:
+            # Проверенный рабочий вид: раздел + сортировка по дате + цена.
+            # Точность обеспечивает сервер: он отсеивает по словам заголовка,
+            # категории, городу и цене (этапы B и F).
+            template_here = "https://www.avito.ru/all/{category}?s=104&pmin={pmin}&pmax={pmax}"
         url = search_url(template_here, slug or '', query, pmin, pmax)
         if url in seen:
             continue
@@ -931,8 +969,9 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
                         'query': query, 'page': 1})
         built += 1
     if built:
-        print(f"  Целей из критериев: {built} — Авито ищет сам по тексту запроса"
-              f"{'' if SEARCH_BY_QUERY else ' (q= выключен: POLKA_SEARCH_BY_QUERY=0)'}")
+        mode = ("Авито ищет по тексту запроса (q=)" if SEARCH_BY_QUERY
+                else "раздел Авито + отсев по словам на сервере")
+        print(f"  Целей из критериев: {built} — {mode}")
     if no_query:
         print(f"  Критериев без текста: {no_query}")
     skipped = len(data.get('items', [])) - built - no_query
