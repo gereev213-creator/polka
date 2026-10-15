@@ -27312,25 +27312,45 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
         body = await request.json()
     except Exception:
         body = {}
-    parsed = parse_avito_filter_url(str((body or {}).get('url') or ''))
-    if not parsed.get('ok'):
-        return _miniapp_json(parsed, status=400)
-    if not parsed.get('slug'):
-        return _miniapp_json({'ok': False, 'error': 'unknown_category',
-                              'detail': 'Не понял категорию из ссылки — пришлите адрес раздела Авито'},
-                             status=400)
+    # Принимаем и одну ссылку, и пачку: {"urls": ["…", "…"]} или {"url": "…"}
+    raw = (body or {}).get('urls')
+    if isinstance(raw, str):
+        raw = [raw]
+    if not raw:
+        raw = [(body or {}).get('url') or '']
     current = collector_filters()
-    current[parsed['slug']] = parsed['filters']
+    added, failed, with_price = [], [], []
+    for one in raw:
+        for piece in str(one).replace('\r', '').split('\n'):
+            piece = piece.strip()
+            if not piece:
+                continue
+            parsed = parse_avito_filter_url(piece)
+            if not parsed.get('ok'):
+                failed.append({'url': piece[:80], 'why': parsed.get('error')})
+                continue
+            if not parsed.get('slug'):
+                failed.append({'url': piece[:80], 'why': 'unknown_category'})
+                continue
+            current[parsed['slug']] = parsed['filters']
+            added.append(parsed['slug'])
+            if parsed.get('has_price'):
+                with_price.append(parsed['slug'])
+    if not added:
+        return _miniapp_json({'ok': False, 'error': 'nothing_added',
+                              'failed': failed[:6],
+                              'detail': 'Ни одну ссылку не разобрал — нужны ссылки разделов Авито '
+                                        'с включёнными фильтрами (f=…)'}, status=400)
     res = cfg_set('collector.filters', json.dumps(current, ensure_ascii=False),
-                  by=admin_id, reason=f"набор для {parsed['slug']}")
+                  by=admin_id, reason=f"наборы: {', '.join(added[:5])}")
     if not res.get('ok'):
         return _miniapp_json(res, status=400)
-    return _miniapp_json({'ok': True, 'slug': parsed['slug'],
-                          'filters': parsed['filters'],
-                          'has_price': parsed.get('has_price', False),
+    return _miniapp_json({'ok': True, 'added': added, 'failed': failed[:6],
                           'total': len(current),
-                          'detail': 'Набор добавлен. Цену в ссылке лучше не задавать — '
-                                    'цена берётся из критерия'})
+                          'with_price': with_price,
+                          'detail': ('Готово. В ссылке была цена — она перебьёт цены критериев, '
+                                     'лучше прислать такую же без цены'
+                                     if with_price else 'Готово: наборы сохранены')})
 
 
 async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Response:
