@@ -338,6 +338,9 @@ export const api = {
   payInvoice: (product) => request('/api/pay/invoice',
     { method: 'POST', body: JSON.stringify({ product }) }),
   getReferral: () => request('/api/referral'),
+  // Документы: политика конфиденциальности и условия пользования
+  getLegal: () => request('/api/legal'),
+  postConsent: () => request('/api/legal/consent', { method: 'POST' }),
   // Промокод: активировать (этап J)
   redeemPromo: (code) => request('/api/promo/redeem',
     { method: 'POST', body: JSON.stringify({ code }) }),

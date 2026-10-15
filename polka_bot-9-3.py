@@ -14672,6 +14672,36 @@ async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 # Дополнительные функции
+async def privacy_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Политика конфиденциальности: ссылка и коротко, что обрабатываем."""
+    docs = legal_docs()
+    url = docs['privacy_url']
+    await update.message.reply_text(
+        "<b>Политика конфиденциальности</b>\n\n"
+        "Мы обрабатываем только то, что нужно для работы сервиса: ваш "
+        "телеграм-идентификатор и имя, заданные вами поисковые условия, "
+        "объявления и переписку внутри сервиса. Данные не продаём и не "
+        "передаём третьим лицам, кроме случаев, прямо предусмотренных законом.\n\n"
+        f"Полный текст: {url}\n\n"
+        "Условия пользования: /terms",
+        parse_mode='HTML', disable_web_page_preview=False)
+
+
+async def terms_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Условия пользования: ссылка на документ."""
+    docs = legal_docs()
+    url = docs['terms_url']
+    await update.message.reply_text(
+        "<b>Условия пользования</b>\n\n"
+        "Сервис помогает находить объявления и общаться с продавцами. Мы не "
+        "являемся стороной сделки, не проверяем товар и не отвечаем за "
+        "договорённости между пользователями. Размещая объявления, вы "
+        "подтверждаете, что они законны и не нарушают права третьих лиц.\n\n"
+        f"Полный текст: {url}\n\n"
+        "Политика конфиденциальности: /privacy",
+        parse_mode='HTML', disable_web_page_preview=False)
+
+
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
         "<b>Полка — находки дешевле рынка, по всей России</b>\n\n"
@@ -22163,6 +22193,15 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'banner.title': ('str', None, None, '', 'Заголовок баннера'),
     'banner.urls': ('str', None, None, '',
                     'Ссылки на картинки бота, JSON: {"welcome": "https://…"}'),
+    # Юридические документы: ссылки меняются из админки, без релиза
+    'legal.privacy_url': ('str', None, None,
+                          'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
+                          'Ссылка на политику конфиденциальности'),
+    'legal.terms_url': ('str', None, None,
+                        'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
+                        'Ссылка на условия пользования (замените на отдельную страницу)'),
+    'legal.consent_required': ('str', None, None, '1',
+                               '1 — спрашивать согласие при первом входе в приложение'),
     'collector.filters': ('str', None, None, '',
                           'Наборы фильтров Авито по категориям, JSON: {"telefony": "&f=…"}'),
     'banner.text': ('str', None, None, '', 'Текст баннера'),
@@ -22770,6 +22809,72 @@ def is_accessory_query(query: str) -> bool:
     """Аксессуар ли это: по таким запросам фильтры товара не применяем."""
     low = str(query or '').lower()
     return any(word in low for word in HUNT_ACCESSORY_QUERY_WORDS)
+
+
+def ensure_consent_column() -> None:
+    """Колонка согласия с документами: когда человек принял политику."""
+    try:
+        db.conn.execute("ALTER TABLE users ADD COLUMN consent_at TEXT DEFAULT ''")
+        db.conn.commit()
+        logger.info("users: добавлена колонка consent_at")
+    except Exception:
+        pass
+
+
+def legal_docs() -> Dict:
+    """Ссылки на документы и нужно ли спрашивать согласие."""
+    return {
+        'privacy_url': str(cfg_get('legal.privacy_url')
+                           or 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'),
+        'terms_url': str(cfg_get('legal.terms_url')
+                         or 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'),
+        'consent_required': str(cfg_get('legal.consent_required') or '1') == '1',
+    }
+
+
+def user_consent_at(user_id: int) -> str:
+    """Когда человек принял документы (пусто — ещё не принимал)."""
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT consent_at FROM users WHERE user_id=?", (int(user_id),))
+        row = cur.fetchone()
+        return str((row['consent_at'] if row else '') or '')
+    except Exception:
+        return ''
+
+
+def save_user_consent(user_id: int) -> str:
+    """Отметка согласия: одна на человека, повторный вызов ничего не портит."""
+    now = get_moscow_time().isoformat()
+    try:
+        cur = db.conn.cursor()
+        cur.execute("UPDATE users SET consent_at=? WHERE user_id=? AND "
+                    "(consent_at IS NULL OR consent_at='')", (now, int(user_id)))
+        if not cur.rowcount:
+            cur.execute("INSERT OR IGNORE INTO users (user_id, consent_at, created_at) "
+                        "VALUES (?,?,?)", (int(user_id), now, now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"consent save: {e}")
+    return now
+
+
+async def api_legal(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/legal — документы и нужно ли согласие (доступно и до согласия)."""
+    viewer_id = _miniapp_viewer(request)
+    docs = await asyncio.to_thread(_db_read, legal_docs)
+    docs['consented'] = bool(await asyncio.to_thread(_db_read, user_consent_at, viewer_id)) \
+        if viewer_id else False
+    return _miniapp_json(docs)
+
+
+async def api_legal_consent(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/legal/consent — человек принял политику и условия."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    at = await asyncio.to_thread(_db_locked, save_user_consent, viewer_id)
+    return _miniapp_json({'ok': True, 'consent_at': at})
 
 
 def collector_filters() -> Dict:
@@ -26306,6 +26411,8 @@ async def post_init(application: Application):
         BotCommand("menu",   "Главное меню"),
         BotCommand("help",   "Помощь и поддержка"),
         BotCommand("city",   "Список городов России"),
+        BotCommand("privacy", "Политика конфиденциальности"),
+        BotCommand("terms",  "Условия пользования"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -29928,6 +30035,8 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings/rollback', api_admin_rollback)
     app.router.add_post('/api/admin/collector-filter', api_admin_collector_filter)
+    app.router.add_get('/api/legal', api_legal)
+    app.router.add_post('/api/legal/consent', api_legal_consent)
     app.router.add_get('/api/admin/history', api_admin_history)
     app.router.add_post('/api/admin/grant', api_admin_grant)
     app.router.add_get('/api/admin/promo', api_admin_promo)
@@ -30081,6 +30190,10 @@ def main():
     application.add_handler(CommandHandler("cleanup", _cleanup_command))
     application.add_handler(CommandHandler("menu",    menu_command))
     application.add_handler(CommandHandler("help",    help_command))
+
+    application.add_handler(CommandHandler("privacy", privacy_command))
+
+    application.add_handler(CommandHandler("terms",   terms_command))
     application.add_handler(CommandHandler("city",    city_command))
     application.add_handler(CommandHandler("reindex", reindex_photos_command))
     application.add_handler(CommandHandler("recover", recover_db_command))
@@ -30479,6 +30592,7 @@ def main():
         install_token_filter()
         _install_log_buffer()
         ensure_filter_columns()
+        ensure_consent_column()
         ensure_hidden_table()
         ensure_verdict_column()
         ensure_hunt_matches()
