@@ -74,7 +74,20 @@ export function BottomNav() {
   )
 
   return (
-    <nav className={hidden ? 'dock hidden' : 'dock'}>
+    // Анимация задана ПРЯМО на элементе: правило из файла стилей может
+    // перебить другое объявление .dock (их несколько), а inline-стиль — нет.
+    // Размытие фона на время ухода выключаем: часть Android-браузеров
+    // не анимирует элемент с backdrop-filter, и движение выглядит рывком.
+    <nav
+      className={hidden ? 'dock hidden' : 'dock'}
+      style={{
+        transition: 'transform 380ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease',
+        willChange: 'transform, opacity',
+        transform: hidden ? 'translate3d(-50%, 140%, 0)' : 'translate3d(-50%, 0, 0)',
+        opacity: hidden ? 0 : 1,
+        ...(hidden ? { backdropFilter: 'none', WebkitBackdropFilter: 'none' } : null),
+      }}
+    >
       {items.slice(0, 2).map(renderItem)}
       <NavLink to="/create" className="dock-create" aria-label="Разместить объявление">
         <Icon name="plus" />
