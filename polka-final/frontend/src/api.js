@@ -76,6 +76,21 @@ export function cacheSet(key, data) {
   }
 }
 
+/** Сбросить кэш лент: после удаления находки старый список не должен
+ *  показываться снова — иначе кажется, что лот не удалился. */
+export function cacheClear() {
+  try {
+    const keys = []
+    for (let i = 0; i < sessionStorage.length; i += 1) {
+      const k = sessionStorage.key(i)
+      if (k && k.startsWith('polka:')) keys.push(k)
+    }
+    keys.forEach((k) => sessionStorage.removeItem(k))
+  } catch {
+    // приватный режим — не критично
+  }
+}
+
 /** Обновление при возврате в приложение и при появлении сети (K6). */
 export function onResume(cb) {
   if (typeof document === 'undefined') return () => {}
@@ -324,8 +339,14 @@ export const api = {
   checkHunt: (draft) => request('/api/hunt/check',
     { method: 'POST', body: JSON.stringify(draft) }),
   // exclude — слова, которые больше не присылать по этому критерию
-  hideFinding: (adId, exclude) => request('/api/findings/hide',
-    { method: 'POST', body: JSON.stringify({ ad_id: adId, exclude: exclude || undefined }) }),
+  hideFinding: async (adId, exclude) => {
+    const res = await request('/api/findings/hide', {
+      method: 'POST',
+      body: JSON.stringify({ ad_id: adId, exclude: exclude || undefined }),
+    })
+    cacheClear()
+    return res
+  },
 
   // ── Диалог с ИИ (этап G): единый движок, состояние на сервере ───────────
   huntDialog: (payload) => request('/api/hunt/dialog',

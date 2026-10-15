@@ -1703,7 +1703,6 @@ function ListingPage() {
   const navigate = useNavigate()
   const listingId = Number(id)
   const { favoriteIds, toggleFavorite, profile } = useApp()
-  const [excludeSuggest, setExcludeSuggest] = useState([])
   const [item, setItem] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -1964,30 +1963,17 @@ function ListingPage() {
         {isFinding ? (
           <button type="button" className="danger-text-btn mt-12"
             onClick={async () => {
+              // Сначала убираем лот, потом возвращаемся — раньше здесь была
+              // подсказка про исключения, из-за которой экран не уходил и
+              // казалось, что удаление не работает.
               try {
-                // Сервер подсказывает слово, которого не было в запросе
-                // («чехол», «копия»): его можно сразу внести в исключения,
-                // чтобы такое больше не приходило.
-                const r = await api.hideFinding(item.id)
-                const words = (r && r.suggest_exclude) || []
-                if (words.length) {
-                  setExcludeSuggest(words)
-                  return
-                }
-                window.history.back()
+                await api.hideFinding(item.id)
               } catch (e) {
                 setError('Не удалось убрать лот')
+                return
               }
-            }}>Удалить лот из находок</button>
-        ) : null}
-        {isFinding && excludeSuggest.length ? (
-          <button type="button" className="ghost-btn wide mt-8"
-            onClick={async () => {
-              try {
-                await api.hideFinding(item.id, excludeSuggest)
-              } catch (e) { /* находка уже скрыта — не мешает */ }
               window.history.back()
-            }}>Больше не присылать: {excludeSuggest.join(', ')}</button>
+            }}>Удалить лот из находок</button>
         ) : null}
 
         {/* Липкая нижняя панель действий: главный сценарий всегда под рукой,
