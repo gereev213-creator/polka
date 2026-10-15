@@ -56,7 +56,7 @@ conn.executescript('''
         created_at TEXT, published_at TEXT, source TEXT, source_url TEXT, external_id TEXT,
         parsed_at TEXT, views INTEGER, published_hours_ago INTEGER, age_estimated INTEGER DEFAULT 0,
         price_suspect INTEGER DEFAULT 0, prev_price INTEGER DEFAULT 0, last_drop_notice_at TEXT,
-        market_median INTEGER, discount_percent INTEGER);
+        market_median INTEGER, discount_percent INTEGER, seller_type TEXT DEFAULT '');
     CREATE TABLE ads_price_history (id INTEGER PRIMARY KEY AUTOINCREMENT, ad_id INTEGER,
         price INTEGER, seen_at TEXT);
     CREATE TABLE hunt_criteria (id INTEGER PRIMARY KEY, user_id INTEGER, query TEXT);
