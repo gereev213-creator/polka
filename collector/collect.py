@@ -1043,7 +1043,15 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # живут в параметре f=…, который генерирует браузер. Наборы задаются
         # в config.json: {"filters_by_category": {"odezhda_obuv_aksessuary": "&f=…"}}
         # Общий набор — "filters" или POLKA_FILTERS.
-        by_cat = (cfg or {}).get('filters_by_category') or {}
+        by_cat = dict((cfg or {}).get('filters_by_category') or {})
+        # То же самое можно задать переменной окружения (на сервере это проще,
+        # чем править config.json): POLKA_FILTERS_BY_CATEGORY='{"telefony":"&f=…"}'
+        try:
+            env_filters = os.environ.get('POLKA_FILTERS_BY_CATEGORY', '')
+            if env_filters:
+                by_cat.update(json.loads(env_filters))
+        except Exception as exc:
+            print(f"  ⚠ POLKA_FILTERS_BY_CATEGORY не разобран: {exc}")
         filters_here = ''
         for key in (slug or '', str(crit.get('category') or '')):
             if key and by_cat.get(key):
