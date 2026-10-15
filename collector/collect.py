@@ -795,6 +795,21 @@ def push(server: str, token: str, source: str, items: list) -> dict:
     этого находки собирались, но НЕ доходили до сервера и до бота.
     """
     url = f"{server.rstrip('/')}/api/ingest"
+    # Партию режем на порции. Раньше всё накопленное уходило ОДНИМ запросом:
+    # на живой базе такой запрос занимал до 19.8 секунды, и всё это время
+    # сервер не отвечал — приложение «зависало». Порция 400 карточек
+    # обрабатывается за десятые доли секунды.
+    CHUNK = 400
+    if len(items) > CHUNK:
+        total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'need_details': []}
+        for start in range(0, len(items), CHUNK):
+            part = push(server, token, source, items[start:start + CHUNK])
+            for key in ('accepted', 'duplicate', 'skipped'):
+                total[key] += int(part.get(key) or 0)
+            total['ids'].extend(part.get('ids') or [])
+            total['need_details'].extend(part.get('need_details') or [])
+            time.sleep(1.0)
+        return total
     body = json.dumps({'source': source, 'items': items}).encode()
     headers = {'Content-Type': 'application/json', 'X-Ingest-Token': token}
     if _cffi is not None:
