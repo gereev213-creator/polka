@@ -25,8 +25,8 @@
   ],
   "_фильтры": "Наборы фильтров Авито (частные, состояние, АКБ, слова в описании) задаются по категориям. Возьмите ссылку из браузера с нужными фильтрами и скопируйте только часть от «&f=» до конца набора.",
   "filters_by_category": {
-    "telefony": "&f=СЮДА_f_ИЗ_ССЫЛКИ_ДЛЯ_ТЕЛЕФОНОВ",
-    "odezhda_obuv_aksessuary": "&f=СЮДА_f_ИЗ_ССЫЛКИ_ДЛЯ_ОДЕЖДЫ"
+    "odezhda_obuv_aksessuary": "&f=ASgBAgICA0TeAtgL4ALeC~K8DfDRNA",
+    "telefony": "&f=ASgBAQECAkS0wA3OqzmwwQ2I_DcBQIKhEhUZ0L3QtSDQstGB0LrRgNGL0LLQsNC70YHRjwFFgu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ"
   },
-  "_фильтры_через_переменную": "Панель Амверы не принимает кавычки, поэтому наборы задаются без них: POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgB…;telefony=&f=ASgB…"
+  "_фильтры_через_переменную": "Панель Амверы не принимает кавычки, поэтому переменная задаётся без них: POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgBAgICA0TeAtgL4ALeC~K8DfDRNA;telefony=&f=ASgBAQECAkS0wA3OqzmwwQ2I_DcBQIKhEhUZ0L3QtSDQstGB0LrRgNGL0LLQsNC70YHRjwFFgu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ"
 }
