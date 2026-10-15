@@ -24005,8 +24005,8 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             # у кого решений ещё нет: полный пересчёт держал цикл событий
             # секундами, и приложение «зависало» в момент создания критерия.
             # Остальное подхватит фоновый цикл (only_missing).
-            hunt_matches_recompute(crit_id=crit_id, limit_ads=60, only_missing=True)
-            ready = hunt_ready_ids(crit_id=crit_id, limit=30)
+            hunt_matches_recompute(crit_id=crit_id, limit_ads=15, only_missing=True)
+            ready = hunt_ready_ids(crit_id=crit_id, limit=10)
             if ready:
                 logger.info(f"критерий {crit_id}: сразу отправляю {len(ready)} находок")
                 hunt_wake()
@@ -24091,20 +24091,20 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         if len(raw_query) < 2:
             return _miniapp_json({'error': 'query_too_short',
                                   'detail': 'Напишите хотя бы два символа'}, status=400)
-        crit_id = add_criterion(
-            viewer_id,
-            raw_query,
-            category=str((body or {}).get('category') or ''),
-        requirements=str((body or {}).get('requirements') or ''),
-            city=str((body or {}).get('city') or ''),
-            max_price=int((body or {}).get('max_price') or 0),
-            min_price=int((body or {}).get('min_price') or 0),
-            max_hours=int((body or {}).get('max_hours') or 0),
-            with_photo=1 if (body or {}).get('with_photo') else 0,
-            min_discount=int((body or {}).get('min_discount') or 0),
-            mode=str((body or {}).get('mode') or 'any'),
-            exclude=str((body or {}).get('exclude') or ''),
-            strict_model=1 if (body or {}).get('strict_model') else 0,
+        crit_id = await asyncio.to_thread(
+            _db_locked, add_criterion, viewer_id, raw_query,
+            str((body or {}).get('category') or ''),
+            str((body or {}).get('city') or ''),
+            int((body or {}).get('max_price') or 0),
+            int((body or {}).get('min_discount') or 0),
+            int((body or {}).get('min_price') or 0),
+            int((body or {}).get('max_hours') or 0),
+            1 if (body or {}).get('with_photo') else 0,
+            str((body or {}).get('mode') or 'any'),
+            str((body or {}).get('requirements') or ''),
+            (body or {}).get('requirements_json') or None,
+            str((body or {}).get('exclude') or ''),
+            1 if (body or {}).get('strict_model') else 0,
         )
         if crit_id == -1:
             _lim = _criteria_limit(viewer_id)
