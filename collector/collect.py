@@ -1039,8 +1039,19 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             # Категория не узнана: цель всё равно создаём (поиск по площадке),
             # но считаем такие критерии — по ним раздел не определён.
             no_slug += 1
-        url = search_url(template_here, slug or '', query, pmin, pmax,
-                         filters=(cfg or {}).get('filters') or os.environ.get('POLKA_FILTERS', ''))
+        # Фильтры Авито (только частные, состояние, АКБ, слова в описании)
+        # живут в параметре f=…, который генерирует браузер. Наборы задаются
+        # в config.json: {"filters_by_category": {"odezhda_obuv_aksessuary": "&f=…"}}
+        # Общий набор — "filters" или POLKA_FILTERS.
+        by_cat = (cfg or {}).get('filters_by_category') or {}
+        filters_here = ''
+        for key in (slug or '', str(crit.get('category') or '')):
+            if key and by_cat.get(key):
+                filters_here = str(by_cat[key])
+                break
+        if not filters_here:
+            filters_here = str((cfg or {}).get('filters') or os.environ.get('POLKA_FILTERS', ''))
+        url = search_url(template_here, slug or '', query, pmin, pmax, filters=filters_here)
         if url in seen:
             continue
         seen.add(url)
