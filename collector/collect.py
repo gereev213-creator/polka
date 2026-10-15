@@ -1046,12 +1046,29 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         by_cat = dict((cfg or {}).get('filters_by_category') or {})
         # То же самое можно задать переменной окружения (на сервере это проще,
         # чем править config.json): POLKA_FILTERS_BY_CATEGORY='{"telefony":"&f=…"}'
-        try:
-            env_filters = os.environ.get('POLKA_FILTERS_BY_CATEGORY', '')
-            if env_filters:
+        # Формат БЕЗ кавычек (панель Амверы их не принимает):
+        #   POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgB…;telefony=&f=ASgB…
+        # Разделитель записей — «;», ключ и значение — по ПЕРВОМУ «=»
+        # (внутри набора фильтров тоже есть «=», поэтому не split('=')).
+        # Если значение начинается с «{», считаем его JSON — для config.json.
+        env_filters = os.environ.get('POLKA_FILTERS_BY_CATEGORY', '').strip()
+        if env_filters.startswith('{'):
+            try:
                 by_cat.update(json.loads(env_filters))
-        except Exception as exc:
-            print(f"  ⚠ POLKA_FILTERS_BY_CATEGORY не разобран: {exc}")
+            except Exception as exc:
+                print(f"  ⚠ POLKA_FILTERS_BY_CATEGORY (JSON) не разобран: {exc}")
+        elif env_filters:
+            for pair in env_filters.replace('\n', ';').split(';'):
+                pair = pair.strip()
+                if not pair or '=' not in pair:
+                    continue
+                key, value = pair.split('=', 1)
+                key = key.strip()
+                value = value.strip()
+                if key and value:
+                    by_cat[key] = value
+            if not by_cat:
+                print("  ⚠ POLKA_FILTERS_BY_CATEGORY: не разобрана ни одна пара «категория=набор»")
         filters_here = ''
         for key in (slug or '', str(crit.get('category') or '')):
             if key and by_cat.get(key):
