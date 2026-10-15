@@ -22696,6 +22696,15 @@ CATEGORY_BY_WORD = {
     'salomon': 'odezhda_obuv_aksessuary', 'ugg': 'odezhda_obuv_aksessuary',
     'велосипед': 'velosipedy', 'самокат': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
     'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+    # бренды одежды: по ним запрос тоже должен попадать в раздел одежды
+    'alpha': 'odezhda_obuv_aksessuary', 'industries': 'odezhda_obuv_aksessuary',
+    'stone': 'odezhda_obuv_aksessuary', 'island': 'odezhda_obuv_aksessuary',
+    'canada': 'odezhda_obuv_aksessuary', 'goose': 'odezhda_obuv_aksessuary',
+    'north': 'odezhda_obuv_aksessuary', 'face': 'odezhda_obuv_aksessuary',
+    'patagonia': 'odezhda_obuv_aksessuary', 'moncler': 'odezhda_obuv_aksessuary',
+    'uniqlo': 'odezhda_obuv_aksessuary', 'zara': 'odezhda_obuv_aksessuary',
+    'burberry': 'odezhda_obuv_aksessuary', 'armani': 'odezhda_obuv_aksessuary',
+    'boss': 'odezhda_obuv_aksessuary', 'the': 'odezhda_obuv_aksessuary',
     'диван': 'mebel', 'стол': 'mebel', 'стул': 'mebel', 'шкаф': 'mebel',
     'перфоратор': 'instrumenty', 'шуруповёрт': 'instrumenty', 'дрель': 'instrumenty',
     'гантели': 'sport_i_otdyh', 'дорожка': 'sport_i_otdyh',
@@ -22746,6 +22755,21 @@ def parse_avito_filter_url(url: str) -> Dict:
                 'has_price': ('pmin' in query or 'pmax' in query)}
     except Exception as e:
         return {'ok': False, 'error': 'parse_failed', 'detail': str(e)[:120]}
+
+
+# Запросы-аксессуары: у них нет аккумулятора и их не «вскрывают». Фильтр
+# товара к ним применять нельзя — иначе находок не будет вообще.
+HUNT_ACCESSORY_QUERY_WORDS = ('чехол', 'чехлы', 'стекло', 'плёнка', 'пленка', 'бампер',
+                              'кабель', 'шнур', 'зарядка', 'зарядное', 'адаптер', 'переходник',
+                              'ремешок', 'ремень', 'картридж', 'запчаст', 'держатель',
+                              'подставка', 'крепление', 'мышка', 'мышь', 'клавиатур',
+                              'наклейк', 'сумка', 'кошелёк', 'кошелек')
+
+
+def is_accessory_query(query: str) -> bool:
+    """Аксессуар ли это: по таким запросам фильтры товара не применяем."""
+    low = str(query or '').lower()
+    return any(word in low for word in HUNT_ACCESSORY_QUERY_WORDS)
 
 
 def collector_filters() -> Dict:
@@ -23925,6 +23949,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                     if word.strip('.,!?()\"\'') in CATEGORY_BY_WORD:
                         key = CATEGORY_BY_WORD[word.strip('.,!?()\"\'')]
                         break
+                if is_accessory_query(row.get('query')):
+                    continue
                 got = flt.get(key or '') or flt.get(str(row.get('category') or '')) or ''
                 if got:
                     row['filters'] = got

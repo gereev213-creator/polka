@@ -926,6 +926,11 @@ CATEGORY_BY_WORD = {
     'фен': 'krasota_i_zdorovie', 'эпилятор': 'krasota_i_zdorovie', 'массажёр': 'krasota_i_zdorovie',
     'шины': 'zapchasti_i_aksessuary', 'диски': 'zapchasti_i_aksessuary',
     'ssd': 'tovary_dlya_kompyutera', 'процессор': 'tovary_dlya_kompyutera',
+    'alpha': 'odezhda_obuv_aksessuary', 'industries': 'odezhda_obuv_aksessuary',
+    'stone': 'odezhda_obuv_aksessuary', 'island': 'odezhda_obuv_aksessuary',
+    'canada': 'odezhda_obuv_aksessuary', 'goose': 'odezhda_obuv_aksessuary',
+    'north': 'odezhda_obuv_aksessuary', 'patagonia': 'odezhda_obuv_aksessuary',
+    'moncler': 'odezhda_obuv_aksessuary', 'uniqlo': 'odezhda_obuv_aksessuary',
     'infinix': 'telefony', 'oppo': 'telefony', 'vivo': 'telefony',
     'tecno': 'telefony', 'nothing': 'telefony', 'чехол': 'telefony',
     'компьютер': 'tovary_dlya_kompyutera', 'пк': 'tovary_dlya_kompyutera',
@@ -1047,6 +1052,13 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # ни переменные окружения не нужны (так его и добавляют на будущее:
         # одна ссылка из браузера на категорию).
         server_filters = str(crit.get('filters') or '')
+        # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара
+        # («АКБ от 80%», «не вскрывался») обнулил бы выдачу — не применяем.
+        if any(w in str(crit.get('query') or '').lower() for w in (
+                'чехол', 'стекло', 'плёнка', 'пленка', 'бампер', 'кабель', 'шнур',
+                'зарядка', 'зарядное', 'адаптер', 'переходник', 'ремешок', 'картридж',
+                'запчаст', 'держатель', 'подставка', 'крепление')):
+            server_filters = ''
         by_cat = dict((cfg or {}).get('filters_by_category') or {})
         # То же самое можно задать переменной окружения (на сервере это проще,
         # чем править config.json): POLKA_FILTERS_BY_CATEGORY='{"telefony":"&f=…"}'
