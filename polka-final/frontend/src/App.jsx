@@ -2992,14 +2992,6 @@ function ProfilePage() {
       {/* Статистика продавца переехала сюда с главной: в профиле она уместнее,
           и здесь больше нет дублирующей строки с теми же цифрами. */}
       <SellerStats profile={profile} />
-      {/* Документы доступны в любой момент, а не только при первом входе */}
-      <div className="glass-card mt-14">
-        <div className="section-head"><strong>Документы</strong></div>
-        <a className="ghost-btn wide mt-8" href={docs.privacy_url}
-           target="_blank" rel="noreferrer">Политика конфиденциальности</a>
-        <a className="ghost-btn wide mt-8" href={docs.terms_url}
-           target="_blank" rel="noreferrer">Условия пользования</a>
-      </div>
       {!profile ? <ErrorBlock text={`Профиль недоступен (initData: ${getInitData()?.length || 0} симв.). Откройте Mini App кнопкой бота, не прямой ссылкой.`} /> : null}
       <div className="list-stack mt-14 menu-list">
         {/* Единый набор иконок слева и шеврон справа: раньше у «Моих
@@ -3437,6 +3429,30 @@ function Layout() {
         <Route path="/chat/:id" element={<ChatPage />} />
       </Routes>
       {!hideNav ? <BottomNav /> : null}
+      {/* Документы — в самом низу приложения, простыми ссылками.
+          Полный текст на telegra.ph, ссылки берутся с сервера: меняются
+          из админки, без релиза. */}
+      <AppFooter />
+    </div>
+  )
+}
+
+
+function AppFooter() {
+  const [docs, setDocs] = useState(null)
+  useEffect(() => {
+    api.getLegal().then(setDocs).catch(() => setDocs(null))
+  }, [])
+  if (!docs || !docs.privacy_url) return null
+  return (
+    <div className="app-footer">
+      <a href={docs.privacy_url} target="_blank" rel="noreferrer">
+        Политика конфиденциальности
+      </a>
+      <span className="app-footer-sep">·</span>
+      <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer">
+        Условия пользования
+      </a>
     </div>
   )
 }
@@ -3470,66 +3486,12 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// Экран согласия с документами: показывается один раз, пока человек не принял
-// политику конфиденциальности и условия пользования. Без него сервис,
-// который собирает переписку и данные объявлений, юридически открывать нельзя.
-function LegalGate() {
-  const [docs, setDocs] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [hidden, setHidden] = useState(false)
-
-  useEffect(() => {
-    api.getLegal().then(setDocs).catch(() => setDocs(null))
-  }, [])
-
-  if (hidden || !docs || !docs.consent_required || docs.consented) return null
-
-  const accept = async () => {
-    setBusy(true)
-    try {
-      await api.postConsent()
-      setHidden(true)
-    } catch {
-      // Не смогли сохранить — не запираем человека в приложении
-      setHidden(true)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(8,10,16,0.92)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-    }}>
-      <div className="glass-card" style={{ maxWidth: 420, width: '100%' }}>
-        <strong className="plan-name">Перед началом</strong>
-        <div className="plan-desc mt-8">
-          Мы обрабатываем только то, что нужно для работы сервиса: ваш телеграм-идентификатор
-          и имя, заданные условия поиска, объявления и переписку внутри сервиса.
-        </div>
-        <a className="ghost-btn wide mt-12" href={docs.privacy_url}
-           target="_blank" rel="noreferrer">Политика конфиденциальности</a>
-        <a className="ghost-btn wide mt-8" href={docs.terms_url}
-           target="_blank" rel="noreferrer">Условия пользования</a>
-        <button type="button" className="primary-btn wide mt-12" disabled={busy}
-          onClick={accept}>{busy ? '…' : 'Принимаю и продолжаю'}</button>
-        <div className="plan-desc mt-8">
-          Продолжая, вы соглашаетесь с политикой конфиденциальности и условиями пользования.
-        </div>
-      </div>
-    </div>
-  )
-}
-
-
 export default function App() {
   return (
     <HashRouter>
       <ErrorBoundary>
         <AppProvider>
           <div className="app-frame">
-            <LegalGate />
             <Layout />
           </div>
         </AppProvider>

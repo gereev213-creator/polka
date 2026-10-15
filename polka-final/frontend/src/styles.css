@@ -2774,3 +2774,18 @@ html, body, #root {
   color: var(--text-tertiary);
   text-align: left;
 }
+
+/* Документы в самом низу приложения: две ссылки, ничего лишнего */
+.app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--muted, #8b93a7);
+}
+.app-footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+.app-footer-sep { opacity: 0.5; }
