@@ -23011,6 +23011,28 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                           'need_details': hunt_need_details()})
 
 
+async def api_ingest_need_details(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/ingest/need-details — что сборщику открыть ради описания.
+
+    Отдельный режим для домашнего IP: телефон тянет ровно те карточки, где
+    описание влияет на отбор (АКБ, состояние, вскрытие), и не дублирует сбор
+    выдачи, который идёт из облака. Раньше очередь отдавалась только в ответ
+    на приём находок, поэтому «только описания» запустить было нечем.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = _ingest_token_ok(request)
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    try:
+        limit = min(max(int(request.query.get('limit', 0) or 0), 1), 200)
+    except (TypeError, ValueError):
+        limit = 0
+    items = await asyncio.to_thread(_db_read, hunt_need_details, None, limit)
+    return _miniapp_json({'items': items, 'count': len(items)})
+
+
 async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/ingest/status — сборщик сообщает судьбу лотов.
 
@@ -29110,6 +29132,7 @@ def create_api_app() -> aiohttp_web.Application:
     # ── Агрегатор находок ────────────────────────────────────────────────────
     app.router.add_post('/api/ingest', api_ingest_findings)
     app.router.add_post('/api/ingest/details', api_ingest_details)
+    app.router.add_get('/api/ingest/need-details', api_ingest_need_details)
     app.router.add_post('/api/ingest/status', api_ingest_status)
     app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)

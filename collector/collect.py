@@ -1331,6 +1331,54 @@ def run_once(cfg: dict) -> int:
     return total_sent
 
 
+def fetch_need_details(server: str, token: str, limit: int = 0) -> list:
+    """Спрашивает у сервера, какие карточки открыть ради описания."""
+    url = f"{server.rstrip('/')}/api/ingest/need-details"
+    if limit:
+        url += f"?limit={int(limit)}"
+    data = fetch_json(url, token)
+    return data.get('items') or []
+
+
+def details_only_loop(server: str, token: str, limit: int = 0,
+                      loop: bool = False, every: int = 600) -> int:
+    """Режим для домашнего IP: приносим ТОЛЬКО описания и продавца.
+
+    Зачем отдельно: выдача собирается из облака (GitHub Actions) и с любого
+    IP, а страницы объявлений Авито отдаёт только домашним адресам. Если
+    телефон будет делать полный проход, он потратит домашний IP на то, что
+    уже делает облако, и оба будут мешать друг другу. Здесь он берёт ровно
+    те карточки, где описание влияет на отбор.
+
+    Паузы щедрые (5–11 с между карточками): один и тот же домашний IP
+    используется и вами, когда вы листаете Авито с телефона.
+    """
+    total = 0
+    while True:
+        try:
+            items = fetch_need_details(server, token, limit)
+        except Exception as exc:
+            print(f"  ✖ очередь не получена: {str(exc)[:120]}")
+            items = []
+        print(f"  карточек к открытию: {len(items)}")
+        if items:
+            try:
+                got = collect_details(server, token, 'avito', items,
+                                      pause=(5.0, 11.0))
+                total += int(got or 0)
+                print(f"  принесено описаний: {got} (всего за смену {total})")
+            except Exception as exc:
+                print(f"  ✖ описания не ушли: {str(exc)[:120]}")
+        if _DETAILS_BLOCKED:
+            print("  ⚠ Авито не пускает на страницы объявлений с этого IP.")
+            print("    Проверьте: python3 collect.py --check-proxy")
+        if not loop:
+            return total
+        wait = max(120, int(every)) + random.uniform(0, 60)
+        print(f"  пауза {int(wait)} с…")
+        time.sleep(wait)
+
+
 def selftest() -> int:
     """Проверка разбора на образцах — без обращения к чужим сайтам.
 
@@ -1427,6 +1475,9 @@ def main() -> int:
                     help='перепроверить лоты: продано или ещё висит')
     ap.add_argument('--check-query', metavar='ТЕКСТ',
                     help='сравнить поиск по тексту запроса и по категории')
+    ap.add_argument('--details-only', metavar='N', nargs='?', const='0',
+                    help='только описания: открывать N карточек за проход '
+                         '(режим для домашнего IP — телефон, ноутбук, малина)')
     ap.add_argument('--loop', action='store_true', help='работать постоянно')
     ap.add_argument('--every', type=int, default=900, help='пауза между проходами, сек')
     args = ap.parse_args()
@@ -1436,6 +1487,22 @@ def main() -> int:
 
     if args.check_query is not None:
         return check_query(args.check_query)
+
+    # Режим «только описания»: сервер и токен берём из config.json,
+    # цели и выдача тут не нужны вовсе
+    if args.details_only is not None:
+        cfg_d = load_config(args.config)
+        try:
+            limit_d = int(args.details_only or 0)
+        except ValueError:
+            limit_d = 0
+        server_d = os.environ.get('POLKA_SERVER') or cfg_d['server']
+        token_d = os.environ.get('POLKA_INGEST_TOKEN') or cfg_d['token']
+        mode = 'постоянно' if args.loop else 'один проход'
+        print(f"Режим «только описания» ({mode}), по {limit_d or 'HUNT_DESC_PER_PASS'} карточек")
+        return details_only_loop(server_d, token_d, limit=limit_d,
+                                 loop=bool(args.loop),
+                                 every=max(120, int(args.every)))
 
     # Проверка прокси — отдельная диагностика: сервер и токен тут не нужны,
     # иначе проверить прокси до покупки было бы невозможно
