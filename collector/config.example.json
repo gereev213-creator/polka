@@ -27,5 +27,6 @@
   "filters_by_category": {
     "telefony": "&f=СЮДА_f_ИЗ_ССЫЛКИ_ДЛЯ_ТЕЛЕФОНОВ",
     "odezhda_obuv_aksessuary": "&f=СЮДА_f_ИЗ_ССЫЛКИ_ДЛЯ_ОДЕЖДЫ"
-  }
+  },
+  "_фильтры_через_переменную": "Панель Амверы не принимает кавычки, поэтому наборы задаются без них: POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgB…;telefony=&f=ASgB…"
 }
