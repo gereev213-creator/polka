@@ -22163,6 +22163,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'banner.title': ('str', None, None, '', 'Заголовок баннера'),
     'banner.urls': ('str', None, None, '',
                     'Ссылки на картинки бота, JSON: {"welcome": "https://…"}'),
+    'collector.filters': ('str', None, None, '',
+                          'Наборы фильтров Авито по категориям, JSON: {"telefony": "&f=…"}'),
     'banner.text': ('str', None, None, '', 'Текст баннера'),
 }
 _SETTINGS_CACHE: Dict[str, Any] = {}
@@ -22658,7 +22660,108 @@ def _template_slug(title: str, index: int) -> str:
     return base[:60]
 
 
+# Категории Авито, с которыми работает сборщик (ключи словаря CATEGORY_BY_WORD).
+# Нужны, чтобы из ссылки понять, к какой категории относится набор фильтров:
+# адрес вида /izhevsk/odezhda_obuv_aksessuary/verhnyaya_odezhda-ASgB…
+# Слово из запроса → раздел Авито. Тот же словарь, что в сборщике
+# (CATEGORY_BY_WORD в collector/collect.py): по нему критерий и набор
+# фильтров находят свою категорию.
+CATEGORY_BY_WORD = {
+    'айфон': 'telefony', 'iphone': 'telefony', 'самсунг': 'telefony', 'samsung': 'telefony',
+    'телефон': 'telefony', 'смартфон': 'telefony', 'xiaomi': 'telefony', 'redmi': 'telefony',
+    'pixel': 'telefony', 'huawei': 'telefony', 'realme': 'telefony', 'honor': 'telefony',
+    'infinix': 'telefony', 'oppo': 'telefony', 'vivo': 'telefony', 'чехол': 'telefony',
+    'ноутбук': 'noutbuki', 'macbook': 'noutbuki', 'макбук': 'noutbuki', 'lenovo': 'noutbuki',
+    'acer': 'noutbuki', 'asus': 'noutbuki', 'hp': 'noutbuki', 'dell': 'noutbuki', 'msi': 'noutbuki',
+    'планшет': 'planshety_i_elektronnye_knigi', 'ipad': 'planshety_i_elektronnye_knigi',
+    'приставка': 'igry_pristavki_i_programmy', 'playstation': 'igry_pristavki_i_programmy',
+    'xbox': 'igry_pristavki_i_programmy', 'nintendo': 'igry_pristavki_i_programmy',
+    'наушники': 'audio_i_video', 'airpods': 'audio_i_video', 'колонка': 'audio_i_video',
+    'телевизор': 'audio_i_video', 'телек': 'audio_i_video', 'саундбар': 'audio_i_video',
+    'холодильник': 'bytovaya_tehnika', 'стиральная': 'bytovaya_tehnika',
+    'пылесос': 'bytovaya_tehnika', 'микроволновка': 'bytovaya_tehnika',
+    'монитор': 'tovary_dlya_kompyutera', 'клавиатура': 'tovary_dlya_kompyutera',
+    'видеокарта': 'tovary_dlya_kompyutera', 'мышь': 'tovary_dlya_kompyutera',
+    'ssd': 'tovary_dlya_kompyutera', 'процессор': 'tovary_dlya_kompyutera',
+    'куртка': 'odezhda_obuv_aksessuary', 'пуховик': 'odezhda_obuv_aksessuary',
+    'кроссовки': 'odezhda_obuv_aksessuary', 'ботинки': 'odezhda_obuv_aksessuary',
+    'сапоги': 'odezhda_obuv_aksessuary', 'платье': 'odezhda_obuv_aksessuary',
+    'сумка': 'odezhda_obuv_aksessuary', 'джинсы': 'odezhda_obuv_aksessuary',
+    'худи': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    'кофта': 'odezhda_obuv_aksessuary', 'свитер': 'odezhda_obuv_aksessuary',
+    'лонгслив': 'odezhda_obuv_aksessuary', 'кардиган': 'odezhda_obuv_aksessuary',
+    'пальто': 'odezhda_obuv_aksessuary', 'бомбер': 'odezhda_obuv_aksessuary',
+    'lacoste': 'odezhda_obuv_aksessuary', 'nike': 'odezhda_obuv_aksessuary',
+    'adidas': 'odezhda_obuv_aksessuary', 'columbia': 'odezhda_obuv_aksessuary',
+    'salomon': 'odezhda_obuv_aksessuary', 'ugg': 'odezhda_obuv_aksessuary',
+    'велосипед': 'velosipedy', 'самокат': 'velosipedy', 'гитара': 'muzykalnye_instrumenty',
+    'квартира': 'kvartiry', 'автомобиль': 'avtomobili', 'машина': 'avtomobili',
+    'диван': 'mebel', 'стол': 'mebel', 'стул': 'mebel', 'шкаф': 'mebel',
+    'перфоратор': 'instrumenty', 'шуруповёрт': 'instrumenty', 'дрель': 'instrumenty',
+    'гантели': 'sport_i_otdyh', 'дорожка': 'sport_i_otdyh',
+    'фен': 'krasota_i_zdorovie', 'шины': 'zapchasti_i_aksessuary',
+}
+
+
+AVITO_CATEGORY_SLUGS = (
+    'telefony', 'noutbuki', 'planshety_i_elektronnye_knigi', 'igry_pristavki_i_programmy',
+    'audio_i_video', 'bytovaya_tehnika', 'tovary_dlya_kompyutera', 'odezhda_obuv_aksessuary',
+    'velosipedy', 'muzykalnye_instrumenty', 'kvartiry', 'avtomobili', 'mebel',
+    'knigi_i_zhurnaly', 'instrumenty', 'sport_i_otdyh', 'krasota_i_zdorovie',
+    'zapchasti_i_aksessuary',
+)
+
+
+def parse_avito_filter_url(url: str) -> Dict:
+    """Достаёт из ссылки Авито категорию и набор фильтров (f=…).
+
+    Владелец копирует ссылку из браузера с нужными фильтрами — состояние,
+    АКБ, слова в описании, только частные. Здесь берём готовый набор, а не
+    выдумываем его: форму генерирует только сайт.
+    """
+    text = str(url or '').strip()
+    if not text.startswith('http'):
+        return {'ok': False, 'error': 'bad_url'}
+    try:
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(text)
+        query = parse_qs(parsed.query)
+        blob = (query.get('f') or [''])[0]
+        if not blob:
+            return {'ok': False, 'error': 'no_filters',
+                    'detail': 'В ссылке нет набора фильтров (f=…)'}
+        slug = ''
+        parts = [x for x in parsed.path.split('/') if x]
+        for part in parts[1:]:
+            candidate = part.strip().lower()
+            base = candidate.split('-')[0]
+            if candidate in AVITO_CATEGORY_SLUGS:
+                slug = candidate
+                break
+            if base in AVITO_CATEGORY_SLUGS:
+                slug = base
+                break
+        return {'ok': True, 'slug': slug, 'filters': '&f=' + blob,
+                'city': (parts[0] if parts else ''),
+                'has_price': ('pmin' in query or 'pmax' in query)}
+    except Exception as e:
+        return {'ok': False, 'error': 'parse_failed', 'detail': str(e)[:120]}
+
+
+def collector_filters() -> Dict:
+    """Наборы фильтров по категориям: настройка collector.filters (JSON строкой)."""
+    raw = str(cfg_get('collector.filters') or '')
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def ensure_templates() -> None:
+
     """Таблица шаблонов + наполнение из кода (идемпотентно), этап J5."""
     cursor = db.conn.cursor()
     try:
@@ -23811,6 +23914,20 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                        "COALESCE(max_hours,0) AS max_hours "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
+        # Наборы фильтров Авито по категориям (частные, состояние, АКБ, слова
+        # в описании) отдаём вместе с критерием: так их применяет сам Авито,
+        # а сборщику не нужно ни файлов, ни переменных окружения.
+        flt = collector_filters()
+        if flt:
+            for row in rows:
+                key = ''
+                for word in str(row.get('query') or '').lower().split():
+                    if word.strip('.,!?()\"\'') in CATEGORY_BY_WORD:
+                        key = CATEGORY_BY_WORD[word.strip('.,!?()\"\'')]
+                        break
+                got = flt.get(key or '') or flt.get(str(row.get('category') or '')) or ''
+                if got:
+                    row['filters'] = got
         return _miniapp_json({'items': rows})
 
     if not viewer_id:
@@ -27149,6 +27266,41 @@ async def api_admin_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json(res, status=200 if res.get('ok') else 400)
 
 
+async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/collector-filter {url} — добавить набор фильтров Авито.
+
+    Владелец копирует ссылку из браузера с нужными фильтрами — сервер сам
+    достаёт из неё категорию и набор, и складывает в настройку
+    collector.filters. Дальше сборщик получает набор вместе с критерием.
+    """
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    parsed = parse_avito_filter_url(str((body or {}).get('url') or ''))
+    if not parsed.get('ok'):
+        return _miniapp_json(parsed, status=400)
+    if not parsed.get('slug'):
+        return _miniapp_json({'ok': False, 'error': 'unknown_category',
+                              'detail': 'Не понял категорию из ссылки — пришлите адрес раздела Авито'},
+                             status=400)
+    current = collector_filters()
+    current[parsed['slug']] = parsed['filters']
+    res = cfg_set('collector.filters', json.dumps(current, ensure_ascii=False),
+                  by=admin_id, reason=f"набор для {parsed['slug']}")
+    if not res.get('ok'):
+        return _miniapp_json(res, status=400)
+    return _miniapp_json({'ok': True, 'slug': parsed['slug'],
+                          'filters': parsed['filters'],
+                          'has_price': parsed.get('has_price', False),
+                          'total': len(current),
+                          'detail': 'Набор добавлен. Цену в ссылке лучше не задавать — '
+                                    'цена берётся из критерия'})
+
+
 async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/admin/metrics — воронка, деньги, задержки (J4, H8)."""
     admin_id, err = await _admin_guard(request)
@@ -29723,6 +29875,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings/rollback', api_admin_rollback)
+    app.router.add_post('/api/admin/collector-filter', api_admin_collector_filter)
     app.router.add_get('/api/admin/history', api_admin_history)
     app.router.add_post('/api/admin/grant', api_admin_grant)
     app.router.add_get('/api/admin/promo', api_admin_promo)
