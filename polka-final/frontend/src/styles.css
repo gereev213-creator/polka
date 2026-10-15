@@ -563,6 +563,8 @@ input, textarea, select { font-family: inherit; }
    отдельным блоком (этап 5, схлопывание дублей). */
 .dock {
   padding: 0 8px;
+  /* Плавно уезжает при листании вниз и возвращается при листании вверх */
+  transition: transform 0.25s ease, opacity 0.2s ease;
 }
 .dock.hidden {
   transform: translateX(-50%) translateY(120%);
