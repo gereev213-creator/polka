@@ -2775,17 +2775,41 @@ html, body, #root {
   text-align: left;
 }
 
-/* Документы в самом низу приложения: две ссылки, ничего лишнего */
+/* Документы в самом низу приложения: копирайт всегда, ссылки — по нажатию */
 .app-footer {
+  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #8b93a7);
+}
+.app-footer-row {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  padding: 18px 16px calc(24px + env(safe-area-inset-bottom));
-  font-size: 12px;
-  line-height: 1.4;
-  text-align: center;
-  color: var(--muted, #8b93a7);
+  gap: 10px;
+  flex-wrap: wrap;
 }
-.app-footer a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
-.app-footer-sep { opacity: 0.5; }
+.app-footer-copy { opacity: 0.85; }
+.app-footer-toggle {
+  background: none;
+  border: 0;
+  padding: 4px 2px;
+  font: inherit;
+  color: inherit;
+  opacity: 0.85;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.app-footer-toggle:hover { opacity: 1; }
+.app-footer-arrow { display: inline-block; transition: transform 0.15s ease; }
+.app-footer-arrow.is-open { transform: rotate(180deg); }
+.app-footer-links {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.app-footer-links a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
