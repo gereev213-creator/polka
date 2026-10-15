@@ -19440,6 +19440,17 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         except Exception as e:
             logger.warning(f"need_details: {e}")
             stats['need_details'] = []
+    # Отметка «сборщик выходил на связь» — для индикатора в приложении.
+    # Раньше она ставилась только в HTTP-обработчике приёма, поэтому при
+    # ВСТРОЕННОМ сборе (он в этом же процессе и в HTTP не ходит) приложение
+    # писало «сборщик молчит», хотя находки шли. Ловим NameError: в тестах
+    # этой функции может не быть.
+    try:
+        _touch_collector(source)
+    except NameError:
+        pass
+    except Exception as e:
+        logger.warning(f"touch collector: {e}")
     return stats
 
 
