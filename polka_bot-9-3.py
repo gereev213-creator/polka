@@ -26739,6 +26739,67 @@ async def api_banner_image(request: aiohttp_web.Request) -> aiohttp_web.Response
                                          'Cache-Control': 'public, max-age=86400'})
 
 
+_SQL_FORBIDDEN = re.compile(
+    r'\b(insert|update|delete|drop|alter|attach|detach|pragma|vacuum|create|replace|'
+    r'reindex|begin|commit|rollback|trigger|grant|savepoint)\b', re.I)
+
+
+async def api_admin_sql(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/sql {sql} — диагностика владельца: ТОЛЬКО ЧТЕНИЕ.
+
+    Доступ: токен сборщика (INGEST_TOKEN) или администратор из Mini App.
+    Разрешён ровно один SELECT (или WITH … SELECT): изменения запрещены на
+    уровне проверки, строк возвращаем не больше 200. Нужен, чтобы смотреть
+    причины отказов и застрявшие отправки на живой базе, не заходя на сервер.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    got = _ingest_token_ok(request)
+    allowed = bool(expected) and hmac.compare_digest(str(got), str(expected))
+    _viewer = None
+    if not allowed:
+        _viewer = _miniapp_viewer(request)
+        try:
+            allowed = bool(_viewer) and bool(await is_admin(_viewer))
+        except Exception:
+            allowed = False
+        if not allowed and int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
+            allowed = True
+    if not allowed:
+        return _miniapp_err('forbidden', 403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    sql = str((body or {}).get('sql') or '').strip().rstrip(';').strip()
+    if not sql:
+        return _miniapp_json({'ok': False, 'error': 'empty'}, status=400)
+    low = sql.lower()
+    if not (low.startswith('select') or low.startswith('with')):
+        return _miniapp_json({'ok': False, 'error': 'only_select',
+                              'detail': 'Разрешён только SELECT'}, status=400)
+    if ';' in sql or _SQL_FORBIDDEN.search(sql):
+        return _miniapp_json({'ok': False, 'error': 'forbidden',
+                              'detail': 'В запросе есть изменение или лишняя команда'}, status=400)
+
+    def _run():
+        cursor = db.conn.cursor()
+        cursor.execute(sql)
+        cols = [d[0] for d in (cursor.description or [])]
+        rows = [dict(zip(cols, r)) for r in cursor.fetchmany(200)]
+        return {'columns': cols, 'rows': rows}
+
+    try:
+        out = await asyncio.to_thread(_db_read, _run)
+    except Exception as e:
+        logger.warning(f"admin sql: {e}")
+        return _miniapp_json({'ok': False, 'error': 'sql_failed',
+                              'detail': str(e)[:200]}, status=400)
+    logger.info(f"admin sql ({len(out['rows'])} строк): {sql[:140]}")
+    return _miniapp_json({'ok': True, 'count': len(out['rows']),
+                          'columns': out['columns'], 'rows': out['rows']})
+
+
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """Эндпоинт проверки работоспособности сервера"""
     return aiohttp_web.Response(
@@ -28963,6 +29024,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/health', api_health)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
+    app.router.add_post('/api/admin/sql', api_admin_sql)
     app.router.add_get('/api/views_diag', api_views_diag)
     app.router.add_get('/chat', api_serve_html)
     app.router.add_get('/api/check_promo', api_check_promo)
@@ -29000,6 +29062,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/check', api_hunt_check)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
+    app.router.add_post('/api/admin/sql', api_admin_sql)
     app.router.add_get('/api/diag/avito', api_diag_avito)
     # ── Crypto Bot webhook ────────────────────────────────────────────────────
     app.router.add_post('/cryptobot/webhook', api_cryptobot_webhook)
