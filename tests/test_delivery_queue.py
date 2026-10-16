@@ -21,7 +21,7 @@ SRC = open(BOT, encoding='utf-8').read()
 TOKENS = ('CATEGORY_BY_WORD', '_query_subject_word', 'HUNT_MODIFIER_WORDS', 'query_word_variants', 'Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_description',
           'HUNT_ACCESSORY_TITLE_WORDS', 'HUNT_ACCESSORY_CATEGORY_HINTS', '_CONDITION_RANK',
           '_CONDITION_PARTS', '_CONDITION_BROKEN', '_CONDITION_WORN', '_CONDITION_EXCELLENT',
-          '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'classify_condition',
+          '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'hunt_defect_phrase', 'HUNT_DEFECT_PHRASES', 'classify_condition',
           'extract_battery_percent', 'requirements_json_from_text', '_crit_requirements_json',
           '_title_has_accessory', '_accessory_before_model', '_OPENED_MARKERS', '_opened_markers_hit',
           'evaluate_ad', '_condition_ok', '_query_alt_numbers', '_query_words_required',

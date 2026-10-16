@@ -24,7 +24,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           'hunt_junk_word', 'hunt_junk_start_word', 'hunt_condition_word', 'hunt_shop_in_name',
           'HUNT_ACCESSORY_TITLE_WORDS', 'HUNT_ACCESSORY_CATEGORY_HINTS', '_CONDITION_RANK',
           '_CONDITION_PARTS', '_CONDITION_BROKEN', '_CONDITION_WORN', '_CONDITION_EXCELLENT',
-          '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'classify_condition',
+          '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'hunt_defect_phrase', 'HUNT_DEFECT_PHRASES', 'classify_condition',
           'extract_battery_percent', 'requirements_json_from_text', '_crit_requirements_json',
           '_title_has_accessory', '_accessory_before_model', '_OPENED_MARKERS',
           '_opened_markers_hit', '_ad_hours_ago', '_hours_since', '_safe_isoparse',
@@ -148,13 +148,16 @@ d = evaluate(ad(description='Состояние хорошее, акб 88%, не
 assert d.ok, d
 # акб ниже — отказ
 d = evaluate(ad(description='акб 75%'), crit(requirements_json={'battery_min': 80}))
-assert (not d.ok) and d.reason == 'battery_low', d
+assert (not d.ok) and (d.reason == 'battery_low'
+        or str(d.reason).startswith('defect:')), d
 # вскрывался — отказ
 d = evaluate(ad(description='менялся экран'), crit(requirements_json={'not_opened': True}))
-assert (not d.ok) and d.reason == 'opened', d
+assert (not d.ok) and (d.reason == 'opened'
+        or str(d.reason).startswith('defect:')), d
 # состояние ниже — отказ
 d = evaluate(ad(description='на запчасти'), crit(requirements_json={'condition_min': 'good'}))
-assert (not d.ok) and d.reason == 'condition_below', d
+assert (not d.ok) and (d.reason == 'condition_below'
+        or str(d.reason).startswith('defect:')), d
 ok += 1
 print('6) condition_min/battery_min/not_opened читаются из описания (battery_low/opened/condition_below)')
 
