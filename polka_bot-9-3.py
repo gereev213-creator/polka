@@ -19542,7 +19542,24 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     if not isinstance(items, list):
         return _miniapp_err('bad_items', 400)
     started = _time.monotonic()
-    if os.environ.get('INGEST_ASYNC', '1') == '1':
+    # Ограничение размера партии НА СЕРВЕРЕ: сборщик уже шлёт по 400 карточек,
+    # но если придёт старый сборщик или ручной запрос на десятки тысяч — один
+    # такой запрос держал блокировку записи минутами (в статистике были вызовы
+    # по 93 секунды) и приложение переставало отвечать. Режем на порции сами.
+    MAX_INGEST_CHUNK = 400
+    if len(items) > MAX_INGEST_CHUNK:
+        total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'need_details': []}
+        logger.info(f"ingest {source}: большая партия {len(items)} — режу на порции "
+                    f"по {MAX_INGEST_CHUNK}")
+        for start in range(0, len(items), MAX_INGEST_CHUNK):
+            part = await asyncio.to_thread(_db_locked, ingest_findings,
+                                           items[start:start + MAX_INGEST_CHUNK], source)
+            for key in ('accepted', 'duplicate', 'skipped'):
+                total[key] += int(part.get(key) or 0)
+            total['ids'].extend(part.get('ids') or [])
+            total['need_details'].extend(part.get('need_details') or [])
+        stats = total
+    elif os.environ.get('INGEST_ASYNC', '1') == '1':
         # Этап K2: разбор, дедуп и вставка — в рабочем потоке. Синхронный
         # вызов блокировал цикл событий: пока шла партия, не отвечали ни
         # лента, ни бот, и человек видел «плохое подключение к интернету».
