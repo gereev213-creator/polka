@@ -19,7 +19,7 @@ TOKENS = ('HUNT_DIALOG_SLOT_ORDER', 'HUNT_DIALOG_DEFAULT_ORDER', 'HUNT_SLOT_QUES
           'HUNT_SLOT_OPTIONS', '_ANY_ANSWERS', '_CONDITION_SYNONYMS', '_dialog_copy',
           '_dialog_next_slot', '_dialog_apply_choice', '_dialog_apply_extract',
           '_dialog_item_word', '_dialog_query', '_dialog_requirements',
-          '_dialog_slot_options', '_dialog_detect_category', 'CATEGORY_BY_WORD', '_dialog_extract_fallback')
+          '_dialog_slot_options', '_dialog_detect_category', 'CATEGORY_BY_WORD', '_query_subject_word', 'HUNT_MODIFIER_WORDS', '_dialog_extract_fallback')
 
 
 def chunks(src):

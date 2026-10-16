@@ -29,7 +29,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           'hunt_junk_word', 'hunt_junk_start_word', 'hunt_condition_word', 'hunt_shop_in_name',
           'HUNT_REPLICA_MARKERS', 'HUNT_SHOP_MARKERS', 'HUNT_NEW_MARKERS', 'HUNT_USED_MARKERS',
           'HUNT_STOP_WORDS', 'QUERY_SYNONYMS', 'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS',
-          'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', 'CATEGORY_BY_WORD', 'query_word_variants',
+          'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', 'CATEGORY_BY_WORD', '_query_subject_word', 'HUNT_MODIFIER_WORDS', 'query_word_variants',
           '_crit_exclude_words', 'HUNT_TITLE_START_JUNK', 'HUNT_FRESH_HOURS',
           'HUNT_ALLOW_UNDATED', 'HUNT_MIN_PRICE_SHARE', '_criterion_hint')
 
@@ -141,5 +141,25 @@ h3 = hint(crit(query='куртка', median_price=3000), {'total': 50, 'sent': 5
 assert h3 == '', h3
 ok += 1
 print('5) подсказки: узко/широко/всё хорошо — по делу и без лишнего')
+
+# ── 6. Общее правило «слово-товар»: работает для любого запроса, не по списку
+subj = ns['_query_subject_word']
+assert subj('Пуховик lacoste') == 'пуховик', subj('Пуховик lacoste')
+assert subj('пылесос Dyson') == 'пылесос', subj('пылесос Dyson')
+assert subj('iPhone 15 Pro') == 'iphone', subj('iPhone 15 Pro')
+assert subj('люстра хрустальная') == 'люстра', subj('люстра хрустальная')
+# кроссовки Lacoste не должны пройти под критерий про пуховик
+d = run(crit(query='Пуховик lacoste', category='Одежда, обувь, аксессуары'),
+        ad('Кроссовки мужские зимние Lacoste'))
+assert not d.ok and d.reason == 'title_words', d
+# фен Dyson не должен пройти под критерий про пылесос Dyson
+d2 = run(crit(query='пылесос Dyson', category='Бытовая техника'),
+         ad('Фен Dyson Supersonic', category='Бытовая техника'))
+assert not d2.ok and d2.reason == 'title_words', d2
+# а сам пуховик Lacoste проходит
+assert run(crit(query='Пуховик lacoste', category='Одежда, обувь, аксессуары'),
+           ad('Пуховик Lacoste зимний мужской')).ok
+ok += 1
+print('6) слово-товар обязано быть в заголовке — для любого запроса, не по списку')
 
 print('\nточность: все проверки пройдены')

@@ -20641,6 +20641,58 @@ def _query_words_required(query: str) -> list:
     return required
 
 
+# Слова-уточнения, которые НЕ называют сам товар: состояние, размер, пол,
+# цвет, температура. По ним нельзя определить, что именно ищет человек,
+# поэтому они не считаются «словом-товаром» и не становятся обязательными.
+HUNT_MODIFIER_WORDS = (
+    'новый', 'новое', 'новая', 'новые', 'б/у', 'бу', 'хороший', 'хорошее',
+    'хорошая', 'отличный', 'отличное', 'идеал', 'состояние', 'размер', 'рост',
+    'цвет', 'любой', 'любая', 'любое', 'мужской', 'мужская', 'мужские',
+    'женский', 'женская', 'женские', 'детский', 'детская', 'детские',
+    'зимний', 'зимняя', 'зимние', 'тёплый', 'тёплая', 'тёплые', 'утеплён',
+    'утеплённая', 'оригинал', 'оригинальная', 'натуральн', 'фирмен',
+    'качествен', 'кожа', 'кожаный', 'кожаная', 'демисезон', 'осенний',
+    'весенний', 'большой', 'маленький', 'красный', 'чёрный', 'черный',
+    'белый', 'синий', 'серый', 'зелёный', 'зеленый',
+)
+
+
+def _query_subject_word(query: str) -> str:
+    """Слово, которое называет САМ товар — оно обязано быть в заголовке.
+
+    Общее правило для ЛЮБОГО запроса, а не список конкретных слов: если
+    человек ищет «пуховик lacoste», заголовок обязан содержать пуховик
+    (или синоним — «парка», «куртка-пуховик»), иначе под бренд проходят
+    кроссовки и пуловеры Lacoste.
+
+    Порядок: сначала слово из словаря категорий (пуховик, кроссовки,
+    куртка — надёжнее всего), иначе первое русское слово, которое не бренд
+    (латиница), не число и не уточнение из HUNT_MODIFIER_WORDS.
+    """
+    words = [w for w in re.split(r'\s+', str(query or '').lower())
+             if len(w) >= 3 and w not in HUNT_STOP_WORDS]
+    for w in words:
+        if w in CATEGORY_BY_WORD:
+            return w
+
+    def is_brand(word: str) -> bool:
+        letters = [c for c in word if c.isalpha()]
+        if not letters:
+            return False
+        ascii_letters = [c for c in letters if c.isascii()]
+        return len(ascii_letters) >= len(letters) * 0.7
+
+    for w in words:
+        if is_brand(w):
+            continue
+        if any(ch.isdigit() for ch in w):
+            continue
+        if w in HUNT_MODIFIER_WORDS:
+            continue
+        return w
+    return ''
+
+
 FILTER_COLUMNS = [
     # (колонка, тип, значение по умолчанию)
     ('min_price', 'INTEGER DEFAULT 0', 0),
@@ -21331,25 +21383,19 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                       'шлейф', 'корпус', 'модуль', 'аккумулятор'):
             if _part in _low_title:
                 return no('accessory')
-    # Тип товара обязателен: критерий «Пуховик lacoste» присылал кроссовки
-    # Lacoste и пуловер — обязательным было только слово «lacoste».
-    # Если запрос называет товар словом из словаря категорий (пуховик,
-    # кроссовки, куртка…), это слово должно быть в заголовке — с учётом
-    # падежей и синонимов.
-    _type_word = ''
-    for _w in re.split(r'\s+', str(query).lower()):
-        _w = _w.strip('.,!?()"\'')
-        if _w in CATEGORY_BY_WORD:
-            _type_word = _w
-            break
-    if _type_word:
+    # Слово-ТОВАР обязано быть в заголовке (общее правило, работает для
+    # любого запроса): «Пуховик lacoste» не должен присылать кроссовки
+    # Lacoste, «iPhone 15 Pro» — колонку или чехол. Слово берём общим
+    # помощником, а в заголовке ищем его с учётом падежей и синонимов.
+    _subject = _query_subject_word(query)
+    if _subject:
         try:
-            _vars = query_word_variants(_type_word) or []
+            _vars = query_word_variants(_subject) or []
         except Exception:
             _vars = []
-        _vars = [str(v).lower() for v in _vars] + [_type_word]
-        if len(_type_word) >= 6:
-            _vars.append(_type_word[:5])
+        _vars = [str(v).lower() for v in _vars] + [_subject]
+        if len(_subject) >= 6:
+            _vars.append(_subject[:5])
         if not any(v and v in _low_title for v in _vars):
             return no('title_words')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)

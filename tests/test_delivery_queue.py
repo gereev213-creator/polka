@@ -18,7 +18,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(HERE, '..', 'polka_bot-9-3.py')
 SRC = open(BOT, encoding='utf-8').read()
 
-TOKENS = ('CATEGORY_BY_WORD', 'query_word_variants', 'Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_description',
+TOKENS = ('CATEGORY_BY_WORD', '_query_subject_word', 'HUNT_MODIFIER_WORDS', 'query_word_variants', 'Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_description',
           'HUNT_ACCESSORY_TITLE_WORDS', 'HUNT_ACCESSORY_CATEGORY_HINTS', '_CONDITION_RANK',
           '_CONDITION_PARTS', '_CONDITION_BROKEN', '_CONDITION_WORN', '_CONDITION_EXCELLENT',
           '_CONDITION_GOOD', '_CONDITION_NEW', '_negated_window', 'classify_condition',
