@@ -24822,22 +24822,43 @@ def cleanup_findings() -> Dict:
         #    каждые 15 минут по 6 категорий, и без этого база распухает до
         #    сотен мегабайт, а на слабом тарифе это смертельно.
         junk_cutoff = (get_moscow_time() - timedelta(days=1)).isoformat()
-        cursor.execute(
-            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
-            "AND (discount_percent IS NULL OR discount_percent < ?) "
-            "AND COALESCE(parsed_at, created_at) < ?",
-            (HUNT_MIN_DISCOUNT, junk_cutoff))
-        removed = cursor.rowcount or 0
+        cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
+        # Удаляем ПОРЦИЯМИ и коммитим после каждой. Раньше здесь стояли два
+        # безразмерных DELETE: на большой базе один такой запрос держал
+        # блокировку записи почти минуту с половиной — в статистике были
+        # вызовы приёма по 90 секунд, а всё приложение в это время не
+        # отвечало (лаг цикла 89 919 мс). Порция 2 000 строк освобождает
+        # блокировку между порциями, и остальные запросы успевают.
+        CHUNK = 2000
+        while True:
+            cursor.execute(
+                "DELETE FROM ads WHERE id IN (SELECT id FROM ads WHERE "
+                "source IS NOT NULL AND source <> 'polka' "
+                "AND (discount_percent IS NULL OR discount_percent < ?) "
+                "AND COALESCE(parsed_at, created_at) < ? LIMIT ?)",
+                (HUNT_MIN_DISCOUNT, junk_cutoff, CHUNK))
+            n = cursor.rowcount or 0
+            db.conn.commit()
+            removed += n
+            if n < CHUNK:
+                break
+            time.sleep(0.05)     # отдаём блокировку приёмy находок
         # 2. Выгодные предложения храним дольше — они нужны для медианы
         #    и для показа в ленте.
-        cutoff = (get_moscow_time() - timedelta(days=HUNT_KEEP_DAYS)).isoformat()
-        cursor.execute(
-            "DELETE FROM ads WHERE source IS NOT NULL AND source <> 'polka' "
-            "AND discount_percent >= ? AND COALESCE(parsed_at, created_at) < ?",
-            (HUNT_MIN_DISCOUNT, cutoff))
-        deals_removed = cursor.rowcount or 0
-        removed += deals_removed
-        db.conn.commit()
+        while True:
+            cursor.execute(
+                "DELETE FROM ads WHERE id IN (SELECT id FROM ads WHERE "
+                "source IS NOT NULL AND source <> 'polka' "
+                "AND discount_percent >= ? "
+                "AND COALESCE(parsed_at, created_at) < ? LIMIT ?)",
+                (HUNT_MIN_DISCOUNT, cutoff, CHUNK))
+            n = cursor.rowcount or 0
+            db.conn.commit()
+            deals_removed += n
+            removed += n
+            if n < CHUNK:
+                break
+            time.sleep(0.05)
     except Exception as e:
         logger.warning(f"cleanup findings: {e}")
     if removed:
@@ -24904,7 +24925,9 @@ async def _findings_cleanup_loop():
     await asyncio.sleep(120)
     while True:
         try:
-            cleanup_all()
+            # В рабочем потоке: удаление тысяч строк даже порциями не
+            # должно занимать цикл событий — иначе лента и бот ждут.
+            await asyncio.to_thread(cleanup_all)
         except Exception as e:
             logger.warning(f"findings cleanup loop: {e}")
         await asyncio.sleep(6 * 3600)
