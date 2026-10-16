@@ -23539,7 +23539,13 @@ HUNT_SEND_MAX_TRIES = int(os.environ.get('HUNT_SEND_MAX_TRIES', '3'))
 HUNT_SEND_RETRY_MIN = int(os.environ.get('HUNT_SEND_RETRY_MIN', '10'))
 HUNT_PENDING_MAX_MIN = int(os.environ.get('HUNT_PENDING_MAX_MIN', '30'))
 # Этап D3: скидка больше 70% от медианы — это не выгода, а другой товар
-HUNT_SUSPECT_DISCOUNT = int(os.environ.get('HUNT_SUSPECT_DISCOUNT', '70'))
+# Скидка больше этого процента — почти всегда другой товар, развод, залог
+# или рассрочка. Было 70 — и проходили объявления «iPhone 13 Pro Max за
+# 23 000 при медиане 62 990» (скидка 63 %) с пометкой «не проверено».
+# 50 % — тот порог, за которым цена уже не бывает честной: настоящая
+# находка на 50 % дешевле рынка в открытой продаже не живёт.
+# Настраивается переменной окружения, если понадобится ослабить.
+HUNT_SUSPECT_DISCOUNT = int(os.environ.get('HUNT_SUSPECT_DISCOUNT', '50'))
 # Этап D8: снижение цены, о котором стоит сказать (в процентах)
 HUNT_PRICE_DROP_PERCENT = int(os.environ.get('HUNT_PRICE_DROP_PERCENT', '5'))
 

@@ -127,11 +127,18 @@ assert (not d.ok) and d.reason == 'price_below_floor', d
 d = evaluate(ad(price=5000), crit())          # 20% медианы → скидка 80%
 assert (not d.ok) and d.reason == 'price_suspect', d
 assert 'подозрительно' in d.label, d.label
+# Порог понижен с 70 % до 50 %: скидка больше половины рынка в открытой
+# продаже не бывает честной. Реальный случай владельца: «iPhone 13 Pro Max
+# за 23 000 при медиане 62 990» (скидка 63 %) приходил с пометкой «описание
+# не проверено» — теперь такие не отправляются вовсе.
 d = evaluate(ad(price=9000), crit())          # 36% медианы → скидка 64%
-assert d.ok and d.discount == 64, d
-d = evaluate(ad(price=8000, title='iPhone 13'), crit())
-assert d.ok and d.discount == 68, d           # 68% < 70% — обычная находка
-print('1) D3: 53 ₽ → ниже пола, 5 000 ₽ (скидка 80%) → price_suspect, 8 000 ₽ (68%) → проходит')
+assert (not d.ok) and d.reason == 'price_suspect', d
+d = evaluate(ad(price=8000, title='iPhone 13'), crit())   # 68% — тоже подозрительно
+assert (not d.ok) and d.reason == 'price_suspect', d
+# А честная находка рядом с рынком проходит
+d = evaluate(ad(price=17000), crit())
+assert d.ok and d.discount == 32, d
+print('1) D3: 53 ₽ → ниже пола, 5 000 ₽ (80%) и 8 000 ₽ (68%) → price_suspect, 17 000 ₽ (32%) → проходит')
 
 # ── D5: оценка возраста
 assert hours_ago({'published_hours_ago': 5}) == 5
