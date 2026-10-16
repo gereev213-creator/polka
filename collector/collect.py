@@ -1228,7 +1228,12 @@ def load_config(path: str) -> dict:
         except Exception as exc:
             print(f"  ⚠ config.json не прочитан: {exc}")
     server = os.environ.get('POLKA_SERVER') or cfg.get('server') or ''
+    # Два разных токена: INGEST — отправка находок и описаний,
+    # ADMIN_READ — только диагностика. Если токен сборщика утечёт, читать
+    # через него админскую диагностику будет нельзя.
     token = os.environ.get('POLKA_INGEST_TOKEN') or cfg.get('token') or ''
+    admin_token = (os.environ.get('POLKA_ADMIN_READ_TOKEN')
+                   or cfg.get('admin_token') or '')
     if not server or not token:
         sys.exit("Не заданы server и token: заполните config.json "
                  "или переменные POLKA_SERVER и POLKA_INGEST_TOKEN")
@@ -1241,7 +1246,9 @@ def load_config(path: str) -> dict:
                  "знаков -_ . Кириллица в заголовок не помещается.\n"
                  "Сгенерируйте новый: openssl rand -base64 32")
     cfg['server'] = server
-    cfg['token'] = token
+    cfg['token'] = token              # обратная совместимость: это INGEST
+    cfg['ingest_token'] = token
+    cfg['admin_token'] = admin_token  # только для диагностики
     cfg.setdefault('targets', [])
     return cfg
 
@@ -1379,7 +1386,77 @@ def date_sorted_first_page(url: str) -> bool:
     return 's=104' in text and ('p=' not in text)
 
 
+# Сколько целей обходим за один проход. Целей может быть больше сотни, и
+# обойти все разом нельзя: Авито ограничивает частоту, а проход становится
+# бесконечным. Остальные подхватит следующий проход — очередь вращается.
+MAX_TARGETS = int(os.environ.get('POLKA_MAX_TARGETS', '40'))
+TARGETS_STATE_FILE = os.environ.get('POLKA_TARGETS_STATE', 'targets_state.json')
+
+
+def _targets_state_path() -> str:
+    """Файл состояния рядом со сборщиком (не в конфиге: это не настройка)."""
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, TARGETS_STATE_FILE)
+
+
+def load_targets_state() -> dict:
+    try:
+        with open(_targets_state_path(), encoding='utf-8') as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_targets_state(state: dict) -> None:
+    try:
+        with open(_targets_state_path(), 'w', encoding='utf-8') as fh:
+            json.dump(state, fh, ensure_ascii=False, indent=1)
+    except Exception as exc:
+        print(f"  ⚠ состояние целей не сохранилось: {exc}")
+
+
+def _today() -> str:
+    return time.strftime('%Y-%m-%d')
+
+
+def target_sort_key(target: dict, state: dict, day: str):
+    """Ключ порядка целей: кто приносит находки — вперёд, остальные в конец.
+
+    Правила по приоритету:
+      1. цели, где в прошлый раз были находки — первыми (живой спрос);
+      2. ещё не проверенные сегодня — раньше проверенных (ротация);
+      3. самые давние по времени — раньше (чтобы очередь не застаивалась).
+    «Редкие» критерии (находок не было ни разу) естественно уезжают в конец
+    и проверяются реже — но всё равно проверяются, за счёт ротации.
+    """
+    st = state.get(str(target.get('url') or '')) or {}
+    fresh = 1 if int(st.get('finds') or 0) > 0 else 0
+    ran_today = 1 if str(st.get('day') or '') == day else 0
+    return (-fresh, ran_today, str(st.get('last_run') or ''))
+
+
+def order_targets(targets: list, state: dict, day: str, limit: int) -> list:
+    """Отбирает цели на проход в порядке приоритета (не больше limit)."""
+    ordered = sorted(targets, key=lambda t: target_sort_key(t, state, day))
+    if limit and limit > 0:
+        return ordered[:limit]
+    return ordered
+
+
 def run_once(cfg: dict) -> int:
+    """Один проход сбора: цели → страницы → отправка.
+
+    Главное здесь — порядок работы. Обработка результата (отправка, запрос
+    описаний, пауза) выполняется для КАЖДОЙ страницы ВНУТРИ цикла, а не
+    после него. Раньше блок стоял снаружи: при цели на несколько страниц
+    отправлялась только последняя, а `items` «протекало» между целями —
+    при ошибке загрузки следующей цели на сервер уходили карточки
+    ПРЕДЫДУЩЕЙ (или ничего, если переменная ещё не создана).
+
+    Ошибка загрузки страницы (URLError / TimeoutError) — просто переход к
+    следующей странице: состояние по цели не портится.
+    """
     server, token = cfg['server'], cfg['token']
     total_sent = 0
     targets = list(cfg.get('targets', []))
@@ -1391,19 +1468,45 @@ def run_once(cfg: dict) -> int:
     if from_crit:
         known = {t.get('url') for t in targets}
         targets += [t for t in from_crit if t['url'] not in known]
-    for target in targets:
+
+    # Ограничение и ротация: за проход обходим не больше MAX_TARGETS целей,
+    # в первую очередь те, что дают находки. Полный список не теряется —
+    # остальные попадут в следующий проход.
+    day = _today()
+    state = load_targets_state()
+    limit = int(cfg.get('max_targets') or MAX_TARGETS)
+    picked = order_targets(targets, state, day, limit)
+    picked_urls = {str(t.get('url') or '') for t in picked}
+    n_today = 0
+    for t in targets:
+        u = str(t.get('url') or '')
+        if u in picked_urls or str((state.get(u) or {}).get('day') or '') == day:
+            n_today += 1
+    print(f"целей сегодня {n_today} из {len(targets)}")
+
+    for target in picked:
         source = target.get('source', 'avito')
         city = target.get('city', '')
+        tkey = str(target.get('url') or '')
+        finds_here = 0
         for url in target_urls(target, cfg):
+            # Своё состояние на каждую страницу: чужие карточки сюда не
+            # попадут ни при ошибке загрузки, ни при пустом разборе.
+            items = []
             print(f"\n→ {source}: {url}")
             try:
                 html = fetch(url)
             except Blocked as exc:
                 print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
+                # Всё, что успели собрать на предыдущих страницах, уже
+                # отправлено (отправка идёт постранично) — терять нечего.
+                save_targets_state(state)
                 # Код 3 = «нас заблокировали». Супервизор на сервере по нему
                 # делает длинную паузу вместо бессмысленных повторов.
                 raise SystemExit(3)
             except (urllib.error.URLError, TimeoutError) as exc:
+                # Сеть отвалилась на этой странице — идём к следующей.
+                # items остаётся пустым: к предыдущей цели не обращаемся.
                 print(f"  ✖ не открылось: {exc}")
                 continue
             items = parse_page(html)
@@ -1417,35 +1520,47 @@ def run_once(cfg: dict) -> int:
                 if item.get('hours_ago') is None and first_page_dated:
                     item['age_estimated'] = True
             print(f"  найдено карточек: {len(items)}")
-        if not items:
-            if '?' in url and 'q=' in url:
-                # Проверено на живом сайте: на поисковый запрос Авито отдаёт
-                # HTTP 200, но страницу БЕЗ объявлений — только подвал.
-                # Это не поломка разбора, а защита именно поиска.
-                print("  ⚠ Авито отдал пустую страницу: он не любит поиск по запросу (?q=).")
-                print("    Ссылки на КАТЕГОРИИ работают. Возьмите нужную категорию")
-                print("    на сайте, скопируйте адрес и добавьте в config.json:")
-                print('      {"source":"avito","url":"https://www.avito.ru/izhevsk/telefony",'
-                      '"city":"Ижевск","category":"Электроника"}')
-            else:
-                print("  ⚠ разбор ничего не дал — возможно, изменилась вёрстка сайта")
-            continue
-        try:
-            stats = push(server, token, source, items)
-            print(f"  отправлено: принято {stats.get('accepted')}, "
-                  f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
-            total_sent += int(stats.get('accepted') or 0)
-            # Сервер отвечает, по каким карточкам нужно описание: отбор
-            # по требованиям словами без него работает вслепую (этап A3)
-            need = stats.get('need_details') or []
-            if need:
-                print(f"  описаний нужно: {len(need)} — открываю карточки")
-                collect_details(server, token, source, need)
-        except Exception as exc:
-            print(f"  ✖ сервер не принял: {exc}")
-        # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
-        # 429 обходится дороже, чем несколько секунд ожидания
-        time.sleep(random.uniform(6.0, 12.0))
+            if not items:
+                if '?' in url and 'q=' in url:
+                    # Проверено на живом сайте: на поисковый запрос Авито отдаёт
+                    # HTTP 200, но страницу БЕЗ объявлений — только подвал.
+                    # Это не поломка разбора, а защита именно поиска.
+                    print("  ⚠ Авито отдал пустую страницу: он не любит поиск по запросу (?q=).")
+                    print("    Ссылки на КАТЕГОРИИ работают. Возьмите нужную категорию")
+                    print("    на сайте, скопируйте адрес и добавьте в config.json:")
+                    print('      {"source":"avito","url":"https://www.avito.ru/izhevsk/telefony",'
+                          '"city":"Ижевск","category":"Электроника"}')
+                else:
+                    print("  ⚠ разбор ничего не дал — возможно, изменилась вёрстка сайта")
+                continue
+            try:
+                stats = push(server, token, source, items)
+                print(f"  отправлено: принято {stats.get('accepted')}, "
+                      f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
+                total_sent += int(stats.get('accepted') or 0)
+                finds_here += int(stats.get('accepted') or 0)
+                # Сервер отвечает, по каким карточкам нужно описание: отбор
+                # по требованиям словами без него работает вслепую (этап A3)
+                need = stats.get('need_details') or []
+                if need:
+                    print(f"  описаний нужно: {len(need)} — открываю карточки")
+                    collect_details(server, token, source, need)
+            except Exception as exc:
+                print(f"  ✖ сервер не принял: {exc}")
+            # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
+            # 429 обходится дороже, чем несколько секунд ожидания
+            time.sleep(random.uniform(6.0, 12.0))
+
+        # Итог по цели — в состояние ротации: сколько находок и когда бегали
+        st = dict(state.get(tkey) or {})
+        st['last_run'] = time.strftime('%Y-%m-%dT%H:%M:%S')
+        st['day'] = day
+        st['finds'] = finds_here
+        st['runs'] = int(st.get('runs') or 0) + 1
+        if tkey:
+            state[tkey] = st
+
+    save_targets_state(state)
     return total_sent
 
 
