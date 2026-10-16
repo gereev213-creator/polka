@@ -22782,6 +22782,10 @@ CATEGORY_BY_WORD = {
     'сапоги': 'odezhda_obuv_aksessuary', 'платье': 'odezhda_obuv_aksessuary',
     'сумка': 'odezhda_obuv_aksessuary', 'джинсы': 'odezhda_obuv_aksessuary',
     'худи': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    # общие слова категорий: из-за их отсутствия критерий «обувь зимняя для
+    # мальчика» не получал набор одежды (категория не определялась)
+    'обувь': 'odezhda_obuv_aksessuary', 'одежда': 'odezhda_obuv_aksessuary',
+    'ноутбуки': 'noutbuki', 'телевизоры': 'audio_i_video', 'наушники': 'audio_i_video',
     'кофта': 'odezhda_obuv_aksessuary', 'свитер': 'odezhda_obuv_aksessuary',
     'лонгслив': 'odezhda_obuv_aksessuary', 'кардиган': 'odezhda_obuv_aksessuary',
     'пальто': 'odezhda_obuv_aksessuary', 'бомбер': 'odezhda_obuv_aksessuary',
