@@ -31,7 +31,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           'HUNT_JUNK_ANYWHERE', 'HUNT_JUNK_START', 'HUNT_CONDITION_WORDS',
           '_ad_hours_ago', 'HUNT_SUSPECT_DISCOUNT', 'HUNT_PRICE_DROP_PERCENT', 'HUNT_MEDIAN_EXCLUDE_WORDS', 'HUNT_JUNK_ANYWHERE', 'HUNT_NEGATION_WORDS', 'HUNT_MEDIAN_EXCLUDE_WORDS', 'HUNT_RE_JUNK_ANYWHERE', 'HUNT_RE_JUNK_START', 'HUNT_RE_CONDITION', 'HUNT_RE_NEGATION', 'HUNT_RE_SHOP', 'HUNT_RE_SHOP_MATCH', '_hunt_word_pattern', '_hunt_asked_stems', '_hunt_marker_asked', 'hunt_junk_word', 'hunt_junk_start_word', 'hunt_condition_word', 'hunt_shop_in_name',
           'HUNT_REPLICA_MARKERS', 'HUNT_SHOP_MARKERS',
-          'HUNT_NEW_MARKERS', 'HUNT_USED_MARKERS', 'HUNT_STOP_WORDS', 'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', '_crit_exclude_words', 'QUERY_SYNONYMS',
+          'HUNT_NEW_MARKERS', 'HUNT_USED_MARKERS', 'HUNT_STOP_WORDS', 'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', '_crit_exclude_words', 'CATEGORY_BY_WORD', 'query_word_variants', 'QUERY_SYNONYMS',
           'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS', 'HUNT_TITLE_START_JUNK',
           'HUNT_FRESH_HOURS', 'HUNT_ALLOW_UNDATED', 'HUNT_MIN_PRICE_SHARE',
           'ensure_hunt_matches', 'hunt_match_store', 'hunt_matches_recompute',

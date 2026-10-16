@@ -29,7 +29,7 @@ TOKENS = ('Decision', 'HUNT_REASON_LABELS', '_hunt_reason_label', '_hunt_needs_d
           '_title_has_accessory', '_accessory_before_model', '_OPENED_MARKERS',
           '_opened_markers_hit', '_ad_hours_ago', '_hours_since', '_safe_isoparse',
           'HUNT_NEW_MARKERS', 'HUNT_USED_MARKERS', 'HUNT_REPLICA_MARKERS', 'HUNT_SHOP_MARKERS',
-          'HUNT_STOP_WORDS', 'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', '_crit_exclude_words', 'QUERY_SYNONYMS', 'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS',
+          'HUNT_STOP_WORDS', 'HUNT_STRICT_MODEL_HINTS', '_hunt_extra_qualifier', '_crit_excluded', '_crit_exclude_words', 'CATEGORY_BY_WORD', 'query_word_variants', 'QUERY_SYNONYMS', 'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS',
           'HUNT_TITLE_START_JUNK', 'HUNT_FRESH_HOURS', 'HUNT_ALLOW_UNDATED',
           'HUNT_MIN_PRICE_SHARE', 'HUNT_SUSPECT_DISCOUNT')
 

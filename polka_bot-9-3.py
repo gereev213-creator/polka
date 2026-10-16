@@ -21321,6 +21321,37 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     excluded = _crit_excluded(crit, title_raw)
     if excluded:
         return no('excluded')
+    # Запчасти и детали: «iPhone 15 pro soft oled дисплей» уходил как iPhone
+    # за 2 500 ₽ — прежняя проверка аксессуаров пропускала слово ПОСЛЕ модели.
+    # Эти слова означают деталь в любом месте заголовка, поэтому проверяем
+    # их жёстко (кроме случая, когда сам критерий про них).
+    _low_title = str(title_raw).lower()
+    if not any(w in str(query).lower() for w in ('дисплей', 'запчаст', 'разбор', 'донор')):
+        for _part in ('дисплей', 'запчаст', 'на запчасти', 'разбор', 'донор',
+                      'шлейф', 'корпус', 'модуль', 'аккумулятор'):
+            if _part in _low_title:
+                return no('accessory')
+    # Тип товара обязателен: критерий «Пуховик lacoste» присылал кроссовки
+    # Lacoste и пуловер — обязательным было только слово «lacoste».
+    # Если запрос называет товар словом из словаря категорий (пуховик,
+    # кроссовки, куртка…), это слово должно быть в заголовке — с учётом
+    # падежей и синонимов.
+    _type_word = ''
+    for _w in re.split(r'\s+', str(query).lower()):
+        _w = _w.strip('.,!?()"\'')
+        if _w in CATEGORY_BY_WORD:
+            _type_word = _w
+            break
+    if _type_word:
+        try:
+            _vars = query_word_variants(_type_word) or []
+        except Exception:
+            _vars = []
+        _vars = [str(v).lower() for v in _vars] + [_type_word]
+        if len(_type_word) >= 6:
+            _vars.append(_type_word[:5])
+        if not any(v and v in _low_title for v in _vars):
+            return no('title_words')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
     if junk:
         # Реплика и «1:1» — это не аксессуар, а подделка: причина другая
