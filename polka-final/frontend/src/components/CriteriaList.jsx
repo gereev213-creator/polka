@@ -6,6 +6,34 @@ import { EmptyState } from './EmptyState'
 
 const money = (n) => Number(n || 0).toLocaleString('ru-RU')
 
+const CONDITION_NAMES = {
+  new: 'новое',
+  excellent: 'отличное',
+  good: 'хорошее',
+  worn: 'с износом',
+  broken: 'с дефектами',
+}
+
+/** Выбранные требования критерия — человеческими словами для чипов.
+ *
+ * Показываем именно то, что человек отметил (или что подставил шаблон):
+ * «АКБ ≥ 80 %», «состояние: хорошее», «только оригинал», «с рук»,
+ * «не вскрывался». Без этого критерий выглядел пустым, хотя требования есть.
+ */
+function reqChips(c) {
+  const req = c.requirements_json || {}
+  const out = []
+  if (req.battery_min) out.push(`АКБ ≥ ${req.battery_min}%`)
+  if (req.condition_min && req.condition_min !== 'any') {
+    out.push(`состояние: ${CONDITION_NAMES[req.condition_min] || req.condition_min}`)
+  }
+  if (req.original_only) out.push('только оригинал')
+  if (req.private_only) out.push('с рук')
+  if (req.not_opened) out.push('не вскрывался')
+  if (c.requirements && String(c.requirements).trim()) out.push(String(c.requirements).trim())
+  return out
+}
+
 /** Список критериев ловли — один вид на обеих вкладках поиска.
  *
  * Раньше карточки рисовались в двух местах по-разному: во «Вручную» были
@@ -48,6 +76,11 @@ export function CriteriaList({ items = [], loading = false, onRemove, title = '�
                 {(c.exclude || []).length
                   ? <Badge>не: {(c.exclude || []).join(', ')}</Badge>
                   : null}
+                {/* Требования, которые человек выбрал в диалоге или шаблоне:
+                    АКБ, состояние, оригинальность, «с рук». Раньше они не
+                    показывались, и критерий «iPhone 13» с «АКБ ≥ 80 %»
+                    выглядел как обычный поиск — будто ничего не выбрано. */}
+                {reqChips(c).map((t) => <Badge key={t}>{t}</Badge>)}
               </div>
               {/* Подсказка по здоровью критерия: почему молчит или почему
                   сыплет слишком многим. Без неё человек не понимает причину. */}

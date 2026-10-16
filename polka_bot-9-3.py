@@ -19052,8 +19052,28 @@ def recompute_one_criterion_median(crit: Dict) -> int:
     cursor = db.conn.cursor()
     try:
         where, params = _criterion_where(crit)
-        cursor.execute(f"SELECT price FROM ads WHERE {where} ORDER BY price", params)
-        prices = [int(r['price']) for r in cursor.fetchall() if r['price']]
+        cursor.execute(f"SELECT price, title FROM ads WHERE {where} ORDER BY price", params)
+        query_text = str(crit.get('query') or '')
+        prices = []
+        for row in cursor.fetchall():
+            if not row['price']:
+                continue
+            title = str(row['title'] or '')
+            # В «обычную цену» берём только сам товар. Аксессуары и мусор
+            # содержат те же слова: «Чехол для iPhone 15 Pro» ронял медиану
+            # до 370 ₽ — и по ней любая настоящая цена выглядела завышенной,
+            # а критерий «iPhone 15 Pro» показывал бессмысленную экономию.
+            try:
+                if hunt_junk_word(title, query_text) or hunt_junk_start_word(title, query_text):
+                    continue
+                if _title_has_accessory(title, query_text):
+                    continue
+                if hunt_defect_phrase(title):
+                    continue
+            except Exception:
+                pass
+            prices.append(int(row['price']))
+        prices.sort()
     except Exception as e:
         logger.warning(f"median for criterion {crit.get('id')}: {e}")
         return 0
