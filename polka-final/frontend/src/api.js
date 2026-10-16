@@ -358,6 +358,12 @@ export const api = {
     { method: 'POST', body: JSON.stringify({ kind, ad_id: adId }) }),
   payInvoice: (product) => request('/api/pay/invoice',
     { method: 'POST', body: JSON.stringify({ product }) }),
+  // Оплата картой через CISPay: счёт создаём на сервере, статус проверяем
+  // опросом — у провайдера нет вебхуков.
+  payPlans: () => request('/api/pay/plans'),
+  payCard: (product) => request('/api/pay/cispay/create',
+    { method: 'POST', body: JSON.stringify({ product }) }),
+  payCardStatus: (uuid) => request(`/api/pay/cispay/status?uuid=${encodeURIComponent(uuid)}`),
   getReferral: () => request('/api/referral'),
   // Документы: политика конфиденциальности и условия пользования
   getLegal: () => request('/api/legal'),

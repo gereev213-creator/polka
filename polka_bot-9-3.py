@@ -22426,6 +22426,20 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                         'Ссылка на условия пользования (замените на отдельную страницу)'),
     'legal.consent_required': ('str', None, None, '1',
                                '1 — спрашивать согласие при первом входе в приложение'),
+    # Оплата картой через CISPay. UUID мерчанта — только на сервере.
+    # Цены в рублях задаёте вы: пока цена 0, тариф не показывается в витрине.
+    'pay.enabled': ('str', None, None, '0',
+                    '1 — включить оплату картой (CISPay)'),
+    'pay.cispay_shop_uuid': ('str', None, None, '',
+                             'UUID мерчанта CISPay из личного кабинета'),
+    'pay.rub_month': ('str', None, None, '0',
+                      'Цена «Плюса» на месяц, ₽ (0 — не показывать)'),
+    'pay.rub_quarter': ('str', None, None, '0',
+                        'Цена «Плюса» на 3 месяца, ₽ (0 — не показывать)'),
+    'pay.rub_year': ('str', None, None, '0',
+                     'Цена «Плюса» на год, ₽ (0 — не показывать)'),
+    'pay.allow_test': ('str', None, None, '0',
+                       '1 — начислять даже по тестовым счетам (только для проверки)'),
     'collector.filters_words': ('str', None, None, '',
                                 'Узкие наборы по словам критерия, JSON: {"macbook": "&f=…"}'),
     'collector.filters': ('str', None, None, '',
@@ -23287,6 +23301,294 @@ def _crit_category_for_template(group: str) -> str:
         'velosipedy': 'Велосипеды', 'sport': 'Спорт и отдых',
         'krasota': 'Красота и здоровье', 'avto': 'Автомобили',
     }.get(group, '')
+
+
+# ── Оплата картой через CISPay ─────────────────────────────────────────────
+# Merchant API провайдера (библиотека: github.com/CISPay/PythonLib):
+#   POST /payment/create  {shop_to, sum, comment, expire} → {uuid, url, expire, sum}
+#   POST /payment/info    {shop_uuid, order_uuid}         → {status, amount, is_test}
+# status: waiting — ждёт оплаты, success — оплачен, expired — истёк.
+# Вебхуков у CISPay нет, поэтому оплату подтверждаем опросом, а начисление
+# делает фоновый цикл: человек может закрыть приложение, «Плюс» всё равно
+# придёт. Авторизация — UUID мерчанта, он хранится только на сервере.
+CISPAY_API = 'https://api.cispay.pro'
+CISPAY_POLL_EVERY = 30
+CISPAY_ORDER_TTL_SEC = 3600
+# Счёт живёт час; опрашиваем сутки — потом уже неважно.
+CISPAY_WATCH_HOURS = 24
+# товар → (дней «Плюса», настройка с ценой в рублях)
+CISPAY_PLANS = {
+    'plus_month': (30, 'pay.rub_month'),
+    'plus_quarter': (90, 'pay.rub_quarter'),
+    'plus_year': (365, 'pay.rub_year'),
+}
+
+
+def ensure_payments() -> None:
+    """Таблица платежей: кто, за что, сколько, UUID счёта и статус."""
+    try:
+        db.conn.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                provider TEXT DEFAULT 'cispay',
+                product TEXT DEFAULT '',
+                order_uuid TEXT UNIQUE,
+                amount REAL DEFAULT 0,
+                days INTEGER DEFAULT 0,
+                url TEXT DEFAULT '',
+                status TEXT DEFAULT 'waiting',
+                is_test INTEGER DEFAULT 0,
+                created_at TEXT,
+                checked_at TEXT,
+                paid_at TEXT,
+                credited INTEGER DEFAULT 0
+            )
+        """)
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_payments: {e}")
+
+
+def cispay_shop_uuid() -> str:
+    return str(cfg_get('pay.cispay_shop_uuid') or '').strip()
+
+
+def cispay_enabled() -> bool:
+    """Включено ли: есть UUID мерчанта и тумблер pay.enabled."""
+    return bool(cispay_shop_uuid()) and str(cfg_get('pay.enabled') or '0') == '1'
+
+
+def _cispay_price(key: str) -> float:
+    try:
+        return float(str(cfg_get(key) or '0').replace(',', '.').strip())
+    except Exception:
+        return 0.0
+
+
+async def cispay_call(path: str, payload: Dict) -> Dict:
+    """Запрос к Merchant API. Ошибки не глотаем — они нужны в ответе."""
+    timeout = aiohttp_web.ClientTimeout(total=15)
+    try:
+        async with aiohttp_web.ClientSession(timeout=timeout) as session:
+            async with session.post(CISPAY_API + path, json=payload) as resp:
+                text = await resp.text()
+                if resp.status != 200:
+                    return {'ok': False, 'error': f'http_{resp.status}',
+                            'detail': text[:200]}
+                data = json.loads(text)
+    except Exception as e:
+        return {'ok': False, 'error': 'network', 'detail': str(e)[:200]}
+    if str(data.get('status')) in ('success', 'waiting', 'expired'):
+        return {'ok': True, 'data': data}
+    return {'ok': False, 'error': 'gateway',
+            'detail': str(data.get('message') or data)[:200]}
+
+
+def cispay_plans_public() -> List[Dict]:
+    """Витрина тарифов: только те, у кого задана цена (настройка в админке)."""
+    out = []
+    for product, (days, key) in CISPAY_PLANS.items():
+        amount = _cispay_price(key)
+        if amount > 0:
+            out.append({'product': product, 'days': days, 'amount': int(amount)})
+    return out
+
+
+async def cispay_order_create(user_id: int, product: str) -> Dict:
+    """Создаёт счёт у провайдера и запись о платеже."""
+    if product not in CISPAY_PLANS:
+        return {'ok': False, 'error': 'unknown_product'}
+    days, key = CISPAY_PLANS[product]
+    amount = _cispay_price(key)
+    if amount <= 0:
+        return {'ok': False, 'error': 'price_not_set',
+                'detail': 'Цена не задана: впишите её в админке'}
+    payload = {
+        'shop_to': cispay_shop_uuid(),
+        'sum': round(amount, 2),
+        # В комментарии — товар и человек: по нему платёж видно в кабинете
+        'comment': f'polka {product} user {int(user_id)}',
+        'expire': CISPAY_ORDER_TTL_SEC,
+    }
+    res = await cispay_call('/payment/create', payload)
+    if not res.get('ok'):
+        logger.warning(f"cispay create: {res}")
+        return {'ok': False, 'error': res.get('error'), 'detail': res.get('detail')}
+    data = res['data']
+    order_uuid = str(data.get('uuid') or '')
+    url = str(data.get('url') or '')
+    if not order_uuid or not url:
+        return {'ok': False, 'error': 'bad_response', 'detail': str(data)[:200]}
+    now = get_moscow_time().isoformat()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "INSERT INTO payments (user_id, provider, product, order_uuid, amount,"
+            " days, url, status, created_at, checked_at) "
+            "VALUES (?,?,?,?,?,?,?,'waiting',?,?)",
+            (int(user_id), 'cispay', product, order_uuid, float(amount),
+             int(days), url, now, now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"cispay save: {e}")
+        return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:150]}
+    _plan_event(int(user_id), 'cispay_order', {'product': product, 'amount': amount})
+    return {'ok': True, 'order_uuid': order_uuid, 'url': url,
+            'amount': int(amount), 'days': int(days)}
+
+
+async def cispay_order_sync(order_uuid: str, user_id: int = 0) -> Dict:
+    """Проверяет счёт и при оплате начисляет «Плюс» ровно один раз."""
+    order_uuid = str(order_uuid or '')
+    if not order_uuid:
+        return {'ok': False, 'error': 'empty'}
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM payments WHERE order_uuid=?", (order_uuid,))
+        row = cursor.fetchone()
+    except Exception as e:
+        return {'ok': False, 'error': 'db', 'detail': str(e)[:120]}
+    if not row:
+        return {'ok': False, 'error': 'not_found'}
+    pay = dict(row)
+    if user_id and int(pay.get('user_id') or 0) != int(user_id):
+        return {'ok': False, 'error': 'not_yours'}
+    days = int(pay.get('days') or 0)
+    if int(pay.get('credited') or 0):
+        return {'ok': True, 'status': 'paid', 'credited': True, 'days': days}
+    if str(pay.get('status')) == 'expired':
+        return {'ok': True, 'status': 'expired', 'credited': False, 'days': days}
+    res = await cispay_call('/payment/info',
+                            {'shop_uuid': cispay_shop_uuid(), 'order_uuid': order_uuid})
+    now = get_moscow_time().isoformat()
+    if not res.get('ok'):
+        try:
+            db.conn.execute("UPDATE payments SET checked_at=? WHERE order_uuid=?",
+                            (now, order_uuid))
+            db.conn.commit()
+        except Exception:
+            pass
+        return {'ok': False, 'error': res.get('error'), 'detail': res.get('detail')}
+    data = res['data']
+    status = str(data.get('status') or 'waiting')
+    is_test = 1 if data.get('is_test') else 0
+    if status != 'success':
+        try:
+            cursor.execute("UPDATE payments SET status=?, checked_at=?, is_test=? "
+                           "WHERE order_uuid=?", (status, now, is_test, order_uuid))
+            db.conn.commit()
+        except Exception:
+            pass
+        return {'ok': True, 'status': status, 'credited': False, 'days': days}
+    # Оплачено. Тестовые счета не начисляем, если это не разрешено явно:
+    # иначе тестовый платёж выдал бы настоящий «Плюс».
+    if is_test and str(cfg_get('pay.allow_test') or '0') != '1':
+        try:
+            cursor.execute("UPDATE payments SET status='test_paid', checked_at=?, is_test=1 "
+                           "WHERE order_uuid=?", (now, order_uuid))
+            db.conn.commit()
+        except Exception:
+            pass
+        logger.info(f"cispay: тестовый платёж {order_uuid} — не начисляю")
+        return {'ok': True, 'status': 'test_paid', 'credited': False, 'days': days}
+    expires = _grant_plus_days(int(pay['user_id']), days)
+    try:
+        cursor.execute("UPDATE payments SET status='paid', paid_at=?, checked_at=?, "
+                       "is_test=?, credited=1 WHERE order_uuid=?",
+                       (now, now, is_test, order_uuid))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"cispay mark paid: {e}")
+    _plan_event(int(pay['user_id']), 'cispay_paid',
+                {'product': pay.get('product'), 'amount': pay.get('amount'),
+                 'days': days, 'test': bool(is_test)})
+    logger.info(f"Плюс начислен по оплате {order_uuid}: {days} дней (до {expires})")
+    try:
+        await _notify_payment_paid(int(pay['user_id']), days, expires, float(pay.get('amount') or 0))
+    except Exception as e:
+        logger.warning(f"cispay notify: {e}")
+    return {'ok': True, 'status': 'paid', 'credited': True, 'days': days,
+            'expires_at': expires, 'amount': int(float(pay.get('amount') or 0))}
+
+
+async def _notify_payment_paid(user_id: int, days: int, expires: str, amount: float) -> None:
+    """Пишем человеку в бота, что оплата прошла — иначе он не поймёт."""
+    app = _get_bot_app()
+    if not app:
+        return
+    try:
+        until = str(expires or '')[:10]
+        await app.bot.send_message(
+            chat_id=int(user_id),
+            text=("✅ <b>Оплата прошла</b>\n\n"
+                  f"«Плюс» продлён на {days} дней — до {until}.\n"
+                  f"Сумма: {int(amount)} ₽.\n\n"
+                  "Критерии без лимита, без задержки и с тщательным отбором по описанию."),
+            parse_mode='HTML')
+    except Exception as e:
+        logger.warning(f"notify payment: {e}")
+
+
+async def _cispay_poll_loop() -> None:
+    """Опрос неоплаченных счетов: CISPay не умеет вебхуки.
+
+    Проверяем включённость ВНУТРИ цикла: если владелец включит оплату в
+    админке, всё заработает без перезапуска сервиса.
+    """
+    while True:
+        try:
+            if cispay_enabled():
+                since = (get_moscow_time() - timedelta(hours=CISPAY_WATCH_HOURS)).isoformat()
+                cursor = db.conn.cursor()
+                cursor.execute("SELECT order_uuid FROM payments WHERE credited=0 "
+                               "AND status IN ('waiting') AND created_at >= ? "
+                               "ORDER BY id DESC LIMIT 50", (since,))
+                for row in cursor.fetchall():
+                    try:
+                        await cispay_order_sync(str(row['order_uuid']))
+                    except Exception as e:
+                        logger.warning(f"cispay poll item: {e}")
+                    await asyncio.sleep(1)
+        except Exception as e:
+            logger.warning(f"cispay poll: {e}")
+        await asyncio.sleep(CISPAY_POLL_EVERY)
+
+
+async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/pay/plans — тарифы картой (цены из настроек)."""
+    plans = await asyncio.to_thread(_db_read, cispay_plans_public)
+    return _miniapp_json({'ok': True, 'plans': plans, 'enabled': cispay_enabled(),
+                          'provider': 'cispay'})
+
+
+async def api_pay_create(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/pay/cispay/create {product} — ссылка на оплату картой."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    if not cispay_enabled():
+        return _miniapp_json({'ok': False, 'error': 'disabled',
+                              'detail': 'Оплата картой пока не включена'}, status=503)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    product = str((body or {}).get('product') or '')
+    res = await cispay_order_create(int(viewer_id), product)
+    if not res.get('ok'):
+        return _miniapp_json(res, status=400)
+    return _miniapp_json(res)
+
+
+async def api_pay_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/pay/cispay/status?uuid= — проверить счёт и начислить при оплате."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    order_uuid = str(request.query.get('uuid') or '')
+    res = await cispay_order_sync(order_uuid, user_id=int(viewer_id))
+    return _miniapp_json(res)
 
 
 def ensure_monetization() -> None:
@@ -30366,6 +30668,9 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_get('/api/plan', api_plan)
+    app.router.add_get('/api/pay/plans', api_pay_plans)
+    app.router.add_post('/api/pay/cispay/create', api_pay_create)
+    app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)
     app.router.add_get('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings', api_admin_settings)
@@ -30936,6 +31241,7 @@ def main():
         ensure_description_lower()
         ensure_quality_columns()
         ensure_fingerprint_backfill()
+        ensure_payments()
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
         ensure_monetization()
@@ -30962,6 +31268,7 @@ def main():
             # Этап K1/K4: наблюдатель блокировок цикла и фоновый пересчёт медиан
             asyncio.ensure_future(_loop_lag_loop())
             asyncio.ensure_future(_medians_worker_loop())
+            asyncio.ensure_future(_cispay_poll_loop())
             print(f"   Health check:      {SERVER_URL}/health")
         except Exception as _srv_err:
             print(f"{EM_FAIL} ОШИБКА запуска API-сервера на порту {WEBAPP_PORT}: {_srv_err}")

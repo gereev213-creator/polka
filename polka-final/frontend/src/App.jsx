@@ -3029,10 +3029,14 @@ function TariffsPage() {
   const [busy, setBusy] = useState(false)
   const [msg, setMsg] = useState('')
   const [promo, setPromo] = useState('')
+  // Тарифы оплаты картой: цены задаются в админке, поэтому список приходит
+  // с сервера. Пусто — значит оплата картой ещё не настроена.
+  const [cardPlans, setCardPlans] = useState([])
 
   const load = () => {
     api.getPlan().then(setPlan).catch(() => {})
     api.getReferral().then(setRef).catch(() => {})
+    api.payPlans().then((d) => setCardPlans(d.plans || [])).catch(() => setCardPlans([]))
   }
   useEffect(() => { load() }, [])
 
@@ -3048,6 +3052,44 @@ function TariffsPage() {
       }
     } catch (e) {
       setMsg((e && e.detail) || 'Не удалось открыть оплату')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  // Оплата картой: счёт создаётся на сервере, страница оплаты открывается
+  // в браузере (карта вводится вне Telegram). Дальше сами опрашиваем статус:
+  // человек может закрыть приложение — «Плюс» начислит фоновый цикл сервера.
+  const buyCard = async (product) => {
+    setBusy(true); setMsg('')
+    try {
+      const r = await api.payCard(product)
+      if (!r.url) throw new Error('нет ссылки оплаты')
+      const tg = window.Telegram?.WebApp
+      if (tg && typeof tg.openLink === 'function') tg.openLink(r.url)
+      else window.open(r.url, '_blank')
+      setMsg('Открыл страницу оплаты. После оплаты вернитесь — проверим автоматически.')
+      let tries = 0
+      const timer = setInterval(async () => {
+        tries += 1
+        try {
+          const s = await api.payCardStatus(r.order_uuid)
+          if (s && s.credited) {
+            clearInterval(timer)
+            setMsg(`Оплачено — «Плюс» продлён на ${s.days} дней`)
+            load()
+          } else if (s && s.status === 'test_paid') {
+            clearInterval(timer)
+            setMsg('Это тестовый счёт: «Плюс» не начисляется')
+          } else if (s && s.status === 'expired') {
+            clearInterval(timer)
+            setMsg('Счёт истёк — создайте новый')
+          }
+        } catch { /* тихо: сеть вернётся, попробуем снова */ }
+        if (tries >= 40) clearInterval(timer)
+      }, 15000)
+    } catch (e) {
+      setMsg((e && e.detail) || 'Не удалось создать счёт на оплату')
     } finally {
       setBusy(false)
     }
@@ -3133,6 +3175,23 @@ function TariffsPage() {
           </button>
         ))}
       </div>
+
+      {cardPlans.length ? (
+        <>
+          <h3 className="section-title mt-14">Оплатить картой</h3>
+          <div className="list-stack mt-8">
+            {cardPlans.map((pl) => (
+              <button key={pl.product} type="button" className="glass-card plan-row"
+                disabled={busy} onClick={() => buyCard(pl.product)}>
+                <span className="plan-left">
+                  <span className="plan-name">Плюс на {pl.days} дней</span>
+                </span>
+                <span className="plan-balance">{pl.amount} ₽</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
 
       <div className="glass-card mt-14">
         <div className="plan-name">Промокод</div>
