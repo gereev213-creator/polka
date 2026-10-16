@@ -19041,7 +19041,16 @@ def recompute_one_criterion_median(crit: Dict) -> int:
     cursor = db.conn.cursor()
     try:
         where, params = _criterion_where(crit)
-        cursor.execute(f"SELECT price, title FROM ads WHERE {where} ORDER BY price", params)
+        # Берём ПОСЛЕДНИЕ HUNT_MEDIAN_SAMPLE подходящих объявлений и только
+        # их сортируем по цене. Причина: чистка мусора ниже — проверки на
+        # Python, и на всей таблице (50 000+ строк) она держала базу почти
+        # минуту с половиной (лаг цикла 98 355 мс). Свежие объявления
+        # описывают рынок лучше старых, поэтому усечение выборки не портит
+        # медиану, зато делает её расчёт предсказуемым по времени.
+        cursor.execute(
+            f"SELECT price, title FROM (SELECT price, title FROM ads WHERE {where} "
+            f"ORDER BY id DESC LIMIT ?) ORDER BY price",
+            tuple(params) + (HUNT_MEDIAN_SAMPLE,))
         query_text = str(crit.get('query') or '')
         prices = []
         for row in cursor.fetchall():
@@ -23880,6 +23889,9 @@ def coins_spend(user_id: int, amount: int, reason: str) -> bool:
 HUNT_DESC_PER_PASS = int(os.environ.get('HUNT_DESC_PER_PASS', '25'))
 HUNT_DESC_RETRY_MIN = int(os.environ.get('HUNT_DESC_RETRY_MIN', '30'))
 HUNT_DESC_MAX_TRIES = int(os.environ.get('HUNT_DESC_MAX_TRIES', '3'))
+# Сколько объявлений берём для медианы критерия (последние по id).
+# Медиана по свежим строкам точнее и считается за предсказуемое время.
+HUNT_MEDIAN_SAMPLE = int(os.environ.get('HUNT_MEDIAN_SAMPLE', '3000'))
 # Этап C: очередь доставки. Один воркер забирает готовые записи пачками,
 # поэтому дублей не бывает даже при параллельных сборах.
 HUNT_WORKER_BATCH = int(os.environ.get('HUNT_WORKER_BATCH', '15'))
