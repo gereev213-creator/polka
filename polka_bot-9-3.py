@@ -22812,6 +22812,13 @@ AVITO_CATEGORY_SLUGS = (
     'velosipedy', 'muzykalnye_instrumenty', 'kvartiry', 'avtomobili', 'mebel',
     'knigi_i_zhurnaly', 'instrumenty', 'sport_i_otdyh', 'krasota_i_zdorovie',
     'zapchasti_i_aksessuary',
+    # Категории, которых не хватало (из-за этого набор для настольных
+    # компьютеров не принимался: сервер не знал такой категории).
+    'nastolnye_kompyutery', 'sistemnye_bloki', 'noutbuki',
+    'orgtehnika_i_rashodnye_materialy', 'remont_i_stroitelstvo', 'dom_i_dacha',
+    'zootovary', 'kollektsionirovanie', 'mototsikly_i_mototehnika',
+    'telefony_i_gadzhety', 'igry_pristavki_i_programmy', 'planshety',
+    'audio_i_video', 'tv_i_audio', 'stroitelstvo_i_remont',
 )
 
 
