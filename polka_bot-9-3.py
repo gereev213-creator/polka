@@ -27517,6 +27517,31 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
     except Exception:
         body = {}
     # Принимаем и одну ссылку, и пачку: {"urls": ["…", "…"]} или {"url": "…"}
+    # Убрать набор: {"remove": ["noutbuki"]} или {"remove": "noutbuki"}
+    drop = (body or {}).get('remove')
+    if drop:
+        if isinstance(drop, str):
+            drop = [drop]
+        current_now = collector_filters()
+        words_now = collector_word_filters()
+        removed = []
+        for key in drop:
+            key = str(key).strip()
+            if key in current_now:
+                current_now.pop(key)
+                removed.append(key)
+            if key.lower() in words_now:
+                words_now.pop(key.lower())
+                removed.append(key.lower())
+        if removed:
+            cfg_set('collector.filters', json.dumps(current_now, ensure_ascii=False),
+                    by=admin_id, reason=f"убраны наборы: {', '.join(removed)}")
+            cfg_set('collector.filters_words', json.dumps(words_now, ensure_ascii=False),
+                    by=admin_id, reason='обновление наборов по словам')
+        return _miniapp_json({'ok': True, 'removed': removed,
+                              'left': sorted(current_now.keys()),
+                              'words_left': sorted(words_now.keys())})
+
     # Принимаем: {"urls": ["…"]}, {"url": "…"} и пары «слово = ссылка»
     # (слово — узкий набор: "macbook = https://…", "rtx = https://…").
     raw = (body or {}).get('urls')
