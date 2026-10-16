@@ -72,6 +72,11 @@ SHORT_PAGE_CHARS = 20000
 # Авито не пустил на страницу объявления в этом проходе: описания пропускаем
 # до следующего прохода, чтобы не долбить сайт и не валить весь сбор.
 _DETAILS_BLOCKED = False
+_DETAILS_BLOCKED_SINCE = 0.0
+# После 439 сборщик пережидает и пробует САМ, без ручного перезапуска.
+# Одна попытка за 30 минут ничего не жжёт, а блок Авито обычно спадает
+# за 1–2 часа — через 2–4 попытки описания снова пойдут.
+DETAILS_BLOCK_RETRY_SEC = 1800
 # Сколько символов описания хранить. Дальше — маркетинговый шум продавца.
 DESC_MAX_CHARS = 2000
 
@@ -1270,9 +1275,17 @@ def collect_details(server: str, token: str, source: str, items: list,
     и продолжаем собирать выдачу. Пометку failed серверу в этом случае не
     шлём — иначе три неудачных прохода подряд навсегда закроют карточку.
     """
-    global _DETAILS_BLOCKED
-    if not items or _DETAILS_BLOCKED:
+    global _DETAILS_BLOCKED, _DETAILS_BLOCKED_SINCE
+    if not items:
         return 0
+    if _DETAILS_BLOCKED:
+        # Авто-восстановление: после 439 ждём полчаса и пробуем снова,
+        # без ручного перезапуска. Один запрос за 30 минут не жечёт лимит.
+        if _DETAILS_BLOCKED_SINCE and (time.time() - _DETAILS_BLOCKED_SINCE) < DETAILS_BLOCK_RETRY_SEC:
+            return 0
+        _DETAILS_BLOCKED = False
+        _DETAILS_BLOCKED_SINCE = 0.0
+        print("  …переждали 30 минут — пробую снова (блок мог сняться)")
     out = []
     for i, item in enumerate(items):
         url = str(item.get('url') or '')
@@ -1283,7 +1296,9 @@ def collect_details(server: str, token: str, source: str, items: list,
             html = fetch_item(url)
         except Blocked as exc:
             _DETAILS_BLOCKED = True
+            _DETAILS_BLOCKED_SINCE = time.time()
             print(f"  ⛔ описания недоступны с этого IP: {exc}")
+            print(f"    пережду {int(DETAILS_BLOCK_RETRY_SEC // 60)} минут и попробую снова сам")
             print("    Скорее всего это дата-центр (GitHub Actions). Соберите")
             print("    описания с домашнего компьютера: collector/start-local.sh")
             if out:
