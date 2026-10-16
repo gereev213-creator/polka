@@ -21745,6 +21745,24 @@ def hunt_need_details(ad_ids: Optional[List[int]] = None, limit: int = 0) -> Lis
     if not crits:
         return []
     retry_before = (get_moscow_time() - timedelta(minutes=HUNT_DESC_RETRY_MIN)).isoformat()
+    # Очередь раньше брала просто 12 САМЫХ СВЕЖИХ объявлений без привязки к
+    # критериям. Если свежие — это машины, а описание нужно для iPhone,
+    # очередь оставалась пустой и телефон простаивал (владелец видел
+    # «карточек к открытию: 0» при 575 подходящих iPhone в базе).
+    # Теперь ищем объявления ПО СЛОВАМ критериев, которым нужно описание.
+    word_conds: List[str] = []
+    word_params: List[str] = []
+    seen_words = set()
+    for _c in crits:
+        for _w in _query_words_required(_c.get('query') or '')[:4]:
+            _w = str(_w).strip().lower()
+            if len(_w) < 3 or _w in seen_words:
+                continue
+            seen_words.add(_w)
+            word_conds.append("COALESCE(title_lower, lower(title)) LIKE ?")
+            word_params.append('%' + _w + '%')
+            if len(word_conds) >= 40:
+                break
     try:
         if ad_ids:
             ids = [int(i) for i in ad_ids][:500]
@@ -21755,12 +21773,16 @@ def hunt_need_details(ad_ids: Optional[List[int]] = None, limit: int = 0) -> Lis
                 f"AND (desc_checked_at IS NULL OR desc_checked_at < ?) "
                 f"ORDER BY id DESC", (*ids, HUNT_DESC_MAX_TRIES, retry_before))
         else:
-            cursor.execute(
-                "SELECT * FROM ads WHERE status='active' AND source_url LIKE 'http%' "
-                "AND COALESCE(description,'')='' AND COALESCE(desc_attempts,0) < ? "
-                "AND (desc_checked_at IS NULL OR desc_checked_at < ?) "
-                "ORDER BY id DESC LIMIT ?",
-                (HUNT_DESC_MAX_TRIES, retry_before, max(limit * 4, limit)))
+            sql = ("SELECT * FROM ads WHERE status='active' AND source_url LIKE 'http%' "
+                   "AND COALESCE(description,'')='' AND COALESCE(desc_attempts,0) < ? "
+                   "AND (desc_checked_at IS NULL OR desc_checked_at < ?)")
+            params = [HUNT_DESC_MAX_TRIES, retry_before]
+            if word_conds:
+                sql += " AND (" + " OR ".join(word_conds) + ")"
+                params.extend(word_params)
+            sql += " ORDER BY id DESC LIMIT ?"
+            params.append(max(limit * 4, limit))
+            cursor.execute(sql, tuple(params))
         ads = [dict(r) for r in cursor.fetchall()]
     except Exception as e:
         logger.error(f"need_details ads: {e}")
