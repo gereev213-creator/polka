@@ -21982,11 +21982,19 @@ def hunt_flush_stale_pending(minutes: int = 0) -> int:
     before = (now - timedelta(minutes=minutes)).isoformat()
     cursor = db.conn.cursor()
     try:
+        # Отправляем с пометкой ТОЛЬКО те, по которым сборщик реально пытался
+        # и не смог (попытки исчерпаны). Раньше сюда попадали и те, до которых
+        # телефон просто ещё не дошёл (например, был под троттлингом 439) —
+        # человек получал находку «описание не проверено» без единой попытки.
+        # Теперь такие продолжают ждать: АКБ и состояние проверятся, когда
+        # описание придёт.
         cursor.execute(
             "UPDATE hunt_matches SET status='ready', reason='desc_failed', "
             "desc_state='failed', updated_at=? "
-            "WHERE status='pending_details' AND created_at < ?",
-            (now.isoformat(), before))
+            "WHERE status='pending_details' AND created_at < ? "
+            "AND EXISTS (SELECT 1 FROM ads a WHERE a.id = hunt_matches.ad_id "
+            "            AND COALESCE(a.desc_attempts,0) >= ?)",
+            (now.isoformat(), before, HUNT_DESC_MAX_TRIES))
         n = int(cursor.rowcount or 0)
         db.conn.commit()
         return n

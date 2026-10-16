@@ -34,7 +34,7 @@ TOKENS = ('CATEGORY_BY_WORD', '_query_subject_word', 'HUNT_MODIFIER_WORDS', 'que
           'QUALIFIER_RU', 'HUNT_MODEL_QUALIFIERS', 'HUNT_TITLE_START_JUNK',
           'HUNT_FRESH_HOURS', 'HUNT_ALLOW_UNDATED', 'HUNT_MIN_PRICE_SHARE',
           'HUNT_WORKER_BATCH', 'HUNT_WORKER_EVERY', 'HUNT_SEND_MAX_TRIES',
-          'HUNT_SEND_RETRY_MIN', 'HUNT_PENDING_MAX_MIN',
+          'HUNT_SEND_RETRY_MIN', 'HUNT_PENDING_MAX_MIN', 'HUNT_DESC_MAX_TRIES',
           'ensure_hunt_matches', 'hunt_match_store', 'hunt_matches_recompute',
           'hunt_match_mark_sent', 'hunt_ready_ids', 'hunt_claim_batch', 'hunt_release',
           'hunt_retry_failed', 'hunt_flush_stale_pending', 'hunt_note_blocked',
@@ -81,7 +81,8 @@ conn.executescript('''
     CREATE TABLE ads (id INTEGER PRIMARY KEY, title TEXT, title_lower TEXT, price INTEGER,
                       city TEXT, category TEXT, description TEXT, photos TEXT,
                       published_hours_ago INTEGER, seller_type TEXT, seller_name TEXT,
-                      status TEXT, source TEXT, source_url TEXT, external_id TEXT);
+                      status TEXT, source TEXT, source_url TEXT, external_id TEXT,
+                      desc_attempts INTEGER DEFAULT 0, desc_checked_at TEXT);
     CREATE TABLE hunt_criteria (id INTEGER PRIMARY KEY, user_id INTEGER, query TEXT,
                                 category TEXT, city TEXT, max_price INTEGER, min_price INTEGER,
                                 max_hours INTEGER, with_photo INTEGER, min_discount INTEGER,
@@ -180,8 +181,24 @@ print('3) повтор: через 10 минут, максимум 3 раза, �
 # ── 4. «Ждём описание» дольше 30 минут → отправляем с пометкой
 add_row(20, status='pending_details', created=NOW[0] - timedelta(minutes=40))
 add_row(21, status='pending_details', created=NOW[0] - timedelta(minutes=5))
-n = flush()
-assert n == 1, n
+# Отправляем с пометкой только тех, по кому сборщик РЕАЛЬНО пытался и не смог
+# (попытки исчерпаны). Иначе находка уходила «описание не проверено» даже
+# тогда, когда телефон до неё ещё не дошёл (например был под троттлингом 439).
+# Строки объявлений нужны: проверяем, что сборщик РЕАЛЬНО пытался открыть
+# описание (попытки исчерпаны), а не просто не дошёл до карточки.
+conn.execute("INSERT OR REPLACE INTO ads (id, title, desc_attempts) VALUES (20,'тест',3)")
+conn.commit()
+flush()
+# Проверяем адресно: старое с исчерпанными попытками ушло, свежее осталось ждать
+_st20 = conn.execute("SELECT status FROM hunt_matches WHERE ad_id=20").fetchone()[0]
+_st21 = conn.execute("SELECT status FROM hunt_matches WHERE ad_id=21").fetchone()[0]
+assert _st20 == 'ready', _st20
+assert _st21 == 'pending_details', _st21
+# Старое, но БЕЗ попыток — продолжаем ждать, а не отправляем непроверенным
+add_row(22, status='pending_details', created=NOW[0] - timedelta(minutes=40))
+conn.execute("INSERT OR REPLACE INTO ads (id, title, desc_attempts) VALUES (22,'тест',0)")
+conn.commit()
+assert flush() == 0, 'без единой попытки открыть описание отправлять нельзя'
 old = conn.execute("SELECT * FROM hunt_matches WHERE ad_id=20").fetchone()
 young = conn.execute("SELECT * FROM hunt_matches WHERE ad_id=21").fetchone()
 assert old['status'] == 'ready' and old['reason'] == 'desc_failed', dict(old)
