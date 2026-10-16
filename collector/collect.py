@@ -958,12 +958,12 @@ CATEGORY_BY_WORD = {
 #   {filters}  — необязательный набор фильтров (f=...) из ссылки браузера:
 #                состояние, доставка, память. Задаётся в config.json.
 DEFAULT_URL_TEMPLATE = ("https://www.avito.ru/all/{category}"
-                        "?cd=1&localPriority=0&q={query}&user=1{filters}"
+                        "?cd=1&localPriority=0&q={query}&user={user}{filters}"
                         "&s=104&pmin={pmin}&pmax={pmax}")
 
 
 def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
-               filters: str = '') -> str:
+               filters: str = '', user: str = '1') -> str:
     """Собирает ссылку поиска по шаблону и убирает пустые параметры.
 
     Пустые pmin/pmax и отсутствие категории не должны оставлять в ссылке
@@ -973,13 +973,14 @@ def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
     url = str(template or DEFAULT_URL_TEMPLATE)
     for key, value in (('{category}', slug or ''),
                        ('{query}', quote_plus(query or '')),
+                       ('{user}', user or ''),
                        ('{filters}', str(filters or '')),
                        ('{pmin}', str(int(pmin)) if pmin else ''),
                        ('{pmax}', str(int(pmax)) if pmax else '')):
         url = url.replace(key, value)
     # Категории нет → путь /all/, превращаем в /all
     url = url.replace('/all/?', '/all?').replace('/all/&', '/all&')
-    url = re.sub(r'[?&](pmin|pmax)=(?=&|$)', '', url)
+    url = re.sub(r'[?&](pmin|pmax|user)=(?=&|$)', '', url)
     url = url.replace('?&', '?').replace('&&', '&')
     if url.endswith('/all/'):
         url = url[:-1]
@@ -1094,7 +1095,13 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             filters_here = server_filters
         if not filters_here:
             filters_here = str((cfg or {}).get('filters') or os.environ.get('POLKA_FILTERS', ''))
-        url = search_url(template_here, slug or '', query, pmin, pmax, filters=filters_here)
+        # Продавец из КРИТЕРИЯ: сервер отдаёт user='1' (только частные) или
+        # '' (все). Раньше сборщик принудительно ставил user=1 всем.
+        # '1' — частные, '' — все, '2' — компании. Пустую строку от сервера
+        # НЕ подменяем (это осознанный «все»), подменяем только отсутствие.
+        user_here = str(crit.get('user', '1'))
+        url = search_url(template_here, slug or '', query, pmin, pmax,
+                         filters=filters_here, user=user_here)
         if url in seen:
             continue
         seen.add(url)

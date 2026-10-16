@@ -24215,9 +24215,21 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         cursor.execute("SELECT DISTINCT query, category, city, "
                        "COALESCE(min_price,0) AS min_price, "
                        "COALESCE(max_price,0) AS max_price, "
-                       "COALESCE(max_hours,0) AS max_hours "
+                       "COALESCE(max_hours,0) AS max_hours, "
+                       "COALESCE(requirements_json,'') AS requirements_json "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
+        # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
+        #   private_only=true  → user=1 (только частные)
+        #   private_only=false → без user (все)
+        # Раньше сборщик ставил user=1 всем критериям, даже тем, где человек
+        # продавца не указывал — и это путало ожидания.
+        for row in rows:
+            try:
+                _req = json.loads(row.get('requirements_json') or '{}')
+            except Exception:
+                _req = {}
+            row['user'] = '1' if _req.get('private_only') else '' 
         # Наборы фильтров Авито по категориям (частные, состояние, АКБ, слова
         # в описании) отдаём вместе с критерием: так их применяет сам Авито,
         # а сборщику не нужно ни файлов, ни переменных окружения.
