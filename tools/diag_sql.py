@@ -1,7 +1,9 @@
 """Диагностика живой базы: причины отказов, застрявшие, что уходит в чат.
 
 Запуск: python3 .work/diag_sql.py
-Токен берётся из collector/config.json (тот же, что INGEST_TOKEN на Амвере).
+Токен берётся из ADMIN_READ_TOKEN (переменная окружения) или из
+collector/config.json (поле admin_token). Токен сборщика (INGEST_TOKEN)
+для диагностики больше НЕ принимается — он лежит на телефоне и в Actions.
 """
 import json
 import os
@@ -13,7 +15,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = os.path.join(HERE, '..', 'collector', 'config.json')
 cfg = json.load(open(CFG, encoding='utf-8'))
 SERVER = cfg['server'].rstrip('/')
-TOKEN = cfg['token']
+TOKEN = (os.environ.get('ADMIN_READ_TOKEN')
+         or cfg.get('admin_token') or '')
+if not TOKEN:
+    raise SystemExit('Нужен ADMIN_READ_TOKEN (или admin_token в config.json): '
+                     'диагностика больше не открывается токеном сборщика')
 
 QUERIES = [
     ("1) Причины отказа за сутки", """
@@ -46,7 +52,7 @@ def call(sql, timeout=60):
     proc = subprocess.run(
         ['curl', '-s', '--max-time', str(timeout), '-X', 'POST',
          f'{SERVER}/api/admin/sql',
-         '-H', f'X-Ingest-Token: {TOKEN}',
+         '-H', f'X-Admin-Token: {TOKEN}',
          '-H', 'Content-Type: application/json',
          '--data-binary', '@-'],
         input=payload.encode(), capture_output=True)

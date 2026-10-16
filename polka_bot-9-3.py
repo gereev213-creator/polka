@@ -145,6 +145,8 @@ ADMIN_CHANNEL_ID = os.environ.get("MAIN_CHANNEL", "-1003994334268")
 
 # ── Crypto Bot (pay.crypt.bot) ────────────────────────────────────────────────
 # Получить токен: https://t.me/CryptoBot → /pay → Создать приложение
+# Токен ДИАГНОСТИКИ (не путать с INGEST_TOKEN — тот у сборщика)
+ADMIN_READ_TOKEN = os.environ.get("ADMIN_READ_TOKEN", "")
 CRYPTO_BOT_TOKEN = os.environ.get("CRYPTO_BOT_TOKEN", "")
 # Курс обмена рублей → USDT (обновляйте по необходимости или подключите API курса)
 # Используется только если нет точного совпадения в таблице цен
@@ -17343,9 +17345,7 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     сбор можно вести прямо здесь — без GitHub, расписаний и токенов,
     а значит без перебоев. Если нет — нужен внешний запуск.
     """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    got = _ingest_token_ok(request)
-    if not expected or not hmac.compare_digest(str(got), str(expected)):
+    if not await _admin_read_ok(request):
         return _miniapp_err('forbidden', 403)
 
     out: Dict = {}
@@ -18772,21 +18772,10 @@ async def hunt_hide_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/diag?token=... — состояние приложения одним ответом.
 
-    Токен тот же, что у сборщика (INGEST_TOKEN): посторонним не отдаём.
+    Доступ: ADMIN_READ_TOKEN или администратор из Mini App. Токен сборщика
+    (INGEST_TOKEN) здесь НЕ принимается: он лежит на телефоне и в Actions.
     """
-    # Доступ: токен сборщика (как было) ИЛИ администратор из Mini App (K1)
-    expected = os.environ.get('INGEST_TOKEN', '')
-    got = _ingest_token_ok(request)
-    allowed = bool(expected) and hmac.compare_digest(str(got), str(expected))
-    if not allowed:
-        _viewer = _miniapp_viewer(request)
-        try:
-            allowed = bool(_viewer) and bool(await is_admin(_viewer))
-        except Exception:
-            allowed = False
-        if not allowed and int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
-            allowed = True
-    if not allowed:
+    if not await _admin_read_ok(request):
         return _miniapp_err('forbidden', 403)
 
     out: Dict = {}
@@ -19526,6 +19515,44 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
     except Exception as e:
         logger.warning(f"touch collector: {e}")
     return stats
+
+
+def _admin_read_token_ok(request) -> str:
+    """Токен ДИАГНОСТИКИ: отдельный от токена сборщика.
+
+    Раньше диагностика принимала INGEST_TOKEN — тот же, что лежит на
+    телефоне и в GitHub Actions. Если он утечёт, через него можно было
+    читать внутренности сервиса. Теперь для диагностики нужен
+    ADMIN_READ_TOKEN (или вход администратора в Mini App).
+    """
+    got = request.headers.get('X-Admin-Token', '')
+    if not got:
+        got = request.headers.get('X-Ingest-Token', '')
+    if not got and os.environ.get('ALLOW_QUERY_TOKEN', '0') == '1':
+        got = request.query.get('token', '')
+    return str(got or '')
+
+
+async def _admin_read_ok(request) -> bool:
+    """Пускать ли к диагностике: ADMIN_READ_TOKEN ИЛИ админ из Mini App."""
+    expected = os.environ.get('ADMIN_READ_TOKEN', '')
+    if expected:
+        got = _admin_read_token_ok(request)
+        try:
+            if hmac.compare_digest(str(got), str(expected)):
+                return True
+        except Exception:
+            pass
+    _viewer = _miniapp_viewer(request)
+    if _viewer:
+        try:
+            if await is_admin(_viewer):
+                return True
+        except Exception:
+            pass
+        if int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
+            return True
+    return False
 
 
 def _ingest_token_ok(request) -> str:
@@ -28369,24 +28396,14 @@ _SQL_FORBIDDEN = re.compile(
 async def api_admin_sql(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/admin/sql {sql} — диагностика владельца: ТОЛЬКО ЧТЕНИЕ.
 
-    Доступ: токен сборщика (INGEST_TOKEN) или администратор из Mini App.
+    Доступ: ADMIN_READ_TOKEN (диагностический) или администратор из Mini App.
+    Токен сборщика (INGEST_TOKEN) здесь НЕ принимается намеренно: он лежит
+    на телефоне и в GitHub Actions, а этот запрос показывает внутренности.
     Разрешён ровно один SELECT (или WITH … SELECT): изменения запрещены на
     уровне проверки, строк возвращаем не больше 200. Нужен, чтобы смотреть
     причины отказов и застрявшие отправки на живой базе, не заходя на сервер.
     """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    got = _ingest_token_ok(request)
-    allowed = bool(expected) and hmac.compare_digest(str(got), str(expected))
-    _viewer = None
-    if not allowed:
-        _viewer = _miniapp_viewer(request)
-        try:
-            allowed = bool(_viewer) and bool(await is_admin(_viewer))
-        except Exception:
-            allowed = False
-        if not allowed and int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
-            allowed = True
-    if not allowed:
+    if not await _admin_read_ok(request):
         return _miniapp_err('forbidden', 403)
 
     try:

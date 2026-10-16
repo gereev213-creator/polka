@@ -43,7 +43,28 @@ print('D9: ALLOW_QUERY_TOKEN=1 возвращает старый способ (�
 bad = [n for n, line in enumerate(SRC.split('\n'), 1)
        if "query.get('token'" in line and '_ingest_token_ok' not in line
        and 'request.query.get' in line and n < SRC[:i].count('\n') + 1]
-extra = [n for n, line in enumerate(SRC.split('\n'), 1)
-         if "query.get('token'" in line and 'def _ingest_token_ok' not in line]
-assert len(extra) == 1, f'остались прямые чтения токена из query: {extra}'
-print('D9: прямых чтений ?token= в обработчиках не осталось')
+# Читать ?token= разрешено ТОЛЬКО в двух помощниках: приём (INGEST) и
+# диагностика (ADMIN_READ). Ни один обработчик не должен делать это сам —
+# иначе токен снова начнёт утекать в логи и историю.
+import re as _re
+
+
+def _enclosing(lines, n):
+    for i in range(n - 1, 0, -1):
+        m = _re.match(r'def ([A-Za-z_0-9]+)', lines[i - 1])
+        if m:
+            return m.group(1)
+    return ''
+
+
+_lines = SRC.split('\n')
+_reads = [(n, _enclosing(_lines, n)) for n, line in enumerate(_lines, 1)
+          if "query.get('token'" in line]
+_handlers = [(n, fn) for n, fn in _reads
+             if fn not in ('_ingest_token_ok', '_admin_read_token_ok')]
+assert not _handlers, f'обработчик читает ?token= напрямую: {_handlers}'
+assert len(_reads) == 2, f'ожидали чтение только в двух помощниках: {_reads}'
+import os as _os
+_os.environ.pop('ALLOW_QUERY_TOKEN', None)
+print('D9: ?token= читают только два помощника (приём и диагностика), '
+      'обработчики — нет')
