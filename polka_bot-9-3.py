@@ -22255,6 +22255,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                         'Ссылка на условия пользования (замените на отдельную страницу)'),
     'legal.consent_required': ('str', None, None, '1',
                                '1 — спрашивать согласие при первом входе в приложение'),
+    'collector.filters_words': ('str', None, None, '',
+                                'Узкие наборы по словам критерия, JSON: {"macbook": "&f=…"}'),
     'collector.filters': ('str', None, None, '',
                           'Наборы фильтров Авито по категориям, JSON: {"telefony": "&f=…"}'),
     'banner.text': ('str', None, None, '', 'Текст баннера'),
@@ -22928,6 +22930,38 @@ async def api_legal_consent(request: aiohttp_web.Request) -> aiohttp_web.Respons
         return _miniapp_err('unauthorized', 401)
     at = await asyncio.to_thread(_db_locked, save_user_consent, viewer_id)
     return _miniapp_json({'ok': True, 'consent_at': at})
+
+
+def collector_word_filters() -> Dict:
+    """Узкие наборы по словам критерия: «macbook» → Apple-фильтры, «rtx» → свои.
+
+    Зачем: набор привязан к категории, а внутри категории товары разные.
+    Apple-фильтр (M1, 13 дюймов) не найдёт игровой ноутбук RTX — поэтому
+    для конкретных слов можно задать свой набор, и он применяется только
+    там, где слово есть в запросе критерия.
+    """
+    raw = str(cfg_get('collector.filters_words') or '')
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return {str(k).lower(): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def word_filter_for(query: str) -> str:
+    """Набор, подходящий словам запроса (самое длинное совпадение)."""
+    words = collector_word_filters()
+    if not words:
+        return ''
+    low = str(query or '').lower()
+    best = ''
+    best_len = 0
+    for key, blob in words.items():
+        if key and key in low and len(key) > best_len:
+            best, best_len = blob, len(key)
+    return best
 
 
 def collector_filters() -> Dict:
@@ -24100,7 +24134,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         # в описании) отдаём вместе с критерием: так их применяет сам Авито,
         # а сборщику не нужно ни файлов, ни переменных окружения.
         flt = collector_filters()
-        if flt:
+        word_flt = collector_word_filters()
+        if flt or word_flt:
             for row in rows:
                 key = ''
                 for word in str(row.get('query') or '').lower().split():
@@ -24109,7 +24144,9 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                         break
                 if is_accessory_query(row.get('query')):
                     continue
-                got = flt.get(key or '') or flt.get(str(row.get('category') or '')) or ''
+                got = word_filter_for(row.get('query')) if word_flt else ''
+                if not got:
+                    got = flt.get(key or '') or flt.get(str(row.get('category') or '')) or ''
                 if got:
                     row['filters'] = got
         return _miniapp_json({'items': rows})
@@ -27473,18 +27510,30 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
     except Exception:
         body = {}
     # Принимаем и одну ссылку, и пачку: {"urls": ["…", "…"]} или {"url": "…"}
+    # Принимаем: {"urls": ["…"]}, {"url": "…"} и пары «слово = ссылка»
+    # (слово — узкий набор: "macbook = https://…", "rtx = https://…").
     raw = (body or {}).get('urls')
     if isinstance(raw, str):
         raw = [raw]
     if not raw:
         raw = [(body or {}).get('url') or '']
     current = collector_filters()
-    added, failed, with_price = [], [], []
+    words_map = collector_word_filters()
+    added, failed, with_price, words_added = [], [], [], []
     for one in raw:
         for piece in str(one).replace('\r', '').split('\n'):
             piece = piece.strip()
             if not piece:
                 continue
+            # «слово = ссылка» → узкий набор по слову
+            word_label = ''
+            if '=' in piece and not piece.startswith('http'):
+                word_label, piece = [x.strip() for x in piece.split('=', 1)]
+                word_label = word_label.lower()
+            if not piece.startswith('http') and '=' in piece:
+                head, tail = piece.split('=', 1)
+                if tail.strip().startswith('http'):
+                    word_label, piece = head.strip().lower(), tail.strip()
             parsed = parse_avito_filter_url(piece)
             if not parsed.get('ok'):
                 failed.append({'url': piece[:80], 'why': parsed.get('error')})
@@ -27492,11 +27541,15 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
             if not parsed.get('slug'):
                 failed.append({'url': piece[:80], 'why': 'unknown_category'})
                 continue
-            current[parsed['slug']] = parsed['filters']
-            added.append(parsed['slug'])
+            if word_label:
+                words_map[word_label] = parsed['filters']
+                words_added.append(word_label)
+            else:
+                current[parsed['slug']] = parsed['filters']
+                added.append(parsed['slug'])
             if parsed.get('has_price'):
                 with_price.append(parsed['slug'])
-    if not added:
+    if not added and not words_added:
         return _miniapp_json({'ok': False, 'error': 'nothing_added',
                               'failed': failed[:6],
                               'detail': 'Ни одну ссылку не разобрал — нужны ссылки разделов Авито '
@@ -27505,7 +27558,12 @@ async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_we
                   by=admin_id, reason=f"наборы: {', '.join(added[:5])}")
     if not res.get('ok'):
         return _miniapp_json(res, status=400)
-    return _miniapp_json({'ok': True, 'added': added, 'failed': failed[:6],
+    if words_added:
+        res2 = cfg_set('collector.filters_words', json.dumps(words_map, ensure_ascii=False),
+                       by=admin_id, reason=f"наборы по словам: {', '.join(words_added[:5])}")
+        if not res2.get('ok'):
+            return _miniapp_json(res2, status=400)
+    return _miniapp_json({'ok': True, 'added': added, 'words': words_added, 'failed': failed[:6],
                           'total': len(current),
                           'with_price': with_price,
                           'detail': ('Готово. В ссылке была цена — она перебьёт цены критериев, '
