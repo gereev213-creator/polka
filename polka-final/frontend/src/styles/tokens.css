@@ -13,8 +13,8 @@
   --border: rgba(60, 60, 67, 0.12);
   --hairline: rgba(60, 60, 67, 0.12);
   --glass-border: rgba(60, 60, 67, 0.12);
-  --bg-glass: #FFFFFF;   /* S: сплошной фон вместо полупрозрачного */
-  --bg-glass-strong: #FFFFFF;
+  --bg-glass: rgba(20, 20, 20, 0.9);   /* S: сплошной фон вместо полупрозрачного */
+  --bg-glass-strong: #141414;
 
   /* text */
   --text: #1D1D1F;
@@ -116,8 +116,8 @@
   --border: #E4E6EB;
   --hairline: #E4E6EB;
   --glass-border: #E4E6EB;
-  --bg-glass: #FFFFFF;
-  --bg-glass-strong: #FFFFFF;
+  --bg-glass: rgba(20, 20, 20, 0.9);
+  --bg-glass-strong: #141414;
 
   --text: #14171A;
   --ink: #14171A;
@@ -204,6 +204,8 @@
   --glass: rgba(18, 18, 18, .72);
   --glass-border: rgba(255, 255, 255, .10);
 
+  --bg-glass: rgba(20, 20, 20, 0.9);
+  --bg-glass-strong: #141414;
   color-scheme: dark;
 }
 
