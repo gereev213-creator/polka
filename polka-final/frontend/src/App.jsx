@@ -303,82 +303,61 @@ function mediaKind(message) {
   return message?.media_type || message?.msg_type || 'photo'
 }
 
+// Относительное время по спеке v2: «12 мин назад», «3 ч назад», «вчера».
+// «только что» — только для лотов моложе двух минут.
+function relTime(item) {
+  const hours = item?.hours_ago
+  if (hours === null || hours === undefined || hours === '') return ''
+  const h = Number(hours)
+  if (!Number.isFinite(h) || h < 0) return ''
+  if (h < 2 / 60) return 'только что'
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} мин назад`
+  if (h < 24) return `${Math.round(h)} ч назад`
+  if (h < 48) return 'вчера'
+  return `${Math.round(h / 24)} дн назад`
+}
+
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
   // Защита: если пришёл пустой элемент, карточка не должна ронять ВСЁ
-  // приложение. Была ошибка «null is not an object (evaluating
-  // 'a.source_url')» — один пустой объект в списке ломал весь экран.
+  // приложение (была ошибка «null is not an object (evaluating 'a.source_url')»).
   if (!item || typeof item !== 'object') return null
   const handleFavorite = (event) => {
     event.preventDefault()
     event.stopPropagation()
     onToggleFavorite?.(item.id)
   }
+  // Скидка — только когда ей можно верить (спека v2):
+  //  • не подозрительная цена и не аксессуар/запчасть;
+  //  • не больше 50 % — иначе это почти всегда другой товар или развод;
+  //  • медиана должна быть ненулевой.
+  const discount = Number(item.discount_percent) || 0
+  const accessory = String(item.hunt_reason || '') === 'accessory' || Number(item.accessory)
+  const reliable = !Number(item.price_suspect) && !accessory && discount > 0
+  const showDiscount = reliable && discount <= 50
+  // Мета: город и время. «Россия» вместо города не показываем вовсе.
+  const city = String(item.city || '').trim()
+  const cityOk = city && !/^россия$/i.test(city)
+  const meta = [cityOk ? city : '', relTime(item)].filter(Boolean).join(' · ')
 
   return (
     <Link to={`/listing/${item.id}`} className="product-card">
       <div className="product-media">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
-        {/* Выгода относительно медианы по категории — то, ради чего подписчик
-            и открывает ленту, а не «свежесть публикации». Подозрительно
-            дешёвые лоты (скидка больше 70%: рассрочка, залог, не тот товар)
-            бейджа «ниже рынка» НЕ получают — иначе человек идёт по ложному
-            следу. Показываем честную серую пометку (этап D3). */}
-        {Number(item.price_suspect) ? (
-          <span className="deal-badge is-suspect">цена подозрительная</span>
-        ) : Number(item.discount_percent) >= 15 ? (
-          <span className="deal-badge">ниже рынка</span>
-        ) : null}
-        <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button" onClick={handleFavorite}
+        {/* Одно сердечко в углу фото. Кнопок-стрелок и бейджей на фото нет:
+            переход к лоту — нажатием на карточку (спека v2). */}
+        <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button"
+          onClick={handleFavorite}
           aria-label={favorite ? 'Убрать из избранного' : 'В избранное'}>
           <Icon name="heart" />
         </button>
-        {/* Кнопка перехода к лоту живёт на фото, а не в нижней строке: раньше
-            она была абсолютной в правом нижнем углу карточки, наезжала на
-            подпись выгоды и заставляла обрезать её («дешевле н…»). */}
-        {item.source_url ? (
-          /* Находка с Авито: понятная стрелка «открыть на сайте» вместо
-             чёрного «самолётика» — тот же переход, но читаемый. */
-          <button className="product-action" type="button"
-            aria-label="Открыть объявление на Авито"
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              const tg = window.Telegram?.WebApp
-              if (tg?.openLink) tg.openLink(item.source_url)
-              else window.open(item.source_url, '_blank', 'noopener')
-            }}>
-            <Icon name="arrowUpRight" />
-          </button>
-        ) : (
-          <button className="product-action" type="button"
-            aria-label={favorite ? 'Убрать из избранного' : 'В избранное'}
-            onClick={handleFavorite}>
-            <Icon name="chat" />
-          </button>
-        )}
       </div>
       <div className="product-info">
-        {item.ai_verdict ? (
-          <div className="verdict-line">{item.ai_verdict}</div>
+        <div className="product-price">{Number(item.price || 0).toLocaleString('ru-RU')} ₽</div>
+        {showDiscount ? (
+          <div className="product-discount">−{Math.round(discount)}% к рынку</div>
         ) : null}
         <div className="product-title">{item.title}</div>
-        <div className="product-city">
-          {/* Разделитель только между двумя непустыми частями: при пустом
-              городе оставался висящий «· только что» — баг из ТЗ этапа 2. */}
-          {item.city}
-          {item.city ? ' · ' : ''}
-          {Number(item.published_hours_ago) > 0
-            ? (Number(item.published_hours_ago) < 24
-              ? `${Math.round(Number(item.published_hours_ago))} ч назад`
-              : `${Math.round(Number(item.published_hours_ago) / 24)} дн назад`)
-            : 'только что'}
-        </div>
-        <div className="product-bottom">
-          <div className="product-price">{priceText(item)}</div>
-          {Number(item.discount_percent) >= 15 ? (
-            <div className="product-deal">дешевле на {Math.round(item.discount_percent)}%</div>
-          ) : null}
-        </div>
+        {meta ? <div className="product-meta">{meta}</div> : null}
       </div>
     </Link>
   )
@@ -811,7 +790,7 @@ function CriteriaPage() {
   return (
     <Screen className="hunt-screen">
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
-      <div className="page-title">Поиск лотов</div>
+      <div className="page-title">Настроить критерии</div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
       <div className="chat-tabs is-second">
         {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
@@ -1123,7 +1102,7 @@ function FindingsView() {
       {loading ? <div className="muted-line">Ищем выгодные предложения…</div> : null}
       {!loading && !error && !items.length ? (
         needCriteria ? (
-          <EmptyBlock text="Сначала скажите, что искать — нажмите «Поиск лотов?» выше. Тогда здесь появятся свежие объявления дешевле рынка." />
+          <EmptyBlock text="Добавьте критерий — и здесь появятся объявления дешевле рынка по нему." />
         ) : (
           <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
         )
