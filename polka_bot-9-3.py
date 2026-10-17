@@ -18534,6 +18534,8 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'plus_price': plan.get('show_price', PLAN_PLUS_SHOW_PRICE),
         'plus_stars': PLUS_STARS,
         'free_max_criteria': PLAN_FREE_MAX_CRITERIA,
+        # лимит «Плюса» — для таблицы сравнения на экране тарифов
+        'plus_max_criteria': int(cfg_get('plus.max_criteria') or 10),
         'free_delay_min': PLAN_FREE_DELAY_MIN,
         # до какого числа действует «Плюс» — для плашки статуса на экране тарифов
         'plus_until': _plus_until(viewer_id),

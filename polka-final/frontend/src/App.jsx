@@ -3151,7 +3151,9 @@ function TariffsPage() {
   const trialLeft = Number(plan?.trial_days_left || 0)
   const freeDelay = plan?.free_delay_min ?? 15
   const freeMax = plan?.free_max_criteria ?? 1
-  const plusMax = plan?.criteria_limit ?? 10
+  // Критерии «Плюса» — это лимит тарифа, а НЕ текущий лимит человека:
+  // criteria_limit у бесплатного равен 1, и колонка «Плюс» показывала 1.
+  const plusMax = plan?.plus_max_criteria ?? 10
   const oldPrice = Number(plan?.plus_price || 0)
 
   // Оплата картой: счёт создаётся на сервере, страница открывается в браузере.
