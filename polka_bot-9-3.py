@@ -17284,6 +17284,14 @@ def ensure_chat_read_columns() -> None:
         for col in ("buyer_last_read", "seller_last_read"):
             if col not in cols:
                 cursor.execute(f"ALTER TABLE chat_sessions ADD COLUMN {col} TEXT DEFAULT NULL")
+        # Снимок товара в диалоге (спека v2, этап V4). Объявления чистятся из
+        # базы, и после LEFT JOIN название пропадало — в списке чатов все
+        # диалоги назывались «Объявление».
+        for col, kind in (("ad_title", "TEXT DEFAULT ''"),
+                          ("ad_price", "INTEGER DEFAULT 0"),
+                          ("ad_photo", "TEXT DEFAULT ''")):
+            if col not in cols:
+                cursor.execute(f"ALTER TABLE chat_sessions ADD COLUMN {col} {kind}")
         db.conn.commit()
     except Exception as e:
         logger.warning(f"ensure_chat_read_columns: {e}")
@@ -17299,6 +17307,26 @@ def get_or_create_chat(ad_id: int, buyer_id: int, seller_id: int) -> int:
     db.conn.commit()
     cursor.execute('SELECT id FROM chat_sessions WHERE ad_id=? AND buyer_id=?', (ad_id, buyer_id))
     row = cursor.fetchone()
+    # Снимок названия, цены и фото — чтобы диалог читался даже после того,
+    # как само объявление уйдёт из базы при чистке.
+    try:
+        cursor.execute("SELECT title, price, photos FROM ads WHERE id=?", (ad_id,))
+        ad = cursor.fetchone()
+        if ad:
+            first_photo = ''
+            try:
+                photos = json.loads(ad['photos'] or '[]')
+                first_photo = str(photos[0]) if photos else ''
+            except Exception:
+                first_photo = ''
+            cursor.execute(
+                "UPDATE chat_sessions SET ad_title=?, ad_price=?, ad_photo=? "
+                "WHERE ad_id=? AND buyer_id=? AND COALESCE(ad_title,'')=''",
+                (str(ad['title'] or '')[:200], int(ad['price'] or 0), first_photo,
+                 ad_id, buyer_id))
+            db.conn.commit()
+    except Exception as e:
+        logger.warning(f"chat snapshot: {e}")
     return dict(row)['id'] if row else None
 
 
@@ -30580,7 +30608,9 @@ async def api_miniapp_chats(request: aiohttp_web.Request) -> aiohttp_web.Respons
         cur = db.conn.cursor()
         cur.execute('''
             SELECT cs.id, cs.ad_id, cs.buyer_id, cs.seller_id, cs.last_message_at,
-                   a.title AS ad_title, a.price AS ad_price, a.photos AS ad_photos,
+                   COALESCE(NULLIF(cs.ad_title,''), a.title) AS ad_title,
+                   COALESCE(NULLIF(cs.ad_price,0), a.price) AS ad_price,
+                   COALESCE(NULLIF(cs.ad_photo,''), a.photos) AS ad_photos,
                    (SELECT m.text FROM chat_messages m
                     WHERE m.session_id = cs.id ORDER BY m.id DESC LIMIT 1) AS last_text,
                 (SELECT m.created_at FROM chat_messages m
