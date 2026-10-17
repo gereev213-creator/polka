@@ -20,12 +20,15 @@ export function BottomNav() {
     api.chatsUnread().then((d) => { if (alive) setUnread(Number(d?.count || 0)) }).catch(() => {})
     return () => { alive = false }
   }, [location.pathname])
+  // Вкладки строго по промту: Home · Search · Parser · Favorites · Profile.
+  // Разделы не меняются — меняются только подписи и адреса, на которые они
+  // ведут: «Поиск» ведёт на поиск, «Парсер» — на управление критериями.
   const tabs = [
-    ['/', 'Главная', 'home'],
-    ['/favorites', 'Избранное', 'bookmark'],
-    ['/create', 'Подать', 'plus-square'],
-    ['/chats', 'Чаты', 'chat'],
-    ['/profile', 'Профиль', 'user'],
+    ['/', 'Home', 'home'],
+    ['/search', 'Search', 'search'],
+    ['/hunt', 'Parser', 'filter'],
+    ['/favorites', 'Favorites', 'bookmark'],
+    ['/profile', 'Profile', 'user'],
   ]
   return (
     <nav className="tabbar" aria-label="Основная навигация">
