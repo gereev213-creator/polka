@@ -23716,6 +23716,16 @@ def ensure_news() -> None:
                 author TEXT DEFAULT 'Полка'
             )
         """)
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT COUNT(*) AS n FROM news_messages")
+        row = cursor.fetchone()
+        if not (row and int(row['n'] or 0)):
+            # Пустой чат выглядит как поломка: засеваем первым сообщением.
+            cursor.execute(
+                "INSERT INTO news_messages (text, created_at, author) VALUES (?,?,?)",
+                ("Здесь новости «Полки»: обновления поиска, новые возможности "
+                 "и предупреждения. Читать можно в любой момент — писать сюда не нужно.",
+                 get_moscow_time().isoformat(), "Полка"))
         db.conn.commit()
     except Exception as e:
         logger.warning(f"ensure_news: {e}")

@@ -153,3 +153,12 @@ button:disabled, [aria-disabled="true"] {
   padding-right: var(--gutter);
 }
 .screen--narrow { max-width: var(--content-narrow); }
+
+/* Inter с запасным системным стеком (спека v2). Если сеть недоступна,
+   приложение остаётся на системном шрифте — вёрстка не ломается. */
+html, body, button, input, select, textarea {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
