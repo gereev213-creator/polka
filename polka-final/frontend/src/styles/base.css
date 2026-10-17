@@ -143,3 +143,13 @@ button:disabled, [aria-disabled="true"] {
 .chat-summary-count {
   color: var(--text-secondary);
 }
+
+/* ── Каркас v2 (этап V0): одни поля и одна ширина на всех экранах ──────── */
+.screen {
+  width: 100%;
+  max-width: var(--content-wide);
+  margin: 0 auto;
+  padding-left: var(--gutter);
+  padding-right: var(--gutter);
+}
+.screen--narrow { max-width: var(--content-narrow); }

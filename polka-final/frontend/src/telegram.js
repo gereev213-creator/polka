@@ -32,8 +32,12 @@ export function initTelegramMiniApp() {
 function applyTelegramTheme(tg) {
   // Цвета шапки и фона — из нашей палитры. Цвета Telegram не подставляем:
   // в тёмном Telegram они сделали бы шапку тёмной при светлом приложении.
-  tg.setHeaderColor?.('#F5F5F7')
-  tg.setBackgroundColor?.('#F5F5F7')
+  // Цвет шапки и фона — из токена --bg, чтобы родная шапка
+  // Telegram не спорила с белым фоном экрана (спека v2).
+  const bgColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--bg').trim() || '#FFFFFF'
+  tg.setHeaderColor?.(bgColor)
+  tg.setBackgroundColor?.(bgColor)
 }
 
 export function getInitData() {

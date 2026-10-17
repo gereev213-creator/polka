@@ -101,3 +101,63 @@
 /* Алиас: в legacy-CSS встречается var(--secondary) — раньше он нигде не был
    задан, поэтому правило молча не работало. */
 :root { --secondary: var(--text-secondary); }
+
+
+/* ── Дизайн v2 (спека 24, этап V0) ───────────────────────────────────────
+   Палитра спокойная, один акцент, контраст не ниже WCAG AA для основного
+   и вторичного текста. Старые токены оставлены: на них завязаны экраны,
+   которые переделываются в следующих этапах. */
+:root {
+  --bg: #FFFFFF;
+  --surface: #F4F5F7;
+  --surface-2: #EDEFF3;
+  --line: #E4E6EB;
+  --line-strong: #CDD2DA;
+  --border: #E4E6EB;
+  --hairline: #E4E6EB;
+  --glass-border: #E4E6EB;
+  --bg-glass: #FFFFFF;
+  --bg-glass-strong: #FFFFFF;
+
+  --text: #14171A;
+  --ink: #14171A;
+  --text-secondary: #5B6471;
+  --text-tertiary: #8A93A0;
+
+  --accent: #0A5BE0;
+  --accent-hover: #0950C6;
+  --accent-bg: #E8F0FE;
+  --cta-bg: #0A5BE0;
+  --cta-text: #FFFFFF;
+
+  --success: #0E8A4A;
+  --success-bg: #E6F5EC;
+  --warning: #B26A00;
+  --warning-bg: #FFF4E0;
+  --danger: #D32F2F;
+  --danger-bg: #FDECEC;
+  --danger-ink: #D32F2F;
+  --success-ink: #0E8A4A;
+
+  --radius: 12px;
+  --radius-btn: 8px;
+  --radius-lg: 12px;
+  --radius-panel: 12px;
+  --radius-pill: 999px;
+
+  /* каркас: одни поля на всех экранах */
+  --gutter: 16px;
+  --content-narrow: 480px;
+  --content-wide: 1120px;
+}
+
+[data-theme="dark"] {
+  --bg: #14171A; --surface: #1D2126; --surface-2: #242A31;
+  --line: #2A3038; --line-strong: #3A424C; --border: #2A3038; --hairline: #2A3038;
+  --text: #F2F4F7; --ink: #F2F4F7; --text-secondary: #A7B0BC; --text-tertiary: #7C8794;
+  --accent: #4C8DFF; --accent-hover: #6BA0FF; --accent-bg: #1B2A44;
+  --cta-bg: #4C8DFF; --cta-text: #0B1017;
+  --success: #34C77B; --success-bg: #14301F; --success-ink: #34C77B;
+  --warning: #E0A23C; --warning-bg: #33270E;
+  --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
+}
