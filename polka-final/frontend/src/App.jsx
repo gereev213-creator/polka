@@ -1983,7 +1983,19 @@ function ListingPage() {
               <Icon name="pin" /><span className="spec-chip-label">{isFinding ? 'Объявление с Авито' : 'Город'}</span><span className="spec-chip-value">{item.city}</span>
             </span>
           ) : null}
-          {item.delivery ? (
+          {/* Этап R: отложенный лот — сколько ждать и что даёт «Плюс» */}
+          {item.delivery === 'queued' ? (
+            <button type="button" className="feed-queued-line"
+              onClick={() => { window.location.hash = '#/tariffs' }}>
+              Придёт в чат через {item.queued_min || 15} мин · без задержки с Плюсом
+            </button>
+          ) : null}
+          {/* Лот без проверенного описания: серая метка, без платных действий */}
+          {item.hunt_status && item.desc_state !== 'ok' ? (
+            <div className="feed-desc-unknown">Описание не проверено</div>
+          ) : null}
+          {item.delivery && item.delivery !== 'queued' && item.delivery !== 'sent'
+            && item.delivery !== 'not_sent' ? (
             <span className="spec-chip">
               <Icon name="truck" /><span className="spec-chip-label">Доставка</span><span className="spec-chip-value">{item.delivery}</span>
             </span>
