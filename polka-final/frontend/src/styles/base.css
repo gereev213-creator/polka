@@ -162,3 +162,46 @@ html, body, button, input, select, textarea {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+
+/* ═══ ПОВЕДЕНИЕ ПРИЛОЖЕНИЯ (как нативное) ════════════════════════════════
+   Интерфейс не должен масштабироваться жестами: это приложение, а не сайт.
+   Отключаем двойной тап-зум, «резиновый» скролл, выделение текста и
+   автоматическое увеличение шрифта в Safari. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  touch-action: manipulation;
+  overscroll-behavior: none;
+}
+body {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+/* Скролл живёт во внутренних контейнерах, а не в документе — так адресная
+   строка не «гуляет» и масштаб не сбивается. */
+.app-shell {
+  height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+}
+/* Поля ввода — единственное место, где выделение и зум нужны */
+input, textarea, select, [contenteditable="true"] {
+  -webkit-user-select: text;
+  user-select: text;
+  touch-action: auto;
+  font-size: 16px;   /* меньше 16 px Safari зумит поле при фокусе */
+}
+
+/* ═══ РАВНАЯ ВЫСОТА КАРТОЧЕК ═════════════════════════════════════════════ */
+.feed-grid { align-items: stretch; }
+.feed-grid > .product-card { height: 100%; }
+.product-card .product-name { min-height: 2.5em; }
