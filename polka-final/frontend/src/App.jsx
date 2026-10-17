@@ -344,16 +344,11 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
   const accessory = String(item.hunt_reason || '') === 'accessory' || Number(item.accessory)
   const reliable = !Number(item.price_suspect) && !accessory
   const showDiscount = reliable && discount > 0 && discount <= 50
-  const source = String(item.source || '').trim()
-  const sourceLabel = source
-    ? source.charAt(0).toUpperCase() + source.slice(1)
-    : ''
 
   return (
     <Link to={`/listing/${item.id}`} className="product-card">
       <div className="product-figure">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
-        {sourceLabel ? <span className="product-badge">{sourceLabel}</span> : null}
         {showDiscount ? (
           <span className="product-badge product-badge--offer">−{Math.round(discount)}%</span>
         ) : null}

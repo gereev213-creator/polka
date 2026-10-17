@@ -982,3 +982,11 @@ button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
   justify-content: center;
 }
 .pill-btn--icon .pill-glyph { transform: translateY(-1px); }
+
+/* Скидка — внизу слева на фото: вверху справа её перекрывало сердечко */
+.product-badge--offer {
+  top: auto !important;
+  bottom: 10px !important;
+  left: 10px !important;
+  right: auto !important;
+}
