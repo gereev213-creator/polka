@@ -229,3 +229,36 @@
   border-radius: var(--radius); background: var(--surface); }
 .feed-reminder-head { display: flex; justify-content: space-between; align-items: center;
   gap: var(--space-2); }
+
+/* ═══ Плоская Барахолка (спека v2) ══════════════════════════════════════
+   Убраны глянцевые 3D-иллюстрации и серые плитки: категории — линейные
+   плитки в две колонки, баннер — плоский блок на фоне акцента с текстом. */
+.banner-card {
+  background: var(--accent-bg);
+  border: 0;
+  border-radius: 12px;
+  padding: 16px;
+  box-shadow: none;
+}
+.banner-card .eyebrow {
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.banner-card h3 { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--text); }
+.banner-card p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
+
+.category-cards {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+.cat-tile {
+  display: flex; align-items: center; justify-content: flex-start;
+  min-height: 48px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 8px;
+  background: var(--bg); color: var(--text);
+  font-size: 14px; text-align: left;
+}
+.cat-tile.is-selected { border-color: var(--accent); color: var(--accent); }
+/* 3D-картинку не показываем: остаётся текстовая плитка, как в спеке */
+.cat-tile-art { display: none; }
