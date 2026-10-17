@@ -217,3 +217,15 @@
 .feed-screen .section-head { margin: var(--space-5) 0 var(--space-3); }
 .feed-screen .hunt-cta { border-radius: var(--radius-panel); }
 .feed-screen .search-input { border-radius: var(--radius-panel); }
+
+/* ── Этап R: напоминания об оплате в ленте ───────────────────────────────
+   Плоско: рамка, без теней и градиентов. Место зарезервировано, чтобы
+   появление карточки не прыгало по вёрстке. */
+.feed-status-row { display: flex; padding: var(--space-2) 0; }
+.feed-status-chip { min-height: 36px; padding: 6px 14px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); font: inherit; color: inherit;
+  font-size: 13px; cursor: pointer; }
+.feed-reminder { grid-column: 1 / -1; padding: var(--space-3); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); }
+.feed-reminder-head { display: flex; justify-content: space-between; align-items: center;
+  gap: var(--space-2); }

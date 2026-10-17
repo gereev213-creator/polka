@@ -18514,6 +18514,18 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'free_delay_min': PLAN_FREE_DELAY_MIN,
         # до какого числа действует «Плюс» — для плашки статуса на экране тарифов
         'plus_until': _plus_until(viewer_id),
+        # Этап R: напоминания об оплате в ленте. Тексты живут в настройках,
+        # чтобы менять их без релиза (спека: тексты не вшиты в JSX).
+        'reminders': {
+            'enabled': str(cfg_get('reminders.enabled') or '1') == '1',
+            'after': int(cfg_get('reminders.feed_after') or 6),
+            'cooldown_hours': int(cfg_get('reminders.cooldown_hours') or 24),
+            'title': str(cfg_get('reminders.title') or 'В чат с задержкой'),
+            'text': str(cfg_get('reminders.text')
+                        or 'С «Плюсом» лоты приходят сразу и с проверкой описания'),
+            'trial_ending': str(cfg_get('reminders.trial_ending')
+                                or 'Пробный период заканчивается'),
+        },
     })
 
 

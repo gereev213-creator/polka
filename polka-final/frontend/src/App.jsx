@@ -1051,6 +1051,29 @@ function FindingsView() {
   const [error, setError] = useState('')
   const [minDiscount, setMinDiscount] = useState(15)
   const [needCriteria, setNeedCriteria] = useState(false)
+  // Этап R: статус плана для чипа и напоминания об оплате.
+  const [plan, setPlan] = useState(null)
+  const [showReminder, setShowReminder] = useState(false)
+
+  useEffect(() => {
+    api.getPlan().then((d) => {
+      setPlan(d)
+      const isPaid = d?.plan === 'plus'
+      const rem = d?.reminders || {}
+      if (isPaid || rem.enabled === false) return
+      // Закрытое не возвращаем сутки; показываем не чаще раза в cooldown.
+      try {
+        const last = Number(localStorage.getItem('polka:paywall_ts') || 0)
+        const cool = Number(rem.cooldown_hours || 24) * 3600 * 1000
+        if (Date.now() - last > cool) setShowReminder(true)
+      } catch { setShowReminder(true) }
+    }).catch(() => {})
+  }, [])
+
+  const dismissReminder = () => {
+    setShowReminder(false)
+    try { localStorage.setItem('polka:paywall_ts', String(Date.now())) } catch { /* приватный режим */ }
+  }
 
   const load = async () => {
     setLoading(true)
@@ -1084,10 +1107,43 @@ function FindingsView() {
           <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
         )
       ) : null}
+      {plan ? (
+        <div className="feed-status-row">
+          <button type="button" className="feed-status-chip"
+            onClick={() => { window.location.hash = '#/tariffs' }}>
+            {plan.plan === 'plus'
+              ? 'Плюс'
+              : Number(plan.trial_days_left || 0) > 0
+                ? `Пробный · ${plan.trial_days_left} дн`
+                : 'Бесплатно'}
+          </button>
+        </div>
+      ) : null}
+
       <div className="grid-two feed-grid">
-        {items.map((item) => (
-          <ProductCard key={item.id} item={item} favorite={favoriteIds.includes(item.id)}
-            onToggleFavorite={toggleFavorite} />
+        {items.map((item, index) => (
+          <React.Fragment key={item.id}>
+            <ProductCard item={item} favorite={favoriteIds.includes(item.id)}
+              onToggleFavorite={toggleFavorite} />
+            {showReminder && plan && index === Number(plan.reminders?.after || 6) - 1 ? (
+              <div className="feed-reminder">
+                <div className="feed-reminder-head">
+                  <span className="plan-name">
+                    {Number(plan.trial_days_left || 0) > 0 && Number(plan.trial_days_left) <= 2
+                      ? (plan.reminders?.trial_ending || 'Пробный период заканчивается')
+                      : (plan.reminders?.title || 'В чат с задержкой')}
+                  </span>
+                  <button type="button" className="chat-crit-x" aria-label="Скрыть"
+                    onClick={dismissReminder}>×</button>
+                </div>
+                <div className="plan-desc">{plan.reminders?.text || ''}</div>
+                <button type="button" className="link-btn"
+                  onClick={() => { window.location.hash = '#/tariffs' }}>
+                  Что даёт Плюс
+                </button>
+              </div>
+            ) : null}
+          </React.Fragment>
         ))}
       </div>
     </>
@@ -2961,7 +3017,9 @@ function ProfilePage() {
   const [isAdmin, setIsAdmin] = useState(false)
   // Ссылки на документы берём с сервера: меняются из админки, без релиза
   const [docs, setDocs] = useState({ privacy_url: '', terms_url: '' })
+  const [sub, setSub] = useState(null)
   useEffect(() => {
+    api.getPlan().then(setSub).catch(() => {})
     api.adminMe().then((d) => setIsAdmin(Boolean(d.is_admin))).catch(() => setIsAdmin(false))
     api.getLegal().then((d) => setDocs({
       privacy_url: d.privacy_url || '', terms_url: d.terms_url || '',
@@ -3004,8 +3062,10 @@ function ProfilePage() {
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
         <Link to="/tariffs" className="setting-row glass-card menu-row">
-          <span className="menu-left"><Icon name="crown" /><span>Тарифы</span></span>
-          <span className="menu-arrow" aria-hidden="true">›</span>
+          <span className="menu-left"><Icon name="crown" /><span>Подписка</span></span>
+          <span className="menu-arrow" aria-hidden="true">
+            {sub?.plan === 'plus' ? 'Плюс' : Number(sub?.trial_days_left || 0) > 0 ? 'Пробный' : 'Бесплатно'}
+          </span>
         </Link>
         {isAdmin ? (
           <Link to="/admin" className="setting-row glass-card menu-row">
