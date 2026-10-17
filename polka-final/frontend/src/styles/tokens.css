@@ -745,3 +745,49 @@ body, button, input, select, textarea {
     inset 0 0 0 1px rgba(255, 255, 255, 0.28),
     0 6px 18px rgba(10, 132, 255, 0.28);
 }
+
+/* ═══ ЕДИНЫЙ ЯЗЫК ПИЛЮЛЬ (как активная вкладка навигации) ════════════════
+   Всё, что переключает раздел, состояние или фильтр, — пилюля: скругление
+   999, тёмная поверхность, светлая подсветка у активного, кольцо-перелив. */
+.chip, .segmented button, .hint-chip, .feed-status-chip, .admin-tab,
+.tariff-method, .tariff-term, .chat-chip, .ui-tab, .tabbar-item {
+  border-radius: 999px;
+  background: var(--card-primary);
+  color: var(--text-secondary);
+  border: 0;
+  font-weight: 600;
+  min-height: 48px;
+  padding: 0 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: background-color 250ms var(--ease-default), color 250ms var(--ease-default),
+              transform 250ms var(--ease-default);
+}
+.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active,
+.hint-chip:active, .feed-status-chip:active, .admin-tab.is-active,
+.tariff-method.is-active, .tariff-term.is-active, .ui-tab.is-active,
+.tabbar-item.is-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active,
+.tariff-method:active, .tariff-term:active, .chat-chip:active {
+  transform: scale(.97);
+}
+
+/* Кнопки — тоже пилюли */
+.cta-primary, .ghost-btn, .ui-search, .text-input, input, textarea, select {
+  border-radius: 999px;
+}
+.text-input, input, textarea, select { padding: 0 20px; }
+.cta-primary { background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 100%);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26), 0 6px 18px rgba(10, 132, 255, .25); }
+.ghost-btn { background: var(--card-primary); color: var(--text-primary); padding: 0 20px;
+  min-height: 48px; box-shadow: inset 0 0 0 1px var(--border-secondary); }
+
+/* Группа вкладок — тоже капсула */
+.segmented { display: inline-flex; gap: 8px; background: transparent; border: 0; padding: 0; }
