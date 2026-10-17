@@ -3114,6 +3114,7 @@ function ProfilePage() {
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
       </div>
+      <AppFooter />
     </Screen>
   )
 }
@@ -3344,6 +3345,7 @@ function TariffsPage() {
           </div>
         </div>
       </div>
+      <AppFooter />
     </div>
   )
 }
@@ -3790,10 +3792,9 @@ function Layout() {
         <Route path="/chat/:id" element={<ChatPage />} />
       </Routes>
       {!hideNav ? <BottomNav /> : null}
-      {/* Документы — в самом низу приложения, простыми ссылками.
-          Полный текст на telegra.ph, ссылки берутся с сервера: меняются
-          из админки, без релиза. */}
-      <AppFooter />
+      {/* Юридические ссылки и копирайт — только в профиле и внизу тарифов
+          (спека v2, этап V1). Раньше футер лежал на каждом экране и налезал
+          под нижнее меню на сообщениях и избранном. */}
     </div>
   )
 }

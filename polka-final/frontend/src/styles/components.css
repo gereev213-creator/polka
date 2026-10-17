@@ -154,3 +154,27 @@
 .ui-group-body { border: 1px solid var(--line); border-radius: 12px;
   background: var(--bg); overflow: hidden; }
 .ui-group-body > * + * { border-top: 1px solid var(--line); }
+
+/* ── TabBar v2 (этап V1): плоская панель из пяти вкладок ───────────────── */
+.tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+  display: flex; align-items: stretch;
+  height: calc(56px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: var(--bg); border-top: 1px solid var(--line);
+}
+.tabbar-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 2px; min-height: 44px;
+  text-decoration: none; color: var(--text-secondary); font-size: 11px;
+  transition: color .15s ease;
+}
+.tabbar-item.is-active { color: var(--accent); }
+.tabbar-icon { position: relative; display: inline-flex; }
+.tabbar-dot {
+  position: absolute; top: -2px; right: -4px; width: 8px; height: 8px;
+  border-radius: 50%; background: var(--accent);
+}
+.tabbar-label { white-space: nowrap; }
+/* контент всегда имеет отступ под панель — она больше не перекрывает текст */
+.app-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
