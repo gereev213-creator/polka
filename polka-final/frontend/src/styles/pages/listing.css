@@ -222,3 +222,14 @@
 
 /* Карточка избранного кликабельна целиком — курсор вместо инлайнового стиля. */
 .favorites-page .favorite-row { cursor: pointer; }
+
+/* ── Страница лота v2 (этап V3) ────────────────────────────────────────── */
+.listing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag { padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px;
+  font-size: 11px; color: var(--text-secondary); background: var(--bg); }
+.tag.is-ok { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.listing-desc { font-size: 14px; line-height: 1.45; color: var(--text); }
+.listing-desc.is-clamped { display: -webkit-box; -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical; overflow: hidden; }
+.listing-desc-toggle { margin-top: 4px; padding: 0; border: 0; background: none;
+  font: inherit; font-size: 13px; color: var(--accent); cursor: pointer; min-height: 44px; }

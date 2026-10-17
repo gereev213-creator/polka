@@ -1777,6 +1777,10 @@ function ListingPage() {
   const [chatLoading, setChatLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState('')
   const [photoIndex, setPhotoIndex] = useState(0)
+  // Описание свёрнуто до 4 строк (спека v2): длинные тексты
+  // раздували страницу, и до кнопки «Открыть на Авито» было
+  // не добраться без долгой прокрутки.
+  const [showFullDesc, setShowFullDesc] = useState(false)
   const galleryRef = useRef(null)
 
   const load = async () => {
@@ -1958,6 +1962,18 @@ function ListingPage() {
 
         <div className="detail-head">
           <div className="listing-title">{item.title}</div>
+          {/* Теги лота (спека v2): тип продавца, проверка описания, АКБ */}
+          <div className="listing-tags">
+            {item.seller_type === 'company' || Number(item.is_shop)
+              ? <span className="tag">Магазин</span>
+              : <span className="tag">Частное лицо</span>}
+            {item.hunt_status ? (
+              item.desc_state === 'ok'
+                ? <span className="tag is-ok">Описание проверено</span>
+                : <span className="tag">Описание не проверено</span>
+            ) : null}
+            {item.battery_percent ? <span className="tag">АКБ {item.battery_percent}%</span> : null}
+          </div>
           {item.seller?.rating ? (
             <div className="rating-row">
               <Icon name="star" />
@@ -2012,7 +2028,15 @@ function ListingPage() {
         {String(item.description || '').trim() ? (
           <div className="copy-block glass-card mt-12">
             <strong>Описание</strong>
-            <p>{item.description}</p>
+            <p className={showFullDesc ? 'listing-desc' : 'listing-desc is-clamped'}>
+              {item.description}
+            </p>
+            {String(item.description || '').length > 220 ? (
+              <button type="button" className="listing-desc-toggle"
+                onClick={() => setShowFullDesc((v) => !v)}>
+                {showFullDesc ? 'Свернуть' : 'Показать полностью'}
+              </button>
+            ) : null}
           </div>
         ) : null}
 
