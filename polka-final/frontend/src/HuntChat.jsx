@@ -170,7 +170,7 @@ export default function HuntChat() {
       </div>
       <div className="chat-tabs">
         <span className="chat-tabs-pill" aria-hidden="true" />
-        <button type="button" className="chat-tab is-active">ИИ-поиск</button>
+        <button type="button" className="chat-tab is-active">Поиск словами</button>
         <button type="button" className="chat-tab" onClick={() => navigate('/hunt/manual')}>Вручную</button>
       </div>
 

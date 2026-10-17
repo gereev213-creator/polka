@@ -119,7 +119,6 @@
 .chat-bubble {
   background: transparent;
   border: none;
-  box-shadow: none;
   border-radius: 0;
   padding: 0;
   max-width: 100%;
@@ -139,7 +138,6 @@
   max-width: 78%;
   font-size: 15.5px;
   line-height: 1.4;
-  box-shadow: none;
 }
 /* Строки: ИИ слева, человек справа, с воздухом между сообщениями */
 .chat-row {
@@ -289,10 +287,8 @@
    а этап 5 обязан сохранить вид 1:1. Итоговый `box-shadow: none` для
    .chat-bubble.is-me задан выше, в §3a. */
 .chat-send {
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .chat-tab.is-active {
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 /* Карточки критериев под чатом — те же отступы, радиус и рамка, что у
    карточек ручного поиска: список «Мои критерии» выглядит одинаково на

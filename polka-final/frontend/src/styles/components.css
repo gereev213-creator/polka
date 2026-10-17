@@ -7,9 +7,8 @@
 .sk-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); padding: var(--space-4) 0; }
 @keyframes sk-shimmer { 0% { background-position: -320px 0; } 100% { background-position: 320px 0; } }
 .sk-line, .sk-box {
-  background: linear-gradient(90deg, var(--surface-2) 0%, var(--surface) 50%, var(--surface-2) 100%);
+  background: var(--surface-2);
   background-size: 640px 100%;
-  animation: sk-shimmer 1.4s linear infinite;
   border-radius: var(--radius);
 }
 .sk-line { height: 14px; }
@@ -102,14 +101,13 @@
   position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-sheet);
   background: var(--surface); border-radius: var(--radius-panel) var(--radius-panel) 0 0;
   padding: var(--space-4) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
-  box-shadow: var(--shadow-soft);
 }
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%);
   bottom: calc(var(--dock-space) + var(--space-2)); z-index: var(--z-toast);
   background: var(--cta-bg); color: var(--cta-text);
   padding: var(--space-3) var(--space-4); border-radius: var(--radius-pill);
-  font: 500 var(--fs-cap)/var(--lh-cap) var(--font); box-shadow: var(--shadow-soft);
+  font: 500 var(--fs-cap)/var(--lh-cap) var(--font);
 }
 
 /* Дополнения системы компонентов */

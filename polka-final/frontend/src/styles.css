@@ -86,7 +86,6 @@ input, textarea, select { font-family: inherit; }
 }
 .search-input:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
 }
 
 /* Chips */
@@ -232,7 +231,6 @@ input, textarea, select { font-family: inherit; }
   font-size: 11.5px;
   font-weight: 700;
   letter-spacing: .02em;
-  backdrop-filter: blur(6px);
 }
 
 .detail-dots {
@@ -293,7 +291,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 .spec-chip .icon-svg { width: 15px; height: 15px; color: var(--accent); }
 .spec-chip-label { font-size: 11px; color: var(--text-secondary); }
@@ -323,7 +320,6 @@ input, textarea, select { font-family: inherit; }
   padding: 0 26px;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 .cta-dark {
   background: var(--ink);
@@ -388,7 +384,7 @@ input, textarea, select { font-family: inherit; }
 
 /* Banner */
 .banner-card {
-  background: linear-gradient(135deg, var(--surface-2), var(--surface));
+  background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   padding: 20px;
@@ -422,7 +418,6 @@ input, textarea, select { font-family: inherit; }
   overflow: hidden;
   margin: 14px 0 16px;
   background: var(--surface-2);
-  box-shadow: 0 10px 24px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 .feed-banner-track {
   display: flex;
@@ -465,9 +460,8 @@ input, textarea, select { font-family: inherit; }
   100% { background-position: 320px 0; }
 }
 .skeleton-banner {
-  background: linear-gradient(90deg, var(--surface-2) 0%, #E7E9EE 50%, var(--surface-2) 100%);
+  background: var(--surface-2);
   background-size: 320px 100%;
-  animation: polka-shimmer 1.3s linear infinite;
 }
 .feed-skeleton { display: flex; flex-direction: column; gap: 14px; margin-top: 12px; }
 .skeleton-banner {
@@ -519,7 +513,6 @@ input, textarea, select { font-family: inherit; }
 }
 .text-input:focus, .text-area:focus, select.text-input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59,130,246,.15);
 }
 .text-area { min-height: 100px; resize: vertical; }
 .form-stack { display: flex; flex-direction: column; gap: 12px; }
@@ -620,7 +613,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: 50%;
   background: var(--surface);
   border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -818,7 +810,6 @@ input, textarea, select { font-family: inherit; }
   color: var(--text);
   font-size: 11.5px;
   font-weight: 700;
-  backdrop-filter: blur(6px);
 }
 .recommend-chip .icon-svg { width: 14px; height: 14px; color: var(--accent); }
 .recommend-go {
@@ -833,7 +824,6 @@ input, textarea, select { font-family: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 8px 20px rgba(0,0,0,.3);
 }
 .recommend-go .icon-svg { width: 20px; height: 20px; }
 
@@ -847,7 +837,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 .lastnews-avatars { display: flex; flex-shrink: 0; }
 .lastnews-avatars .lastnews-thumb {
@@ -903,7 +892,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: 999px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -.01em;
@@ -924,7 +912,6 @@ input, textarea, select { font-family: inherit; }
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 .count-chip.is-active .count-chip-n {
   background: rgba(255,255,255,.22);
@@ -972,7 +959,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
   position: relative;
 }
 .favorite-row:active { transform: scale(.99); }
@@ -1047,7 +1033,6 @@ input, textarea, select { font-family: inherit; }
   justify-content: center;
   flex-shrink: 0;
   cursor: pointer;
-  box-shadow: var(--soft);
   transition: transform .18s ease;
 }
 .photo-search-btn:active { transform: scale(.94); }
@@ -1058,7 +1043,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 
 /* ── Продавец и служебные строки ─────────────────────────────────────── */
@@ -1142,7 +1126,6 @@ input, textarea, select { font-family: inherit; }
   border-radius: var(--radius-lg);
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
   font-size: 13.5px;
   line-height: 1.5;
 }
@@ -1288,7 +1271,6 @@ video.bubble-media-img {
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow);
 }
 .bubble-menu button {
   padding: 8px 10px;
@@ -1308,7 +1290,6 @@ video.bubble-media-img {
   padding: 8px 10px 8px 14px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 .attach-btn {
   width: 36px;
@@ -1344,8 +1325,8 @@ video.bubble-media-img {
   animation: mic-pulse 1.2s ease-in-out infinite;
 }
 @keyframes mic-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,.45); }
-  50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+  0%, 100% { }
+  50% { }
 }
 
 /* Аудио в пузыре: не растягиваем шире, чем нужно */
@@ -1390,9 +1371,7 @@ video.bubble-media-img {
   transform: translateX(-50%);
   border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 42%, transparent), transparent 62%),
-    radial-gradient(circle at 70% 70%, rgba(139,92,246,.45), transparent 60%);
-  filter: blur(30px);
+    var(--surface-2);
   z-index: -1;
   pointer-events: none;
 }
@@ -1409,7 +1388,6 @@ video.bubble-media-img {
   font-weight: 800;
   letter-spacing: -.01em;
   text-decoration: none;
-  box-shadow: 0 10px 24px rgba(23,23,26,.28);
   transition: transform .18s ease;
 }
 .dark-btn:active { transform: scale(.97); }
@@ -1465,7 +1443,6 @@ video.bubble-media-img {
   border-radius: 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 .upload-card .product-media {
   border-radius: 14px;
@@ -1486,8 +1463,7 @@ video.bubble-media-img {
   border-radius: 20px;
   border: 1.5px dashed color-mix(in srgb, var(--accent) 45%, transparent);
   background:
-    radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 72%),
-    var(--surface);
+    var(--surface-2);
   cursor: pointer;
   text-align: center;
   overflow: hidden;
@@ -1504,7 +1480,6 @@ video.bubble-media-img {
   justify-content: center;
   background: var(--accent);
   color: #fff;
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .upload-drop-icon .icon-svg { width: 24px; height: 24px; }
 .upload-drop-title {
@@ -1533,7 +1508,6 @@ video.bubble-media-img {
   border-radius: 20px;
   background: var(--surface);
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
 }
 .preview-media {
   width: 62px;
@@ -1567,7 +1541,7 @@ video.bubble-media-img {
   background: var(--surface-2);
   overflow: hidden;
   text-align: left;
-  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+  transition: transform .18s ease, background .18s ease;
 }
 .cat-tile:active { transform: scale(.97); }
 /* PNG прижат к правому нижнему углу и намеренно выходит за край плашки.
@@ -1605,7 +1579,6 @@ video.bubble-media-img {
 /* Выбор: без обводки — только мягкое серое свечение и чуть более тёмная плашка */
 .cat-tile.is-selected {
   background: #E4E7EB;
-  box-shadow: 0 6px 20px color-mix(in srgb, var(--ink) 20%, transparent), 0 0 14px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 /* Истории продавцов и аукционы убраны из продукта — их стили удалены.
@@ -1637,7 +1610,6 @@ video.bubble-media-img {
 .segmented button.is-active {
   background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 2px 8px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 
@@ -1659,7 +1631,6 @@ select.text-input {
 .cta-dark:disabled,
 .primary-btn:disabled {
   opacity: .45;
-  box-shadow: none;
   cursor: default;
   /* ВАЖНО: анимация .screen > * (slideUp) анимирует opacity и с fill-mode
      both удерживает её на 1 — она перебивала это правило, и заблокированная
@@ -1763,7 +1734,6 @@ select.text-input {
 .chip:active,
 .segmented button:active,
 [class*="tile"]:active {
-  box-shadow: none;
 }
 
 /* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
@@ -1774,10 +1744,7 @@ select.text-input {
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  background: linear-gradient(100deg,
-    var(--surface-2) 34%,
-    color-mix(in srgb, var(--surface-2) 70%, transparent) 52%,
-    transparent 72%);
+  background: var(--surface-2);
 }
 .cat-tile-label {
   position: relative;
@@ -1918,10 +1885,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 .chat-summary,
 .dock {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
-  backdrop-filter: blur(20px) saturate(160%);
-  -webkit-backdrop-filter: blur(20px) saturate(160%);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
-  box-shadow: 0 10px 30px color-mix(in srgb, var(--ink) 10%, transparent);
 }
 
 /* Карточки критериев — так же, как плашки фильтров */
@@ -1970,7 +1934,6 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   flex-shrink: 0;
   margin-top: -22px;
   transition: transform .18s ease;
-  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 42%, transparent);
   background: var(--accent);
   border: none;
   outline: none;
@@ -2019,7 +1982,6 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 /* Реплика человека: аккуратный пузырь справа, как в мессенджерах */
 .chat-bubble.is-me {
   border-color: var(--accent);
-  box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* «Разбираю…» — приглушённо, как системная строка */
@@ -2082,7 +2044,6 @@ button,
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
     border-color .18s ease,
-    box-shadow .18s ease,
     color .18s ease;
   -webkit-tap-highlight-color: transparent;
 }
@@ -2117,27 +2078,24 @@ button:active,
   font-weight: 600;
   transition: background-color .24s cubic-bezier(.2, .8, .3, 1),
     color .24s ease,
-    box-shadow .24s ease,
     transform .14s ease;
 }
 .chat-tab:active { transform: scale(.97); }
 .chat-tab.is-active {
   color: #fff;
   background: var(--accent);
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 /* Поля ввода: мягкое появление рамки при фокусе */
 .chat-input .text-input,
 .text-input,
 .input {
-  transition: border-color .18s ease, box-shadow .18s ease, background-color .18s ease;
+  transition: border-color .18s ease, background-color .18s ease;
 }
 .chat-input .text-input:focus,
 .text-input:focus,
 .input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent);
   outline: none;
 }
 
@@ -2152,7 +2110,6 @@ button:active,
   padding: 12px;
   border-radius: 20px;
   border: 1px solid var(--border);
-  box-shadow: var(--soft);
   animation: chat-in .22s cubic-bezier(.2, .8, .3, 1);
 }
 
@@ -2167,8 +2124,7 @@ button:active,
   height: 46px;
   border-radius: 50%;
   flex: 0 0 46px;
-  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 30%, transparent);
-  transition: transform .14s ease, box-shadow .18s ease, opacity .18s ease;
+  transition: transform .14s ease, opacity .18s ease;
 }
 .chat-send:not(:disabled):active { transform: scale(.9); }
 
@@ -2341,17 +2297,11 @@ html, body, #root {
 .chat-tabs, .chat-crit-card, .chat-summary, .field-label-row.is-toggle,
 .product-card, .chat-example {
   background: var(--surface);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  box-shadow: none;
 }
 .dock, .chat-header, .chat-input {
   background: var(--bg-glass);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: 0.5px solid var(--hairline);
   border-bottom: none;
-  box-shadow: none;
 }
 .product-price {
   flex: 0 0 auto;
@@ -2365,7 +2315,6 @@ html, body, #root {
   left: 8px;
   background: var(--success-ink);
   color: #fff;
-  box-shadow: 0 2px 8px rgba(22,163,74,.4);
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0;
@@ -2382,7 +2331,6 @@ html, body, #root {
 .deal-badge.is-suspect {
   background: var(--surface-2);
   color: var(--text-secondary);
-  box-shadow: none;
 }
 
 /* Сердечко — поверх всего, с собственным фоном */
@@ -2396,7 +2344,6 @@ html, body, #root {
   justify-content: center;
   color: var(--text-secondary);
   border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,.1);
   position: absolute;
   top: 10px;
   right: 10px;
@@ -2496,9 +2443,6 @@ html, body, #root {
 /* По ТЗ тень отсутствует, а волосяная линия появляется только после скролла */
 /* Название приложения в центре — по ТЗ 4: 13/18, вес 500, tracking +0.3 */
 /* Если backdrop-filter не поддержан — плотный фон, чтобы текст не «плыл» */
-@supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
-  .topbar { background: rgba(255, 255, 255, 0.92); }
-}
 
 /* ── ТЗ 1: safe-area и отступ под нижнюю полосу ─────────────────────────── */
 /* Док занимает 80 px снизу (16 отступ + 64 высота), но контент этого не
@@ -2642,8 +2586,6 @@ html, body, #root {
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-bottom: 0.5px solid transparent;
   transition: background-color .18s ease, border-color .18s ease;
   box-sizing: border-box;
@@ -2690,13 +2632,6 @@ html, body, #root {
 /* Запасной вариант с плотным белым фоном срабатывал ВСЕГДА: в Telegram
    backdrop-filter не поддержан, и шапка читалась как белая полоса.
    Правильно: наверху прозрачно, при прокрутке — плотный фон. */
-@supports not ((backdrop-filter: blur(20px)) or (-webkit-backdrop-filter: blur(20px))) {
-  .topbar { background: transparent; }
-  .topbar.is-scrolled {
-    background: rgba(255, 255, 255, 0.94);
-    border-bottom: 0.5px solid var(--hairline);
-  }
-}
 
 /* ── Кнопка «назад»: одна форма на всех экранах ────────────────────────── */
 /* В чате была круглая, на остальных — квадрат 12 px. Приводим к общей:
@@ -2764,7 +2699,6 @@ html, body, #root {
 .chat-back, .icon-btn, .icon-btn.is-active {
   background: transparent;
   border: none;
-  box-shadow: none;
 }
 
 /* Пояснение о том, что фильтр может ошибаться. Честность важнее, чем
@@ -2814,3 +2748,15 @@ html, body, #root {
   opacity: 0;
   pointer-events: none;
 }
+
+/* ── Этап S: панели больше не «стекло» ───────────────────────────────────
+   Шапка, нижнее меню, шапка чата и нижняя панель лота были полупрозрачными
+   с размытием подложки (backdrop-filter). Размытие убрано: без непрозрачного
+   фона сквозь них просвечивало содержимое. Теперь сплошной фон и тонкая
+   линия-разделитель — как у обычного сервиса объявлений. */
+.topbar, .topbar.is-scrolled, .chat-header, .chat-input, .detail-bar,
+.recommend-chip, .back-to-top, .dock {
+  background: var(--surface);
+}
+.topbar, .topbar.is-scrolled, .chat-header { border-bottom: 1px solid var(--border); }
+.dock, .detail-bar { border-top: 1px solid var(--border); }

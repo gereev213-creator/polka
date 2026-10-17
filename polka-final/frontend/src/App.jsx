@@ -79,7 +79,7 @@ function MediaPlaceholder({ label = 'фото', tall = false, imageUrl = '' }) {
   )
 }
 
-function Banner({ eyebrow, title, text, action, icon = 'sparkles' }) {
+function Banner({ eyebrow, title, text, action, icon = 'search' }) {
   return (
     <div className="banner-card glass-card">
       <div className="banner-copy">
@@ -1227,7 +1227,7 @@ function RecommendCard({ items = [] }) {
       <MediaPlaceholder label="" imageUrl={firstPhoto(pick)} />
       <div className="recommend-shade" aria-hidden="true" />
       <span className="recommend-chip">
-        <Icon name="sparkles" />
+        <Icon name="search" />
         Рекомендуем сегодня
       </span>
       <div className="recommend-copy">

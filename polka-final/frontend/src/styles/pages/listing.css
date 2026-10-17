@@ -98,8 +98,6 @@
            calc(var(--page-pad) + env(safe-area-inset-left));
   background: var(--bg-glass-strong);
   border-top: .5px solid var(--hairline);
-  backdrop-filter: saturate(180%) blur(20px);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
 }
 /* Главное действие растягивается, но не может выдавить второстепенные */
 .detail-bar .cta-primary {
@@ -127,7 +125,7 @@
 }
 /* Стрелка select нарисована фоном в styles.css — здесь только отступ под неё */
 .filters-panel select.text-input { padding-right: 42px; }
-.filters-panel .text-input { box-shadow: none; }
+.filters-panel .text-input { }
 
 /* Сетка результатов — .feed-grid (2/3/4–5 колонок) и карточка ProductCard,
    то есть ровно то же, что на главной; .feed-screen включает стили карточки

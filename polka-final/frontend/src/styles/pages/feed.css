@@ -88,7 +88,6 @@
   top: var(--space-2);
   right: var(--space-2);
   background: var(--bg-glass-strong);
-  box-shadow: var(--soft);
 }
 
 /* Кнопка перехода к лоту: светлая круглая кнопка со стрелкой на фото.
@@ -105,9 +104,6 @@
   background: var(--bg-glass-strong);
   color: var(--accent);
   border: 1px solid var(--glass-border);
-  box-shadow: var(--soft);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
 }
 
 /* Цена — крупным текстом под фото, без синей пилюли */
@@ -160,15 +156,11 @@
   flex: 0 0 146px;
   height: 108px;
   padding: var(--space-3);
-  background: linear-gradient(155deg,
-    color-mix(in srgb, var(--accent) 12%, var(--surface)) 0%,
-    var(--surface) 62%);
+  background: var(--surface-2);
   border: 1px solid var(--border);
 }
 .category-cards .cat-tile::after {
-  background: linear-gradient(100deg,
-    color-mix(in srgb, var(--accent) 12%, var(--surface)) 34%,
-    transparent 72%);
+  background: var(--surface-2);
 }
 .category-cards .cat-tile-label {
   max-width: 66%;
@@ -180,17 +172,14 @@
   height: 66px;
 }
 .category-cards .cat-tile.is-selected {
-  background: linear-gradient(155deg,
-    color-mix(in srgb, var(--accent) 22%, var(--surface)) 0%,
-    var(--surface) 68%);
+  background: var(--surface-2);
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
-  box-shadow: var(--soft);
 }
 /* Нажатие на выбранную категорию тень не показывает: это итог legacy-правила
    `.cat-tile:active { box-shadow: none !important }` (этап 5 снял !important).
    Селектор приходится повторять здесь: правило выше специфичнее legacy-
    селектора `:active`, и без этой строки при нажатии появлялась бы тень. */
-.category-cards .cat-tile.is-selected:active { box-shadow: none; }
+.category-cards .cat-tile.is-selected:active { }
 
 /* ── 7. Баннер-карусель: индикаторы крупнее (ТЗ этап 2) ────────────────── */
 .feed-screen .feed-banner-dots {
@@ -202,7 +191,6 @@
   width: 8px;
   height: 8px;
   background: rgba(255, 255, 255, .55);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, .14);
 }
 .feed-screen .feed-banner-dot.is-active {
   width: 20px;

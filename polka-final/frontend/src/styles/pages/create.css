@@ -55,7 +55,6 @@
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
-  box-shadow: none;
 }
 
 /* ═══ 4. ОШИБКИ ВАЛИДАЦИИ И ПОДСКАЗКА ШАГА ═══════════════════════════════

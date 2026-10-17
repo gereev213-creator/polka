@@ -12,9 +12,9 @@
   --surface-2: #E8E8ED;
   --border: rgba(60, 60, 67, 0.12);
   --hairline: rgba(60, 60, 67, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.6);
-  --bg-glass: rgba(255, 255, 255, 0.72);
-  --bg-glass-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(60, 60, 67, 0.12);
+  --bg-glass: #FFFFFF;   /* S: сплошной фон вместо полупрозрачного */
+  --bg-glass-strong: #FFFFFF;
 
   /* text */
   --text: #1D1D1F;
@@ -39,7 +39,7 @@
 
   /* радиусы: три значения + pill */
   --radius: 12px;
-  --radius-btn: 14px;
+  --radius-btn: 8px;
   --radius-panel: 20px;
   --radius-lg: 20px;
   --radius-pill: 999px;
