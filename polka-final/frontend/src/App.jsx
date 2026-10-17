@@ -886,6 +886,19 @@ function CriteriaPage() {
         <Input value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Что искать — например «iphone 13»" />
+          {/* Чипы подсказок (спека v2, V5): слова, которые чаще всего
+              помогают отбору. Нажатие дописывает их в требования. */}
+          <div className="hint-chips">
+            {['только оригинал', 'не вскрывался', 'АКБ от 80%', 'с рук', 'не магазин', 'без дефектов'].map((hintText) => (
+              <button key={hintText} type="button" className="hint-chip"
+                onClick={() => {
+                  if (huntNotes.includes(hintText)) return
+                  setHuntNotes(huntNotes ? `${huntNotes}, ${hintText}` : hintText)
+                }}>
+                {hintText}
+              </button>
+            ))}
+          </div>
         {/* Город — на всю ширину строки: раньше он стоял в .grid-two и занимал
             половину ширины без причины. */}
         <Input value={city}
