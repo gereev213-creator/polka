@@ -1541,6 +1541,7 @@ function FeedPage() {
             </span>
             <span className="hunt-cta-arrow"><Icon name="back" /></span>
           </Link>
+          <div className="feed-dots"><i className="is-on" /><i /><i /></div>
           <FindingsView />
         </>
       )

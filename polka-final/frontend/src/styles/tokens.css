@@ -990,3 +990,50 @@ button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
   left: 10px !important;
   right: auto !important;
 }
+
+/* ═══ HERO-БАННЕР (по промту Memgift: hero — обязателен) ════════════════
+   Плашка «Поиск лотов?» возвращена первым блоком главной: крупная
+   градиентная карточка с CTA-пилюлей и точками карусели. */
+.hunt-cta {
+  display: flex !important;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  margin: 8px 0 16px;
+  padding: 20px;
+  min-height: 140px;
+  border-radius: 28px;
+  background: var(--gradient-orange);
+  color: #fff;
+  text-decoration: none;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(255, 98, 0, 0.25);
+}
+.hunt-cta::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 28px;
+  padding: 1px;
+  background: linear-gradient(170deg, rgba(255,255,255,.45), rgba(255,255,255,.05) 45%, rgba(255,255,255,.22));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+.hunt-cta-icon {
+  width: 56px; height: 56px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.20);
+  backdrop-filter: blur(10px);
+}
+.hunt-cta-icon .icon-svg { width: 26px; height: 26px; }
+.hunt-cta-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
+.hunt-cta-text strong { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.hunt-cta-text span { font-size: 14px; opacity: .9; }
+/* Точки карусели под баннером */
+.feed-dots { display: flex; justify-content: center; gap: 6px; margin: -4px 0 12px; }
+.feed-dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,.18); }
+.feed-dots i.is-on { background: rgba(255,255,255,.85); }
