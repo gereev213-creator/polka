@@ -807,3 +807,40 @@ body, button, input, select, textarea {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
   color: var(--text-primary);
 }
+
+/* ═══ ПЕРЕКЛЮЧАТЕЛИ — ПИЛЮЛИ (окончательно) ═════════════════════════════
+   Перекрываем ВСЕ варианты классов табов, включая старые .chat-tab и .ui-tab,
+   и убираем подчёркивание псевдоэлементом — именно оно оставалось видимым. */
+.chat-tabs, .ui-tabs, .segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+}
+.chat-tab, .ui-tab, .segmented button {
+  flex: 0 0 auto;
+  height: 52px;
+  padding: 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--card-primary);
+  color: var(--text-secondary);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--border-secondary);
+}
+.chat-tab.is-active, .ui-tab.is-active, .segmented button.is-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+/* подчёркивание и «ползунок» старого вида убираем полностью */
+.chat-tab::after, .ui-tab::after, .chat-tabs-pill { display: none; }
+.chat-tab:active, .ui-tab:active { transform: scale(.97); }
