@@ -927,3 +927,27 @@ body, button, input, select, textarea {
 .topbar-side, .topbar-center { display: flex; align-items: center; }
 .topbar-center { flex: 1; }
 .topbar-side--right { justify-content: flex-end; }
+
+/* ═══ ШАПКА: ФИКС ВЁРСТКИ ═══════════════════════════════════════════════
+   Ряд пилюль и логотип стояли в одной строке (старый .topbar был флексом),
+   из-за чего «Закрыть» переносился, логотип сжимался, а вкладки уезжали за
+   край экрана. Теперь шапка — колонка: сверху пилюли, ниже логотип. */
+.topbar { display: block !important; width: 100%; }
+.topbar-pills {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; width: 100%; height: 48px;
+}
+.topbar-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 2px 0 6px; width: 100%;
+}
+.pill-btn {
+  height: 48px; min-height: 48px; padding: 0 16px;
+  border-radius: 16px; font-size: 16px; font-weight: 600;
+  white-space: nowrap; flex: 0 0 auto;
+}
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }
+.topbar-side, .topbar-center { min-width: 0; }
+.brand-logo { max-width: 118px; height: 20px; }
+/* Горизонтальная прокрутка страницы запрещена */
+html, body, .app-shell, .screen { overflow-x: hidden; max-width: 100%; }
