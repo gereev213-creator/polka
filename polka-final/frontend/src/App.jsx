@@ -1165,9 +1165,9 @@ function FindingsView() {
       {loading ? <div className="muted-line">Ищем выгодные предложения…</div> : null}
       {!loading && !error && !items.length ? (
         needCriteria ? (
-          <EmptyBlock text="Добавьте критерий — и здесь появятся объявления дешевле рынка по нему." />
+          <EmptyBlock text="Добавьте критерий — здесь появятся находки по нему." />
         ) : (
-          <EmptyBlock text="По вашим критериям пока ничего не нашлось. Сборщик ищет новые объявления каждые 15 минут — загляните позже." />
+          <EmptyBlock text="Пока пусто. Новые находки приходят каждые 15 минут." />
         )
       ) : null}
       {plan ? (

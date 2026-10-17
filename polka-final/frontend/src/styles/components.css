@@ -240,3 +240,40 @@
 
 /* Вкладка меню в активном состоянии — жирнее, чтобы «где я» читалось */
 .tabbar-item.is-active .tabbar-label { font-weight: 600; }
+
+/* ═══ Плоский список вместо «карточек» ═══════════════════════════════════
+   Главный признак «сгенерированного» интерфейса — каждый элемент в своей
+   плашке со скруглением. В настоящих продуктовых списках строки лежат
+   вплотную и разделены тонкой линией: глазу не нужно разбирать 8 рамок,
+   он читает строки.
+
+   Поэтому внутри списков убираем рамку и радиус, оставляем линию-разделитель.
+   Одиночные блоки (статус, итоговая карточка, лист) остаются с рамкой —
+   они и должны читаться как отдельные блоки. */
+.list-stack > .glass-card,
+.list-stack > .plan-row,
+.ui-group-body > .glass-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+}
+.list-stack > .glass-card:last-child,
+.list-stack > .plan-row:last-child,
+.ui-group-body > .glass-card:last-child {
+  border-bottom: 0;
+}
+/* Плотность: строки списка чуть ниже, воздуха между ними — больше не нужно */
+.list-stack { display: flex; flex-direction: column; }
+.list-stack > .glass-card,
+.list-stack > .plan-row { padding: 14px 0; }
+
+/* Заголовки секций — мелкие, с разрядкой: типографский приём, а не «плашка» */
+.section-title, .admin-group-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin: 24px 0 8px;
+}
