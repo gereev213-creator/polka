@@ -280,3 +280,21 @@ html, body { background: var(--bg); color: var(--text); }
   color: rgba(255, 255, 255, .92);
 }
 .save-btn.is-on { color: var(--danger); }
+
+/* Сердечко v2: селектор максимально конкретный, чтобы старое белое правило
+   из styles.css (.save-btn { background: rgba(255,255,255,.9) }) не выиграло. */
+.product-card .product-media .save-btn,
+.product-card .save-btn {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 50%;
+  background: rgba(8, 8, 8, .58);
+  border: 1px solid rgba(255, 255, 255, .14);
+  color: rgba(255, 255, 255, .95);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+.product-card .product-media .save-btn .icon-svg,
+.product-card .save-btn .icon-svg { width: 15px; height: 15px; }
