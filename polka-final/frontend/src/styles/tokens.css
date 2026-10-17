@@ -844,3 +844,33 @@ body, button, input, select, textarea {
 /* подчёркивание и «ползунок» старого вида убираем полностью */
 .chat-tab::after, .ui-tab::after, .chat-tabs-pill { display: none; }
 .chat-tab:active, .ui-tab:active { transform: scale(.97); }
+
+/* Вкладки ленты: компонент SegmentedControl с classes="feed-switch", а сами
+   кнопки внутри — без классов. Целимся в .feed-switch button напрямую. */
+.feed-switch {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 8px;
+  border: 0 !important;
+  border-bottom: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+.feed-switch button {
+  flex: 0 0 auto;
+  height: 52px;
+  padding: 0 24px;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: var(--card-primary) !important;
+  color: var(--text-secondary) !important;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px var(--border-secondary);
+}
+.feed-switch button.is-active {
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+}
