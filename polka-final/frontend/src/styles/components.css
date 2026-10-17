@@ -1096,3 +1096,22 @@ textarea, select, .ui-search {
   padding: 0 18px;
 }
 .ui-search { border-radius: 999px; }
+
+
+/* ═══ КАРТОЧКА БЕЗ РАМКИ ═════════════════════════════════════════════════
+   У карточки рисовалось светлое кольцо (градиентная обводка из блока
+   «плашка Memgift»), и оно читалось как рамка по бокам. У карточек его
+   убираем: глубину даёт сама поверхность + тень, кольцо оставляем только
+   у панелей, пилюль и полей. */
+.app-shell .product-card::after,
+.product-card::after,
+.app-shell .product-card::before,
+.product-card::before {
+  display: none;
+}
+.product-card {
+  border: 0;
+  outline: 0;
+}
+/* Фигура фото внутри карточки — без обводки и без лишней тени */
+.product-figure::after, .product-figure::before { display: none; }
