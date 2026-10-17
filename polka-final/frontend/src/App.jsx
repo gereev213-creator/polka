@@ -3250,9 +3250,28 @@ function TariffsPage() {
   )
 }
 
+// ── Админка (этап A) ─────────────────────────────────────────────────────
+// Группы настроек по префиксу ключа. Подписи берём с сервера (settings[key].title),
+// ключ показываем только если подписи нет — как требует спека.
+const ADMIN_GROUPS = [
+  ['pay.', 'Оплата'],
+  ['plus.', 'Тарифы и цены'],
+  ['tariff.', 'Тарифы и цены'],
+  ['reminders.', 'Напоминания и тексты'],
+  ['banner.', 'Напоминания и тексты'],
+  ['hunt.', 'Пороги отбора'],
+  ['delivery.', 'Лимиты и доставка'],
+  ['limit.', 'Лимиты и доставка'],
+]
+// Пороги «здоровья» в метриках. Зелёный/жёлтый/красный — по этим числам.
+const HEALTH_INGEST = [400, 1500]      // мс
+const HEALTH_LAG = [500, 2000]         // мс
+
 function AdminPage() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('settings')
+  const [tab, setTab] = useState(() => {
+    try { return sessionStorage.getItem('polka:admin-tab') || 'settings' } catch { return 'settings' }
+  })
   const [allowed, setAllowed] = useState(null)
   const [settings, setSettings] = useState({})
   const [draft, setDraft] = useState({})
@@ -3261,7 +3280,12 @@ function AdminPage() {
   const [promo, setPromo] = useState({ items: [], titles: {} })
   const [promoForm, setPromoForm] = useState({ code: '', kind: 'plus_days', value: 100, max_uses: 0 })
   const [grant, setGrant] = useState({ user: '', kind: 'plus_days', amount: 100 })
-  const [msg, setMsg] = useState('')
+  const [query, setQuery] = useState('')
+  const [toast, setToast] = useState('')
+  const [confirm, setConfirm] = useState(null)   // {reason} — второе подтверждение
+  const [preview, setPreview] = useState(false)
+
+  const flash = (text) => { setToast(text); setTimeout(() => setToast(''), 3500) }
 
   const loadAll = () => {
     api.adminSettings().then((d) => setSettings(d.items || {})).catch(() => {})
@@ -3271,61 +3295,77 @@ function AdminPage() {
   }
 
   useEffect(() => {
-    api.adminMe()
-      .then((d) => {
-        setAllowed(Boolean(d.is_admin))
-        if (d.is_admin) loadAll()
-      })
+    api.adminMe().then((d) => { setAllowed(Boolean(d.is_admin)); if (d.is_admin) loadAll() })
       .catch(() => setAllowed(false))
   }, [])
 
-  const save = async (key) => {
-    const value = draft[key] !== undefined ? draft[key] : settings[key]?.value
-    try {
-      const r = await api.adminSet(key, value, 'экран админа')
-      setMsg(r.ok ? `${key}: ${r.old} → ${r.new}` : `Не сохранил: ${r.error}`)
-      api.adminSettings().then((d) => setSettings(d.items || {}))
-      api.adminHistory().then((d) => setHistory(d.items || []))
-    } catch (e) {
-      setMsg((e && e.detail) || 'Ошибка сохранения')
+  useEffect(() => {
+    try { sessionStorage.setItem('polka:admin-tab', tab) } catch { /* приватный режим */ }
+  }, [tab])
+
+  const val = (key) => (draft[key] !== undefined ? draft[key] : settings[key]?.value)
+  const isDirty = (key) => draft[key] !== undefined && String(draft[key]) !== String(settings[key]?.value)
+  const dirtyKeys = Object.keys(draft).filter((k) => isDirty(k))
+  const isFlag = (key, s) => {
+    const v = String(s?.value ?? '')
+    return (v === '0' || v === '1') && !(s?.min !== null && s?.min !== undefined && s?.max !== null)
+  }
+  const isNum = (key, s) => s?.min !== null && s?.min !== undefined && s?.max !== null && s?.max !== undefined
+  // Цены и лимиты сохраняем только со второго нажатия и с причиной (спека A.2)
+  const needsConfirm = (key) => /^(pay\.|plus\.)/.test(key) || /_(min|max|days|hours|price)$/.test(key)
+
+  const saveAll = async (reason) => {
+    const keys = dirtyKeys.slice()
+    if (!keys.length) return flash('Изменений нет')
+    let ok = 0
+    for (const key of keys) {
+      try {
+        const r = await api.adminSet(key, val(key), reason || 'экран админа')
+        if (r.ok) ok += 1
+      } catch { /* следующий ключ */ }
     }
+    setDraft({})
+    setConfirm(null)
+    flash(`Сохранено: ${ok} из ${keys.length}`)
+    api.adminSettings().then((d) => setSettings(d.items || {}))
+    api.adminHistory().then((d) => setHistory(d.items || []))
+  }
+
+  const trySave = () => {
+    if (!dirtyKeys.length) return flash('Изменений нет')
+    if (dirtyKeys.some(needsConfirm)) return setConfirm({ reason: '' })
+    saveAll('экран админа')
   }
 
   const rollback = async (key) => {
     try {
       const r = await api.adminRollback(key)
-      setMsg(r.ok ? `${key} возвращён к ${r.rolled_back_to}` : `Откат не вышел: ${r.error}`)
+      flash(r.ok ? `«${settings[key]?.title || key}» возвращён к ${r.rolled_back_to}` : `Откат не вышел: ${r.error}`)
       api.adminSettings().then((d) => setSettings(d.items || {}))
       api.adminHistory().then((d) => setHistory(d.items || []))
-    } catch (e) {
-      setMsg((e && e.detail) || 'Ошибка отката')
-    }
+    } catch (e) { flash((e && e.detail) || 'Ошибка отката') }
   }
 
   const doGrant = async () => {
     try {
       const r = await api.adminGrant(grant.user, grant.kind, Number(grant.amount))
-      setMsg(r.ok ? `Выдано: ${grant.kind} ${grant.amount} → ${r.user_id}` : `Не выдал: ${r.error}`)
-    } catch (e) {
-      setMsg((e && e.detail) || 'Ошибка выдачи')
-    }
+      flash(r.ok ? `Выдано: ${grant.kind} ${grant.amount} → ${r.user_id}` : `Не выдал: ${r.error}`)
+    } catch (e) { flash((e && e.detail) || 'Ошибка выдачи') }
   }
 
   const createPromo = async () => {
     try {
       const r = await api.adminPromoCreate({ ...promoForm, value: Number(promoForm.value) })
-      setMsg(r.ok ? `Промокод ${r.code} создан` : `Не создал: ${r.error}`)
+      flash(r.ok ? `Промокод ${r.code} создан` : `Не создал: ${r.error}`)
       api.adminPromo().then((d) => setPromo({ items: d.items || [], titles: d.titles || {} }))
-    } catch (e) {
-      setMsg((e && e.detail) || 'Ошибка создания промокода')
-    }
+    } catch (e) { flash((e && e.detail) || 'Ошибка создания промокода') }
   }
 
   if (allowed === false) {
     return (
       <Screen>
         <TopBar left={<Logo />} />
-        <ErrorBlock text="Раздел только для администраторов" />
+        <EmptyState text="Раздел только для администраторов" icon={<Icon name="shield" />} />
       </Screen>
     )
   }
@@ -3333,55 +3373,131 @@ function AdminPage() {
   const tabs = [['settings', 'Условия'], ['grant', 'Выдача'], ['promo', 'Промокоды'],
     ['metrics', 'Метрики'], ['history', 'История']]
 
+  // Группировка настроек по префиксу + поиск по подписи и ключу
+  const grouped = []
+  const seen = {}
+  Object.entries(settings).forEach(([key, s]) => {
+    const title = s.title || key
+    const q = query.trim().toLowerCase()
+    if (q && !title.toLowerCase().includes(q) && !key.toLowerCase().includes(q)) return
+    const group = (ADMIN_GROUPS.find(([pre]) => key.startsWith(pre)) || [null, 'Прочее'])[1]
+    if (!seen[group]) { seen[group] = []; grouped.push([group, seen[group]]) }
+    seen[group].push([key, s])
+  })
+
+  const health = (value, [yellow, red]) => {
+    if (value === null || value === undefined) return 'unknown'
+    const n = Number(value)
+    if (n >= red) return 'bad'
+    if (n >= yellow) return 'warn'
+    return 'ok'
+  }
+  const lag = metrics?.loop_lag?.max_ms
+  const ing = metrics?.ingest?.last_ms
+  const draftPrices = [7, 30, 90].map((days) => {
+    const key = days === 7 ? 'pay.rub_week' : days === 30 ? 'pay.rub_month' : 'pay.rub_quarter'
+    const v = Number(val(key) || 0)
+    return { days, amount: v }
+  })
+
   return (
     <Screen>
       <TopBar left={<Logo />} />
       <h2 className="section-title">Админ</h2>
-      <div className="chat-tabs">
+
+      <div className="admin-tabs">
         {tabs.map(([key, label]) => (
           <button key={key} type="button"
-            className={tab === key ? 'chat-tab is-active' : 'chat-tab'}
+            className={tab === key ? 'admin-tab is-active' : 'admin-tab'}
             onClick={() => setTab(key)}>{label}</button>
         ))}
       </div>
-      {msg ? <div className="chat-note">{msg}</div> : null}
+
+      {toast ? <div className="admin-toast">{toast}</div> : null}
 
       {tab === 'settings' ? (
-        <div className="list-stack mt-8">
-          {Object.entries(settings).map(([key, s]) => (
-            <div key={key} className="plan-row glass-card">
-              <div className="plan-left">
-                <div className="plan-name">{s.title || key}</div>
-                <div className="plan-desc">
-                  {key} · сейчас {String(s.value)}
-                  {s.min !== null && s.min !== undefined ? ` · допустимо ${s.min}…${s.max}` : ''}
-                </div>
-              </div>
-              <div className="admin-actions">
-                <input className="text-input admin-input" type="number"
-                  value={draft[key] !== undefined ? draft[key] : s.value}
-                  onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
-                <button type="button" className="chat-chip" onClick={() => save(key)}>Сохранить</button>
-                <button type="button" className="link-btn" onClick={() => rollback(key)}>Откат</button>
+        <>
+          <input className="text-input mt-8" placeholder="Поиск по настройкам"
+            value={query} onChange={(e) => setQuery(e.target.value)} />
+
+          {grouped.map(([group, items]) => (
+            <div key={group} className="mt-14">
+              <div className="admin-group-title">{group}</div>
+              <div className="list-stack mt-8">
+                {items.map(([key, s]) => {
+                  const dirty = isDirty(key)
+                  const flag = isFlag(key, s)
+                  const num = isNum(key, s)
+                  return (
+                    <div key={key} className={`glass-card admin-setting${dirty ? ' is-dirty' : ''}`}>
+                      <div className="admin-setting-head">
+                        <span className="plan-name">{s.title || key}</span>
+                        {!s.title ? <span className="admin-key">{key}</span> : null}
+                      </div>
+                      {dirty ? (
+                        <div className="admin-diff">
+                          было {String(settings[key]?.value)} → станет {String(val(key))}
+                        </div>
+                      ) : null}
+
+                      {flag ? (
+                        <button type="button"
+                          className={`admin-switch${String(val(key)) === '1' ? ' is-on' : ''}`}
+                          onClick={() => setDraft({ ...draft, [key]: String(val(key)) === '1' ? '0' : '1' })}>
+                          {String(val(key)) === '1' ? 'Включено' : 'Выключено'}
+                        </button>
+                      ) : num ? (
+                        <div className="admin-stepper">
+                          <button type="button" onClick={() => setDraft({
+                            ...draft, [key]: String(Math.max(Number(s.min), Number(val(key) || 0) - 1)),
+                          })}>−</button>
+                          <span>{String(val(key))}</span>
+                          <button type="button" onClick={() => setDraft({
+                            ...draft, [key]: String(Math.min(Number(s.max), Number(val(key) || 0) + 1)),
+                          })}>+</button>
+                          <span className="admin-range">допустимо {String(s.min)}…{String(s.max)}</span>
+                        </div>
+                      ) : (
+                        <textarea className="text-input admin-text" rows={2}
+                          value={String(val(key) ?? '')}
+                          onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+                      )}
+
+                      {history.find((h) => h.key === key) ? (
+                        <div className="admin-history-line">
+                          изменено {String(history.find((h) => h.key === key)?.at || '').slice(0, 16).replace('T', ' ')}
+                          {' · '}{history.find((h) => h.key === key)?.by || 'админ'}
+                          <button type="button" className="link-btn"
+                            onClick={() => rollback(key)}>Откатить</button>
+                        </div>
+                      ) : null}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           ))}
-        </div>
+
+          <div className="admin-save-bar">
+            <button type="button" className="ghost-btn" onClick={() => setPreview(true)}>Предпросмотр тарифов</button>
+            <button type="button" className="cta-primary" disabled={!dirtyKeys.length} onClick={trySave}>
+              Сохранить изменения{dirtyKeys.length ? ` (${dirtyKeys.length})` : ''}
+            </button>
+          </div>
+        </>
       ) : null}
 
       {tab === 'grant' ? (
         <div className="list-stack mt-8">
-          <div className="glass-card plan-row">
-            <div className="plan-left">
-              <div className="plan-name">Выдать пользователю</div>
-              <div className="plan-desc">id или @username · Плюс, слот, пробный период</div>
-            </div>
+          <div className="glass-card admin-setting">
+            <div className="plan-name">Выдать пользователю</div>
+            <div className="plan-desc">id или @username · Плюс, слот критерия, пробный период</div>
           </div>
           <input className="text-input" placeholder="id или @username"
             value={grant.user} onChange={(e) => setGrant({ ...grant, user: e.target.value })} />
           <select className="text-input" value={grant.kind}
             onChange={(e) => setGrant({ ...grant, kind: e.target.value })}>
-                        <option value="plus_days">дней «Плюса»</option>
+            <option value="plus_days">дней «Плюса»</option>
             <option value="criterion_days">дней доп. критерия</option>
             <option value="trial_days">дней пробного</option>
             <option value="plan_free">сбросить на бесплатный</option>
@@ -3398,24 +3514,24 @@ function AdminPage() {
             value={promoForm.code} onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value })} />
           <select className="text-input" value={promoForm.kind}
             onChange={(e) => setPromoForm({ ...promoForm, kind: e.target.value })}>
-                        <option value="plus_days">дни «Плюса»</option>
+            <option value="plus_days">дни «Плюса»</option>
             <option value="criterion_days">дни доп. критерия</option>
             <option value="trial_days">дни пробного</option>
           </select>
           <input className="text-input" type="number" value={promoForm.value}
             onChange={(e) => setPromoForm({ ...promoForm, value: e.target.value })} />
-          <input className="text-input" type="number" placeholder="сколько активаций (0 — без предела)"
-            value={promoForm.max_uses}
-            onChange={(e) => setPromoForm({ ...promoForm, max_uses: e.target.value })} />
-          <button type="button" className="cta-primary" onClick={createPromo}>Создать промокод</button>
-          {(promo.items || []).map((c) => (
-            <div key={c.id} className="plan-row glass-card">
-              <div className="plan-left">
-                <div className="plan-name">{c.code}</div>
-                <div className="plan-desc">
-                  {promo.titles?.[c.kind] || c.kind}: {c.value} · активаций {c.uses}
-                  {c.max_uses ? ` из ${c.max_uses}` : ''} · {c.active ? 'включён' : 'выключен'}
-                </div>
+          <button type="button" className="cta-primary" onClick={createPromo}>Создать</button>
+
+          {promo.items.length ? <div className="admin-group-title mt-14">Созданные</div> : null}
+          {promo.items.map((p) => (
+            <div key={p.code} className="glass-card admin-setting">
+              <div className="admin-setting-head">
+                <span className="plan-name">{p.code}</span>
+                <span className="admin-key">{promo.titles[p.kind] || p.kind} · {p.value}</span>
+              </div>
+              <div className="plan-desc">
+                использовано {p.used ?? 0} из {p.max_uses || '∞'}
+                {p.active === false ? ' · выключен' : ''}
               </div>
             </div>
           ))}
@@ -3423,43 +3539,107 @@ function AdminPage() {
       ) : null}
 
       {tab === 'metrics' && metrics ? (
-        <div className="list-stack mt-8">
-          {[['Пользователей', metrics.users], ['Критериев активно', metrics.criteria_active],
-            ['Решений', metrics.matches], ['Отправлено', metrics.sent],
-            ['Находок в базе', metrics.findings], ['Покупок', metrics.payments],
-            ['Приём, мс', metrics.ingest?.last_ms], ['Лаг цикла, мс', metrics.loop_lag?.max_ms]].map(
-            ([label, value]) => (
-              <div key={label} className="plan-row glass-card">
-                <div className="plan-left"><div className="plan-name">{label}</div></div>
-                <div className="plan-balance">{String(value ?? 0)}</div>
+        <div className="mt-8">
+          <div className="admin-health">
+            {[['Приём находок', ing, HEALTH_INGEST], ['Лаг цикла', lag, HEALTH_LAG]].map(([label, v, th]) => (
+              <div key={label} className={`admin-health-item is-${health(v, th)}`}>
+                <span className="admin-health-dot" />
+                <span>{label}: {v === null || v === undefined ? '—' : `${v} мс`}</span>
               </div>
             ))}
+          </div>
+
+          <div className="admin-kpi">
+            {[['Пользователи', metrics.users], ['Критериев активно', metrics.criteria_active],
+              ['Отправлено', metrics.sent], ['Платежей', metrics.payments],
+              ['Находок в базе', metrics.findings]].map(([label, v]) => (
+              <div key={label} className="glass-card admin-kpi-cell">
+                <div className="admin-kpi-value">{v ?? 0}</div>
+                <div className="admin-kpi-label">{label}</div>
+              </div>
+            ))}
+          </div>
+
           {metrics.plans ? (
-            <div className="plan-row glass-card">
-              <div className="plan-left">
-                <div className="plan-name">Планы</div>
-                <div className="plan-desc">
-                  {Object.entries(metrics.plans).map(([k, v]) => `${k || 'новые'}: ${v}`).join(' · ')}
-                </div>
+            <div className="glass-card mt-14">
+              <div className="plan-name">Распределение планов</div>
+              <div className="admin-plans">
+                {Object.entries(metrics.plans).map(([name, n]) => (
+                  <div key={name} className="admin-plan-line">
+                    <span>{name}</span><span>{n}</span>
+                  </div>
+                ))}
               </div>
             </div>
+          ) : null}
+
+          {metrics.purchases?.length ? (
+            <>
+              <div className="admin-group-title mt-14">Последние покупки</div>
+              <div className="list-stack mt-8">
+                {metrics.purchases.slice(0, 10).map((p, i) => (
+                  <div key={i} className="glass-card plan-row">
+                    <span className="plan-left"><span className="plan-name">{p.user_id ?? p.user}</span></span>
+                    <span className="plan-balance">{p.days ?? p.amount ?? ''}</span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : null}
         </div>
       ) : null}
 
       {tab === 'history' ? (
         <div className="list-stack mt-8">
-          {history.map((h) => (
-            <div key={h.id} className="plan-row glass-card">
-              <div className="plan-left">
-                <div className="plan-name">{h.key}</div>
-                <div className="plan-desc">
-                  {h.old_json} → {h.new_json} · {String(h.changed_at || '').slice(0, 16)}
-                  {h.reason ? ` · ${h.reason}` : ''}
-                </div>
+          {history.length ? history.slice(0, 40).map((h, i) => (
+            <div key={i} className="glass-card admin-setting">
+              <div className="admin-setting-head">
+                <span className="plan-name">{settings[h.key]?.title || h.key}</span>
+                <span className="admin-key">{String(h.at || '').slice(0, 16).replace('T', ' ')}</span>
               </div>
+              <div className="plan-desc">
+                {String(h.old)} → {String(h.new)} · {h.by || 'админ'}
+              </div>
+              <button type="button" className="link-btn" onClick={() => rollback(h.key)}>Откатить</button>
             </div>
-          ))}
+          )) : <EmptyState text="Изменений ещё не было" icon={<Icon name="clock" />} />}
+        </div>
+      ) : null}
+
+      {confirm ? (
+        <div className="admin-sheet-backdrop" onClick={() => setConfirm(null)}>
+          <div className="admin-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="plan-name">Подтвердите изменение</div>
+            <div className="plan-desc">
+              Меняются цены или лимиты: {dirtyKeys.length} шт. Укажите причину — она попадёт в историю.
+            </div>
+            <input className="text-input mt-8" placeholder="Причина" value={confirm.reason}
+              onChange={(e) => setConfirm({ reason: e.target.value })} />
+            <div className="admin-actions mt-8">
+              <button type="button" className="ghost-btn" onClick={() => setConfirm(null)}>Отмена</button>
+              <button type="button" className="cta-primary" onClick={() => saveAll(confirm.reason || 'изменение цен/лимитов')}>
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {preview ? (
+        <div className="admin-sheet-backdrop" onClick={() => setPreview(false)}>
+          <div className="admin-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="plan-name">Предпросмотр тарифов</div>
+            <div className="plan-desc">Черновые цены, без сохранения</div>
+            <div className="tariff-terms mt-8">
+              {draftPrices.map((p) => (
+                <div key={p.days} className={`glass-card tariff-term${p.days === 30 ? ' is-active' : ''}`}>
+                  <span className="tariff-term-days">{p.days} дн.</span>
+                  <span className="tariff-term-price">{p.amount} ₽</span>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="cta-primary mt-14" onClick={() => setPreview(false)}>Закрыть</button>
+          </div>
         </div>
       ) : null}
     </Screen>
