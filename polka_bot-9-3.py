@@ -23701,6 +23701,34 @@ _CLIENT_EVENTS = ('paywall_shown', 'paywall_dismissed', 'paywall_clicked',
                   'feed_opened', 'tariffs_opened')
 
 
+async def api_chats_unread(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/chats/unread — одно число для точки на вкладке «Чаты» (V4).
+
+    Считаем сообщения собеседников, пришедшие после отметки «прочитано».
+    Если отметки нет (диалог ни разу не открывали), считаем все входящие.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_json({'count': 0})
+    cur = db.conn.cursor()
+    marker = ("(CASE WHEN cs.buyer_id = ? THEN cs.buyer_last_read "
+              "ELSE cs.seller_last_read END)")
+    try:
+        cur.execute(
+            "SELECT COUNT(*) AS n FROM chat_messages m "
+            "JOIN chat_sessions cs ON cs.id = m.session_id "
+            "WHERE cs.status = 'active' AND (cs.buyer_id = ? OR cs.seller_id = ?) "
+            "AND m.sender_id != ? "
+            f"AND ({marker} IS NULL OR m.created_at > {marker})",
+            (int(viewer_id), int(viewer_id), int(viewer_id),
+             int(viewer_id), int(viewer_id)))
+        row = cur.fetchone()
+        return _miniapp_json({'count': int((row['n'] if row else 0) or 0)})
+    except Exception as e:
+        logger.warning(f"chats unread: {e}")
+        return _miniapp_json({'count': 0})
+
+
 async def api_client_event(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/event {name, props} — событие воронки из приложения (этап R).
 
@@ -30897,6 +30925,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/plan', api_plan)
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)
+    app.router.add_get('/api/chats/unread', api_chats_unread)
     app.router.add_post('/api/pay/cispay/create', api_pay_create)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)

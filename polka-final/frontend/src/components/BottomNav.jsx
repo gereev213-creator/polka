@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { api } from '../api'
 import { Icon } from './Icon'
 
 /** Нижняя навигация (спека v2, этап V1): пять равных вкладок.
@@ -9,7 +11,15 @@ import { Icon } from './Icon'
  * «Подать» — обычная вкладка с иконкой «плюс в квадрате».
  */
 // unread приходит пропом: хук useApp живёт внутри App.jsx и наружу не отдаётся
-export function BottomNav({ unread = 0 } = {}) {
+export function BottomNav() {
+  // Точка непрочитанных: одно число с сервера, обновляем при смене экрана.
+  const [unread, setUnread] = useState(0)
+  const location = useLocation()
+  useEffect(() => {
+    let alive = true
+    api.chatsUnread().then((d) => { if (alive) setUnread(Number(d?.count || 0)) }).catch(() => {})
+    return () => { alive = false }
+  }, [location.pathname])
   const tabs = [
     ['/', 'Главная', 'home'],
     ['/favorites', 'Избранное', 'bookmark'],

@@ -72,9 +72,9 @@ function MediaPlaceholder({ label = 'фото', tall = false, imageUrl = '' }) {
   }
 
   return (
+    /* Заглушка беззначковая (спека v2, V4): серый блок, без иконки-вопроса. */
     <div className={`media-placeholder ${tall ? 'is-tall' : ''}`}>
-      <Icon name="image" />
-      <span>{label}</span>
+      {label ? <span>{label}</span> : null}
     </div>
   )
 }

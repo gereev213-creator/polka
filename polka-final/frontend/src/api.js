@@ -357,6 +357,8 @@ export const api = {
   // Оплата картой через CISPay: счёт создаём на сервере, статус проверяем
   // опросом — у провайдера нет вебхуков.
   payPlans: () => request('/api/pay/plans'),
+  // одно число для точки на вкладке «Чаты» (этап V4)
+  chatsUnread: () => request('/api/chats/unread').catch(() => ({ count: 0 })),
   // события воронки (этап R): ошибка не должна ломать экран
   sendEvent: (name, props) => request('/api/event',
     { method: 'POST', body: JSON.stringify({ name, props: props || {} }) })
