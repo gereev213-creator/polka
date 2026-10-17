@@ -107,14 +107,6 @@
 .list-row:last-child { border-bottom: none; }
 .list-row-body { min-width: 0; flex: 1 1 auto; }
 
-.segmented { display: flex; gap: var(--space-1); padding: 4px; background: var(--surface-2); border-radius: var(--radius-pill); }
-.segmented button {
-  flex: 1 1 0; min-height: 44px; border: none; background: transparent;
-  color: var(--text-secondary); font: 500 var(--fs-cap)/var(--lh-cap) var(--font);
-  border-radius: var(--radius-pill);
-}
-.segmented button.is-active { background: var(--surface); color: var(--text); font-weight: 600; }
-
 /* ── BottomSheet и Toast ────────────────────────────────────────────────── */
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: var(--z-sheet);
@@ -176,7 +168,6 @@
 
 /* Tabbar: плавающая капсула Memgift — полная вёрстка в styles/tokens.css */
 .tabbar { position: fixed; z-index: var(--z-dock, var(--z-navbar, 100)); }
-.app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
 /* ═══ Современная тактильность и типографика ═════════════════════════════
    Правила из разбора современных приложений:
@@ -220,9 +211,6 @@
 }
 .cta-primary:active { transform: scale(var(--tap-scale)); opacity: .9; }
 .cta-primary:disabled { opacity: .5; transform: none; }
-.ghost-btn, .link-btn {
-  transition: opacity 120ms ease, color 120ms ease;
-}
 .ghost-btn:active, .link-btn:active { opacity: .6; }
 
 /* Скидка — плотной пилюлей рядом с ценой, читается сразу */
@@ -294,16 +282,6 @@
   padding: 16px 0;
   min-height: 44px;
 }
-.list-stack > .glass-card::after,
-.list-stack > .plan-row::after {
-  content: '';
-  position: absolute;
-  left: 16px;
-  right: 0;
-  bottom: 0;
-  height: 1px;
-  background: var(--line);
-}
 .list-stack > .glass-card:last-child::after,
 .list-stack > .plan-row:last-child::after { display: none; }
 
@@ -321,48 +299,8 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-
-.product-card {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 28px;
-  padding: 10px 10px 14px;
-  box-shadow: var(--shadow-card);
-  overflow: hidden;
-  transition: transform 250ms ease, box-shadow 250ms ease;
-}
 .product-card:active { transform: scale(.975); box-shadow: 0 6px 18px rgba(0,0,0,.5); }
 .product-media { border-radius: 20px; }
-.product-info { padding: 10px 4px 2px; }
-.product-price { color: var(--text); }
-.product-title { color: var(--text); }
-.product-meta { color: var(--text-tertiary); }
-
-.tabbar {
-  left: 16px;
-  right: 16px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  width: auto;
-  border: 1px solid var(--glass-border);
-  border-radius: 28px;
-  background: var(--glass);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  box-shadow: var(--shadow-float);
-  padding-bottom: 0;
-  height: 64px;
-  border-top: 1px solid var(--glass-border);
-}
-.tabbar-item { color: var(--text-tertiary); }
-.tabbar-item.is-active { color: var(--text); }
-.tabbar-label { font-size: 10.5px; }
-
-.topbar {
-  background: var(--glass);
-  backdrop-filter: blur(24px) saturate(160%);
-  -webkit-backdrop-filter: blur(24px) saturate(160%);
-  border-bottom: 1px solid var(--line);
-}
 
 .product-card, .chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item,
 .cta-primary, .chip, .segmented button {
@@ -432,7 +370,6 @@
 }
 
 .ghost-btn, .link-btn { color: var(--accent); }
-.cta-primary { background: var(--accent); color: #fff; border-radius: 16px; }
 
 .list-stack > .glass-card::after,
 .list-stack > .plan-row::after { background: var(--line); }
@@ -461,64 +398,21 @@
 }
 .page-title { font-size: var(--font-h3-size); font-weight: 600; line-height: 30px; }
 .section-title, .admin-group-title { font-size: var(--font-small-size); }
-
-.tabbar {
-  height: var(--navbar-height);
-  border-radius: var(--memgift-tabbar-radius);
-  background: var(--memgift-tabbar-bg);
-  backdrop-filter: blur(var(--blur-navbar)) saturate(160%);
-  -webkit-backdrop-filter: blur(var(--blur-navbar)) saturate(160%);
-  box-shadow: var(--shadow-large);
-  z-index: var(--z-navbar);
-}
 .tabbar-label { font-size: 11px; font-weight: 500; }
-.tabbar-item.is-active { color: var(--accent-primary); }
-
-.cta-primary { min-height: var(--button-height); border-radius: var(--radius-md);
-  font-size: var(--font-body-size); font-weight: 600; }
 .ui-search, .text-input { min-height: var(--filter-height); border-radius: var(--radius-md); }
-.product-card { border-radius: var(--memgift-card-radius); box-shadow: var(--memgift-card-shadow); }
-.product-price { font-size: 18px; font-weight: 700; }
-.product-discount { color: var(--success); background: var(--success-bg); }
-
-.tabbar {
-  left: 12px; right: 12px; bottom: calc(10px + env(safe-area-inset-bottom));
-  height: 68px; padding: 0 8px; display: flex; align-items: center;
-  justify-content: space-between; gap: 8px;
-  background: var(--memgift-tabbar-bg); border: 1px solid var(--border-secondary);
-  border-radius: 999px; backdrop-filter: var(--memgift-blur) saturate(160%);
-  -webkit-backdrop-filter: var(--memgift-blur) saturate(160%);
-  box-shadow: var(--shadow-large);
-}
 .tabbar-group { display: flex; align-items: center; flex: 1; gap: 4px; }
-.tabbar-item { flex: 1; display: inline-flex; align-items: center; justify-content: center;
-  height: 52px; border-radius: 999px; color: var(--text-muted);
-  text-decoration: none; position: relative; }
-.tabbar-item.is-active { background: var(--surface-secondary); color: var(--text-primary); }
 .tabbar-item .icon-svg { width: 22px; height: 22px; }
 .tabbar-dot { position: absolute; top: 12px; right: 16px; width: 7px; height: 7px;
   border-radius: 50%; background: var(--accent-primary); }
-.tabbar-fab { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--surface-secondary); color: var(--text-primary); text-decoration: none; }
 .tabbar-fab .icon-svg { width: 24px; height: 24px; }
-
-.product-card { padding: 8px 8px 10px; }
 .product-info { padding: 10px 2px 0; gap: 6px; }
-.product-price { display: flex; align-items: center; justify-content: center;
-  width: 100%; height: 44px; border-radius: 999px; background: var(--accent-primary);
-  color: #fff; font-size: 15px; font-weight: 700; }
 .product-title { font-size: 15px; font-weight: 600; }
 .product-meta { font-size: 12px; color: var(--text-secondary); }
 .product-discount { align-self: flex-start; padding: 3px 10px; border-radius: 999px;
   background: var(--success); color: #06210a; font-weight: 700; }
-
-.segmented { gap: 8px; border: 0; padding: 0; }
 .segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
   background: var(--surface-secondary); color: var(--text-secondary);
   font-size: 16px; font-weight: 600; }
-.segmented button.is-active { background: var(--card-primary); color: var(--text-primary);
-  box-shadow: inset 0 0 0 1px var(--border-secondary); }
 
 .product-card, .glass-card, .summary-card, .pay-status, .admin-setting,
 .tariff-term, .ui-stat, .tabbar, .chip, .badge, .tag {
@@ -547,25 +441,6 @@
   pointer-events: none;
 }
 
-.product-price {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  width: 100%;
-  height: 56px;
-  padding: 0 16px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 100%);
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    0 6px 18px rgba(10, 132, 255, 0.28);
-}
-
 .chip, .segmented button {
   height: 56px;
   padding: 0 20px;
@@ -585,12 +460,6 @@
 }
 
 .tabbar { border: 1px solid transparent; }
-.tabbar-item.is-active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
-  color: #fff;
-}
 .tabbar-fab {
   background: var(--card-primary);
   box-shadow:
@@ -642,13 +511,6 @@
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .01em;
-}
-.product-badge--offer {
-  left: auto;
-  right: 10px;
-  background: var(--success);
-  color: #06210a;
-  font-weight: 700;
 }
 .product-body { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 2px; }
 .product-name {
@@ -762,16 +624,6 @@
 }
 .chat-tab::after, .ui-tab::after, .chat-tabs-pill { display: none; }
 .chat-tab:active, .ui-tab:active { transform: scale(.97); }
-
-.feed-switch {
-  display: inline-flex !important;
-  align-items: center;
-  gap: 8px;
-  border: 0 !important;
-  border-bottom: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-}
 .feed-switch button {
   flex: 0 0 auto;
   height: 52px;
@@ -790,41 +642,7 @@
   color: var(--text-primary) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
 }
-
-.topbar {
-  background: transparent !important;
-  border-bottom: 0 !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  padding: 8px 0 4px;
-}
-.topbar-pills {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  height: 56px;
-}
 .topbar-pills-right { display: flex; align-items: center; gap: 8px; }
-.pill-btn {
-  height: 56px;
-  min-height: 56px;
-  padding: 0 22px;
-  border: 0;
-  border-radius: 20px;
-  background: var(--card-primary);
-  color: var(--text-primary);
-  font: inherit;
-  font-size: 17px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  box-shadow: inset 0 0 0 1px var(--border-secondary), var(--shadow-soft);
-  cursor: pointer;
-}
-.pill-btn--icon { width: 56px; padding: 0; }
 .pill-btn:active { transform: scale(.97); }
 .pill-chevron {
   width: 12px; height: 12px;
@@ -838,8 +656,6 @@
   background:
     radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 50% / 6px 4px repeat-x;
 }
-.topbar-row { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; }
-.topbar-side, .topbar-center { display: flex; align-items: center; }
 .topbar-center { flex: 1; }
 .topbar-side--right { justify-content: flex-end; }
 
