@@ -982,3 +982,37 @@ input[type="checkbox"]:checked::after {
   text-transform: uppercase;
   z-index: 2;
 }
+
+
+/* ═══ КЛИК ПО КАРТОЧКЕ (функциональный фикс) ═════════════════════════════
+   Риббон скидки — декоративный, но он перехватывал нажатие и, выходя за
+   край фото, накрывал СОСЕДНЮЮ карточку: клик по левой не срабатывал,
+   потому что сверху оказывался span из правой. Теперь все оверлеи карточки
+   прозрачны для мыши, а фигура гарантированно обрезает ленту. */
+.product-card .product-badge,
+.product-card .product-badge--offer,
+.product-card .product-ribbon-new,
+.product-card::after,
+.product-card::before,
+.product-figure::after,
+.product-figure::before {
+  pointer-events: none;
+}
+.product-figure {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  isolation: isolate;
+}
+.product-card { position: relative; overflow: hidden; }
+
+/* Карточка — как кнопки в меню: та же поверхность и верхний блик */
+.app-shell .product-card,
+.product-card {
+  background: var(--card-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    var(--shadow-card);
+  border-radius: 28px;
+}
+.product-card .save-btn { pointer-events: auto; }
