@@ -576,3 +576,99 @@ body, button, input, select, textarea {
 }
 /* У круглых элементов обводка не должна ломаться */
 .tabbar-fab::before, .tabbar-item::before { display: none; }
+
+/* ═══ ПЛАШКА MEMGIFT (точная фактура по кропам) ══════════════════════════
+   1. Кольцо 1px: ярче сверху (0.22), почти прозрачное в середине (0.04),
+      снова проявляется снизу (0.10). Именно это даёт «перелив».
+   2. Синяя пилюля цены: вертикальный градиент + внутреннее белое кольцо
+      + мягкое свечение снизу.
+   3. Пилюля-фильтр: тёмная, с тем же кольцом, разделитель и иконка. */
+
+/* ── 1. Кольцо-перелив для карточек и пилюль ─────────────────────────── */
+.product-card, .glass-card, .summary-card, .pay-status, .admin-setting,
+.tariff-term, .ui-stat, .tabbar, .chip, .badge, .tag {
+  border: 0;
+  position: relative;
+}
+.product-card::after, .glass-card::after, .summary-card::after, .pay-status::after,
+.admin-setting::after, .tariff-term::after, .ui-stat::after, .tabbar::after,
+.chip::after, .badge::after, .tag::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    170deg,
+    rgba(255, 255, 255, 0.22) 0%,
+    rgba(255, 255, 255, 0.05) 38%,
+    rgba(255, 255, 255, 0.03) 62%,
+    rgba(255, 255, 255, 0.10) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ── 2. Синяя пилюля цены ────────────────────────────────────────────── */
+.product-price {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 56px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 100%);
+  color: #fff;
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -.01em;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
+    0 6px 18px rgba(10, 132, 255, 0.28);
+}
+
+/* ── 3. Пилюля-фильтр с разделителем и иконкой ───────────────────────── */
+.chip, .segmented button {
+  height: 56px;
+  padding: 0 20px;
+  border-radius: 999px;
+  background: var(--card-primary);
+  color: var(--text-primary);
+  font-size: 16px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+.segmented button.is-active {
+  background: var(--card-secondary);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+/* ── 4. Навигация: активный пункт — светлая пилюля с верхним бликом ──── */
+.tabbar { border: 1px solid transparent; }
+.tabbar-item.is-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  color: #fff;
+}
+.tabbar-fab {
+  background: var(--card-primary);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 4px 16px rgba(0, 0, 0, .5);
+}
+
+/* ── 5. Кнопки-стрелки в списках: круглые, тёмные ────────────────────── */
+.menu-arrow, .plan-arrow {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--card-secondary); color: var(--text-secondary);
+}
