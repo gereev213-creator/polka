@@ -358,3 +358,133 @@ html, body { background: var(--bg); color: var(--text); }
 }
 /* Карточка продавца и блоки под панелью не должны обрезаться */
 .listing, .detail-page, .screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM (по промту владельца) — цвета, градиенты, отступы,
+   радиусы, типографика, высоты компонентов, тени, блюры, анимации, z-index.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --bg-primary: #050505;
+  --bg-secondary: #0b0b0b;
+  --bg-tertiary: #101010;
+  --card-primary: #141414;
+  --card-secondary: #181818;
+  --card-hover: #1d1d1d;
+  --surface-primary: rgba(20, 20, 20, 0.9);
+  --surface-secondary: rgba(255, 255, 255, 0.04);
+  --border-primary: rgba(255, 255, 255, 0.05);
+  --border-secondary: rgba(255, 255, 255, 0.08);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-muted: rgba(255, 255, 255, 0.35);
+  --accent-primary: #0a84ff;
+  --accent-primary-hover: #2992ff;
+  --success: #84ff39;
+  --warning: #ffb84d;
+  --danger: #ff5c5c;
+
+  --gradient-page: radial-gradient(circle at top center, #111315 0%, #050505 60%);
+  --gradient-orange: linear-gradient(135deg, #ff6200 0%, #ff7a00 100%);
+  --gradient-blue: linear-gradient(135deg, #0a84ff 0%, #4ca2ff 100%);
+  --gradient-purple: linear-gradient(135deg, #5a43ff 0%, #8d7aff 100%);
+
+  --space-2: 2px; --space-4: 4px; --space-8: 8px; --space-12: 12px;
+  --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px;
+  --space-40: 40px; --space-48: 48px; --space-64: 64px;
+  --page-padding: 16px; --section-gap: 24px;
+
+  --radius-sm: 18px; --radius-md: 20px; --radius-lg: 24px;
+  --radius-xl: 28px; --radius-2xl: 32px; --radius-pill: 999px;
+
+  --font-family-primary: "SF Pro Display", "Inter", sans-serif;
+  --font-h1-size: 52px; --font-h2-size: 36px; --font-h3-size: 24px;
+  --font-body-lg-size: 18px; --font-body-size: 16px;
+  --font-caption-size: 14px; --font-small-size: 13px;
+
+  --button-height: 56px; --search-height: 64px; --filter-height: 56px;
+  --banner-height: 140px; --navbar-height: 84px; --topbar-height: 56px;
+  --tab-active-size: 66px;
+
+  --shadow-card: 0 5px 30px rgba(0, 0, 0, 0.45);
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-large: 0 10px 40px rgba(0, 0, 0, 0.55);
+  --shadow-active: 0 0 25px rgba(255, 255, 255, 0.08);
+
+  --blur-navbar: 30px; --blur-card: 20px; --blur-glass: 24px;
+  --duration-fast: 150ms; --duration-normal: 250ms; --duration-slow: 350ms;
+  --ease-default: cubic-bezier(0.4, 0, 0.2, 1);
+  --z-navbar: 100; --z-modal: 200; --z-dropdown: 300; --z-toast: 400;
+
+  --memgift-card-radius: 28px;
+  --memgift-chip-radius: 20px;
+  --memgift-tabbar-radius: 36px;
+  --memgift-card-bg: #141414;
+  --memgift-tabbar-bg: rgba(20, 20, 20, .9);
+  --memgift-page-padding: 16px;
+  --memgift-section-gap: 24px;
+  --memgift-card-shadow: 0 5px 30px rgba(0, 0, 0, .45);
+  --memgift-blur: blur(30px);
+
+  /* ── связка с приложением: приложение читает свои токены, они указывают
+        на систему выше. Меняется одно место — меняется всё. ───────────── */
+  --bg: var(--bg-primary);
+  --surface: var(--card-primary);
+  --surface-2: var(--card-secondary);
+  --line: var(--border-secondary);
+  --line-strong: var(--border-primary);
+  --border: var(--border-secondary);
+  --hairline: var(--border-secondary);
+  --text: var(--text-primary);
+  --ink: var(--text-primary);
+  --text-secondary: rgba(255, 255, 255, 0.65);
+  --text-tertiary: rgba(255, 255, 255, 0.35);
+  --accent: var(--accent-primary);
+  --accent-hover: var(--accent-primary-hover);
+  --accent-bg: rgba(10, 132, 255, 0.14);
+  --cta-bg: var(--accent-primary);
+  --cta-text: #fff;
+  --success-bg: rgba(132, 255, 57, 0.12);
+  --warning-bg: rgba(255, 184, 77, 0.12);
+  --danger-bg: rgba(255, 92, 92, 0.12);
+  --radius: var(--radius-xl);
+  --radius-btn: var(--radius-md);
+  --radius-lg: var(--radius-xl);
+  --radius-panel: var(--radius-xl);
+  --gutter: var(--page-padding);
+  color-scheme: dark;
+}
+
+/* Фон приложения — мягкое свечение сверху (градиент из промта) */
+html, body, .app-shell { background: var(--gradient-page); background-attachment: fixed; }
+
+/* Типографика по шкале промта */
+body, button, input, select, textarea {
+  font-family: var(--font-family-primary);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-body-weight);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+.page-title { font-size: var(--font-h3-size); font-weight: 600; line-height: 30px; }
+.section-title, .admin-group-title { font-size: var(--font-small-size); }
+
+/* Навигация: высота 84, блюр 30, радиус 36 */
+.tabbar {
+  height: var(--navbar-height);
+  border-radius: var(--memgift-tabbar-radius);
+  background: var(--memgift-tabbar-bg);
+  backdrop-filter: blur(var(--blur-navbar)) saturate(160%);
+  -webkit-backdrop-filter: blur(var(--blur-navbar)) saturate(160%);
+  box-shadow: var(--shadow-large);
+  z-index: var(--z-navbar);
+}
+.tabbar-label { font-size: 11px; font-weight: 500; }
+.tabbar-item.is-active { color: var(--accent-primary); }
+
+/* Кнопки 56, поиск 64, карточки 28 */
+.cta-primary { min-height: var(--button-height); border-radius: var(--radius-md);
+  font-size: var(--font-body-size); font-weight: 600; }
+.ui-search, .text-input { min-height: var(--filter-height); border-radius: var(--radius-md); }
+.product-card { border-radius: var(--memgift-card-radius); box-shadow: var(--memgift-card-shadow); }
+.product-price { font-size: 18px; font-weight: 700; }
+.product-discount { color: var(--success); background: var(--success-bg); }
