@@ -990,6 +990,32 @@ function CriteriaPage() {
           </>
         )}
 
+        {/* Итоговая карточка (спека v2, V5): видно, что именно ищем и
+            какой запрос уйдёт, до нажатия кнопки. Показываем только когда
+            есть что искать. */}
+        {query.trim() ? (
+          <div className="summary-card">
+            <div className="summary-title">Что будем искать</div>
+            <div className="summary-line">«{query.trim()}»</div>
+            <div className="summary-meta">
+              {[
+                city.trim() || '',
+                Number(maxPrice) ? `до ${Number(maxPrice).toLocaleString('ru-RU')} ₽` : '',
+                Number(minPrice) ? `от ${Number(minPrice).toLocaleString('ru-RU')} ₽` : '',
+                withPhoto ? 'только с фото' : '',
+                huntSeller === 'private' ? 'только частные' : '',
+                mode === 'deal' ? `дешевле рынка на ${minDiscount}%` : '',
+              ].filter(Boolean).join(' · ') || 'без ограничений'}
+            </div>
+            {huntNotes.trim() ? (
+              <div className="summary-req">Требования: {huntNotes.trim()}</div>
+            ) : null}
+            {huntExclude.trim() ? (
+              <div className="summary-req">Не присылать: {huntExclude.trim()}</div>
+            ) : null}
+          </div>
+        ) : null}
+
         {error ? <div className="status-line error">{error}</div> : null}
         <Button variant="primary" wide disabled={busy} onClick={add}>
           {busy ? 'Добавляем…' : 'Найти лоты'}
