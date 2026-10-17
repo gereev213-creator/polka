@@ -178,3 +178,65 @@
 .tabbar-label { white-space: nowrap; }
 /* контент всегда имеет отступ под панель — она больше не перекрывает текст */
 .app-shell { padding-bottom: calc(64px + env(safe-area-inset-bottom)); }
+
+/* ═══ Современная тактильность и типографика ═════════════════════════════
+   Правила из разбора современных приложений:
+   • всё, что нажимается, отвечает на нажатие (120 мс, без «прыжков»);
+   • цифры табличные — цены не дёргаются и выравниваются по разрядам;
+   • иерархия держится весами и трекингом, а не только размером. */
+:root {
+  --tap-scale: .98;
+  --tap-ease: cubic-bezier(.2, .8, .3, 1);
+}
+
+/* Цены и любые числа — табличные цифры */
+.product-price, .detail-price, .ui-stat-value, .tariff-term-price,
+.plan-balance, .admin-kpi-value {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.01em;
+}
+
+/* Заголовки экранов: плотнее и с отрицательным трекингом */
+.page-title, .section-title, h2, h3 {
+  letter-spacing: -.02em;
+}
+
+/* Карточка: палец чувствует нажатие */
+.product-card, .chat-row, .menu-row, .setting-row, .plan-row,
+.admin-setting, .tariff-term, .ui-group-body > * {
+  transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
+  -webkit-tap-highlight-color: transparent;
+}
+.product-card:active, .chat-row:active, .menu-row:active, .setting-row:active,
+.plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active,
+.chip:active, .hint-chip:active, .feed-status-chip:active {
+  transform: scale(var(--tap-scale));
+  opacity: .82;
+}
+
+/* Кнопки: главная — акцентом, вторичная — рамкой, обе отвечают нажатием */
+.cta-primary {
+  font-weight: 600;
+  transition: transform 120ms var(--tap-ease), background 120ms ease, opacity 120ms ease;
+}
+.cta-primary:active { transform: scale(var(--tap-scale)); opacity: .9; }
+.cta-primary:disabled { opacity: .5; transform: none; }
+.ghost-btn, .link-btn {
+  transition: opacity 120ms ease, color 120ms ease;
+}
+.ghost-btn:active, .link-btn:active { opacity: .6; }
+
+/* Скидка — плотной пилюлей рядом с ценой, читается сразу */
+.product-discount {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Вкладка меню в активном состоянии — жирнее, чтобы «где я» читалось */
+.tabbar-item.is-active .tabbar-label { font-weight: 600; }
