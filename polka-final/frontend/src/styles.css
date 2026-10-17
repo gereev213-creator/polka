@@ -2862,4 +2862,4 @@ html, body, #root {
 /* 160 px — это размер пустого экрана онбординга, а не профиля: на нём
    ничего не видно вокруг. 96 — достаточно, чтобы узнавать себя, и остаётся
    место имени и плану. */
-.profile-avatar, .avatar-xl { width: 96px; height: 96px; font-size: 32px; }
+.profile-avatar-img, .profile-avatar-fallback { width: 96px; height: 96px; font-size: 32px; }
