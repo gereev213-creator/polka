@@ -31415,6 +31415,15 @@ def main():
         ensure_quality_columns()
         ensure_fingerprint_backfill()
         ensure_payments()
+        # Миграция чатов: колонки buyer_last_read/seller_last_read. Раньше
+        # init_chat_tables вызывался только по пути «открыть диалог», а список
+        # чатов с непрочитанными обращался к колонкам до миграции — в логе
+        # было «no such column: buyer_last_read», и создание лота падало
+        # следом, потому что счётчик непрочитанных не мог посчитаться.
+        try:
+            init_chat_tables()
+        except Exception as _e:
+            logger.warning(f"init_chat_tables при старте: {_e}")
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
         ensure_monetization()
