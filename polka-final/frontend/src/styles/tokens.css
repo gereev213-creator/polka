@@ -298,3 +298,44 @@ html, body { background: var(--bg); color: var(--text); }
 }
 .product-card .product-media .save-btn .icon-svg,
 .product-card .save-btn .icon-svg { width: 15px; height: 15px; }
+
+/* ═══ ТЁМНЫЙ ПРОХОД ПО ЭКРАНАМ ══════════════════════════════════════════
+   В старых правилах остались захардкоженные светлые поверхности и белые
+   подложки. Здесь перекрываем их тёмными — без правки логики и разметки. */
+.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row,
+.setting-row, .feed-reminder, .summary-card, .stats-row,
+.pay-status, .admin-sheet, .admin-save-bar, .tariff-compare,
+.admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip,
+.tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body,
+.ui-plan, .chat-input, .chat-header, .topbar, .detail-bar,
+.media-placeholder {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+.glass-card, .admin-sheet { border: 1px solid var(--line); }
+
+/* Белые подложки и «белые» элементы управления */
+.save-btn, .icon-btn, .chat-chip, .feed-reminder, .badge,
+.chat-time, .plan-desc, .spec-chip, .stats-head-label {
+  background-color: transparent;
+}
+.badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }
+
+/* Поля ввода и текстовые области */
+.text-input, input, textarea, select, .chat-input input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+.text-input::placeholder, input::placeholder, textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+/* Кнопки: главная — акцентом, вторичная — поверхностью */
+.ghost-btn, .link-btn { color: var(--accent); }
+.cta-primary { background: var(--accent); color: #fff; border-radius: 16px; }
+
+/* Разделители и линии */
+.list-stack > .glass-card::after,
+.list-stack > .plan-row::after { background: var(--line); }

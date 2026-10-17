@@ -2310,21 +2310,6 @@ html, body, #root {
 }
 
 /* Сердечко — поверх всего, с собственным фоном */
-.save-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  border: none;
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 3;
-}
 
 /* Медиа-блок карточки: плашка и сердечко не пересекаются */
 .product-media {
@@ -2752,17 +2737,6 @@ html, body, #root {
 
 /* 3. Сердечко — 28 px в углу фото, без белого круга */
 .product-media .save-btn,
-.save-btn {
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
-  top: 8px;
-  right: 8px;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, .9);
-  color: var(--text-secondary);
-}
 
 /* 4. Вкладки «Находки / Барахолка» — подчёркнутый текст */
 .segmented {
@@ -2828,10 +2802,6 @@ html, body, #root {
   -webkit-box-orient: vertical; overflow: hidden; }
 .product-meta { margin-top: 2px; font-size: 11px; color: var(--text-tertiary); }
 .product-media .save-btn,
-.save-btn { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px;
-  min-width: 28px; min-height: 28px; display: inline-flex; align-items: center;
-  justify-content: center; border: 0; border-radius: 6px;
-  background: rgba(255, 255, 255, .9); color: var(--text-secondary); cursor: pointer; }
 .save-btn.is-on { color: var(--danger); }
 .product-media .save-btn .icon-svg,
 .save-btn .icon-svg { width: 15px; height: 15px; }
