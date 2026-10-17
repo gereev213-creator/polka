@@ -266,7 +266,7 @@
 /* Плотность: строки списка чуть ниже, воздуха между ними — больше не нужно */
 .list-stack { display: flex; flex-direction: column; }
 .list-stack > .glass-card,
-.list-stack > .plan-row { padding: 14px 0; }
+.list-stack > .plan-row { padding: 16px 0; min-height: 44px; }
 
 /* Заголовки секций — мелкие, с разрядкой: типографский приём, а не «плашка» */
 .section-title, .admin-group-title {
@@ -277,3 +277,33 @@
   color: var(--text-tertiary);
   margin: 24px 0 8px;
 }
+
+/* ═══ Врезной разделитель и сетка 8 ══════════════════════════════════════
+   Две детали, которые отличают спроектированный интерфейс от собранного:
+
+   1. Разделитель не идёт от края до края, а начинается на уровне текста
+      (врезка 16 px) — так линия не «режет» экран на полосы. Это правило
+      Material и Apple HIG.
+   2. Все отступы кратны 8 (4/8/12/16/24). Было 14 — глаз этого не
+      осознаёт, но строка «дрожит» относительно остальных.
+
+   Линию рисуем псевдоэлементом, а не border: border всегда во всю ширину. */
+.list-stack > .glass-card,
+.list-stack > .plan-row {
+  position: relative;
+  border-bottom: 0;
+  padding: 16px 0;
+  min-height: 44px;
+}
+.list-stack > .glass-card::after,
+.list-stack > .plan-row::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: var(--line);
+}
+.list-stack > .glass-card:last-child::after,
+.list-stack > .plan-row:last-child::after { display: none; }
