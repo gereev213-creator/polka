@@ -1164,3 +1164,106 @@ html, body, .app-shell, .screen {
   background: var(--accent-primary);
   color: #fff;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   УНИВЕРСАЛЬНАЯ ПЛАШКА (единый стиль кнопок меню для ВСЕХ поверхностей)
+   Одна формула: поверхность #141414 + верхний блик 1px + мягкая тень.
+   Селекторы с префиксом .app-shell, чтобы гарантированно перебить любые
+   старые правила (это рабочий приём из memgift-final.css).
+
+   Радиус по типу:
+     • пилюли/чипы/поля  — 999 или 20
+     • панели и строки    — 20
+     • карточки и листы   — 28
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Поверхности: карточки, панели, строки ───────────────────────────── */
+.app-shell .glass-card, .glass-card,
+.app-shell .card, .card,
+.app-shell .product-card, .product-card,
+.app-shell .plan-row, .plan-row,
+.app-shell .admin-setting, .admin-setting,
+.app-shell .chat-row, .chat-row,
+.app-shell .menu-row, .menu-row,
+.app-shell .setting-row, .setting-row,
+.app-shell .feed-reminder, .feed-reminder,
+.app-shell .summary-card, .summary-card,
+.app-shell .stats-row, .stats-row,
+.app-shell .pay-status, .pay-status,
+.app-shell .admin-save-bar, .admin-save-bar,
+.app-shell .tariff-compare, .tariff-compare,
+.app-shell .admin-kpi-cell, .admin-kpi-cell,
+.app-shell .admin-health-item, .admin-health-item,
+.app-shell .tariff-term, .tariff-term,
+.app-shell .cat-tile, .cat-tile,
+.app-shell .ui-stat, .ui-stat,
+.app-shell .ui-group-body, .ui-group-body,
+.app-shell .ui-plan, .ui-plan,
+.app-shell .stat-card, .stat-card,
+.app-shell .banner-card, .banner-card {
+  background: var(--card-primary, #141414);
+  border: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    var(--shadow-soft);
+}
+/* Панели и строки — 20, карточки и листы — 28 */
+.menu-row, .setting-row, .stats-row, .glass-card, .card, .admin-setting,
+.summary-card, .pay-status, .tariff-term, .tariff-compare, .chat-row,
+.ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card,
+.admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card,
+.cat-tile { border-radius: 20px; }
+.product-card, .admin-sheet, .admin-save-bar { border-radius: 28px; }
+
+/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
+.app-shell .chip, .chip,
+.app-shell .hint-chip, .hint-chip,
+.app-shell .segmented button, .segmented button,
+.app-shell .feed-switch button, .feed-switch button,
+.app-shell .pill-btn, .pill-btn,
+.app-shell .ghost-btn, .ghost-btn,
+.app-shell .dark-btn, .dark-btn,
+.app-shell .btn-dark, .btn-dark,
+.app-shell .admin-tab, .admin-tab,
+.app-shell .tariff-method, .tariff-method,
+.app-shell .feed-status-chip, .feed-status-chip,
+.app-shell .chat-chip, .chat-chip,
+.app-shell .tag, .tag,
+.app-shell .spec-chip, .spec-chip,
+.app-shell .badge, .badge {
+  background: var(--card-primary, #141414);
+  border: 0;
+  border-radius: 999px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  color: var(--text-secondary, rgba(255,255,255,.65));
+}
+
+/* ── Поля ввода ──────────────────────────────────────────────────────── */
+.app-shell .text-input, .text-input,
+.app-shell input[type="text"], input[type="text"],
+.app-shell input[type="number"], input[type="number"],
+.app-shell input[type="search"], input[type="search"],
+.app-shell textarea, textarea,
+.app-shell select, select,
+.app-shell .ui-search, .ui-search {
+  background: var(--card-secondary, #181818);
+  border: 0;
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: var(--text-primary, #fff);
+}
+.ui-search { border-radius: 999px; }
+
+/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
+.app-shell .chip.is-active, .chip.is-active,
+.app-shell .segmented button.is-active, .segmented button.is-active,
+.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
+.app-shell .admin-tab.is-active, .admin-tab.is-active,
+.app-shell .tariff-method.is-active, .tariff-method.is-active,
+.app-shell .tariff-term.is-active, .tariff-term.is-active,
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: var(--text-primary, #fff);
+}
