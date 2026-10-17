@@ -1065,13 +1065,17 @@ function FindingsView() {
       try {
         const last = Number(localStorage.getItem('polka:paywall_ts') || 0)
         const cool = Number(rem.cooldown_hours || 24) * 3600 * 1000
-        if (Date.now() - last > cool) setShowReminder(true)
+        if (Date.now() - last > cool) {
+          setShowReminder(true)
+          api.sendEvent('paywall_shown', { place: 'feed' })
+        }
       } catch { setShowReminder(true) }
     }).catch(() => {})
   }, [])
 
   const dismissReminder = () => {
     setShowReminder(false)
+    api.sendEvent('paywall_dismissed', { place: 'feed' })
     try { localStorage.setItem('polka:paywall_ts', String(Date.now())) } catch { /* приватный режим */ }
   }
 
@@ -1138,7 +1142,10 @@ function FindingsView() {
                 </div>
                 <div className="plan-desc">{plan.reminders?.text || ''}</div>
                 <button type="button" className="link-btn"
-                  onClick={() => { window.location.hash = '#/tariffs' }}>
+                  onClick={() => {
+                    api.sendEvent('paywall_clicked', { place: 'feed' })
+                    window.location.hash = '#/tariffs'
+                  }}>
                   Что даёт Плюс
                 </button>
               </div>

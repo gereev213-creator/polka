@@ -357,6 +357,10 @@ export const api = {
   // Оплата картой через CISPay: счёт создаём на сервере, статус проверяем
   // опросом — у провайдера нет вебхуков.
   payPlans: () => request('/api/pay/plans'),
+  // события воронки (этап R): ошибка не должна ломать экран
+  sendEvent: (name, props) => request('/api/event',
+    { method: 'POST', body: JSON.stringify({ name, props: props || {} }) })
+    .catch(() => null),
   payCard: (product) => request('/api/pay/cispay/create',
     { method: 'POST', body: JSON.stringify({ product }) }),
   payCardStatus: (uuid) => request(`/api/pay/cispay/status?uuid=${encodeURIComponent(uuid)}`),

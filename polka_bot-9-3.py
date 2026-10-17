@@ -23644,6 +23644,32 @@ async def _cispay_poll_loop() -> None:
         await asyncio.sleep(CISPAY_POLL_EVERY)
 
 
+_CLIENT_EVENTS = ('paywall_shown', 'paywall_dismissed', 'paywall_clicked',
+                  'feed_opened', 'tariffs_opened')
+
+
+async def api_client_event(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/event {name, props} — событие воронки из приложения (этап R).
+
+    Список имён закрытый: посторонние события не пишем, чтобы не засорять
+    метрики. Ошибка у клиента не должна ломать экран — поэтому отвечаем
+    всегда 200, а имя просто игнорируем, если оно не из списка.
+    """
+    viewer_id = _miniapp_viewer(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = str((body or {}).get('name') or '')[:40]
+    props = (body or {}).get('props') or {}
+    if name in _CLIENT_EVENTS and viewer_id:
+        try:
+            _plan_event(int(viewer_id), name, props if isinstance(props, dict) else {})
+        except Exception as e:
+            logger.warning(f"client event: {e}")
+    return _miniapp_json({'ok': True})
+
+
 async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/pay/plans — тарифы картой (цены из настроек)."""
     plans = await asyncio.to_thread(_db_read, cispay_plans_public)
@@ -27599,7 +27625,7 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     sql = (f"SELECT a.*, hm.status AS hunt_status, hm.reason AS hunt_reason, "
            f"hm.reject_reason AS hunt_reject, hm.discount AS hunt_discount, "
            f"hm.desc_state AS hunt_desc_state, hm.delivery AS hunt_delivery, "
-           f"hm.unverified AS hunt_unverified "
+           f"hm.unverified AS hunt_unverified, hm.deliver_after AS hunt_deliver_after "
            f"FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
            f"WHERE {' AND '.join(where)} "
            f"ORDER BY CASE WHEN hm.reject_reason = 'price_below_floor' THEN 1 ELSE 0 END, "
@@ -27630,6 +27656,17 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         else:
             delivery = 'not_sent'
         item['delivery'] = delivery
+        # Этап R: сколько ждать до прихода в чат. Бесплатному лот приходит
+        # с задержкой — показываем «Придёт через N мин» и что с «Плюсом» сразу.
+        queued_min = 0
+        raw_after = str(row.get('hunt_deliver_after') or '')
+        if delivery == 'queued' and raw_after:
+            try:
+                left = (_safe_isoparse(raw_after) - get_moscow_time()).total_seconds()
+                queued_min = max(0, int(left // 60))
+            except Exception:
+                queued_min = 0
+        item['queued_min'] = queued_min
         item['hunt_status'] = status
         item['hunt_reason'] = str(row.get('hunt_reason') or '')
         item['hunt_reason_label'] = _hunt_reason_label(item['hunt_reason'])
@@ -30804,6 +30841,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_get('/api/plan', api_plan)
     app.router.add_get('/api/pay/plans', api_pay_plans)
+    app.router.add_post('/api/event', api_client_event)
     app.router.add_post('/api/pay/cispay/create', api_pay_create)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)
