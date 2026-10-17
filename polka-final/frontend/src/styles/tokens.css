@@ -1009,3 +1009,13 @@ button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
 }
 /* Никаких ползунков и подчёркиваний у вкладок */
 .chat-tabs-pill, .chat-tab::after, .ui-tab::after { display: none !important; }
+
+.pill-glyph {
+  font-size: 18px;
+  line-height: 1;
+  letter-spacing: .02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.pill-btn--icon .pill-glyph { transform: translateY(-1px); }

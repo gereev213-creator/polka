@@ -36,10 +36,10 @@ export function TopBar({ left, center, right, title, onBack }) {
           : <button type="button" className="pill-btn" onClick={closeApp}>✕ Закрыть</button>}
         <div className="topbar-pills-right">
           <button type="button" className="pill-btn pill-btn--icon" aria-label="Свернуть">
-            <span className="pill-chevron" />
+            <span className="pill-glyph">⌄</span>
           </button>
           <button type="button" className="pill-btn pill-btn--icon" aria-label="Ещё">
-            <span className="pill-dots" />
+            <span className="pill-glyph">•••</span>
           </button>
         </div>
       </div>
