@@ -1027,6 +1027,16 @@ function CriteriaPage() {
           а отбор не врёт (для телефонов сразу проверка АКБ). */}
       {templates.length ? (
         <div className="list-stack mt-14">
+        {/* Новостной чат: всегда первым, писать в него нельзя */}
+        <Link to="/news" className="chat-row glass-card">
+          <div className="chat-meta">
+            <div className="chat-meta-top">
+              <span className="chat-name">Новости</span>
+              <span className="chat-time" />
+            </div>
+            <span className="chat-ad">Объявления и новости от «Полки»</span>
+          </div>
+        </Link>
           <div className="section-head"><strong>Готовые шаблоны</strong><span>{templates.length}</span></div>
           <div className="chat-replies">
             <button type="button"
@@ -2631,6 +2641,47 @@ function MyAdsPage() {
   )
 }
 
+
+// ── Новостной чат (админ пишет, человек читает) ──────────────────────────
+function NewsPage() {
+  const navigate = useNavigate()
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const load = () => {
+    setLoading(true)
+    api.news().then((d) => setItems(d.items || [])).catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }
+  useEffect(() => { load() }, [])
+
+  return (
+    <Screen>
+      <div className="chat-header">
+        <button type="button" className="chat-back" onClick={() => navigate('/chats')} aria-label="Назад">
+          <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true"><path d="M15 4l-8 8 8 8" /></svg>
+        </button>
+        <div className="page-title chat-header-title">Новости</div>
+      </div>
+      <div className="chat-list">
+        {loading ? <div className="muted-line">Загружаем…</div> : null}
+        {!loading && !items.length ? (
+          <EmptyBlock text="Здесь появятся новости и объявления от «Полки»." />
+        ) : null}
+        {items.map((m) => (
+          <div key={m.id} className="chat-row">
+            <div className="chat-bubble">
+              <div>{m.text}</div>
+              <div className="chat-time">{String(m.created_at || '').slice(11, 16)}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+      {/* Поля ввода нет намеренно: в этот чат пишет только «Полка». */}
+    </Screen>
+  )
+}
+
 function ChatsPage() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -3426,6 +3477,8 @@ function AdminPage() {
   const [toast, setToast] = useState('')
   const [confirm, setConfirm] = useState(null)   // {reason} — второе подтверждение
   const [preview, setPreview] = useState(false)
+  // Новостной чат: админ пишет, пользователи только читают
+  const [newsText, setNewsText] = useState('')
 
   const flash = (text) => { setToast(text); setTimeout(() => setToast(''), 3500) }
 
@@ -3495,6 +3548,18 @@ function AdminPage() {
     } catch (e) { flash((e && e.detail) || 'Ошибка выдачи') }
   }
 
+  const sendNews = async () => {
+    const text = newsText.trim()
+    if (!text) return flash('Напишите текст сообщения')
+    try {
+      const r = await api.adminNewsSend(text)
+      flash(r.ok ? 'Сообщение отправлено в новости' : `Не отправилось: ${r.error}`)
+      if (r.ok) setNewsText('')
+    } catch (e) {
+      flash((e && e.detail) || 'Не удалось отправить')
+    }
+  }
+
   const createPromo = async () => {
     try {
       const r = await api.adminPromoCreate({ ...promoForm, value: Number(promoForm.value) })
@@ -3513,6 +3578,7 @@ function AdminPage() {
   }
 
   const tabs = [['settings', 'Условия'], ['grant', 'Выдача'], ['promo', 'Промокоды'],
+    ['news', 'Новости'],
     ['metrics', 'Метрики'], ['history', 'История']]
 
   // Группировка настроек по префиксу + поиск по подписи и ключу
@@ -3680,6 +3746,22 @@ function AdminPage() {
         </div>
       ) : null}
 
+      {tab === 'news' ? (
+        <div className="list-stack mt-8">
+          <div className="glass-card admin-setting">
+            <div className="plan-name">Новости</div>
+            <div className="plan-desc">
+              Сообщение увидят все пользователи в чате «Новости». Писать обратно нельзя.
+            </div>
+          </div>
+          <textarea className="text-input admin-text" rows={5}
+            placeholder="Текст сообщения" value={newsText}
+            onChange={(e) => setNewsText(e.target.value)} />
+          <button type="button" className="cta-primary" disabled={!newsText.trim()}
+            onClick={sendNews}>Отправить</button>
+        </div>
+      ) : null}
+
       {tab === 'metrics' && metrics ? (
         <div className="mt-8">
           <div className="admin-health">
@@ -3830,6 +3912,7 @@ function Layout() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/tariffs" element={<TariffsPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/news" element={<NewsPage />} />
         <Route path="/chats" element={<ChatsPage />} />
         <Route path="/chat/:id" element={<ChatPage />} />
       </Routes>

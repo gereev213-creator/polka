@@ -23701,6 +23701,68 @@ _CLIENT_EVENTS = ('paywall_shown', 'paywall_dismissed', 'paywall_clicked',
                   'feed_opened', 'tariffs_opened')
 
 
+def ensure_news() -> None:
+    """Новостной чат: сообщения от «Полки» всем пользователям.
+
+    Нужен вместо отдельной плашки: админ пишет в него, человек читает в
+    обычном чате. Писать обратно нельзя, поэтому в этом чате нет поля ввода.
+    """
+    try:
+        db.conn.execute("""
+            CREATE TABLE IF NOT EXISTS news_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                text TEXT NOT NULL,
+                created_at TEXT,
+                author TEXT DEFAULT 'Полка'
+            )
+        """)
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_news: {e}")
+
+
+async def api_news(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/news — лента новостей (только чтение)."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        limit = min(max(int(request.query.get('limit', 50) or 50), 1), 200)
+    except ValueError:
+        limit = 50
+    cur = db.conn.cursor()
+    rows = []
+    try:
+        cur.execute("SELECT id, text, created_at, author FROM news_messages "
+                    "ORDER BY id DESC LIMIT ?", (limit,))
+        rows = [dict(r) for r in cur.fetchall()][::-1]
+    except Exception as e:
+        logger.warning(f"api_news: {e}")
+    return _miniapp_json({'ok': True, 'items': rows})
+
+
+async def api_admin_news(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/news {text} — отправить сообщение в новостной чат."""
+    if not await _admin_read_ok(request):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    text = str((body or {}).get('text') or '').strip()[:2000]
+    if not text:
+        return _miniapp_err('empty_text', 400)
+    try:
+        cur = db.conn.cursor()
+        cur.execute("INSERT INTO news_messages (text, created_at, author) VALUES (?,?,?)",
+                    (text, get_moscow_time().isoformat(), 'Полка'))
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'id': cur.lastrowid})
+    except Exception as e:
+        logger.warning(f"admin news send: {e}")
+        return _miniapp_err('send_failed', 500)
+
+
 async def api_chats_unread(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/chats/unread — одно число для точки на вкладке «Чаты» (V4).
 
@@ -30926,6 +30988,8 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)
     app.router.add_get('/api/chats/unread', api_chats_unread)
+    app.router.add_get('/api/news', api_news)
+    app.router.add_post('/api/admin/news', api_admin_news)
     app.router.add_post('/api/pay/cispay/create', api_pay_create)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)
@@ -31498,6 +31562,7 @@ def main():
         ensure_description_lower()
         ensure_quality_columns()
         ensure_fingerprint_backfill()
+        ensure_news()
         ensure_payments()
         # Миграция чатов: колонки buyer_last_read/seller_last_read. Раньше
         # init_chat_tables вызывался только по пути «открыть диалог», а список
