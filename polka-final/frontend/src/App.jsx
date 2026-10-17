@@ -3206,6 +3206,23 @@ function ProfilePage() {
           <span className="menu-left"><Icon name="plus" /><span>Разместить объявление</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
+
+        {/* Документы — отдельными строками в профиле: так их видно сразу,
+            без прокрутки до самого низа и без поиска по футеру. */}
+        {docs.privacy_url ? (
+          <a href={docs.privacy_url} target="_blank" rel="noreferrer"
+            className="setting-row glass-card menu-row">
+            <span className="menu-left"><Icon name="shield" /><span>Политика конфиденциальности</span></span>
+            <span className="menu-arrow" aria-hidden="true">›</span>
+          </a>
+        ) : null}
+        {docs.terms_url || docs.privacy_url ? (
+          <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer"
+            className="setting-row glass-card menu-row">
+            <span className="menu-left"><Icon name="tag" /><span>Условия пользования</span></span>
+            <span className="menu-arrow" aria-hidden="true">›</span>
+          </a>
+        ) : null}
       </div>
       <AppFooter />
     </Screen>
