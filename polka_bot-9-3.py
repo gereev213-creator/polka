@@ -17266,6 +17266,29 @@ async def init_chat_tables():
     db.conn.commit()
 
 
+def ensure_chat_read_columns() -> None:
+    """Идемпотентно добавляет отметки «прочитано» в chat_sessions.
+
+    Раньше это делалось только внутри init_chat_tables (async) и срабатывало
+    лишь при открытии диалога. Список чатов с непрочитанными обращался к
+    колонкам раньше миграции — в логе было «no such column: buyer_last_read»,
+    а следом падало создание лота: счётчик непрочитанных не считался.
+    Здесь обычная синхронная миграция, которую можно звать при старте.
+    """
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("PRAGMA table_info(chat_sessions)")
+        cols = {r["name"] for r in cursor.fetchall()}
+        if not cols:
+            return
+        for col in ("buyer_last_read", "seller_last_read"):
+            if col not in cols:
+                cursor.execute(f"ALTER TABLE chat_sessions ADD COLUMN {col} TEXT DEFAULT NULL")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_chat_read_columns: {e}")
+
+
 def get_or_create_chat(ad_id: int, buyer_id: int, seller_id: int) -> int:
     cursor = db.conn.cursor()
     now = get_moscow_time().isoformat()
@@ -31421,9 +31444,9 @@ def main():
         # было «no such column: buyer_last_read», и создание лота падало
         # следом, потому что счётчик непрочитанных не мог посчитаться.
         try:
-            init_chat_tables()
+            ensure_chat_read_columns()
         except Exception as _e:
-            logger.warning(f"init_chat_tables при старте: {_e}")
+            logger.warning(f"ensure_chat_read_columns при старте: {_e}")
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
         ensure_monetization()
