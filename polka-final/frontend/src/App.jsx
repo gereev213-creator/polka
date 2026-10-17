@@ -810,12 +810,12 @@ function CriteriaPage() {
         {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
         <span className="chat-tabs-pill" aria-hidden="true" />
         <button type="button" className="chat-tab"
-          onClick={() => { window.location.hash = '#/hunt' }}>ИИ-поиск</button>
+          onClick={() => { window.location.hash = '#/hunt' }}>Поиск словами</button>
         <button type="button" className="chat-tab is-active">Вручную</button>
       </div>
 
       <p className="sub-copy">
-        Напишите, что искать на Авито — бот пришлёт подходящие объявления.</p>
+        </p>
 
       {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает.
           Плашки — общий Chip из дизайн-системы: один компонент на все фильтры. */}
@@ -1041,16 +1041,7 @@ function CriteriaPage() {
           а отбор не врёт (для телефонов сразу проверка АКБ). */}
       {templates.length ? (
         <div className="list-stack mt-14">
-        {/* Новостной чат: всегда первым, писать в него нельзя */}
-        <Link to="/news" className="chat-row glass-card">
-          <div className="chat-meta">
-            <div className="chat-meta-top">
-              <span className="chat-name">Новости</span>
-              <span className="chat-time" />
-            </div>
-            <span className="chat-ad">Объявления и новости от «Полки»</span>
-          </div>
-        </Link>
+
           <div className="section-head"><strong>Готовые шаблоны</strong><span>{templates.length}</span></div>
           <div className="chat-replies">
             <button type="button"
@@ -2729,6 +2720,16 @@ function ChatsPage() {
       <div className="list-stack mt-14">
         {/* Строка диалога: аватар с инициалами (пустые круги были одинаковые),
             имя, объявление, последнее сообщение, время и непрочитанные. */}
+        {/* Новостной чат: всегда первым, писать в него нельзя */}
+        <Link to="/news" className="chat-row glass-card">
+          <div className="chat-meta">
+            <div className="chat-meta-top">
+              <span className="chat-name">Новости</span>
+              <span className="chat-time" />
+            </div>
+            <span className="chat-ad">Объявления и новости от «Полки»</span>
+          </div>
+        </Link>
         {items.map((chat) => {
           const name = chatName(chat)
           return (
