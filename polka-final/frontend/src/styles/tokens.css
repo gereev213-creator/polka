@@ -874,3 +874,56 @@ body, button, input, select, textarea {
   color: var(--text-primary) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
 }
+
+/* ═══ ШАПКА-ПИЛЮЛИ (по Memgift) ═════════════════════════════════════════ */
+.topbar {
+  background: transparent !important;
+  border-bottom: 0 !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 8px 0 4px;
+}
+.topbar-pills {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 56px;
+}
+.topbar-pills-right { display: flex; align-items: center; gap: 8px; }
+.pill-btn {
+  height: 56px;
+  min-height: 56px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--card-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 17px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: inset 0 0 0 1px var(--border-secondary), var(--shadow-soft);
+  cursor: pointer;
+}
+.pill-btn--icon { width: 56px; padding: 0; }
+.pill-btn:active { transform: scale(.97); }
+.pill-chevron {
+  width: 12px; height: 12px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg) translateY(-2px);
+  border-radius: 1px;
+}
+.pill-dots {
+  width: 18px; height: 4px;
+  background:
+    radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 50% / 6px 4px repeat-x;
+}
+.topbar-row { display: flex; align-items: center; gap: 12px; padding: 4px 0 8px; }
+.topbar-side, .topbar-center { display: flex; align-items: center; }
+.topbar-center { flex: 1; }
+.topbar-side--right { justify-content: flex-end; }
