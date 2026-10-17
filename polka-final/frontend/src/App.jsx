@@ -769,6 +769,23 @@ function CriteriaPage() {
       setMaxPrice('')
       await load()
     } catch (err) {
+      // Сначала проверяем: может, критерий ВСЁ-ТАКИ создался. Запрос мог не
+      // дождаться ответа (таймаут, занятая база), а запись на сервере уже
+      // прошла — тогда «не удалось» было бы ложью и человек создал бы дубль.
+      try {
+        const d = await api.getCriteria()
+        const want = query.trim().toLowerCase()
+        const found = (d.items || []).some(
+          (c) => String(c.query || '').trim().toLowerCase() === want)
+        if (found) {
+          setQuery('')
+          setCity('')
+          setMaxPrice('')
+          setError('')
+          await load()
+          return
+        }
+      } catch { /* список не получен — покажем обычную ошибку */ }
       // Показываем ПРИЧИНУ, а не «не удалось»: без этого человек не поймёт,
       // что критерий просто уже есть в списке
       const code = err?.code || ''
