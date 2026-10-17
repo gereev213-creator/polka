@@ -2843,3 +2843,23 @@ html, body, #root {
 .segmented button.is-active { background: transparent; color: var(--text);
   font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
 .brand-logo { height: 18px; width: auto; }
+
+/* ═══ СТАТИСТИКА ПРОФИЛЯ ОДНОЙ СТРОКОЙ ═══════════════════════════════════ */
+.stats-head { display: flex; align-items: baseline; justify-content: space-between;
+  margin: 24px 0 8px; }
+.stats-head-label { font-size: 12px; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--text-tertiary); }
+.stats-row { display: flex; border: 1px solid var(--line); border-radius: 12px;
+  overflow: hidden; }
+.stats-cell { flex: 1; display: flex; flex-direction: column-reverse; gap: 2px;
+  padding: 12px; text-decoration: none; color: inherit; text-align: center; }
+.stats-cell + .stats-cell { border-left: 1px solid var(--line); }
+.stats-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stats-label { font-size: 11px; color: var(--text-secondary); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; }
+
+/* ═══ АВАТАР ПРОФИЛЯ ═════════════════════════════════════════════════════ */
+/* 160 px — это размер пустого экрана онбординга, а не профиля: на нём
+   ничего не видно вокруг. 96 — достаточно, чтобы узнавать себя, и остаётся
+   место имени и плану. */
+.profile-avatar, .avatar-xl { width: 96px; height: 96px; font-size: 32px; }

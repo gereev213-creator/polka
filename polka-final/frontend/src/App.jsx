@@ -1309,20 +1309,19 @@ function SellerStats({ profile, caption = '' }) {
     { key: 'mod', label: 'На модерации', value: profile.moderation_ads || 0, icon: 'clock', to: '/my' },
     { key: 'fav', label: 'В избранном', value: profile.favorites || 0, icon: 'heart', to: '/favorites' },
   ]
+  // Статистика одной строкой (спека v2): три числа в общей рамке с
+  // разделителями, без иконок — иконки дублировали подписи и шумели.
   return (
     <>
       <div className="stats-head">
-        <strong>Моя статистика</strong>
+        <span className="stats-head-label">Статистика</span>
         {caption ? <span>{caption}</span> : null}
       </div>
       <div className="stats-row">
         {cards.map((c) => (
-          <Link key={c.key} to={c.to} className="stat-card">
-            <span className="stat-card-label">{c.label}</span>
-            <span className="stat-card-bottom">
-              <span className="stat-card-value">{c.value}</span>
-              <span className="stat-card-icon"><Icon name={c.icon} /></span>
-            </span>
+          <Link key={c.key} to={c.to} className="stats-cell">
+            <span className="stats-value">{c.value}</span>
+            <span className="stats-label">{c.label}</span>
           </Link>
         ))}
       </div>
