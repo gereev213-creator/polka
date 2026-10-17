@@ -24791,16 +24791,29 @@ def cleanup_all() -> Dict:
     removed = {}
 
     def _cut(table: str, days: int, column: str = 'created_at') -> int:
+        # ПОРЦИЯМИ: на большой таблице один безразмерный DELETE держит
+        # блокировку записи десятки секунд — та же болезнь, что была в
+        # чистке объявлений (лаг цикла 90 017 мс при среднем ответе 200 мс).
+        # Удаляем по 2 000 строк и коммитим между порциями.
+        CHUNK = 2000
+        total = 0
         cutoff = (now - timedelta(days=days)).isoformat()
         try:
-            cursor.execute(f"DELETE FROM {table} WHERE {column} IS NOT NULL AND {column} < ?",
-                           (cutoff,))
-            n = cursor.rowcount or 0
-            db.conn.commit()
-            return n
+            while True:
+                cursor.execute(
+                    f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} "
+                    f"WHERE {column} IS NOT NULL AND {column} < ? LIMIT ?)",
+                    (cutoff, CHUNK))
+                n = cursor.rowcount or 0
+                db.conn.commit()
+                total += n
+                if n < CHUNK:
+                    break
+                time.sleep(0.05)
+            return total
         except Exception as e:
             logger.warning(f"cleanup {table}: {e}")
-            return 0
+            return total
 
     removed['отметки об отправке'] = _cut('search_notifications_sent', 30, 'sent_at')
     removed['логи'] = _cut('logs', 14)
