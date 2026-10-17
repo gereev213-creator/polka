@@ -67,8 +67,22 @@ function Screen({ children, padded = true, className = '' }) {
 
 
 function MediaPlaceholder({ label = 'фото', tall = false, imageUrl = '' }) {
-  if (imageUrl) {
-    return <img className={`media-image ${tall ? 'is-tall' : ''}`.trim()} src={resolveAssetUrl(imageUrl)} alt={label} />
+  const [broken, setBroken] = useState(false)
+  if (imageUrl && !broken) {
+    return (
+      <img
+        className={`media-image ${tall ? 'is-tall' : ''}`.trim()}
+        src={resolveAssetUrl(imageUrl)}
+        alt={label}
+        /* Ленивая загрузка: в сетке из 20 карточек грузим только видимое —
+           лента открывается заметно быстрее на мобильном интернете. */
+        loading="lazy"
+        decoding="async"
+        /* Битая ссылка на фото не должна показывать «сломанную картинку»:
+           тихо уходим на серую заглушку. */
+        onError={() => setBroken(true)}
+      />
+    )
   }
 
   return (
