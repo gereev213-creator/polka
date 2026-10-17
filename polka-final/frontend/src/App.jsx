@@ -11,7 +11,7 @@ import {
 } from 'react-router-dom'
 import { getInitData, getTelegramUser, initTelegramMiniApp } from './telegram'
 import HuntChat from './HuntChat'
-import { api, resolveAssetUrl, openInvoice, cacheGet, cacheSet, friendlyError, onResume } from './api'
+import { api, resolveAssetUrl, cacheGet, cacheSet, friendlyError, onResume } from './api'
 
 import { Skeleton } from './components/Skeleton'
 import { EmptyState } from './components/EmptyState'
@@ -3004,7 +3004,7 @@ function ProfilePage() {
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
         <Link to="/tariffs" className="setting-row glass-card menu-row">
-          <span className="menu-left"><Icon name="crown" /><span>Тарифы и монеты</span></span>
+          <span className="menu-left"><Icon name="crown" /><span>Тарифы</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
         {isAdmin ? (
@@ -3039,23 +3039,6 @@ function TariffsPage() {
     api.payPlans().then((d) => setCardPlans(d.plans || [])).catch(() => setCardPlans([]))
   }
   useEffect(() => { load() }, [])
-
-  const buy = async (product) => {
-    setBusy(true); setMsg('')
-    try {
-      const r = await api.payInvoice(product)
-      if (!r.invoice_url) throw new Error('нет ссылки оплаты')
-      if (!openInvoice(r.invoice_url, (status) => {
-        if (status === 'paid') { setMsg('Оплачено — обновляем…'); setTimeout(load, 1500) }
-      })) {
-        window.open(r.invoice_url, '_blank')
-      }
-    } catch (e) {
-      setMsg((e && e.detail) || 'Не удалось открыть оплату')
-    } finally {
-      setBusy(false)
-    }
-  }
 
   // Оплата картой: счёт создаётся на сервере, страница оплаты открывается
   // в браузере (карта вводится вне Telegram). Дальше сами опрашиваем статус:
@@ -3118,7 +3101,7 @@ function TariffsPage() {
   return (
     <Screen>
       <TopBar left={<Logo />} />
-      <h2 className="section-title">Тарифы и монеты</h2>
+      <h2 className="section-title">Тарифы</h2>
 
       {isTrial ? (
         <div className="glass-card banner-card">
@@ -3152,28 +3135,9 @@ function TariffsPage() {
           {isPlus
             ? <span className="badge">Активен</span>
             : <button type="button" className="cta-primary" disabled={busy}
-                onClick={() => buy('plus_month')}>Оформить</button>}
+                onClick={() => buyCard('plus_month')}>Оформить</button>}
         </div>
 
-        <div className="glass-card plan-row">
-          <div className="plan-left">
-            <div className="plan-name">Баланс монет</div>
-            <div className="plan-desc">Монеты на «Открыть сейчас» (5) и «Тщательную проверку» (3)</div>
-          </div>
-          <div className="plan-balance">{plan?.balance ?? 0} ⦿</div>
-        </div>
-      </div>
-
-      <h3 className="section-title mt-14">Пополнить монеты</h3>
-      <div className="list-stack mt-8">
-        {[['coins_50', '50 монет', '55 ⭐'], ['coins_150', '150 монет', '149 ⭐'],
-          ['coins_500', '500 монет', '449 ⭐']].map(([prod, label, stars]) => (
-          <button key={prod} type="button" className="glass-card plan-row" disabled={busy}
-            onClick={() => buy(prod)}>
-            <span className="plan-left"><span className="plan-name">{label}</span></span>
-            <span className="plan-balance">{stars}</span>
-          </button>
-        ))}
       </div>
 
       {cardPlans.length ? (
@@ -3195,7 +3159,7 @@ function TariffsPage() {
 
       <div className="glass-card mt-14">
         <div className="plan-name">Промокод</div>
-        <div className="plan-desc">Введите код — он даст монеты, дни «Плюса» или слот</div>
+        <div className="plan-desc">Введите код — он даст дни «Плюса» или слот критерия</div>
         <div className="admin-actions mt-8">
           <input className="text-input" placeholder="КОД" value={promo}
             onChange={(e) => setPromo(e.target.value.toUpperCase())} />
@@ -3227,8 +3191,8 @@ function AdminPage() {
   const [history, setHistory] = useState([])
   const [metrics, setMetrics] = useState(null)
   const [promo, setPromo] = useState({ items: [], titles: {} })
-  const [promoForm, setPromoForm] = useState({ code: '', kind: 'coins', value: 100, max_uses: 0 })
-  const [grant, setGrant] = useState({ user: '', kind: 'coins', amount: 100 })
+  const [promoForm, setPromoForm] = useState({ code: '', kind: 'plus_days', value: 100, max_uses: 0 })
+  const [grant, setGrant] = useState({ user: '', kind: 'plus_days', amount: 100 })
   const [msg, setMsg] = useState('')
 
   const loadAll = () => {
@@ -3342,15 +3306,14 @@ function AdminPage() {
           <div className="glass-card plan-row">
             <div className="plan-left">
               <div className="plan-name">Выдать пользователю</div>
-              <div className="plan-desc">id или @username · Плюс, монеты, слот, пробный</div>
+              <div className="plan-desc">id или @username · Плюс, слот, пробный период</div>
             </div>
           </div>
           <input className="text-input" placeholder="id или @username"
             value={grant.user} onChange={(e) => setGrant({ ...grant, user: e.target.value })} />
           <select className="text-input" value={grant.kind}
             onChange={(e) => setGrant({ ...grant, kind: e.target.value })}>
-            <option value="coins">монеты</option>
-            <option value="plus_days">дней «Плюса»</option>
+                        <option value="plus_days">дней «Плюса»</option>
             <option value="criterion_days">дней доп. критерия</option>
             <option value="trial_days">дней пробного</option>
             <option value="plan_free">сбросить на бесплатный</option>
@@ -3367,8 +3330,7 @@ function AdminPage() {
             value={promoForm.code} onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value })} />
           <select className="text-input" value={promoForm.kind}
             onChange={(e) => setPromoForm({ ...promoForm, kind: e.target.value })}>
-            <option value="coins">монеты</option>
-            <option value="plus_days">дни «Плюса»</option>
+                        <option value="plus_days">дни «Плюса»</option>
             <option value="criterion_days">дни доп. критерия</option>
             <option value="trial_days">дни пробного</option>
           </select>
@@ -3396,8 +3358,7 @@ function AdminPage() {
         <div className="list-stack mt-8">
           {[['Пользователей', metrics.users], ['Критериев активно', metrics.criteria_active],
             ['Решений', metrics.matches], ['Отправлено', metrics.sent],
-            ['Находок в базе', metrics.findings], ['Монет на руках', metrics.coins_left],
-            ['Покупок', metrics.payments], ['Звёзд получено', metrics.stars],
+            ['Находок в базе', metrics.findings], ['Покупок', metrics.payments],
             ['Приём, мс', metrics.ingest?.last_ms], ['Лаг цикла, мс', metrics.loop_lag?.max_ms]].map(
             ([label, value]) => (
               <div key={label} className="plan-row glass-card">

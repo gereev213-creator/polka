@@ -354,10 +354,6 @@ export const api = {
 
   // ── Монетизация (этап H) ────────────────────────────────────────────────
   getPlan: () => request('/api/plan'),
-  coinsSpend: (kind, adId) => request('/api/coins/spend',
-    { method: 'POST', body: JSON.stringify({ kind, ad_id: adId }) }),
-  payInvoice: (product) => request('/api/pay/invoice',
-    { method: 'POST', body: JSON.stringify({ product }) }),
   // Оплата картой через CISPay: счёт создаём на сервере, статус проверяем
   // опросом — у провайдера нет вебхуков.
   payPlans: () => request('/api/pay/plans'),
@@ -394,15 +390,3 @@ export const api = {
 }
 
 // Открывает ссылку оплаты Telegram Stars (XTR) в WebApp
-export function openInvoice(url, onClose) {
-  try {
-    const tg = window.Telegram?.WebApp
-    if (tg && typeof tg.openInvoice === 'function') {
-      tg.openInvoice(url, (status) => { if (onClose) onClose(status) })
-      return true
-    }
-  } catch {
-    // ignore
-  }
-  return false
-}

@@ -100,7 +100,7 @@ class FakeLog:
 
 
 settings = {}
-ns = {'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'Dict': Dict, 'List': List,
+ns = {'COINS_ENABLED': True, 'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'Dict': Dict, 'List': List,
       'Optional': Optional, 'Tuple': Tuple, 'Any': Any, 'datetime': datetime,
       'timedelta': timedelta, 'ZoneInfo': ZoneInfo, 'db': FakeDb(conn), 'logger': FakeLog(),
       'get_moscow_time': lambda: NOW[0], '_time': __import__('time'),

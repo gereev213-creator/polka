@@ -147,6 +147,11 @@ ADMIN_CHANNEL_ID = os.environ.get("MAIN_CHANNEL", "-1003994334268")
 # Получить токен: https://t.me/CryptoBot → /pay → Создать приложение
 # Токен ДИАГНОСТИКИ (не путать с INGEST_TOKEN — тот у сборщика)
 ADMIN_READ_TOKEN = os.environ.get("ADMIN_READ_TOKEN", "")
+# Монеты и Telegram Stars убраны из продукта (B0, 17.10.2026): платёж идёт
+# напрямую через шлюз (CISPay), платный продукт один — «Плюс» на срок.
+# Таблицы coin_wallets/coin_transactions не удалены: флаг COINS_ENABLED=1
+# возвращает старые эндпоинты, если понадобится откат.
+COINS_ENABLED = os.environ.get("COINS_ENABLED", "0") == "1"
 CRYPTO_BOT_TOKEN = os.environ.get("CRYPTO_BOT_TOKEN", "")
 # Курс обмена рублей → USDT (обновляйте по необходимости или подключите API курса)
 # Используется только если нет точного совпадения в таблице цен
@@ -18501,7 +18506,8 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'trial_days_left': plan['trial_days_left'],
         'criteria_used': used,
         'criteria_limit': limit,
-        'balance': coins_balance(viewer_id),
+        # баланс монет отдаём только при включённом флаге (B0)
+        **({'balance': coins_balance(viewer_id)} if COINS_ENABLED else {}),
         'plus_price': plan.get('show_price', PLAN_PLUS_SHOW_PRICE),
         'plus_stars': PLUS_STARS,
         'free_max_criteria': PLAN_FREE_MAX_CRITERIA,
@@ -18510,7 +18516,16 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/coins/spend {kind, ad_id?} — разовые покупки за монеты (H4)."""
+    """POST /api/coins/spend {kind, ad_id?} — ОТКЛЮЧЕНО (B0).
+
+    Монеты убраны из продукта: разовых покупок лотов больше нет, снять
+    задержку можно только «Плюсом» или промокодом. Эндпоинт оставлен, чтобы
+    старые копии приложения получали понятный отказ, а не ошибку сети.
+    """
+    if not COINS_ENABLED:
+        return _miniapp_json({'ok': False, 'error': 'coins_disabled',
+                              'detail': 'Разовые покупки отключены — оформите «Плюс»'},
+                             status=410)
     viewer_id = _miniapp_viewer(request)
     if not viewer_id:
         return _miniapp_err('unauthorized', 401)
@@ -18564,11 +18579,15 @@ async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 async def api_pay_invoice(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/pay/invoice {product} — ссылка на оплату Telegram Stars (H3).
+    """POST /api/pay/invoice {product} — ОТКЛЮЧЕНО (B0): оплата только через CISPay.
 
-    Оплата цифровых услуг — через Stars (createInvoiceLink, валюта XTR).
-    Карточная PayAnyway для этих товаров не используется.
+    Telegram Stars и монеты убраны: продукт один — «Плюс» на срок, оплата
+    картой в тарифах. Старые копии приложения получают понятный отказ.
     """
+    if not COINS_ENABLED:
+        return _miniapp_json({'ok': False, 'error': 'stars_disabled',
+                              'detail': 'Оплата звёздами отключена — оплата картой в «Тарифах»'},
+                             status=410)
     viewer_id = _miniapp_viewer(request)
     if not viewer_id:
         return _miniapp_err('unauthorized', 401)
@@ -22474,6 +22493,23 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                         'Цена «Плюса» на 3 месяца, ₽ (0 — не показывать)'),
     'pay.rub_year': ('str', None, None, '0',
                      'Цена «Плюса» на год, ₽ (0 — не показывать)'),
+    'pay.crypto_enabled': ('str', None, None, '0',
+                           '1 — показать способ оплаты «Криптой» (скоро)'),
+    # Напоминания об оплате в ленте (этап R): тексты живут в настройках,
+    # а не в JSX — чтобы менять без релиза.
+    'reminders.enabled': ('str', None, None, '1',
+                          '1 — показывать напоминания о «Плюсе» в ленте находок'),
+    'reminders.feed_after': ('str', None, None, '6',
+                             'После какого по счёту лота показывать карточку-напоминание'),
+    'reminders.cooldown_hours': ('str', None, None, '24',
+                                 'Не чаще раза в N часов'),
+    'reminders.title': ('str', None, None, 'В чат с задержкой',
+                        'Заголовок карточки-напоминания'),
+    'reminders.text': ('str', None, None,
+                       'С «Плюсом» лоты приходят сразу и с проверкой описания',
+                       'Текст карточки-напоминания'),
+    'reminders.trial_ending': ('str', None, None, 'Пробный период заканчивается',
+                              'Текст, когда пробный период в последние 2 дня'),
     'pay.allow_test': ('str', None, None, '0',
                        '1 — начислять даже по тестовым счетам (только для проверки)'),
     'collector.filters_words': ('str', None, None, '',
@@ -22658,7 +22694,8 @@ def _cfg_ab_bucket(user_id: int) -> bool:
 
 
 # ── Промокоды под текущую модель (Плюс, монеты, слот, пробный период) ───────
-PROMO_KINDS = ('plus_days', 'coins', 'criterion_days', 'trial_days')
+PROMO_KINDS = (('plus_days', 'coins', 'criterion_days', 'trial_days')
+                if COINS_ENABLED else ('plus_days', 'criterion_days', 'trial_days'))
 PROMO_KIND_TITLES = {
     'plus_days': 'дней «Плюса»',
     'coins': 'монет',
@@ -22826,7 +22863,7 @@ def promo_redeem(user_id: int, code: str) -> Dict:
         if kind == 'plus_days':
             _grant_plus_days(int(user_id), value)
             granted = f'«Плюс» на {value} дн.'
-        elif kind == 'coins':
+        elif kind == 'coins' and COINS_ENABLED:
             coins_add(int(user_id), value, f'promo:{code}')
             granted = f'{value} монет'
         elif kind == 'criterion_days':
@@ -28008,7 +28045,7 @@ async def api_admin_grant(request: aiohttp_web.Request) -> aiohttp_web.Response:
             return _miniapp_json({'ok': False, 'error': 'bad_amount'}, status=400)
         expires = _grant_plus_days(target, amount)
         res = {'ok': True, 'kind': kind, 'amount': amount, 'expires_at': expires}
-    elif kind == 'coins':
+    elif kind == 'coins' and COINS_ENABLED:
         if amount == 0:
             return _miniapp_json({'ok': False, 'error': 'bad_amount'}, status=400)
         balance = coins_add(target, amount, f'admin:{admin_id}')
