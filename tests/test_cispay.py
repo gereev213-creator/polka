@@ -55,7 +55,7 @@ conn = sqlite3.connect(':memory:')
 conn.row_factory = sqlite3.Row
 
 SETTINGS = {'pay.enabled': '1', 'pay.cispay_shop_uuid': 'shop-uuid-test',
-            'pay.rub_month': '199', 'pay.rub_quarter': '499', 'pay.rub_year': '1490',
+            'pay.rub_week': '69', 'pay.rub_month': '199', 'pay.rub_quarter': '499',
             'pay.allow_test': '0'}
 GRANTS = []
 CALLS = []
@@ -111,11 +111,11 @@ ns['ensure_payments']()
 
 # ── 1. Витрина: только тарифы с ценой
 plans = ns['cispay_plans_public']()
-assert [p['product'] for p in plans] == ['plus_month', 'plus_quarter', 'plus_year'], plans
-assert plans[0]['amount'] == 199 and plans[0]['days'] == 30, plans
-SETTINGS['pay.rub_year'] = '0'
-assert [p['product'] for p in ns['cispay_plans_public']()] == ['plus_month', 'plus_quarter']
-SETTINGS['pay.rub_year'] = '1490'
+assert [p['product'] for p in plans] == ['plus_week', 'plus_month', 'plus_quarter'], plans
+assert plans[0]['amount'] == 69 and plans[0]['days'] == 7, plans
+SETTINGS['pay.rub_quarter'] = '0'
+assert [p['product'] for p in ns['cispay_plans_public']()] == ['plus_week', 'plus_month']
+SETTINGS['pay.rub_quarter'] = '499'
 print('1) витрина показывает только тарифы с заданной ценой')
 
 # ── 2. Создание счёта: запись в базе, ссылка наружу

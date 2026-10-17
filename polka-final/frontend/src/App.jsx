@@ -3027,31 +3027,49 @@ function TariffsPage() {
   const [plan, setPlan] = useState(null)
   const [ref, setRef] = useState(null)
   const [busy, setBusy] = useState(false)
-  const [msg, setMsg] = useState('')
-  const [promo, setPromo] = useState('')
-  // Тарифы оплаты картой: цены задаются в админке, поэтому список приходит
-  // с сервера. Пусто — значит оплата картой ещё не настроена.
   const [cardPlans, setCardPlans] = useState([])
+  const [cryptoOn, setCryptoOn] = useState(false)
+  const [term, setTerm] = useState('')
+  const [method, setMethod] = useState('card')
+  const [promoOpen, setPromoOpen] = useState(false)
+  const [promo, setPromo] = useState('')
+  // Статус оплаты вместо голой строки: ждём / оплачено / тестовый / истёк / ошибка.
+  const [pay, setPay] = useState({ state: '', text: '', tries: 0 })
+  const [err, setErr] = useState('')
 
   const load = () => {
-    api.getPlan().then(setPlan).catch(() => {})
+    api.getPlan().then(setPlan).catch(setErr)
     api.getReferral().then(setRef).catch(() => {})
-    api.payPlans().then((d) => setCardPlans(d.plans || [])).catch(() => setCardPlans([]))
+    api.payPlans().then((d) => {
+      const list = d.plans || []
+      setCardPlans(list)
+      setCryptoOn(!!d.crypto_enabled)
+      // По умолчанию выбираем 30 дней, если они есть в витрине
+      setTerm((cur) => cur || (list.find((p) => p.days === 30) || list[0] || {}).product || '')
+    }).catch(() => setCardPlans([]))
   }
   useEffect(() => { load() }, [])
 
-  // Оплата картой: счёт создаётся на сервере, страница оплаты открывается
-  // в браузере (карта вводится вне Telegram). Дальше сами опрашиваем статус:
-  // человек может закрыть приложение — «Плюс» начислит фоновый цикл сервера.
-  const buyCard = async (product) => {
-    setBusy(true); setMsg('')
+  const chosen = cardPlans.find((p) => p.product === term) || null
+  const isPlus = plan?.plan === 'plus'
+  const trialLeft = Number(plan?.trial_days_left || 0)
+  const freeDelay = plan?.free_delay_min ?? 15
+  const freeMax = plan?.free_max_criteria ?? 1
+  const plusMax = plan?.criteria_limit ?? 10
+  const oldPrice = Number(plan?.plus_price || 0)
+
+  // Оплата картой: счёт создаётся на сервере, страница открывается в браузере.
+  // Дальше сами опрашиваем статус — человек может закрыть приложение.
+  const buyCard = async () => {
+    if (!chosen) return
+    setBusy(true)
+    setPay({ state: 'waiting', text: 'Открыл страницу оплаты. Проверяем автоматически…', tries: 0 })
     try {
-      const r = await api.payCard(product)
+      const r = await api.payCard(chosen.product)
       if (!r.url) throw new Error('нет ссылки оплаты')
       const tg = window.Telegram?.WebApp
       if (tg && typeof tg.openLink === 'function') tg.openLink(r.url)
       else window.open(r.url, '_blank')
-      setMsg('Открыл страницу оплаты. После оплаты вернитесь — проверим автоматически.')
       let tries = 0
       const timer = setInterval(async () => {
         tries += 1
@@ -3059,20 +3077,22 @@ function TariffsPage() {
           const s = await api.payCardStatus(r.order_uuid)
           if (s && s.credited) {
             clearInterval(timer)
-            setMsg(`Оплачено — «Плюс» продлён на ${s.days} дней`)
+            setPay({ state: 'paid', text: `Оплачено — «Плюс» продлён на ${s.days} дней`, tries })
             load()
           } else if (s && s.status === 'test_paid') {
             clearInterval(timer)
-            setMsg('Это тестовый счёт: «Плюс» не начисляется')
+            setPay({ state: 'test', text: 'Тестовый счёт: «Плюс» не начисляется', tries })
           } else if (s && s.status === 'expired') {
             clearInterval(timer)
-            setMsg('Счёт истёк — создайте новый')
+            setPay({ state: 'expired', text: 'Счёт истёк — создайте новый', tries })
+          } else {
+            setPay((cur) => ({ ...cur, tries }))
           }
-        } catch { /* тихо: сеть вернётся, попробуем снова */ }
+        } catch { /* сеть вернётся — попробуем снова */ }
         if (tries >= 40) clearInterval(timer)
       }, 15000)
     } catch (e) {
-      setMsg((e && e.detail) || 'Не удалось создать счёт на оплату')
+      setPay({ state: 'error', text: (e && e.detail) || 'Не удалось создать счёт', tries: 0 })
     } finally {
       setBusy(false)
     }
@@ -3080,105 +3100,153 @@ function TariffsPage() {
 
   const applyPromo = async () => {
     if (!promo.trim()) return
-    setBusy(true); setMsg('')
+    setBusy(true)
     try {
       const r = await api.redeemPromo(promo.trim())
-      setMsg(r.granted ? `Промокод активирован: ${r.granted}` : 'Промокод принят')
+      setPay({ state: 'paid', text: r.granted ? `Промокод активирован: ${r.granted}` : 'Промокод принят', tries: 0 })
       setPromo('')
       load()
     } catch (e) {
-      setMsg((e && e.detail) || 'Промокод не подошёл')
+      setPay({ state: 'error', text: (e && e.detail) || 'Промокод не подошёл', tries: 0 })
     } finally {
       setBusy(false)
     }
   }
 
-  const planName = plan?.plan || '…'
-  const isTrial = planName === 'trial'
-  const isPlus = planName === 'plus'
-  const money = (n) => Number(n || 0).toLocaleString('ru-RU')
+  const copyRef = async () => {
+    const link = ref?.link || ''
+    if (!link) return
+    try { await navigator.clipboard.writeText(link); setPay({ state: 'paid', text: 'Ссылка скопирована', tries: 0 }) }
+    catch { setPay({ state: 'error', text: 'Не удалось скопировать — скопируйте вручную', tries: 0 }) }
+  }
+
+  if (err) {
+    return (
+      <div className="screen">
+        <TopBar title="Тарифы" onBack={() => navigate(-1)} />
+        <ErrorState text="Не удалось загрузить тарифы" onRetry={load} />
+      </div>
+    )
+  }
 
   return (
-    <Screen>
-      <TopBar left={<Logo />} />
-      <h2 className="section-title">Тарифы</h2>
+    <div className="screen">
+      <TopBar title="Тарифы" onBack={() => navigate(-1)} />
+      <div className="page-narrow">
 
-      {isTrial ? (
-        <div className="glass-card banner-card">
-          <div className="banner-title">Пробный период</div>
-          <div className="banner-text">
-            Осталось дней: {plan.trial_days_left}. Без задержки, до {plan.criteria_limit} критериев,
-            тщательный отбор по описанию включён.
+        {/* 1. Статус: пробный / Плюс / бесплатный */}
+        <div className="glass-card tariff-status">
+          <div className="plan-name">
+            {isPlus ? 'Плюс' : trialLeft > 0 ? 'Пробный период' : 'Бесплатный тариф'}
+          </div>
+          <div className="plan-desc">
+            {isPlus
+              ? `Действует до ${plan?.plus_until || '—'}`
+              : trialLeft > 0
+                ? `${trialLeft} дн. · потом ${freeMax} критерий и чат через ${freeDelay} мин`
+                : `${freeMax} критерий · чат через ${freeDelay} мин`}
           </div>
         </div>
-      ) : null}
 
-      <div className="list-stack mt-14">
-        <div className="glass-card plan-row">
-          <div className="plan-left">
-            <div className="plan-name">Бесплатно</div>
-            <div className="plan-desc">1 критерий, находки с задержкой {plan?.free_delay_min || 10} мин</div>
+        {/* 2. Сравнение «Бесплатно / Плюс» — все числа из данных */}
+        <div className="glass-card tariff-compare">
+          <div className="tariff-row tariff-head">
+            <span />
+            <span>Бесплатно</span>
+            <span>Плюс</span>
           </div>
-          {planName === 'free' ? <span className="badge">Сейчас</span> : null}
+          <div className="tariff-row">
+            <span>Критерии</span><span>{freeMax}</span><span>{plusMax}</span>
+          </div>
+          <div className="tariff-row">
+            <span>Чат</span><span>через {freeDelay} мин</span><span>сразу</span>
+          </div>
+          <div className="tariff-row">
+            <span>Отбор по описанию</span><span>—</span><span>есть</span>
+          </div>
+          <div className="tariff-row">
+            <span>«Цена снижена»</span><span>—</span><span>есть</span>
+          </div>
         </div>
 
-        <div className="glass-card plan-row">
-          <div className="plan-left">
-            <div className="plan-name">
-              ПОЛКА Плюс
-              <span className="plan-price"><s>{plan?.plus_price || 149} ₽</s> 99 ₽/мес</span>
-            </div>
-            <div className="plan-desc">
-              10 критериев, без задержки, тщательный отбор по описанию, «цена снижена»
-            </div>
-          </div>
-          {isPlus
-            ? <span className="badge">Активен</span>
-            : <button type="button" className="cta-primary" disabled={busy}
-                onClick={() => buyCard('plus_month')}>Оформить</button>}
-        </div>
-
-      </div>
-
-      {cardPlans.length ? (
-        <>
-          <h3 className="section-title mt-14">Оплатить картой</h3>
-          <div className="list-stack mt-8">
+        {/* 3. Срок */}
+        {cardPlans.length ? (
+          <div className="tariff-terms">
             {cardPlans.map((pl) => (
-              <button key={pl.product} type="button" className="glass-card plan-row"
-                disabled={busy} onClick={() => buyCard(pl.product)}>
-                <span className="plan-left">
-                  <span className="plan-name">Плюс на {pl.days} дней</span>
-                </span>
-                <span className="plan-balance">{pl.amount} ₽</span>
+              <button key={pl.product} type="button"
+                className={`glass-card tariff-term${term === pl.product ? ' is-active' : ''}`}
+                onClick={() => setTerm(pl.product)} disabled={busy}>
+                <span className="tariff-term-days">{pl.days} дн.</span>
+                <span className="tariff-term-price">{pl.amount} ₽</span>
+                {pl.days === 30 && oldPrice > pl.amount ? (
+                  <span className="badge">выгодно</span>
+                ) : null}
               </button>
             ))}
           </div>
-        </>
-      ) : null}
+        ) : (
+          <EmptyState text="Оплата картой пока не настроена" icon={<Icon name="card" />} />
+        )}
 
-      <div className="glass-card mt-14">
-        <div className="plan-name">Промокод</div>
-        <div className="plan-desc">Введите код — он даст дни «Плюса» или слот критерия</div>
-        <div className="admin-actions mt-8">
-          <input className="text-input" placeholder="КОД" value={promo}
-            onChange={(e) => setPromo(e.target.value.toUpperCase())} />
-          <button type="button" className="cta-primary" disabled={busy} onClick={applyPromo}>
-            Применить
+        {/* 4. Способ оплаты */}
+        {cryptoOn ? (
+          <div className="tariff-methods">
+            <button type="button" className={`tariff-method${method === 'card' ? ' is-active' : ''}`}
+              onClick={() => setMethod('card')}>Картой</button>
+            <button type="button" className={`tariff-method${method === 'crypto' ? ' is-active' : ''}`}
+              onClick={() => setMethod('crypto')}>Криптой · скоро</button>
+          </div>
+        ) : null}
+
+        {/* 5. Оплата */}
+        {chosen ? (
+          <>
+            <button type="button" className="cta-primary tariff-pay" disabled={busy}
+              onClick={buyCard}>
+              {busy ? 'Открываю…' : `Оплатить ${chosen.amount} ₽`}
+            </button>
+            <div className="chat-note">
+              Откроется страница оплаты. «Плюс» включится сам, даже если закрыть приложение.
+            </div>
+          </>
+        ) : null}
+
+        {/* 6. Статус оплаты */}
+        {pay.state ? (
+          <div className={`pay-status pay-${pay.state}`}>
+            <span>{pay.text}</span>
+            {pay.state === 'error' ? (
+              <button type="button" className="ghost-btn" onClick={buyCard}>Повторить</button>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* 7. Промокод и приглашение — компактными строками */}
+        <div className="list-stack mt-14">
+          <button type="button" className="glass-card plan-row"
+            onClick={() => setPromoOpen((v) => !v)}>
+            <span className="plan-left"><span className="plan-name">Промокод</span></span>
+            <span className="plan-balance">{promoOpen ? '−' : '+'}</span>
           </button>
+          {promoOpen ? (
+            <div className="admin-actions mt-8">
+              <input className="text-input" placeholder="КОД" value={promo}
+                onChange={(e) => setPromo(e.target.value.toUpperCase())} />
+              <button type="button" className="cta-primary" disabled={busy}
+                onClick={applyPromo}>Применить</button>
+            </div>
+          ) : null}
+
+          <div className="glass-card plan-row">
+            <span className="plan-left">
+              <span className="plan-name">Пригласить друга</span>
+              <span className="plan-desc">Вам и ему +1 критерий на неделю</span>
+            </span>
+            <button type="button" className="ghost-btn" onClick={copyRef}>Скопировать</button>
+          </div>
         </div>
       </div>
-
-      <div className="glass-card mt-14">
-        <div className="plan-name">Реферальная программа</div>
-        <div className="plan-desc">
-          +1 критерий вам и другу за каждого приглашённого (до 3). Приглашено: {ref?.count || 0}.
-        </div>
-        <div className="plan-desc mt-8">{ref?.link || ''}</div>
-      </div>
-
-      {msg ? <div className="chat-note mt-8">{msg}</div> : null}
-    </Screen>
+    </div>
   )
 }
 

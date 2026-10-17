@@ -99,3 +99,39 @@
 
 /* Декоративное пятно онбординга (330 px) вылезало за экран на 320 px. */
 .blob { width: min(330px, 92vw); height: min(330px, 92vw); }
+
+/* ── Этап T: экран тарифов ───────────────────────────────────────────────
+   Плоский вид: рамки вместо теней, один акцент, шкала отступов из токенов. */
+.page-narrow { max-width: 480px; margin: 0 auto;
+  padding: 0 var(--space-4) calc(96px + env(safe-area-inset-bottom)); }
+.tariff-status { margin-top: var(--space-4); }
+.tariff-compare { margin-top: var(--space-3); padding: var(--space-3) var(--space-4); }
+.tariff-row { display: grid; grid-template-columns: 1fr 78px 78px; gap: var(--space-2);
+  padding: 10px 0; border-top: 1px solid var(--border); font-size: 14px; }
+.tariff-row:first-child { border-top: 0; }
+.tariff-head { color: var(--text-secondary); font-size: 12px;
+  text-transform: uppercase; letter-spacing: .04em; }
+.tariff-row > span:not(:first-child) { text-align: right; }
+.tariff-terms { display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2); margin-top: var(--space-3); }
+.tariff-term { display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: var(--space-3) var(--space-2); border: 1px solid var(--border);
+  border-radius: var(--radius); background: var(--surface); cursor: pointer;
+  min-height: 76px; }
+.tariff-term.is-active { border-color: var(--accent); }
+.tariff-term-days { font-size: 13px; color: var(--text-secondary); }
+.tariff-term-price { font-size: 17px; font-weight: 600; }
+.tariff-methods { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.tariff-method { flex: 1; min-height: 44px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-btn);
+  background: var(--surface); cursor: pointer; font: inherit; color: inherit; }
+.tariff-method.is-active { border-color: var(--accent); }
+.tariff-pay { width: 100%; margin-top: var(--space-4); }
+.pay-status { display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-2); margin-top: var(--space-3); padding: var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-btn);
+  background: var(--surface); font-size: 14px; }
+.pay-waiting { border-color: var(--accent); }
+.pay-paid { border-color: var(--success); }
+.pay-error, .pay-expired { border-color: var(--danger); }
+.pay-test { color: var(--text-secondary); }

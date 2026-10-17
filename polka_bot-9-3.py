@@ -18512,6 +18512,8 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'plus_stars': PLUS_STARS,
         'free_max_criteria': PLAN_FREE_MAX_CRITERIA,
         'free_delay_min': PLAN_FREE_DELAY_MIN,
+        # до какого числа действует «Плюс» — для плашки статуса на экране тарифов
+        'plus_until': _plus_until(viewer_id),
     })
 
 
@@ -22487,6 +22489,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                     '1 — включить оплату картой (CISPay)'),
     'pay.cispay_shop_uuid': ('str', None, None, '',
                              'UUID мерчанта CISPay из личного кабинета'),
+    'pay.rub_week': ('str', None, None, '0',
+                     'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_month': ('str', None, None, '0',
                       'Цена «Плюса» на месяц, ₽ (0 — не показывать)'),
     'pay.rub_quarter': ('str', None, None, '0',
@@ -23391,9 +23395,9 @@ CISPAY_ORDER_TTL_SEC = 3600
 CISPAY_WATCH_HOURS = 24
 # товар → (дней «Плюса», настройка с ценой в рублях)
 CISPAY_PLANS = {
+    'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
     'plus_quarter': (90, 'pay.rub_quarter'),
-    'plus_year': (365, 'pay.rub_year'),
 }
 
 
@@ -23632,7 +23636,9 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/pay/plans — тарифы картой (цены из настроек)."""
     plans = await asyncio.to_thread(_db_read, cispay_plans_public)
     return _miniapp_json({'ok': True, 'plans': plans, 'enabled': cispay_enabled(),
-                          'provider': 'cispay'})
+                          'provider': 'cispay',
+                          # Этап T: вариант «Криптой» показываем только когда включён
+                          'crypto_enabled': str(cfg_get('pay.crypto_enabled') or '0') == '1'})
 
 
 async def api_pay_create(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -23869,6 +23875,21 @@ def _pause_extra_criteria(user_id: int, limit: int) -> int:
     except Exception as e:
         logger.warning(f"pause criteria: {e}")
     return n
+
+
+def _plus_until(user_id: int) -> str:
+    """Дата окончания «Плюса» человеческим видом (ДД.ММ.ГГГГ) или пусто."""
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT expires_at FROM subscriptions WHERE user_id=? "
+                       "ORDER BY id DESC LIMIT 1", (int(user_id),))
+        row = cursor.fetchone()
+        exp = str(row['expires_at'] or '') if row else ''
+        if exp and exp > get_moscow_time().isoformat():
+            return f"{exp[8:10]}.{exp[5:7]}.{exp[0:4]}"
+    except Exception:
+        pass
+    return ''
 
 
 def coins_balance(user_id: int) -> int:
