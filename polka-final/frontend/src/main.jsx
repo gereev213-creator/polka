@@ -22,6 +22,8 @@ import './styles/pages/account.css'
 // ЭТАП 5: мастер создания (/create, /edit/:id) — шаги, сетка категорий,
 // ошибки валидации у полей.
 import './styles/pages/create.css'
+// Memgift: финальные перебивки legacy styles.css (кнопки, карточки, шапка)
+import './styles/memgift-final.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

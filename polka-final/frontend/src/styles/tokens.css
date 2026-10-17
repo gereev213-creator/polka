@@ -390,7 +390,15 @@ html, body { background: var(--bg); color: var(--text); }
   --gradient-blue: linear-gradient(135deg, #0a84ff 0%, #4ca2ff 100%);
   --gradient-purple: linear-gradient(135deg, #5a43ff 0%, #8d7aff 100%);
 
-  --space-2: 2px; --space-4: 4px; --space-8: 8px; --space-12: 12px;
+  /* Совместимость с приложением: --space-* = шкала 4/8/12/16… */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 12px;
   --space-16: 16px; --space-20: 20px; --space-24: 24px; --space-32: 32px;
   --space-40: 40px; --space-48: 48px; --space-64: 64px;
   --page-padding: 16px; --section-gap: 24px;
@@ -401,6 +409,7 @@ html, body { background: var(--bg); color: var(--text); }
   --font-family-primary: "SF Pro Display", "Inter", sans-serif;
   --font-h1-size: 52px; --font-h2-size: 36px; --font-h3-size: 24px;
   --font-body-lg-size: 18px; --font-body-size: 16px;
+  --font-body-weight: 400;
   --font-caption-size: 14px; --font-small-size: 13px;
 
   --button-height: 56px; --search-height: 64px; --filter-height: 56px;
@@ -530,52 +539,6 @@ body, button, input, select, textarea {
   font-size: 16px; font-weight: 600; }
 .segmented button.is-active { background: var(--card-primary); color: var(--text-primary);
   box-shadow: inset 0 0 0 1px var(--border-secondary); }
-
-/* ═══ ГРАДИЕНТНАЯ ОБВОДКА (как в Memgift) ════════════════════════════════
-   У плашек и карточек обводка не сплошная: сверху яркая белая, к середине
-   растворяется, снизу снова проявляется — «переливается».
-   Делается градиентом в padding-box и маской: рамка толщиной 1px, фон
-   карточки остаётся сплошным, заливка внутрь не протекает. */
-.product-card,
-.glass-card,
-.tabbar,
-.admin-setting,
-.summary-card,
-.pay-status,
-.tariff-term,
-.ui-stat {
-  position: relative;
-  border: 0 !important;
-}
-.product-card::before,
-.glass-card::before,
-.tabbar::before,
-.admin-setting::before,
-.summary-card::before,
-.pay-status::before,
-.tariff-term::before,
-.ui-stat::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.34) 0%,
-    rgba(255, 255, 255, 0.06) 24%,
-    rgba(255, 255, 255, 0.00) 50%,
-    rgba(255, 255, 255, 0.06) 76%,
-    rgba(255, 255, 255, 0.22) 100%
-  );
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  mask-composite: exclude;
-  pointer-events: none;
-}
-/* У круглых элементов обводка не должна ломаться */
-.tabbar-fab::before, .tabbar-item::before { display: none; }
 
 /* ═══ ПЛАШКА MEMGIFT (точная фактура по кропам) ══════════════════════════
    1. Кольцо 1px: ярче сверху (0.22), почти прозрачное в середине (0.04),
