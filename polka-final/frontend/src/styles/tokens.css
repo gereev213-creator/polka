@@ -951,3 +951,61 @@ body, button, input, select, textarea {
 .brand-logo { max-width: 118px; height: 20px; }
 /* Горизонтальная прокрутка страницы запрещена */
 html, body, .app-shell, .screen { overflow-x: hidden; max-width: 100%; }
+
+/* ═══ ЕДИНОЕ ВЫРАВНИВАНИЕ КНОПОК ════════════════════════════════════════
+   Все кнопки и пилюли: одна высота, текст строго по центру, запрет переноса,
+   одинаковые внутренние отступы по шкале 16/20. Раньше высота и line-height
+   наследовались из разных старых правил — отсюда «неровности». */
+button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
+.feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method,
+.tariff-term, .hint-chip, .tabbar-item {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  white-space: nowrap;
+  font-family: inherit;
+  vertical-align: middle;
+}
+/* Единая высота для управляющих элементов */
+.pill-btn, .cta-primary, .ghost-btn, .chip, .hint-chip,
+.admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }
+/* Единый внутренний отступ */
+.pill-btn, .cta-primary, .ghost-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
+.chat-tab, .ui-tab, .feed-switch button { padding: 0 22px; }
+
+/* Контейнер вкладок ленты: убираем старую высоту и обрезку — из-за них
+   активная пилюля вылезала и снизу торчала дуга подчёркивания. */
+.feed-switch {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  border: 0 !important;
+  background: transparent !important;
+  padding: 0 !important;
+}
+.feed-switch button,
+.segmented button {
+  height: 48px !important;
+  min-height: 48px !important;
+  padding: 0 22px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  box-shadow: inset 0 0 0 1px var(--border-secondary) !important;
+  background: var(--card-primary) !important;
+  color: var(--text-secondary) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+.feed-switch button.is-active,
+.segmented button.is-active {
+  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)) !important;
+  color: var(--text-primary) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.18) !important;
+}
+/* Никаких ползунков и подчёркиваний у вкладок */
+.chat-tabs-pill, .chat-tab::after, .ui-tab::after { display: none !important; }
