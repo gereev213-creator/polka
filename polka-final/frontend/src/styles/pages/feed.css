@@ -176,7 +176,7 @@
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 /* Нажатие на выбранную категорию тень не показывает: это итог legacy-правила
-   `.cat-tile:active { box-shadow: none !important }` (этап 5 снял !important).
+   `.cat-tile:active { box-shadow: none }` (этап 5 снял).
    Селектор приходится повторять здесь: правило выше специфичнее legacy-
    селектора `:active`, и без этой строки при нажатии появлялась бы тень. */
 .category-cards .cat-tile.is-selected:active { }

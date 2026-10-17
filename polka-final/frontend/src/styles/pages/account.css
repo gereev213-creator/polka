@@ -205,3 +205,13 @@
   display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
   font-size: 11px; color: var(--text-secondary);
 }
+
+/* Нижняя панель оплаты (спека v2, V5): кнопка закреплена внизу экрана,
+   чтобы «Оплатить» была доступна без прокрутки. */
+.tariff-pay {
+  position: sticky;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  width: 100%;
+  margin-top: 16px;
+  z-index: 5;
+}
