@@ -332,46 +332,40 @@ function relTime(item) {
 }
 
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
-  // Защита: если пришёл пустой элемент, карточка не должна ронять ВСЁ
-  // приложение (была ошибка «null is not an object (evaluating 'a.source_url')»).
+  // Карточка в духе Memgift: фото живёт в своей внутренней плашке, бейдж
+  // источника лежит на фото, ниже название, внизу — синяя пилюля цены.
   if (!item || typeof item !== 'object') return null
   const handleFavorite = (event) => {
     event.preventDefault()
     event.stopPropagation()
     onToggleFavorite?.(item.id)
   }
-  // Скидка — только когда ей можно верить (спека v2):
-  //  • не подозрительная цена и не аксессуар/запчасть;
-  //  • не больше 50 % — иначе это почти всегда другой товар или развод;
-  //  • медиана должна быть ненулевой.
   const discount = Number(item.discount_percent) || 0
   const accessory = String(item.hunt_reason || '') === 'accessory' || Number(item.accessory)
-  const reliable = !Number(item.price_suspect) && !accessory && discount > 0
-  const showDiscount = reliable && discount <= 50
-  // Мета: город и время. «Россия» вместо города не показываем вовсе.
-  const city = String(item.city || '').trim()
-  const cityOk = city && !/^россия$/i.test(city)
-  const meta = [cityOk ? city : '', relTime(item)].filter(Boolean).join(' · ')
+  const reliable = !Number(item.price_suspect) && !accessory
+  const showDiscount = reliable && discount > 0 && discount <= 50
+  const source = String(item.source || '').trim()
+  const sourceLabel = source
+    ? source.charAt(0).toUpperCase() + source.slice(1)
+    : ''
 
   return (
     <Link to={`/listing/${item.id}`} className="product-card">
-      <div className="product-media">
+      <div className="product-figure">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
-        {/* Одно сердечко в углу фото. Кнопок-стрелок и бейджей на фото нет:
-            переход к лоту — нажатием на карточку (спека v2). */}
-        <button className={`save-btn ${favorite ? 'is-on' : ''}`} type="button"
+        {sourceLabel ? <span className="product-badge">{sourceLabel}</span> : null}
+        {showDiscount ? (
+          <span className="product-badge product-badge--offer">−{Math.round(discount)}%</span>
+        ) : null}
+        <button className={favorite ? 'save-btn is-on' : 'save-btn'} type="button"
           onClick={handleFavorite}
           aria-label={favorite ? 'Убрать из избранного' : 'В избранное'}>
           <Icon name="heart" />
         </button>
       </div>
-      <div className="product-info">
+      <div className="product-body">
+        <div className="product-name">{item.title}</div>
         <div className="product-price">{Number(item.price || 0).toLocaleString('ru-RU')} ₽</div>
-        {showDiscount ? (
-          <div className="product-discount">−{Math.round(discount)}% к рынку</div>
-        ) : null}
-        <div className="product-title">{item.title}</div>
-        {meta ? <div className="product-meta">{meta}</div> : null}
       </div>
     </Link>
   )
