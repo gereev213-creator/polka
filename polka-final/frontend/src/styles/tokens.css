@@ -339,3 +339,22 @@ html, body { background: var(--bg); color: var(--text); }
 /* Разделители и линии */
 .list-stack > .glass-card::after,
 .list-stack > .plan-row::after { background: var(--line); }
+
+/* Нижняя панель лота в тёмной теме: в listing.css остался белый фон,
+   и панель читалась как светлая полоса поверх чёрного экрана. */
+.detail-bar,
+.listing .detail-bar,
+.detail-hero + .detail-bar {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  color: var(--text);
+}
+.detail-bar .cta-primary { background: var(--accent); color: #fff; }
+.detail-bar .cta-round,
+.detail-bar .icon-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+}
+/* Карточка продавца и блоки под панелью не должны обрезаться */
+.listing, .detail-page, .screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
