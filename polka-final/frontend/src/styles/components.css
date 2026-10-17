@@ -1016,3 +1016,20 @@ input[type="checkbox"]:checked::after {
   border-radius: 28px;
 }
 .product-card .save-btn { pointer-events: auto; }
+
+
+/* ═══ КАРТОЧКА: ШИРИНА ПО СЕТКЕ ═════════════════════════════════════════
+   В токенах есть --listing-card-width: 171px, и карточки получали её как
+   фиксированную ширину. При двух колонках на 390 px карточка выходила за
+   свою ячейку и накрывала соседнюю — клик по левой не срабатывал, потому
+   что сверху оказывалась картинка правой. Теперь ширина — по ячейке. */
+.feed-grid > .product-card,
+.product-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.feed-grid { align-items: start; }
+.feed-grid > * { min-width: 0; }
+.product-figure, .product-media { width: 100%; min-width: 0; }
