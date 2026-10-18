@@ -37,13 +37,10 @@ body {
 @media (min-width: 480px) { .app-frame { max-width: 520px; } }
 @media (min-width: 768px) { .app-frame { max-width: 640px; } }
 @media (min-width: 1024px) { .app-frame { max-width: 720px; } }
-@media (min-width: 1280px) { .app-frame { max-width: 800px; } }
-
-/* ── Экран: единые поля, safe-area, место под док ─────────────────────────
+@media (min-width: 1280px) { .app-frame { max-width: 800px; } }/* ── Экран: единые поля, safe-area, место под док ─────────────────────────
    .screen.padded раньше перебивал отступ под док (padding: 16px), поэтому
    правило пишем для обоих селекторов. */
-.screen,
-.screen.padded {
+.screen {
   padding-top: calc(var(--space-4) + env(safe-area-inset-top));
   padding-bottom: var(--dock-space);
   padding-left: calc(var(--page-pad) + env(safe-area-inset-left));
@@ -109,7 +106,6 @@ button:disabled, [aria-disabled="true"] {
    .screen{max-width:520px} — они зажимали контейнер, и брейкпоинты из
    .app-frame не работали (ID-селектор сильнее класса). Снимаем зажим. */
 #root { max-width: none; }
-.screen, .screen.padded { max-width: none; }
 
 /* 2. 100dvh. .chat-screen{height:100vh} и .chat-wrap{calc(100vh - 150px)}
    при клавиатуре ломали чат и ИИ-поиск. Перекрываем на dvh. */

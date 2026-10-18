@@ -894,3 +894,29 @@
   font-weight: 500;
   text-align: left;
 }
+
+/* ── 12. Каркас страницы (screen) ─────────────────────────────────────────
+   Экран занимает всю ширину телефона: чёрных полос по бокам быть не должно.
+   Отступ 16px слева и справа, снизу — запас под плавающую панель, чтобы
+   контент не уходил под неё. На планшете и десктопе ширина ограничивается
+   по центру, там это уместно. */
+.app-shell .screen, .screen {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
+}
+
+.app-shell .screen.padded, .screen.padded {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+@media (min-width: 768px) {
+  .app-shell .screen, .screen { max-width: 720px; margin: 0 auto; }
+}
+@media (min-width: 1280px) {
+  .app-shell .screen, .screen { max-width: 1120px; }
+}

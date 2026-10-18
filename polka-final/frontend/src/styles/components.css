@@ -284,8 +284,7 @@
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--text);
-}
-.listing, .detail-page, .screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+}.listing, .detail-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
 /* Селектор этого блока потерялся при переносе правил — свойства висели
    без правила и ломали разбор CSS, из-за чего esbuild ругался на var(). */
@@ -612,21 +611,13 @@ input[type="checkbox"]:checked::after {
 .app-shell .product-card::after {
   display: none;
 }/* Фигура фото внутри карточки — без обводки и без лишней тени */
-.product-figure::after { display: none; }
-
-
-/* ═══ БЕЗ ЧЁРНЫХ ПОЛЕЙ ПО БОКАМ ══════════════════════════════════════════
-   Экран сжимался в узкую колонку по центру (max-width 480/1120 + margin auto),
-   и по бокам оставались чёрные полосы. Контент должен занимать всю ширину
+.product-figure::after { display: none; }/* ═══ БЕЗ ЧЁРНЫХ ПОЛЕЙ ПО БОКАМ ══════════════════════════════════════════
+   Экран сжимался в узкую колонку по центру (max-width 480/1120 + margin auto), и по бокам оставались чёрные полосы. Контент должен занимать всю ширину
    телефона; широкий центр нужен только на планшетах и десктопе. */
-html, body, .app-shell, .screen {
+html, body, .app-shell {
   width: 100%;
   max-width: none;
   margin: 0;
-}
-.screen {
-  padding-left: 16px;
-  padding-right: 16px;
 }
 @media (min-width: 768px) {
   .screen { max-width: 720px; margin: 0 auto; }
@@ -840,12 +831,6 @@ html, body, .app-shell, .screen {
   max-width: none !important;
 }
 .app-shell { width: 100% !important; }
-.screen {
-  padding-left: 16px !important;
-  padding-right: 16px !important;
-  width: 100% !important;
-  max-width: none !important;
-}
 /* Панели, которые прибиты к краям, тоже во всю ширину */
 .topbar { width: 100% !important; }
 
