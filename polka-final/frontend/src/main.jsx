@@ -24,6 +24,7 @@ import './styles/pages/account.css'
 import './styles/pages/create.css'
 // Memgift: финальные перебивки legacy styles.css (кнопки, карточки, шапка)
 import './styles/memgift-final.css'
+import './styles/mg-core.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

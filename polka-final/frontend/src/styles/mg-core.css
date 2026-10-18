@@ -1,0 +1,69 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   MG-CORE — единственный владелец оформления по эталону MemGift.
+   Правила:
+     • подключается ПОСЛЕДНИМ в main.jsx, поэтому побеждает порядком, а не силой;
+     • здесь НЕТ !important — если правило не срабатывает, значит в старом файле
+       осталось !important, и его нужно убрать там, а не давить здесь;
+     • один класс — одно определение. Начинаем с семейства «кнопки-синие».
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Синяя кнопка (cta-primary / primary-btn / cta-button) ─────────────
+   Значения из эталона владельца (memgift_кнопка_и_список.html):
+     градиент  #1f78ff → #0a62f0
+     высота    52 (в эталоне 104 при --mg-u:.5px)
+     кромка    1px сверху rgba(255,255,255,.28) — только сверху
+     радиус    полная таблетка 999
+     нажатие   brightness(.94), без движения
+     disabled  opacity .5                                                        */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn,
+.app-shell .cta-button, .cta-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 20px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1f78ff 0%, #0a62f0 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  text-align: center;
+  box-shadow: none;
+  cursor: pointer;
+  transition: none;
+  transform: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell .cta-primary:active, .cta-primary:active,
+.app-shell .primary-btn:active, .primary-btn:active,
+.app-shell .cta-button:active, .cta-button:active {
+  filter: brightness(0.94);
+  transform: none;
+}
+
+.app-shell .cta-primary:disabled, .cta-primary:disabled,
+.app-shell .primary-btn:disabled, .primary-btn:disabled,
+.app-shell .cta-button:disabled, .cta-button:disabled,
+.app-shell .cta-primary[disabled], .cta-primary[disabled] {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}
+
+.app-shell .cta-primary .icon-svg, .cta-primary .icon-svg,
+.app-shell .primary-btn .icon-svg, .primary-btn .icon-svg,
+.app-shell .cta-button .icon-svg, .cta-button .icon-svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}

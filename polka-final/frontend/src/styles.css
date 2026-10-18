@@ -270,10 +270,7 @@ input, textarea, select { font-family: inherit; }
 }
 .spec-chip .icon-svg { width: 15px; height: 15px; color: var(--accent); }
 .spec-chip-label { font-size: 11px; color: var(--text-secondary); }
-.spec-chip-value { font-size: 12.5px; font-weight: 700; }
-
-.cta-primary,
-.cta-dark {
+.spec-chip-value { font-size: 12.5px; font-weight: 700; }.cta-dark {
   height: 54px;
   border-radius: 20px;
   font-size: 15px;
@@ -286,26 +283,11 @@ input, textarea, select { font-family: inherit; }
   text-decoration: none;
   transition: transform .18s ease;
 }
-.cta-primary {
-  /* Без flex:1 — раньше он стоял здесь глобально, и у ОДИНОЧНОЙ кнопки
-     flex-basis:0% схлопывал ширину и высоту: текст вылезал за плашку.
-     Растягивание нужно только в ряду кнопок — см. .detail-bar
-     в styles/pages/listing.css.
-     Горизонтальные отступы были только у .cta-dark, поэтому одиночная
-     кнопка облегала текст вплотную и выглядела «сломанной». */
-  padding: 0 26px;
-  background: var(--accent);
-  color: #fff;
-}
 .cta-dark {
   background: var(--ink);
   color: #fff;
   padding: 0 22px;
-}
-.cta-primary:active,
-.cta-dark:active { transform: scale(.97); }
-.cta-primary .icon-svg,
-.cta-dark .icon-svg { width: 18px; height: 18px; }
+}.cta-dark:active { transform: scale(.97); }.cta-dark .icon-svg { width: 18px; height: 18px; }
 .cta-round {
   width: 54px;
   height: 54px;
@@ -443,10 +425,8 @@ input, textarea, select { font-family: inherit; }
 .skeleton-banner {
   height: 168px;
   border-radius: 20px;
-}
-
-/* Buttons */
-.cta-button, .primary-btn {
+}/* Buttons */
+.cta-button {
   padding: 14px 24px;
   border-radius: 14px;
   background: var(--accent);
@@ -458,9 +438,6 @@ input, textarea, select { font-family: inherit; }
   align-items: center;
   justify-content: center;
 }
-.cta-button:hover, .primary-btn:hover { background: var(--accent-hover); }
-.cta-button:active, .primary-btn:active { transform: scale(.97); }
-.cta-button:disabled, .primary-btn:disabled { opacity: .5; }
 
 .ghost-btn {
   padding: 12px 20px;
@@ -1578,13 +1555,9 @@ select.text-input {
   background-repeat: no-repeat;
   background-position: right 16px center;
   padding-right: 42px;
-}
-
-/* Заблокированная кнопка должна выглядеть заблокированной:
+}/* Заблокированная кнопка должна выглядеть заблокированной:
    раньше она оставалась ярко-синей, и по ней бессмысленно жали */
-.cta-primary:disabled,
-.cta-dark:disabled,
-.primary-btn:disabled {
+.cta-primary:disabled, .cta-dark:disabled {
   opacity: .45;
   cursor: default;
   /* ВАЖНО: анимация .screen > * (slideUp) анимирует opacity и с fill-mode
@@ -1972,26 +1945,12 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.chat-back:active { transform: scale(.94); }
-
-/* ── Плавные нажатия и переходы ────────────────────────────────────────── */
+.chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── */
 /* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
    Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
    лёгкое сжатие: палец чувствует, что нажал. */
 
-button,
-.dock-create,
-.chat-tab,
-.chat-chip,
-.chat-example,
-.chat-back,
-.save-btn,
-.cta-primary,
-.ghost-btn,
-.product-card,
-.chat-crit-card,
-.chat-crit-x,
-.field-label-row.is-toggle {
+button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .save-btn, .ghost-btn, .product-card, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,

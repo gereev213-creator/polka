@@ -204,13 +204,8 @@
   opacity: .82;
 }
 
-/* Кнопки: главная — акцентом, вторичная — рамкой, обе отвечают нажатием */
-.cta-primary {
-  font-weight: 600;
-  transition: transform 120ms var(--tap-ease), background 120ms ease, opacity 120ms ease;
-}
-.cta-primary:active { transform: scale(var(--tap-scale)); opacity: .9; }
-.cta-primary:disabled { opacity: .5; transform: none; }
+/* Базовое определение .cta-primary переехало в styles/mg-core.css —
+   здесь оставлено только контекстное оформление (.detail-bar .cta-primary и т.п.). */
 .ghost-btn:active, .link-btn:active { opacity: .6; }
 
 /* Скидка — плотной пилюлей рядом с ценой, читается сразу */
@@ -300,10 +295,7 @@
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
 .product-card:active { transform: scale(.975); box-shadow: 0 6px 18px rgba(0,0,0,.5); }
-.product-media { border-radius: 20px; }
-
-.product-card, .chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item,
-.cta-primary, .chip, .segmented button {
+.product-media { border-radius: 20px; }.product-card, .chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item, .chip, .segmented button {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
@@ -568,15 +560,10 @@ body, button, input, select, textarea {
 .chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active,
 .tariff-method:active, .tariff-term:active, .chat-chip:active {
   transform: scale(.97);
-}
-
-.cta-primary, .ghost-btn, .ui-search, .text-input, input, textarea, select {
+}.ghost-btn, .ui-search, .text-input, input, textarea, select {
   border-radius: 999px;
 }
 .text-input, input, textarea, select { padding: 0 20px; }
-.cta-primary { background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 100%);
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .26), 0 6px 18px rgba(10, 132, 255, .25); }
 .ghost-btn { background: var(--card-primary); color: var(--text-primary); padding: 0 20px;
   min-height: 48px; box-shadow: inset 0 0 0 1px var(--border-secondary); }
 
@@ -678,11 +665,7 @@ body, button, input, select, textarea {
 }
 .pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }
 .topbar-side, .topbar-center { min-width: 0; }
-.brand-logo { max-width: 118px; height: 20px; }
-
-button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
-.feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method,
-.tariff-term, .hint-chip, .tabbar-item {
+.brand-logo { max-width: 118px; height: 20px; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip, .tabbar-item {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -691,10 +674,7 @@ button, .pill-btn, .cta-primary, .ghost-btn, .chip, .segmented button,
   white-space: nowrap;
   font-family: inherit;
   vertical-align: middle;
-}
-.pill-btn, .cta-primary, .ghost-btn, .chip, .hint-chip,
-.admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }
-.pill-btn, .cta-primary, .ghost-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
+}.pill-btn, .ghost-btn, .chip, .hint-chip, .admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }.pill-btn, .ghost-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
 .chat-tab, .ui-tab, .feed-switch button { padding: 0 22px; }
 
 .feed-switch {
@@ -1269,22 +1249,15 @@ html, body, .app-shell, .screen {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary, #fff);
-}
-
-
-/* ═══════════════════════════════════════════════════════════════════════
+}/* ═══════════════════════════════════════════════════════════════════════
    ЭТАЛОН MEMGIFT (по файлу владельца: синяя кнопка + список с кружками)
    Значения перенесены 1:1 с коэффициентом 0.5 (1px скриншота = 0.5px CSS):
-     кнопка 52px, радиус-таблетка, градиент #1f78ff→#0a62f0,
-     светлая кромка сверху rgba(255,255,255,.28);
-     группа — одна плашка #141414, радиус 28, разделители #262626,
-     строка 74px, кружок 44px на #262626.
+     кнопка 52px, радиус-таблетка, градиент #1f78ff→#0a62f0, светлая кромка сверху rgba(255,255,255,.28);
+     группа — одна плашка #141414, радиус 28, разделители #262626, строка 74px, кружок 44px на #262626.
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── 1. Синяя кнопка ─────────────────────────────────────────────────── */
-.app-shell .cta-primary, .cta-primary,
-.app-shell .primary-btn, .primary-btn,
-.app-shell .product-price, .product-price {
+.app-shell .cta-primary, .app-shell .product-price, .product-price {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1300,17 +1273,11 @@ html, body, .app-shell, .screen {
   box-shadow: none;
   -webkit-tap-highlight-color: transparent;
 }
-.app-shell .cta-primary, .cta-primary,
-.app-shell .primary-btn, .primary-btn { height: 56px; font-size: 17px; }
 .app-shell .product-price, .product-price {
   height: 52px;
   font-size: 20px;
   box-shadow: none;
-}
-.app-shell .cta-primary:active, .cta-primary:active,
-.app-shell .primary-btn:active, .primary-btn:active,
-.app-shell .product-price:active, .product-price:active { filter: brightness(.94); }
-.app-shell .cta-primary[disabled], .cta-primary[disabled] { opacity: .5; cursor: default; }
+}.app-shell .product-price:active, .product-price:active { filter: brightness(.94); }
 
 /* ── 2. Список — ОДНА плашка с разделителями ─────────────────────────── */
 .app-shell .list-stack, .list-stack {
@@ -1394,33 +1361,18 @@ html, body, .app-shell, .screen {
   font-size: 15px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
-}
-/* Текст внутри кнопок — обычный вес, без «жирных» наследств */
-.app-shell .cta-primary strong, .cta-primary strong,
-.app-shell .primary-btn strong, .primary-btn strong,
-.app-shell .product-price strong, .product-price strong { font-weight: 600 !important; }
-
-
-/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
+}/* Текст внутри кнопок — обычный вес, без «жирных» наследств */
+.app-shell .cta-primary strong, .app-shell .product-price strong, .product-price strong { font-weight: 600 !important; }/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
    Градиент был насыщенным (#1f78ff → #0a62f0) и кромка сверху яркой —
    вместе это давало «тяжёлое» ощущение. Сдвигаем в светлую сторону и
    приглушаем кромку: та же таблетка, но воздушнее. */
-.app-shell .cta-primary, .cta-primary,
-.app-shell .primary-btn, .primary-btn,
-.app-shell .product-price, .product-price,
-.app-shell .product-body .product-price {
+.app-shell .cta-primary, .app-shell .product-price, .product-price, .app-shell .product-body .product-price {
   background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: none;
-}
-.app-shell .cta-primary:hover, .cta-primary:hover,
-.app-shell .primary-btn:hover, .primary-btn:hover,
-.app-shell .product-price:hover, .product-price:hover {
+}.app-shell .product-price:hover, .product-price:hover {
   filter: brightness(1.04);
-}
-.app-shell .cta-primary:active, .cta-primary:active,
-.app-shell .primary-btn:active, .primary-btn:active,
-.app-shell .product-price:active, .product-price:active {
+}.app-shell .product-price:active, .product-price:active {
   filter: brightness(.96);
 }
 
@@ -1534,15 +1486,10 @@ html, body, .app-shell, .screen {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.14),
     0 4px 12px rgba(0, 0, 0, 0.45) !important;
-}
-
-/* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
+}/* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
    Кромка была приглушена до .16 и на тёмном фоне почти не читалась.
    Возвращаем заметную светлую линию сверху — как в эталоне владельца. */
-.app-shell .cta-primary, .cta-primary,
-.app-shell .primary-btn, .primary-btn,
-.app-shell .product-price, .product-price,
-.app-shell .product-body .product-price {
+.app-shell .cta-primary, .app-shell .product-price, .product-price, .app-shell .product-body .product-price {
   border: 0 !important;
   border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
