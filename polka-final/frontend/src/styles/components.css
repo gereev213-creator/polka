@@ -2101,3 +2101,44 @@ html, body, .app-shell, .screen {
 .segmented button:active {
   filter: brightness(0.86) !important;
 }
+
+
+/* ═══ ОБВОДКА УБРАНА НАВСЕГДА ════════════════════════════════════════════
+   Кромка 1px у плашек постоянно вылезала: то между меню и «+», то по краям.
+   Убираем её полностью — и у панели, и у пилюль, и у вкладок.
+   Глубина при этом остаётся: градиент + верхний блик + тень. Именно они
+   дают объём, а рамка для этого не нужна. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab,
+.app-shell .feed-switch button, .feed-switch button,
+.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
+.app-shell .segmented button, .segmented button,
+.app-shell .segmented button.is-active, .segmented button.is-active,
+.app-shell .filter-pill, .filter-pill,
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
+.app-shell .chip, .chip,
+.app-shell .hint-chip, .hint-chip,
+.app-shell .admin-tab, .admin-tab,
+.app-shell .tariff-method, .tariff-method,
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  border: 0 !important;
+  border-width: 0 !important;
+  outline: 0 !important;
+  outline-offset: 0 !important;
+}
+/* Объём — только градиентом, бликом и тенью */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab {
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.45) !important;
+}
+.app-shell .feed-switch button, .feed-switch button,
+.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
+.app-shell .segmented button, .segmented button,
+.app-shell .filter-pill, .filter-pill,
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input {
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+}
