@@ -2101,38 +2101,3 @@ html, body, .app-shell, .screen {
 .segmented button:active {
   filter: brightness(0.86) !important;
 }
-
-
-/* ═══ НИКАКОГО ЗАТЕМНЕНИЯ ════════════════════════════════════════════════
-   Кнопки вкладок не должны реагировать на касание вообще: ни нашим
-   brightness, ни нативной подсветкой браузера, ни сменой цвета.
-   Убираем оба источника — включая -webkit-tap-highlight-color, который
-   на телефоне даёт серую вспышку по площади кнопки. */
-.app-shell .feed-switch button:active,
-.app-shell .feed-switch button:hover,
-.app-shell .feed-switch button:focus,
-.app-shell .feed-switch button:focus-visible,
-.feed-switch button:active,
-.feed-switch button:hover,
-.feed-switch button:focus,
-.feed-switch button:focus-visible,
-.app-shell .segmented button:active,
-.app-shell .segmented button:hover,
-.app-shell .segmented button:focus,
-.app-shell .segmented button:focus-visible,
-.segmented button:active,
-.segmented button:hover,
-.segmented button:focus,
-.segmented button:focus-visible {
-  filter: none !important;
-  opacity: 1 !important;
-  outline: none !important;
-  -webkit-tap-highlight-color: transparent !important;
-  transition: none !important;
-  transform: none !important;
-}
-/* Нативная подсветка касания — выключена на всём интерфейсе приложения.
-   Поля ввода оставляем как есть, иначе не видно фокуса. */
-.app-shell button, .app-shell a, .app-shell [role="button"] {
-  -webkit-tap-highlight-color: transparent;
-}
