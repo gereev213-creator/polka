@@ -371,3 +371,111 @@
   box-shadow: none;
   border: 0;
 }
+
+/* ── 5. Вторичные кнопки (ghost / dark / link / destructive) ──────────────
+   По эталону MemGift у кнопок четыре роли:
+     1) синяя таблетка  — главное действие (.cta-primary, .primary-btn)
+     2) тёмная таблетка — обычное действие (.ghost-btn, .dark-btn)
+     3) текстовая       — второстепенное (.link-btn)
+     4) разрушительная  — только текст, без плашки (.danger-text-btn)
+   Здесь роли 2–4. Ни одна не использует !important: файл подключается
+   последним, этого достаточно. */
+.app-shell .ghost-btn, .ghost-btn,
+.app-shell .btn-ghost, .btn-ghost,
+.app-shell .dark-btn, .dark-btn,
+.app-shell .btn-dark, .btn-dark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  transition: none;
+  transform: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Плоский вариант «тёмной» — без градиента, только поверхность */
+.app-shell .dark-btn, .dark-btn,
+.app-shell .btn-dark, .btn-dark {
+  background: #242424;
+  box-shadow: none;
+}
+
+.app-shell .ghost-btn:active, .ghost-btn:active,
+.app-shell .btn-ghost:active, .btn-ghost:active,
+.app-shell .dark-btn:active, .dark-btn:active,
+.app-shell .btn-dark:active, .btn-dark:active {
+  filter: brightness(1.14);
+  transform: none;
+}
+
+.app-shell .ghost-btn:disabled, .ghost-btn:disabled,
+.app-shell .dark-btn:disabled, .dark-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+  filter: none;
+}
+
+.app-shell .ghost-btn.wide, .ghost-btn.wide,
+.app-shell .dark-btn.wide, .dark-btn.wide { width: 100%; }
+
+/* Текстовая кнопка: без плашки, только текст */
+.app-shell .link-btn, .link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell .link-btn:active, .link-btn:active { opacity: 0.6; }
+
+/* Разрушительная — только текст, цветом */
+.app-shell .danger-text-btn, .danger-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--danger, #ff5c5c);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell .danger-text-btn:active, .danger-text-btn:active { opacity: 0.6; }
+
+/* Иконки внутри вторичных кнопок */
+.app-shell .ghost-btn .icon-svg, .ghost-btn .icon-svg,
+.app-shell .dark-btn .icon-svg, .dark-btn .icon-svg,
+.app-shell .link-btn .icon-svg, .link-btn .icon-svg,
+.app-shell .danger-text-btn .icon-svg, .danger-text-btn .icon-svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}

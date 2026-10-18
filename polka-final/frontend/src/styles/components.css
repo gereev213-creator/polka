@@ -48,21 +48,6 @@
   border-radius: var(--radius-pill);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.26), 0 6px 18px rgba(10, 132, 255, 0.22);
 }
-.btn-dark {
-  background: var(--card-primary, var(--cta-bg));
-  color: var(--cta-text);
-  font-weight: 600;
-  min-height: 48px;
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--border-secondary, var(--border));
-}
-.btn-ghost {
-  background: var(--card-primary, var(--surface));
-  color: var(--text);
-  border: 0;
-  border-radius: var(--radius-pill);
-  box-shadow: inset 0 0 0 1px var(--border-secondary, var(--border));
-}
 .btn-wide { width: 100%; }
 
 /* ── Chip ───────────────────────────────────────────────────────────────── */
@@ -199,11 +184,9 @@
 }.chat-row:active, .menu-row:active, .setting-row:active, .plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
-}
-
-/* Базовое определение .cta-primary переехало в styles/mg-core.css —
+}/* Базовое определение .cta-primary переехало в styles/mg-core.css —
    здесь оставлено только контекстное оформление (.detail-bar .cta-primary и т.п.). */
-.ghost-btn:active, .link-btn:active { opacity: .6; }
+.ghost-btn:active { opacity: .6; }
 
 /* Скидка — плотной пилюлей рядом с ценой, читается сразу */
 .product-discount {
@@ -327,8 +310,6 @@
   color: var(--text-tertiary);
 }
 
-.ghost-btn, .link-btn { color: var(--accent); }
-
 .list-stack > .glass-card::after,
 .list-stack > .plan-row::after { background: var(--line); }
 
@@ -434,12 +415,10 @@ body, button, input, select, textarea {
 .chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active,
 .tariff-method:active, .tariff-term:active, .chat-chip:active {
   transform: scale(.97);
-}.ghost-btn, .ui-search, .text-input, input, textarea, select {
+}.ui-search, .text-input, input, textarea, select {
   border-radius: 999px;
 }
 .text-input, input, textarea, select { padding: 0 20px; }
-.ghost-btn { background: var(--card-primary); color: var(--text-primary); padding: 0 20px;
-  min-height: 48px; box-shadow: inset 0 0 0 1px var(--border-secondary); }
 
 .segmented { display: inline-flex; gap: 8px; background: transparent; border: 0; padding: 0; }
 
@@ -511,7 +490,7 @@ body, button, input, select, textarea {
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -520,7 +499,7 @@ body, button, input, select, textarea {
   white-space: nowrap;
   font-family: inherit;
   vertical-align: middle;
-}.pill-btn, .ghost-btn, .chip, .hint-chip, .admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }.pill-btn, .ghost-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
+}.pill-btn, .chip, .hint-chip, .admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }.pill-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
 .chat-tab, .ui-tab, .feed-switch button { padding: 0 22px; }
 
 .feed-switch {
@@ -767,41 +746,16 @@ input[type="checkbox"]:checked::after {
   box-sizing: border-box;
 }
 .feed-grid { align-items: start; }
-.feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }
-
-
-/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
-   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414,
-   верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство,
-   а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */
-.app-shell .chip, .chip,
-.app-shell .segmented button, .segmented button,
-.app-shell .feed-switch button, .feed-switch button,
-.app-shell .pill-btn, .pill-btn,
-.app-shell .ghost-btn, .ghost-btn,
-.app-shell .menu-row, .menu-row,
-.app-shell .setting-row, .setting-row,
-.app-shell .stats-row, .stats-row,
-.app-shell .glass-card, .glass-card,
-.app-shell .admin-setting, .admin-setting,
-.app-shell .summary-card, .summary-card,
-.app-shell .pay-status, .pay-status,
-.app-shell .tariff-term, .tariff-term,
-.app-shell .hint-chip, .hint-chip,
-.app-shell .chat-row, .chat-row,
-.app-shell .admin-tab, .admin-tab,
-.app-shell .tariff-method, .tariff-method,
-.app-shell .ui-stat, .ui-stat,
-.app-shell .feed-reminder, .feed-reminder {
+.feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
+   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */
+.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .stats-row, .stats-row, .app-shell .glass-card, .glass-card, .app-shell .admin-setting, .admin-setting, .app-shell .summary-card, .summary-card, .app-shell .pay-status, .pay-status, .app-shell .tariff-term, .tariff-term, .app-shell .hint-chip, .hint-chip, .app-shell .chat-row, .chat-row, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat, .app-shell .feed-reminder, .feed-reminder {
   background: var(--card-primary);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}
-/* Пилюли — скругление 999, панели — 20, карточки — 28 */
-.chip, .segmented button, .feed-switch button, .pill-btn, .ghost-btn,
-.hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }
+}/* Пилюли — скругление 999, панели — 20, карточки — 28 */
+.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }
 .menu-row, .setting-row, .stats-row, .glass-card, .admin-setting,
 .summary-card, .pay-status, .tariff-term, .chat-row, .ui-stat,
 .feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */
@@ -903,24 +857,8 @@ html, body, .app-shell, .screen {
 .summary-card, .pay-status, .tariff-term, .tariff-compare, .chat-row,
 .ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card,
 .admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card,
-.cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }
-
-/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
-.app-shell .chip, .chip,
-.app-shell .hint-chip, .hint-chip,
-.app-shell .segmented button, .segmented button,
-.app-shell .feed-switch button, .feed-switch button,
-.app-shell .pill-btn, .pill-btn,
-.app-shell .ghost-btn, .ghost-btn,
-.app-shell .dark-btn, .dark-btn,
-.app-shell .btn-dark, .btn-dark,
-.app-shell .admin-tab, .admin-tab,
-.app-shell .tariff-method, .tariff-method,
-.app-shell .feed-status-chip, .feed-status-chip,
-.app-shell .chat-chip, .chat-chip,
-.app-shell .tag, .tag,
-.app-shell .spec-chip, .spec-chip,
-.app-shell .badge, .badge {
+.cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
+.app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .chat-chip, .chat-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip, .app-shell .badge, .badge {
   background: var(--card-primary, #141414);
   border: 0;
   border-radius: 999px;

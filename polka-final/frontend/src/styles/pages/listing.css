@@ -69,9 +69,6 @@
   text-align: center;
   transition: background-color var(--dur-fast) var(--ease);
 }
-.danger-text-btn:active {
-  background: color-mix(in srgb, var(--danger) 10%, transparent);
-}
 
 /* ── 1.4 Липкая нижняя панель действий ───────────────────────────────────
    position: sticky, а не fixed: панель остаётся внутри колонки контента

@@ -428,19 +428,6 @@ input, textarea, select { font-family: inherit; }
   justify-content: center;
 }
 
-.ghost-btn {
-  padding: 12px 20px;
-  border-radius: 14px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 500;
-  transition: all .2s ease;
-}
-.ghost-btn:hover { background: var(--surface-2); }
-.ghost-btn:active { transform: scale(.97); }
-
 /* Form */
 .text-input, .text-area, select.text-input {
   width: 100%;
@@ -1317,23 +1304,6 @@ video.bubble-media-img {
   z-index: -1;
   pointer-events: none;
 }
-.dark-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  padding: 15px 30px;
-  border-radius: 999px;
-  background: var(--ink);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -.01em;
-  text-decoration: none;
-  transition: transform .18s ease;
-}
-.dark-btn:active { transform: scale(.97); }
-.dark-btn.big { padding: 16px 46px; font-size: 16px; }
 .onboarding .dots { margin-top: 22px; gap: 6px; }
 .onboarding .dots span {
   width: 7px;
@@ -1936,9 +1906,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 }
 .chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── *//* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
    Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
-   лёгкое сжатие: палец чувствует, что нажал. */
-
-button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .ghost-btn, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
+   лёгкое сжатие: палец чувствует, что нажал. */button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
@@ -2278,10 +2246,9 @@ html, body, #root {
   border: 1px solid var(--border);
   border-radius: 14px;
   text-align: left;
-}/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
-/* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
+}/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── *//* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
    это требование доступности, а не вкусовщина. */
-.chat-chip, .chat-tab, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
+.chat-chip, .chat-tab, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .cta-round, .mic-btn {
   min-height: 44px;
   min-width: 44px;
 }
