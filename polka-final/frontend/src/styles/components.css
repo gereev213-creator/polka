@@ -382,16 +382,16 @@ body, button, input, select, textarea {
 }.pill-btn { height: 48px; min-height: 48px; }.pill-btn { padding: 0 20px; }
 
 .feed-switch {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 8px !important;
-  height: auto !important;
-  min-height: 0 !important;
-  overflow: visible !important;
-  border: 0 !important;
-  background: transparent !important;
-  padding: 0 !important;
-}.chat-tabs-pill { display: none !important; }
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  padding: 0;
+}.chat-tabs-pill { display: none; }
 
 .pill-glyph {
   font-size: 18px;
@@ -404,7 +404,7 @@ body, button, input, select, textarea {
 .pill-btn--icon .pill-glyph { transform: translateY(-1px); }
 
 .hunt-cta {
-  display: flex !important;
+  display: flex;
   align-items: center;
   gap: 14px;
   position: relative;
@@ -742,7 +742,7 @@ html, body, .app-shell {
   transform: none;
 }
 /* Старый «док» из legacy-стилей, если он ещё в DOM, — скрыть */
-.dock { display: none !important; }/* ═══ ПАНЕЛЬ СПЛОШНАЯ ════════════════════════════════════════════════════
+.dock { display: none; }/* ═══ ПАНЕЛЬ СПЛОШНАЯ ════════════════════════════════════════════════════
    Фон капсулы был полупрозрачным (rgba(20,20,20,.9)) — сквозь него и сквозь
    скруглённые концы просвечивали карточки и читались как чёрные полосы.
    Делаем сплошной фон: перекрытий по краям больше нет. *//* ═══ КНОПКА «+» ОТДЕЛЬНОЙ ПЛАШКОЙ ═══════════════════════════════════════
@@ -779,28 +779,28 @@ html, body, .app-shell {
    пальцем и висели над контентом. По просьбе владельца шапка должна
    уезжать вместе со страницей: ставим static, убираем sticky-контекст. */
 .app-shell .topbar {
-  position: static !important;
-  top: auto !important;
-  z-index: auto !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
+  position: static;
+  top: auto;
+  z-index: auto;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 /* Линия под шапкой при прокрутке больше не нужна — шапка уходит */
-.topbar.is-scrolled { border-bottom: 0 !important; box-shadow: none !important; }/* ═══ БЕЗ СЛЕДОВ ОБВОДКИ У ПАНЕЛИ ════════════════════════════════════════
+.topbar.is-scrolled { border-bottom: 0; box-shadow: none; }/* ═══ БЕЗ СЛЕДОВ ОБВОДКИ У ПАНЕЛИ ════════════════════════════════════════
    Светлая линия, идущая к кнопке «+», — это внутренний блик
    inset 0 1px 0 rgba(255,255,255,.14) у капсулы и у круга. На скруглениях
    он идёт по дуге и читается как обводка, соединяющая плашки.
    Убираем блики и любые тени: остаётся чистый сплошной #141414. */
 /* Точка непрочитанных — без обводки */
-.tabbar-dot { box-shadow: none !important; border: 0 !important; }/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
+.tabbar-dot { box-shadow: none; border: 0; }/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
    Свои панели «Закрыть» / «⌄» / «•••» убраны: кнопку закрытия рисует сам
    Telegram над webview. Сверху оставляем воздух под неё, чтобы логотип
    не прилипал к системной панели. */
 .app-shell .topbar {
-  padding: 12px 0 4px !important;
-  background: transparent !important;
-  border: 0 !important;
-  box-shadow: none !important;
+  padding: 12px 0 4px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }/* Стрелка назад — без плашки, только иконка */
 .app-shell .topbar-back {
   width: 44px;
@@ -823,14 +823,14 @@ html, body, .app-shell {
    полосы слева и справа. Отступ переносим внутрь .screen: карточки и текст
    по-прежнему не липнут к краю, но сама страница занимает всю ширину. */
 .app-frame {
-  padding-left: 0 !important;
-  padding-right: 0 !important;
-  width: 100% !important;
-  max-width: none !important;
+  padding-left: 0;
+  padding-right: 0;
+  width: 100%;
+  max-width: none;
 }
-.app-shell { width: 100% !important; }
+.app-shell { width: 100%; }
 /* Панели, которые прибиты к краям, тоже во всю ширину */
-.topbar { width: 100% !important; }
+.topbar { width: 100%; }
 
 
 /* ═══ СТРОКА ПОИСКА И КНОПКА ФИЛЬТРА ═════════════════════════════════════
@@ -843,7 +843,7 @@ html, body, .app-shell {
   margin: 12px 0;
 }
 /* Категорийные плитки в этом разделе больше не нужны */
-.category-cards { display: none !important; }/* ═══ ВКЛАДКИ — ВСЕГДА КНОПКИ ════════════════════════════════════════════
+.category-cards { display: none; }/* ═══ ВКЛАДКИ — ВСЕГДА КНОПКИ ════════════════════════════════════════════
    Раньше плашку получала только активная вкладка: неактивная сливалась с
    фоном и выглядела текстом, пока по ней не нажмёшь. Теперь обе — видимые
    пилюли: неактивная на приподнятой поверхности #242424, активная светлее. *//* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
@@ -869,7 +869,7 @@ html, body, .app-shell {
   color: var(--text-primary, #fff);
 }a.icon-btn:active { filter: brightness(1.15); }
 /* Статистика профиля: ячейки внутри общей плашки — без своей поверхности */
-.app-shell a.stats-cell, a.stats-cell { background: transparent !important; border-radius: 0; }
+.app-shell a.stats-cell, a.stats-cell { background: transparent; border-radius: 0; }
 
 
 /* ═══ ЗАТЕМНЕНИЕ ПОД ПАНЕЛЬЮ ═════════════════════════════════════════════
@@ -911,11 +911,11 @@ html, body, .app-shell {
 /* ═══ ИКОНКА ПРОФИЛЯ УБРАНА ИЗ ШАПКИ ═════════════════════════════════════
    В верхней панели была круглая кнопка профиля. Профиль уже есть в нижней
    навигации, дублировать его сверху не нужно — шапка остаётся чистой. */
-.top-actions { display: none !important; }/* ═══ ЕДИНАЯ ФОРМУЛА ПИЛЮЛЬ ══════════════════════════════════════════════
+.top-actions { display: none; }/* ═══ ЕДИНАЯ ФОРМУЛА ПИЛЮЛЬ ══════════════════════════════════════════════
    «Барахолка» и «Фильтр» выбивались из стиля: у них был градиент и не было
    кромки, а у капсулы меню — плоский #141414 с кромкой 1px. Приводим все
    пилюли к одной формуле. Градиенты и внутренние блики убраны. *//* Активное состояние — тот же приём, что у активной вкладки меню *//* «Фильтр» — действие, поэтому текст ярче */
-.app-shell .filter-pill { color: #fff !important; }/* ═══ ПЛАШКИ БЕЗ КРОМОК — ФИНАЛ ══════════════════════════════════════════
+.app-shell .filter-pill { color: #fff; }/* ═══ ПЛАШКИ БЕЗ КРОМОК — ФИНАЛ ══════════════════════════════════════════
    Две кромки в зазоре (правая у капсулы, левая у «+») читались как линия
    между плашками. Плюс кромки были разной яркости: .10 у кнопки и .08 у
    капсулы, из-за чего «+» выглядел иначе.
@@ -927,8 +927,8 @@ html, body, .app-shell {
    Опускаем его: отступ шапки сверху больше, а разрыв до вкладок меньше —
    блок читается спокойнее. */
 .app-shell .topbar {
-  padding-top: 26px !important;
-  padding-bottom: 6px !important;
+  padding-top: 26px;
+  padding-bottom: 6px;
 }/* Логотип — своя строка, без лишней высоты */
 .app-shell .topbar .logo { line-height: 1; }/* ═══ БЕЛЫЙ ЛОГОТИП ══════════════════════════════════════════════════════
    Логотип заменён на белый. Соотношение сторон у него 5.65:1 (520×92), а прежнее правило задавало height 20px при max-width 118 — оно сплющивало
@@ -952,7 +952,7 @@ html, body, .app-shell {
    Панель получила градиент, блик и кромку, а вкладки, «Фильтр» и поиск
    остались плоскими — из-за этого выглядели из другого набора. Приводим
    их к той же формуле: те же четыре эффекта, те же значения. *//* Активная — светлее основы, как активная вкладка в меню *//* «Фильтр» — действие, текст ярче */
-.app-shell .filter-pill { color: #fff !important; }/* ═══ БЕЗ АНИМАЦИИ ПЕРЕХОДА, ТОЛЬКО НАЖАТИЕ ══════════════════════════════
+.app-shell .filter-pill { color: #fff; }/* ═══ БЕЗ АНИМАЦИИ ПЕРЕХОДА, ТОЛЬКО НАЖАТИЕ ══════════════════════════════
    Вкладки и пилюли плавно перекрашивались и «переезжали» при переключении.
    Этого быть не должно: кнопка — статичная плашка в нашем стиле, реакция
    только на нажатие. Убираем все переходы, трансформации и анимации, фиксируем одинаковые размеры у активного и неактивного состояния, чтобы
