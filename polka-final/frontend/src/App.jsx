@@ -1559,13 +1559,10 @@ function FeedPage() {
       />
       {feedTab === 'deals' ? (
         <>
-          <Link to="/hunt" className="hunt-cta">
-            <span className="hunt-cta-icon"><Icon name="search" /></span>
-            <span className="hunt-cta-text">
-              <strong>Поиск лотов?</strong>
-              <span>Настроим поиск дешёвых лотов под вас</span>
-            </span>
-            <span className="hunt-cta-arrow"><Icon name="back" /></span>
+          {/* Баннер-кнопка в раздел поиска лотов: картинка владельца,
+              целиком кликабельная, ведёт на /hunt. */}
+          <Link to="/hunt" className="hunt-banner" aria-label="Поиск лотов">
+            <img src="/banner-hunt.png" alt="Поиск лотов" />
           </Link>
           <div className="feed-dots"><i className="is-on" /><i /><i /></div>
           <FindingsView />
