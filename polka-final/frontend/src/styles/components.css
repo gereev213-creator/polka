@@ -1956,3 +1956,28 @@ html, body, .app-shell, .screen {
   object-fit: contain;
   display: block;
 }
+
+
+/* ═══ ЭФФЕКТЫ ПАНЕЛИ ВОЗВРАЩЕНЫ ══════════════════════════════════════════
+   Убирая «линию между плашками», я снял вообще все эффекты — панель стала
+   плоской. Возвращаем глубину: градиент, верхний блик и кромку 1px — у
+   капсулы и у «+» ОДИНАКОВО. Чтобы кромки не читались как линия в зазоре,
+   зазор увеличен до 16px: две тонкие рамки на таком расстоянии не
+   складываются в одну. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab {
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.45) !important;
+  box-sizing: border-box;
+}
+/* Активная вкладка — заметно светлее основы */
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+  color: #fff !important;
+}
+.app-shell .tabbar-wrap, .tabbar-wrap { gap: 16px !important; }
+.app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.16); }
