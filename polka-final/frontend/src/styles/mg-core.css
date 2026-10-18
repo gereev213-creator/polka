@@ -977,59 +977,6 @@
   transform: none;
 }
 
-/* ── 14. Свечение вокруг поля (glow-field) ────────────────────────────────
-   Мягкий ореол вокруг поля поиска, как у Gemini: цвет медленно перетекает
-   по кругу. Реализовано псевдоэлементом с размытым коническим градиентом,
-   который лежит ПОД полем (z-index: -1), поэтому сама плашка остаётся
-   чёткой, а светится только ореол вокруг.
-
-   Важно: фон у поля сплошной, значит часть градиента под ним не видна —
-   наружу выходят только края. Это и нужно: тонкая светящаяся кайма.
-   Движение — сдвиг оттенка, а не трансформация: дешевле для телефона. */
-.app-shell .glow-field, .glow-field {
-  position: relative;
-  isolation: auto;
-}
-
-.app-shell .glow-field::before, .glow-field::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: inherit;
-  z-index: -1;
-  pointer-events: none;
-  /* Только голубые оттенки: холодное свечение без пёстрых переходов */
-  background: conic-gradient(
-    from 0deg,
-    rgba(10, 132, 255, 0.95),
-    rgba(102, 195, 255, 0.85),
-    rgba(31, 120, 255, 0.75),
-    rgba(0, 92, 214, 0.85),
-    rgba(10, 132, 255, 0.95)
-  );
-  filter: blur(9px) saturate(140%);
-  opacity: 0.55;
-  animation: glow-drift 7s linear infinite;
-}
-
-@keyframes glow-drift {
-  0%   { filter: blur(9px)  saturate(140%) hue-rotate(0deg);   opacity: 0.50; }
-  33%  { filter: blur(11px) saturate(160%) hue-rotate(60deg);  opacity: 0.62; }
-  66%  { filter: blur(9px)  saturate(150%) hue-rotate(140deg); opacity: 0.54; }
-  100% { filter: blur(9px)  saturate(140%) hue-rotate(220deg); opacity: 0.50; }
-}
-
-/* Внутри свечения — обычная плашка без изменений */
-.app-shell .glow-field .icon-svg, .glow-field .icon-svg { position: relative; z-index: 1; }
-
-/* Уважение к системной настройке «уменьшить движение» */
-@media (prefers-reduced-motion: reduce) {
-  .app-shell .glow-field::before, .glow-field::before {
-    animation: none;
-    opacity: 0.42;
-  }
-}
-
 /* ── 15. ИИ-чат («Поиск словами») ─────────────────────────────────────────
    Экран в духе Gemini: пока диалог пуст, по центру крупный заголовок,
    под ним примеры-чипы, а поле ввода — светящаяся пилюля с мягким ореолом.
