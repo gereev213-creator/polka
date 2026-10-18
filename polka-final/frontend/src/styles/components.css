@@ -1599,3 +1599,22 @@ html, body, .app-shell, .screen {
 }
 /* Линия под шапкой при прокрутке больше не нужна — шапка уходит */
 .topbar.is-scrolled { border-bottom: 0 !important; box-shadow: none !important; }
+
+
+/* ═══ БЕЗ СЛЕДОВ ОБВОДКИ У ПАНЕЛИ ════════════════════════════════════════
+   Светлая линия, идущая к кнопке «+», — это внутренний блик
+   inset 0 1px 0 rgba(255,255,255,.14) у капсулы и у круга. На скруглениях
+   он идёт по дуге и читается как обводка, соединяющая плашки.
+   Убираем блики и любые тени: остаётся чистый сплошной #141414. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab,
+.app-shell .tabbar-wrap, .tabbar-wrap {
+  box-shadow: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  filter: none !important;
+}
+.app-shell .tabbar, .tabbar { background: #141414 !important; }
+.app-shell .tabbar-fab, .tabbar-fab { background: #141414 !important; }
+/* Точка непрочитанных — без обводки */
+.tabbar-dot { box-shadow: none !important; border: 0 !important; }
