@@ -1420,3 +1420,28 @@ html, body, .app-shell, .screen {
 .app-shell .product-price:active, .product-price:active {
   filter: brightness(.96);
 }
+
+
+/* ═══ ПАНЕЛЬ ПОВЕРХ ВСЕГО ════════════════════════════════════════════════
+   По краям капсулы просвечивали карточки товаров: они оказывались выше
+   навигации в порядке слоёв (карточка создаёт свой контекст наложения
+   через isolation и псевдоэлементы). Поднимаем панель над всем и убираем
+   лишний контекст у карточки. */
+.app-shell .tabbar, .tabbar {
+  position: fixed !important;
+  z-index: 1000 !important;
+}
+.app-shell .tabbar-item, .tabbar-item,
+.app-shell .tabbar-fab, .tabbar-fab {
+  z-index: 1001;
+  position: relative;
+}
+/* Карточка не должна уходить выше панели */
+.app-shell .product-card, .product-card {
+  isolation: auto;
+  z-index: auto;
+  transform: none;
+}
+.app-shell .product-figure, .product-figure { isolation: auto; }
+/* Старый «док» из legacy-стилей, если он ещё в DOM, — скрыть */
+.dock { display: none !important; }
