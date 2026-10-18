@@ -1122,3 +1122,55 @@
 .app-shell .chat-send:active, .chat-send:active { filter: brightness(0.94); }
 .app-shell .chat-send:disabled, .chat-send:disabled { opacity: 0.5; }
 .app-shell .chat-send .icon-svg, .chat-send .icon-svg { width: 20px; height: 20px; }
+
+/* ── 16. Разгрузка экранов поиска ─────────────────────────────────────────
+   «Поиск словами» и «Вручную» были перегружены: два заголовка подряд,
+   пояснительные абзацы, подсказки под каждым полем. Оставляем суть —
+   название режима, поля, чипы. Текстовые пояснения убираем совсем,
+   подсказки делаем мелкой приглушённой строкой. */
+.app-shell .sub-copy, .sub-copy { display: none; }
+
+/* Заголовок страницы в этих режимах дублирует вкладку и крупный приветствие */
+.app-shell .hunt-screen > .page-title, .hunt-screen > .page-title,
+.app-shell .chat-wrap .chat-header-title, .chat-wrap .chat-header-title {
+  display: none;
+}
+
+/* Подписи полей — мелкие, капсом, с воздухом сверху */
+.app-shell .field-label-row, .field-label-row {
+  margin: 22px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+}
+.app-shell .chip-row, .chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Подсказки — одна тихая строка вместо абзаца */
+.app-shell .hint-note, .hint-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.38);
+}
+.app-shell .collector-warn, .collector-warn {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 184, 77, 0.10);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.app-shell .hint-chips, .hint-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
