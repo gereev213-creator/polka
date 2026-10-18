@@ -17,7 +17,7 @@
   padding: 0 22px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(180deg, #2e90ff 0%, #0a84ff 100%);
+  background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   color: #fff;
   font-size: 16px;
   font-weight: 600;
@@ -74,7 +74,7 @@
   min-width: 44px;
   border-radius: 50%;
   border: 0;
-  background: linear-gradient(180deg, #2e90ff 0%, #0a84ff 100%);
+  background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   color: #fff;
   box-shadow: 0 4px 14px rgba(10, 132, 255, 0.35);
 }
@@ -130,7 +130,7 @@
   min-height: 48px;
   padding: 0 16px;
   border-radius: 999px;
-  background: linear-gradient(180deg, #2e90ff 0%, #0a84ff 100%);
+  background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   color: #fff;
   font-size: 16px;
   font-weight: 700;
