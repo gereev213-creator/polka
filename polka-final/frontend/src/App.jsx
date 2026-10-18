@@ -54,6 +54,11 @@ function useApp() {
 
 
 
+// Метка сборки. Показывается в профиле мелким текстом: по ней видно,
+// какой именно бандл открыт у человека — иначе закэшированная версия
+// выглядит как «ничего не исправилось».
+const APP_BUILD = '2026-10-18-5'
+
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
 }
@@ -4025,7 +4030,8 @@ function AppFooter() {
     <div className="app-footer">
       {/* Внизу копирайт и сразу ссылки на документы — без промежуточной
           надписи «Документы»: лишний клик на ровном месте. */}
-      <div className="app-footer-copy">Полка © {year} — все права защищены</div>
+      <div className="app-footer-copy">Полка © {year} — все права защищены
+            <span className="build-mark">сборка {APP_BUILD}</span></div>
       {docs && docs.privacy_url ? (
         <div className="app-footer-links">
           <a href={docs.privacy_url} target="_blank" rel="noreferrer">

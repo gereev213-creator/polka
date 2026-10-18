@@ -1247,3 +1247,12 @@
   text-underline-offset: 2px;
 }
 .app-shell .pay-legal-muted, .pay-legal-muted { color: rgba(255, 255, 255, 0.28); }
+
+/* Метка сборки в профиле: мелко и тихо, нужна только для проверки версии */
+.app-shell .build-mark, .build-mark {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.22);
+  letter-spacing: 0.02em;
+}
