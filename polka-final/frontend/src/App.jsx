@@ -1199,21 +1199,9 @@ function FindingsView() {
 
 /* Рельс категорий в ленте — те же плашки, что и в форме, только
  * в горизонтальной прокрутке (в форме они в сетке 2 в ряд). */
-function CategoryCards({ categories, activeCategory, onSelect }) {
-  return (
-    <div className="category-cards">
-      {categories.map((cat) => (
-        <CategoryTile
-          key={cat}
-          value={cat}
-          label={cat}
-          selected={activeCategory === cat}
-          onSelect={onSelect}
-        />
-      ))}
-    </div>
-  )
-}
+/* Компонент CategoryCards удалён: плитки категорий убраны из Барахолки,
+   вместо них строка поиска и кнопка «Фильтр». Сетка CategoryGrid в поиске
+   осталась — она использует CategoryTile и жива. */
 
 /* Баннер ленты — просто картинка, которую загрузил админ.
  * Никакого текста и кнопок поверх: раньше мы рисовали свой оверлей

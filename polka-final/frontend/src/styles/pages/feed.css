@@ -146,7 +146,6 @@
   max-width: 100%;
   padding-right: var(--space-2);
 }
-.category-cards > * { scroll-snap-align: start; }
 @media (prefers-reduced-motion: reduce) {
   .category-cards { scroll-snap-type: none; }
 }
@@ -161,22 +160,6 @@
   padding: var(--space-3);
   background: var(--surface-2);
   border: 1px solid var(--border);
-}
-.category-cards .cat-tile::after {
-  background: var(--surface-2);
-}
-.category-cards .cat-tile-label {
-  max-width: 66%;
-  font-size: 13px;
-  line-height: 1.16;
-}
-.category-cards .cat-tile-art {
-  width: 78px;
-  height: 66px;
-}
-.category-cards .cat-tile.is-selected {
-  background: var(--surface-2);
-  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 /* Нажатие на выбранную категорию тень не показывает: это итог legacy-правила
    `.cat-tile:active { box-shadow: none }` (этап 5 снял).
@@ -247,12 +230,6 @@
 }
 .banner-card h3 { margin: 4px 0 0; font-size: 17px; font-weight: 600; color: var(--text); }
 .banner-card p { margin: 4px 0 0; font-size: 13px; color: var(--text-secondary); }
-
-.category-cards {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
 .cat-tile {
   display: flex; align-items: center; justify-content: flex-start;
   min-height: 48px; padding: 0 12px;

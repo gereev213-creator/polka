@@ -28,11 +28,6 @@ input, textarea, select { font-family: inherit; }
   padding: 2px 0 6px;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
-}
-.category-cards::-webkit-scrollbar { display: none; }
-.category-cards .cat-tile {
-  flex: 0 0 152px;
-  height: 116px;
 }/* TopBar */
 .topbar-side:last-child { justify-content: flex-end; }
 /* Ряд иконок в шапке: без этого кнопки встают столбиком */
