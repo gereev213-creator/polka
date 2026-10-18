@@ -237,7 +237,7 @@ export default function HuntChat() {
       </div>
 
       {!showFinal ? (
-        <div className="chat-input">
+        <div className="chat-input glow-field">
           <input className="text-input" value={text} placeholder="Напиши, что ищешь…"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send() }} />

@@ -1027,3 +1027,98 @@
     opacity: 0.42;
   }
 }
+
+/* ── 15. ИИ-чат («Поиск словами») ─────────────────────────────────────────
+   Экран в духе Gemini: пока диалог пуст, по центру крупный заголовок,
+   под ним примеры-чипы, а поле ввода — светящаяся пилюля с мягким ореолом.
+   Когда начинается переписка, центрирование уходит и остаётся обычная лента. */
+.app-shell .chat-start, .chat-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  min-height: 44vh;
+  padding: 24px 0;
+}
+.app-shell .chat-hello, .chat-hello {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+  max-width: 320px;
+}
+.app-shell .chat-hello-sub, .chat-hello-sub {
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  max-width: 300px;
+}
+.app-shell .chat-examples, .chat-examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+  max-width: 340px;
+}
+.app-shell .chat-example, .chat-example {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell .chat-example:active, .chat-example:active { filter: brightness(1.14); }
+
+/* Поле ввода — пилюля с ореолом, кнопка отправки внутри */
+.app-shell .chat-input, .chat-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.app-shell .chat-input .text-input, .chat-input .text-input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: #fff;
+  font-size: 16px;
+}
+.app-shell .chat-input .text-input:focus, .chat-input .text-input:focus { box-shadow: none; }
+.app-shell .chat-send, .chat-send {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 50%;
+  border: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #1f78ff 0%, #0a62f0 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell .chat-send:active, .chat-send:active { filter: brightness(0.94); }
+.app-shell .chat-send:disabled, .chat-send:disabled { opacity: 0.5; }
+.app-shell .chat-send .icon-svg, .chat-send .icon-svg { width: 20px; height: 20px; }
