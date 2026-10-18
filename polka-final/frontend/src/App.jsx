@@ -3238,12 +3238,15 @@ function TariffsPage() {
   const [promo, setPromo] = useState('')
   // Статус оплаты вместо голой строки: ждём / оплачено / тестовый / истёк / ошибка.
   const [pay, setPay] = useState({ state: '', text: '', tries: 0 })
+  // Реквизиты исполнителя с сервера: CISPay проверяет страницу оплаты
+  const [legal, setLegal] = useState(null)
   const [err, setErr] = useState('')
 
   const load = () => {
     api.getPlan().then(setPlan).catch(setErr)
     api.getReferral().then(setRef).catch(() => {})
     api.payPlans().then((d) => {
+      setLegal(d.legal || null)
       const list = d.plans || []
       setCardPlans(list)
       setCryptoOn(!!d.crypto_enabled)
@@ -3436,6 +3439,47 @@ function TariffsPage() {
             ) : null}
           </div>
         ) : null}
+
+        {/* 6б. Условия оплаты и реквизиты — требование CISPay для одобрения
+            мерчанта: на платёжной странице должны быть исполнитель, ИНН,
+            правила возврата, оферта, политика и контакт поддержки. */}
+        <div className="pay-legal">
+          <div className="pay-legal-title">Условия оплаты</div>
+          <ul className="pay-legal-list">
+            <li>Услуга: подписка «Плюс» — расширенные критерии поиска на выбранный срок.</li>
+            <li>Оплата разовая. Автопродление не подключается, повторных списаний нет.</li>
+            <li>Платёж проходит на стороне CISPay: данные карты приложению не передаются.</li>
+            <li>Доступ открывается автоматически в течение 1–2 минут после подтверждения.</li>
+            <li>
+              Возврат: напишите в поддержку
+              {legal?.support ? <> <b>{legal.support}</b></> : null}
+              {' '}— рассмотрим в течение {legal?.refund_days || '14'} дней.
+            </li>
+          </ul>
+          {legal?.name ? (
+            <div className="pay-legal-requisites">
+              Исполнитель: {legal.name}
+              {legal.inn ? `, ИНН ${legal.inn}` : ''}
+            </div>
+          ) : (
+            <div className="pay-legal-requisites">
+              Реквизиты исполнителя не заполнены — их указывает владелец в админке.
+            </div>
+          )}
+          <div className="pay-legal-links">
+            {legal?.offer_url ? (
+              <a href={legal.offer_url} target="_blank" rel="noreferrer">Условия пользования</a>
+            ) : (
+              <span className="pay-legal-muted">Условия пользования</span>
+            )}
+            <span>·</span>
+            {legal?.privacy_url ? (
+              <a href={legal.privacy_url} target="_blank" rel="noreferrer">Политика конфиденциальности</a>
+            ) : (
+              <span className="pay-legal-muted">Политика конфиденциальности</span>
+            )}
+          </div>
+        </div>
 
         {/* 7. Промокод и приглашение — компактными строками */}
         <div className="list-stack mt-14">

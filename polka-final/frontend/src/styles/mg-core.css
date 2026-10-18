@@ -1194,3 +1194,56 @@
 @media (prefers-reduced-motion: reduce) {
   .app-shell .pay-spinner, .pay-spinner { animation: none; border-top-color: #0a84ff; }
 }
+
+/* ── 19. Условия оплаты и реквизиты ───────────────────────────────────────
+   Обязательный блок для проверки мерчанта CISPay: что за услуга, как
+   списываются деньги, правила возврата, исполнитель, ИНН, ссылки на
+   документы. Оформлен тихо, чтобы не спорить с тарифами. */
+.app-shell .pay-legal, .pay-legal {
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.app-shell .pay-legal-title, .pay-legal-title {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  margin-bottom: 8px;
+}
+.app-shell .pay-legal-list, .pay-legal-list {
+  margin: 0;
+  padding: 0 0 0 16px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.app-shell .pay-legal-list li, .pay-legal-list li {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.62);
+}
+.app-shell .pay-legal-requisites, .pay-legal-requisites {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+}
+.app-shell .pay-legal-links, .pay-legal-links {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.35);
+}
+.app-shell .pay-legal-links a, .pay-legal-links a {
+  color: #6fb4ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-shell .pay-legal-muted, .pay-legal-muted { color: rgba(255, 255, 255, 0.28); }

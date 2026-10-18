@@ -22564,6 +22564,20 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                      'Цена «Плюса» на год, ₽ (0 — не показывать)'),
     'pay.crypto_enabled': ('str', None, None, '0',
                            '1 — показать способ оплаты «Криптой» (скоро)'),
+    # Реквизиты продавца. CISPay проверяет платёжную страницу: на ней должны
+    # быть исполнитель, ИНН, условия возврата, оферта, политика и поддержка.
+    'pay.legal_name': ('str', None, None, '',
+                       'Исполнитель: ИП / самозанятый / ООО (полное наименование)'),
+    'pay.legal_inn': ('str', None, None, '',
+                      'ИНН исполнителя'),
+    'pay.support_contact': ('str', None, None, '@polka_support',
+                            'Контакт поддержки (Telegram или e-mail)'),
+    'pay.refund_days': ('str', None, None, '14',
+                        'Срок рассмотрения возврата, дней'),
+    'pay.offer_url': ('str', None, None, '',
+                      'Ссылка на оферту / условия пользования (https://…)'),
+    'pay.privacy_url': ('str', None, None, '',
+                        'Ссылка на политику конфиденциальности (https://…)'),
     # Напоминания об оплате в ленте (этап R): тексты живут в настройках,
     # а не в JSX — чтобы менять без релиза.
     'reminders.enabled': ('str', None, None, '1',
@@ -23830,8 +23844,17 @@ async def api_client_event(request: aiohttp_web.Request) -> aiohttp_web.Response
 async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/pay/plans — тарифы картой (цены из настроек)."""
     plans = await asyncio.to_thread(_db_read, cispay_plans_public)
+    # Данные исполнителя: CISPay проверяет, что страница оплаты их содержит.
+    legal = {
+        'name': str(cfg_get('pay.legal_name') or ''),
+        'inn': str(cfg_get('pay.legal_inn') or ''),
+        'support': str(cfg_get('pay.support_contact') or ''),
+        'refund_days': str(cfg_get('pay.refund_days') or '14'),
+        'offer_url': str(cfg_get('pay.offer_url') or ''),
+        'privacy_url': str(cfg_get('pay.privacy_url') or ''),
+    }
     return _miniapp_json({'ok': True, 'plans': plans, 'enabled': cispay_enabled(),
-                          'provider': 'cispay',
+                          'provider': 'cispay', 'legal': legal,
                           # Этап T: вариант «Криптой» показываем только когда включён
                           'crypto_enabled': str(cfg_get('pay.crypto_enabled') or '0') == '1'})
 
