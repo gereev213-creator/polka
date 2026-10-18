@@ -390,6 +390,9 @@
 }
 .listing, .detail-page, .screen { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
 
+/* Селектор этого блока потерялся при переносе правил — свойства висели
+   без правила и ломали разбор CSS, из-за чего esbuild ругался на var(). */
+body, button, input, select, textarea {
   font-family: var(--font-family-primary);
   font-size: var(--font-body-size);
   font-weight: var(--font-body-weight);
