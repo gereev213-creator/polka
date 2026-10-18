@@ -1564,7 +1564,6 @@ function FeedPage() {
           <Link to="/hunt" className="hunt-banner" aria-label="Поиск лотов">
             <img src="/banner-hunt.png" alt="Поиск лотов" />
           </Link>
-          <div className="feed-dots"><i className="is-on" /><i /><i /></div>
           <FindingsView />
         </>
       )
