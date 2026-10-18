@@ -1934,28 +1934,19 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── */
-/* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
+.chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── *//* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
    Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
    лёгкое сжатие: палец чувствует, что нажал. */
 
-button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .save-btn, .ghost-btn, .product-card, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
+button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .ghost-btn, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
     border-color .18s ease,
     color .18s ease;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* Нажатие: сжатие до 94% — ощущается как живая кнопка */
-button:active,
-.chat-chip:active,
-.chat-example:active,
-.save-btn:active,
-.chat-crit-x:active,
-.dock-create:active,
-.chat-back:active {
+}/* Нажатие: сжатие до 94% — ощущается как живая кнопка */
+button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .dock-create:active, .chat-back:active {
   transform: scale(.94);
 }
 
@@ -2190,22 +2181,15 @@ html, body, #root {
   .page-title { font-size: 26px; line-height: 32px; }
 }
 /* Контент: не шире 520 px, по центру на широких экранах */
-#root { max-width: 520px; margin: 0 auto; }
-
-/* ── Стекло ровно в трёх точках (раздел 6 ТЗ) ──────────────────────────── */
+#root { max-width: 520px; margin: 0 auto; }/* ── Стекло ровно в трёх точках (раздел 6 ТЗ) ──────────────────────────── */
 /* Всё остальное, что раньше было «стеклянным», становится плоским. */
-.chat-tabs, .chat-crit-card, .chat-summary, .field-label-row.is-toggle,
-.product-card, .chat-example {
+.chat-tabs, .chat-crit-card, .chat-summary, .field-label-row.is-toggle, .chat-example {
   background: var(--surface);
 }
 .dock, .chat-header, .chat-input {
   background: var(--bg-glass);
   border-top: 0.5px solid var(--hairline);
   border-bottom: none;
-}
-.product-price {
-  flex: 0 0 auto;
-  white-space: nowrap;
 }
 
 /* Плашка выгоды: компактнее и не залезает под сердечко */
@@ -2294,12 +2278,10 @@ html, body, #root {
   border: 1px solid var(--border);
   border-radius: 14px;
   text-align: left;
-}
-
-/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
+}/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── */
 /* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
    это требование доступности, а не вкусовщина. */
-.chat-chip, .chat-tab, .chat-example, .save-btn, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
+.chat-chip, .chat-tab, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .ghost-btn, .cta-round, .mic-btn {
   min-height: 44px;
   min-width: 44px;
 }
@@ -2311,9 +2293,8 @@ html, body, #root {
   justify-content: center;
   padding-left: 16px;
   padding-right: 16px;
-}
-/* Круглые кнопки: ровный круг 44 px */
-.chat-send, .chat-back, .save-btn, .chat-crit-x, .icon-btn, .mic-btn {
+}/* Круглые кнопки: ровный круг 44 px */
+.chat-send, .chat-back, .chat-crit-x, .icon-btn, .mic-btn {
   width: 44px;
   height: 44px;
   display: inline-flex;
@@ -2634,12 +2615,6 @@ html, body, #root {
   text-align: left;
 }
 .product-media { border-radius: 8px; }
-.product-discount {
-  display: inline-block;
-  align-self: flex-start;
-  width: auto;
-  margin-top: 3px;
-}
 
 /* 3. Сердечко — 28 px в углу фото, без белого круга */
 .product-media .save-btn,
@@ -2651,9 +2626,6 @@ html, body, #root {
 /* Ритм текста в карточке: цена → скидка → название → мета.
    Раньше промежутки были разными, и карточка «расползалась» по вертикали. */
 .product-info { display: flex; flex-direction: column; align-items: flex-start; }
-.product-price { font-size: 16px; font-weight: 700; line-height: 1.2; }
-.product-discount { margin-top: 2px; }
-.product-title { margin: 4px 0 0; line-height: 1.3; }
 .product-meta { margin-top: 2px; }
 /* Название в одну строку не должно оставлять пустоту под собой:
    резерв под вторую строку убираем, обрезку оставляем. */
@@ -2675,19 +2647,9 @@ html, body, #root {
 .product-media .media-placeholder { width: 100%; height: 100%; border-radius: 0; }
 .product-info { display: flex; flex-direction: column; align-items: flex-start;
   padding: 8px 0 0; text-align: left; }
-.product-price { font-size: 16px; font-weight: 700; line-height: 1.2;
-  font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
-.product-discount { display: inline-block; align-self: flex-start; margin-top: 2px;
-  padding: 1px 6px; border-radius: 4px; background: var(--success-bg);
-  color: var(--success); font-size: 11px; font-weight: 600; }
-.product-card .product-title { margin: 4px 0 0; font-size: 13px; font-weight: 500;
-  line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical; overflow: hidden; }
 .product-meta { margin-top: 2px; font-size: 11px; color: var(--text-tertiary); }
 .product-media .save-btn,
-.save-btn.is-on { color: var(--danger); }
-.product-media .save-btn .icon-svg,
-.save-btn .icon-svg { width: 15px; height: 15px; }
+.save-btn.is-on { color: var(--danger); }.product-media .save-btn .icon-svg { width: 15px; height: 15px; }
 .hunt-cta { display: none; }
 
 /* ═══ СТАТИСТИКА ПРОФИЛЯ ОДНОЙ СТРОКОЙ ═══════════════════════════════════ */

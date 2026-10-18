@@ -76,10 +76,8 @@ input:focus-visible, textarea:focus-visible, select:focus-visible {
 button:disabled, [aria-disabled="true"] {
   opacity: .4;
   pointer-events: none;
-}
-
-/* Зоны нажатия: не меньше 44 px. Круглые кнопки — ровно 44×44. */
-.icon-btn, .chat-back, .chat-send, .save-btn, .chat-crit-x, .mic-btn {
+}/* Зоны нажатия: не меньше 44 px. Круглые кнопки — ровно 44×44. */
+.icon-btn, .chat-back, .chat-send, .chat-crit-x, .mic-btn {
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -204,4 +202,3 @@ input, textarea, select, [contenteditable="true"] {
 /* ═══ РАВНАЯ ВЫСОТА КАРТОЧЕК ═════════════════════════════════════════════ */
 .feed-grid { align-items: stretch; }
 .feed-grid > .product-card { height: 100%; }
-.product-card .product-name { min-height: 2.5em; }

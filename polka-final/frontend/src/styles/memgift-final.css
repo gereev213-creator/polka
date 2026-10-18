@@ -107,22 +107,7 @@
   text-align: left;
   text-decoration: none;
   color: inherit;
-}
-.app-shell .product-figure {
-  position: relative;
-  border-radius: 20px;
-  overflow: hidden;
-  aspect-ratio: 1 / 1;
-  background: #171a20;
-}
-.app-shell .product-figure .save-btn {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
-}
-.app-shell .product-body .product-price,
-.app-shell .product-info .product-price {
+}.app-shell .product-info .product-price {
   display: flex;
   align-items: center;
   justify-content: center;

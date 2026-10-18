@@ -142,3 +142,128 @@
   border-bottom: 0;
   box-shadow: none;
 }
+
+/* ── 3. Карточка товара (product-card) ────────────────────────────────────
+   Одна плашка #141414 с верхним бликом, радиус 28. Внутри — фото в своей
+   плашке радиусом 20 и синяя пилюля цены. Обводки и кольца у карточки нет:
+   глубину дают фон и блик. Лента скидки декоративная — мышь не ловит. */
+.app-shell .product-card, .product-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 0;
+  border-radius: 28px;
+  background: var(--card-primary, #141414);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    0 5px 30px rgba(0, 0, 0, 0.45);
+  text-align: left;
+  text-decoration: none;
+  color: inherit;
+  overflow: hidden;
+  position: relative;
+  isolation: auto;
+}
+.app-shell .product-card::before, .product-card::before,
+.app-shell .product-card::after, .product-card::after { display: none; }
+
+/* Фото — своя плашка, лента скидки обрезается её скруглением */
+.app-shell .product-figure, .product-figure {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 20px;
+  background: #171a20;
+  isolation: auto;
+}
+.app-shell .product-figure img, .product-figure img,
+.app-shell .product-figure .media-image, .product-figure .media-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  object-fit: cover;
+}
+
+/* Лента скидки: диагональная, декоративная */
+.app-shell .product-badge, .product-badge,
+.app-shell .product-badge--offer, .product-badge--offer {
+  position: absolute;
+  top: 16px;
+  right: -34px;
+  left: auto;
+  bottom: auto;
+  width: 128px;
+  padding: 4px 0;
+  transform: rotate(45deg);
+  border-radius: 0;
+  background: var(--success, #84ff39);
+  color: #06210a;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-align: center;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.40);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Текст карточки */
+.app-shell .product-title, .product-title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+}
+.app-shell .product-name, .product-name { min-height: 2.5em; }
+
+/* Цена — синяя пилюля по эталону, на всю ширину карточки */
+.app-shell .product-price, .product-price,
+.app-shell .product-body .product-price, .product-body .product-price {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, #1f78ff 0%, #0a62f0 100%);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+.app-shell .product-price:active, .product-price:active { filter: brightness(0.94); }
+
+/* Сердечко — видимое, ловит нажатие (в отличие от ленты) */
+.app-shell .product-figure .save-btn, .product-figure .save-btn,
+.app-shell .product-card .save-btn, .product-card .save-btn {
+  pointer-events: auto;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  border: 0;
+  color: #fff;
+  z-index: 3;
+}

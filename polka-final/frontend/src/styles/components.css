@@ -196,10 +196,7 @@
 .admin-setting, .tariff-term, .ui-group-body > * {
   transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
   -webkit-tap-highlight-color: transparent;
-}
-.product-card:active, .chat-row:active, .menu-row:active, .setting-row:active,
-.plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active,
-.chip:active, .hint-chip:active, .feed-status-chip:active {
+}.chat-row:active, .menu-row:active, .setting-row:active, .plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
 }
@@ -294,16 +291,12 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-.product-card:active { transform: scale(.975); box-shadow: 0 6px 18px rgba(0,0,0,.5); }
-.product-media { border-radius: 20px; }.product-card, .chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item, .chip, .segmented button {
+.product-media { border-radius: 20px; }.chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item, .chip, .segmented button {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
 
-.app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
-
-.product-media .save-btn,
-.save-btn {
+.app-shell { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }.product-media .save-btn {
   width: 32px;
   height: 32px;
   min-width: 32px;
@@ -315,31 +308,12 @@
   border: 1px solid rgba(255, 255, 255, .12);
   color: rgba(255, 255, 255, .92);
 }
-.save-btn.is-on { color: var(--danger); }
-
-.product-card .product-media .save-btn,
-.product-card .save-btn {
-  width: 30px;
-  height: 30px;
-  min-width: 30px;
-  min-height: 30px;
-  border-radius: 50%;
-  background: rgba(8, 8, 8, .58);
-  border: 1px solid rgba(255, 255, 255, .14);
-  color: rgba(255, 255, 255, .95);
-  backdrop-filter: blur(14px) saturate(140%);
-  -webkit-backdrop-filter: blur(14px) saturate(140%);
-}
-.product-card .product-media .save-btn .icon-svg,
-.product-card .save-btn .icon-svg { width: 15px; height: 15px; }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
+.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
 }
-.glass-card, .admin-sheet { border: 1px solid var(--line); }
-
-.save-btn, .icon-btn, .chat-chip, .feed-reminder, .badge,
-.chat-time, .plan-desc, .spec-chip, .stats-head-label {
+.glass-card, .admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .feed-reminder, .badge, .chat-time, .plan-desc, .spec-chip, .stats-head-label {
   background-color: transparent;
 }
 .badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }
@@ -393,22 +367,13 @@ body, button, input, select, textarea {
   border-radius: 50%; background: var(--accent-primary); }
 .tabbar-fab .icon-svg { width: 24px; height: 24px; }
 .product-info { padding: 10px 2px 0; gap: 6px; }
-.product-title { font-size: 15px; font-weight: 600; }
 .product-meta { font-size: 12px; color: var(--text-secondary); }
-.product-discount { align-self: flex-start; padding: 3px 10px; border-radius: 999px;
-  background: var(--success); color: #06210a; font-weight: 700; }
 .segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
   background: var(--surface-secondary); color: var(--text-secondary);
-  font-size: 16px; font-weight: 600; }
-
-.product-card, .glass-card, .summary-card, .pay-status, .admin-setting,
-.tariff-term, .ui-stat, .tabbar, .chip, .badge, .tag {
+  font-size: 16px; font-weight: 600; }.glass-card, .summary-card, .pay-status, .admin-setting, .tariff-term, .ui-stat, .tabbar, .chip, .badge, .tag {
   border: 0;
   position: relative;
-}
-.product-card::after, .glass-card::after, .summary-card::after, .pay-status::after,
-.admin-setting::after, .tariff-term::after, .ui-stat::after, .tabbar::after,
-.chip::after, .badge::after, .tag::after {
+}.glass-card::after, .summary-card::after, .pay-status::after, .admin-setting::after, .tariff-term::after, .ui-stat::after, .tabbar::after, .chip::after, .badge::after, .tag::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -458,71 +423,6 @@ body, button, input, select, textarea {
   width: 36px; height: 36px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--card-secondary); color: var(--text-secondary);
-}
-
-.product-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px;
-  background: var(--card-primary);
-  border-radius: 28px;
-  box-shadow: var(--shadow-card);
-  text-decoration: none;
-  color: inherit;
-}
-.product-figure {
-  position: relative;
-  border-radius: 20px;
-  overflow: hidden;
-  aspect-ratio: 1 / 1;
-  background: #171A20;
-}
-.product-figure .media-image,
-.product-figure .media-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 0;
-  object-fit: cover;
-}
-.product-badge {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgba(12, 12, 14, 0.55);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .01em;
-}
-.product-body { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 2px; }
-.product-name {
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: var(--text-primary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.product-price {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 56px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #2E90FF 0%, #0A84FF 100%);
-  color: #fff;
-  font-size: 19px;
-  font-weight: 700;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    0 6px 18px rgba(10, 132, 255, 0.28);
 }
 
 .chip, .segmented button, .hint-chip, .feed-status-chip, .admin-tab,
@@ -695,13 +595,6 @@ body, button, input, select, textarea {
   justify-content: center;
 }
 .pill-btn--icon .pill-glyph { transform: translateY(-1px); }
-
-.product-badge--offer {
-  top: auto !important;
-  bottom: 10px !important;
-  left: 10px !important;
-  right: auto !important;
-}
 
 .hunt-cta {
   display: flex !important;
@@ -898,14 +791,10 @@ input[type="checkbox"]:checked::after {
   background: var(--card-primary);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
   color: var(--text-primary);
-}
-
-
-/* ═══ РИББОН (диагональная лента, как «author / rare» в Memgift) ═════════
+}/* ═══ РИББОН (диагональная лента, как «author / rare» в Memgift) ═════════
    Лента идёт из правого верхнего угла под 45°, выходит за край и обрезается
    скруглением фото (у .product-figure стоит overflow: hidden). */
-.app-shell .product-badge--offer,
-.product-badge--offer {
+.app-shell .product-badge--offer {
   position: absolute;
   top: 16px;
   right: -34px;
@@ -945,58 +834,32 @@ input[type="checkbox"]:checked::after {
   text-align: center;
   text-transform: uppercase;
   z-index: 2;
-}
-
-
-/* ═══ КЛИК ПО КАРТОЧКЕ (функциональный фикс) ═════════════════════════════
+}/* ═══ КЛИК ПО КАРТОЧКЕ (функциональный фикс) ═════════════════════════════
    Риббон скидки — декоративный, но он перехватывал нажатие и, выходя за
-   край фото, накрывал СОСЕДНЮЮ карточку: клик по левой не срабатывал,
-   потому что сверху оказывался span из правой. Теперь все оверлеи карточки
+   край фото, накрывал СОСЕДНЮЮ карточку: клик по левой не срабатывал, потому что сверху оказывался span из правой. Теперь все оверлеи карточки
    прозрачны для мыши, а фигура гарантированно обрезает ленту. */
-.product-card .product-badge,
-.product-card .product-badge--offer,
-.product-card .product-ribbon-new,
-.product-card::after,
-.product-card::before,
-.product-figure::after,
-.product-figure::before {
+.product-card .product-badge {
   pointer-events: none;
-}
-.product-figure {
-  position: relative;
-  overflow: hidden;
-  border-radius: 20px;
-  isolation: isolate;
-}
-.product-card { position: relative; overflow: hidden; }
-
-/* Карточка — как кнопки в меню: та же поверхность и верхний блик */
-.app-shell .product-card,
-.product-card {
+}/* Карточка — как кнопки в меню: та же поверхность и верхний блик */
+.app-shell .product-card {
   background: var(--card-primary);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-card);
   border-radius: 28px;
-}
-.product-card .save-btn { pointer-events: auto; }
-
-
-/* ═══ КАРТОЧКА: ШИРИНА ПО СЕТКЕ ═════════════════════════════════════════
+}/* ═══ КАРТОЧКА: ШИРИНА ПО СЕТКЕ ═════════════════════════════════════════
    В токенах есть --listing-card-width: 171px, и карточки получали её как
    фиксированную ширину. При двух колонках на 390 px карточка выходила за
    свою ячейку и накрывала соседнюю — клик по левой не срабатывал, потому
    что сверху оказывалась картинка правой. Теперь ширина — по ячейке. */
-.feed-grid > .product-card,
-.product-card {
+.feed-grid > .product-card {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
 }
 .feed-grid { align-items: start; }
-.feed-grid > * { min-width: 0; }
-.product-figure, .product-media { width: 100%; min-width: 0; }
+.feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }
 
 
 /* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
@@ -1033,8 +896,7 @@ input[type="checkbox"]:checked::after {
 .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }
 .menu-row, .setting-row, .stats-row, .glass-card, .admin-setting,
 .summary-card, .pay-status, .tariff-term, .chat-row, .ui-stat,
-.feed-reminder { border-radius: 20px; }
-.product-card, .admin-sheet { border-radius: 28px; }
+.feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }
 
 /* Активное состояние — светлее и с более ярким бликом */
 .chip.is-active, .segmented button.is-active, .feed-switch button.is-active,
@@ -1055,26 +917,15 @@ textarea, select, .ui-search {
   color: var(--text-primary);
   padding: 0 18px;
 }
-.ui-search { border-radius: 999px; }
-
-
-/* ═══ КАРТОЧКА БЕЗ РАМКИ ═════════════════════════════════════════════════
+.ui-search { border-radius: 999px; }/* ═══ КАРТОЧКА БЕЗ РАМКИ ═════════════════════════════════════════════════
    У карточки рисовалось светлое кольцо (градиентная обводка из блока
    «плашка Memgift»), и оно читалось как рамка по бокам. У карточек его
    убираем: глубину даёт сама поверхность + тень, кольцо оставляем только
    у панелей, пилюль и полей. */
-.app-shell .product-card::after,
-.product-card::after,
-.app-shell .product-card::before,
-.product-card::before {
+.app-shell .product-card::after {
   display: none;
-}
-.product-card {
-  border: 0;
-  outline: 0;
-}
-/* Фигура фото внутри карточки — без обводки и без лишней тени */
-.product-figure::after, .product-figure::before { display: none; }
+}/* Фигура фото внутри карточки — без обводки и без лишней тени */
+.product-figure::after { display: none; }
 
 
 /* ═══ БЕЗ ЧЁРНЫХ ПОЛЕЙ ПО БОКАМ ══════════════════════════════════════════
@@ -1123,10 +974,7 @@ html, body, .app-shell, .screen {
 .chat-row.is-me .chat-bubble {
   background: var(--accent-primary);
   color: #fff;
-}
-
-
-/* ═══════════════════════════════════════════════════════════════════════
+}/* ═══════════════════════════════════════════════════════════════════════
    УНИВЕРСАЛЬНАЯ ПЛАШКА (единый стиль кнопок меню для ВСЕХ поверхностей)
    Одна формула: поверхность #141414 + верхний блик 1px + мягкая тень.
    Селекторы с префиксом .app-shell, чтобы гарантированно перебить любые
@@ -1139,29 +987,7 @@ html, body, .app-shell, .screen {
    ═══════════════════════════════════════════════════════════════════════ */
 
 /* ── Поверхности: карточки, панели, строки ───────────────────────────── */
-.app-shell .glass-card, .glass-card,
-.app-shell .card, .card,
-.app-shell .product-card, .product-card,
-.app-shell .plan-row, .plan-row,
-.app-shell .admin-setting, .admin-setting,
-.app-shell .chat-row, .chat-row,
-.app-shell .menu-row, .menu-row,
-.app-shell .setting-row, .setting-row,
-.app-shell .feed-reminder, .feed-reminder,
-.app-shell .summary-card, .summary-card,
-.app-shell .stats-row, .stats-row,
-.app-shell .pay-status, .pay-status,
-.app-shell .admin-save-bar, .admin-save-bar,
-.app-shell .tariff-compare, .tariff-compare,
-.app-shell .admin-kpi-cell, .admin-kpi-cell,
-.app-shell .admin-health-item, .admin-health-item,
-.app-shell .tariff-term, .tariff-term,
-.app-shell .cat-tile, .cat-tile,
-.app-shell .ui-stat, .ui-stat,
-.app-shell .ui-group-body, .ui-group-body,
-.app-shell .ui-plan, .ui-plan,
-.app-shell .stat-card, .stat-card,
-.app-shell .banner-card, .banner-card {
+.app-shell .glass-card, .glass-card, .app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .admin-setting, .admin-setting, .app-shell .chat-row, .chat-row, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .feed-reminder, .feed-reminder, .app-shell .summary-card, .summary-card, .app-shell .stats-row, .stats-row, .app-shell .pay-status, .pay-status, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .admin-kpi-cell, .admin-kpi-cell, .app-shell .admin-health-item, .admin-health-item, .app-shell .tariff-term, .tariff-term, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .stat-card, .stat-card, .app-shell .banner-card, .banner-card {
   background: var(--card-primary, #141414);
   border: 0;
   box-shadow:
@@ -1173,8 +999,7 @@ html, body, .app-shell, .screen {
 .summary-card, .pay-status, .tariff-term, .tariff-compare, .chat-row,
 .ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card,
 .admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card,
-.cat-tile { border-radius: 20px; }
-.product-card, .admin-sheet, .admin-save-bar { border-radius: 28px; }
+.cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }
 
 /* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
 .app-shell .chip, .chip,
@@ -1231,10 +1056,8 @@ html, body, .app-shell, .screen {
    Значения перенесены 1:1 с коэффициентом 0.5 (1px скриншота = 0.5px CSS):
      кнопка 52px, радиус-таблетка, градиент #1f78ff→#0a62f0, светлая кромка сверху rgba(255,255,255,.28);
      группа — одна плашка #141414, радиус 28, разделители #262626, строка 74px, кружок 44px на #262626.
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/* ── 1. Синяя кнопка ─────────────────────────────────────────────────── */
-.app-shell .cta-primary, .app-shell .product-price, .product-price {
+   ═══════════════════════════════════════════════════════════════════════ *//* ── 1. Синяя кнопка ─────────────────────────────────────────────────── */
+.app-shell .cta-primary {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1250,11 +1073,6 @@ html, body, .app-shell, .screen {
   box-shadow: none;
   -webkit-tap-highlight-color: transparent;
 }
-.app-shell .product-price, .product-price {
-  height: 52px;
-  font-size: 20px;
-  box-shadow: none;
-}.app-shell .product-price:active, .product-price:active { filter: brightness(.94); }
 
 /* ── 2. Список — ОДНА плашка с разделителями ─────────────────────────── */
 .app-shell .list-stack, .list-stack {
@@ -1330,27 +1148,13 @@ html, body, .app-shell, .screen {
   min-height: 48px !important;
   font-size: 16px !important;
   font-weight: 600 !important;
-}
-.app-shell .product-price, .product-price,
-.app-shell .product-body .product-price {
-  height: 44px !important;
-  min-height: 44px !important;
-  font-size: 15px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0 !important;
-}/* Текст внутри кнопок — обычный вес, без «жирных» наследств */
-.app-shell .cta-primary strong, .app-shell .product-price strong, .product-price strong { font-weight: 600 !important; }/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
+}/* Текст внутри кнопок — обычный вес, без «жирных» наследств */.app-shell .cta-primary strong { font-weight: 600 !important; }/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
    Градиент был насыщенным (#1f78ff → #0a62f0) и кромка сверху яркой —
    вместе это давало «тяжёлое» ощущение. Сдвигаем в светлую сторону и
-   приглушаем кромку: та же таблетка, но воздушнее. */
-.app-shell .cta-primary, .app-shell .product-price, .product-price, .app-shell .product-body .product-price {
+   приглушаем кромку: та же таблетка, но воздушнее. */.app-shell .cta-primary {
   background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: none;
-}.app-shell .product-price:hover, .product-price:hover {
-  filter: brightness(1.04);
-}.app-shell .product-price:active, .product-price:active {
-  filter: brightness(.96);
 }
 
 
@@ -1367,14 +1171,12 @@ html, body, .app-shell, .screen {
 .app-shell .tabbar-fab, .tabbar-fab {
   z-index: 1001;
   position: relative;
-}
-/* Карточка не должна уходить выше панели */
-.app-shell .product-card, .product-card {
+}/* Карточка не должна уходить выше панели */
+.app-shell .product-card {
   isolation: auto;
   z-index: auto;
   transform: none;
 }
-.app-shell .product-figure, .product-figure { isolation: auto; }
 /* Старый «док» из legacy-стилей, если он ещё в DOM, — скрыть */
 .dock { display: none !important; }
 
@@ -1465,8 +1267,7 @@ html, body, .app-shell, .screen {
     0 4px 12px rgba(0, 0, 0, 0.45) !important;
 }/* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
    Кромка была приглушена до .16 и на тёмном фоне почти не читалась.
-   Возвращаем заметную светлую линию сверху — как в эталоне владельца. */
-.app-shell .cta-primary, .app-shell .product-price, .product-price, .app-shell .product-body .product-price {
+   Возвращаем заметную светлую линию сверху — как в эталоне владельца. */.app-shell .cta-primary {
   border: 0 !important;
   border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
