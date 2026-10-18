@@ -1789,3 +1789,30 @@ html, body, .app-shell, .screen {
 .app-shell .topbar .icon-btn:active, a.icon-btn:active { filter: brightness(1.15); }
 /* Статистика профиля: ячейки внутри общей плашки — без своей поверхности */
 .app-shell a.stats-cell, a.stats-cell { background: transparent !important; border-radius: 0; }
+
+
+/* ═══ ЗАТЕМНЕНИЕ ПОД ПАНЕЛЬЮ ═════════════════════════════════════════════
+   Пиксельная проверка показала: у кнопки «+» нет ни кольца, ни каймы —
+   внутри ровный #141414. «Рамкой» читался контент, который просвечивает
+   в зазоре вокруг плашек: карточка и лаймовая лента скидки прямо под
+   панелью. Мягкое затемнение снизу убирает эту пестроту, но не создаёт
+   жёсткой полосы: переход прозрачный → фон страницы. */
+.app-shell::after {
+  content: '';
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 132px;
+  pointer-events: none;
+  z-index: 999;
+  background: linear-gradient(
+    180deg,
+    rgba(5, 5, 5, 0) 0%,
+    rgba(5, 5, 5, 0.72) 45%,
+    rgba(5, 5, 5, 0.96) 75%,
+    #050505 100%
+  );
+}
+/* Сама панель выше затемнения */
+.app-shell .tabbar-wrap, .tabbar-wrap { z-index: 1000; }
