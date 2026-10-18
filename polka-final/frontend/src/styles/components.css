@@ -1943,3 +1943,16 @@ html, body, .app-shell, .screen {
 /* Логотип — своя строка, без лишней высоты */
 .app-shell .topbar .logo, .topbar .logo,
 .app-shell .topbar-row > .topbar-side:first-child { line-height: 1; }
+
+
+/* ═══ БЕЛЫЙ ЛОГОТИП ══════════════════════════════════════════════════════
+   Логотип заменён на белый. Соотношение сторон у него 5.65:1 (520×92),
+   а прежнее правило задавало height 20px при max-width 118 — оно сплющивало
+   картинку. Теперь размер по высоте, ширина считается сама. */
+.app-shell .brand-logo, .brand-logo {
+  height: 26px;
+  width: auto;
+  max-width: none;
+  object-fit: contain;
+  display: block;
+}
