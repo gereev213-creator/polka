@@ -171,14 +171,11 @@
 /* Заголовки экранов: плотнее и с отрицательным трекингом */
 .page-title, .section-title, h2, h3 {
   letter-spacing: -.02em;
-}
-
-/* Карточка: палец чувствует нажатие */
-.product-card, .chat-row, .menu-row, .setting-row, .plan-row,
-.admin-setting, .tariff-term, .ui-group-body > * {
+}/* Карточка: палец чувствует нажатие */
+.product-card, .menu-row, .setting-row, .plan-row, .admin-setting, .tariff-term, .ui-group-body > * {
   transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
   -webkit-tap-highlight-color: transparent;
-}.chat-row:active, .menu-row:active, .setting-row:active, .plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
+}.menu-row:active, .setting-row:active, .plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
 }/* Базовое определение .cta-primary переехало в styles/mg-core.css —
@@ -271,7 +268,7 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-.product-media { border-radius: 20px; }.chat-row, .menu-row, .setting-row, .plan-row, .chip, .segmented button {
+.product-media { border-radius: 20px; }.menu-row, .setting-row, .plan-row, .chip, .segmented button {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
@@ -288,12 +285,12 @@
   border: 1px solid rgba(255, 255, 255, .12);
   color: rgba(255, 255, 255, .92);
 }
-.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
+.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
 }
-.glass-card, .admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .feed-reminder, .badge, .chat-time, .plan-desc, .spec-chip, .stats-head-label {
+.glass-card, .admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .feed-reminder, .badge, .plan-desc, .spec-chip, .stats-head-label {
   background-color: transparent;
 }
 .badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }input, textarea, select, .chat-input input {
@@ -739,18 +736,14 @@ input[type="checkbox"]:checked::after {
 }
 .feed-grid { align-items: start; }
 .feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
-   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */
-.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .stats-row, .stats-row, .app-shell .glass-card, .glass-card, .app-shell .admin-setting, .admin-setting, .app-shell .summary-card, .summary-card, .app-shell .pay-status, .pay-status, .app-shell .tariff-term, .tariff-term, .app-shell .hint-chip, .hint-chip, .app-shell .chat-row, .chat-row, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat, .app-shell .feed-reminder, .feed-reminder {
+   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .stats-row, .stats-row, .app-shell .glass-card, .glass-card, .app-shell .admin-setting, .admin-setting, .app-shell .summary-card, .summary-card, .app-shell .pay-status, .pay-status, .app-shell .tariff-term, .tariff-term, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat, .app-shell .feed-reminder, .feed-reminder {
   background: var(--card-primary);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
 }/* Пилюли — скругление 999, панели — 20, карточки — 28 */
-.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }
-.menu-row, .setting-row, .stats-row, .glass-card, .admin-setting,
-.summary-card, .pay-status, .tariff-term, .chat-row, .ui-stat,
-.feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */
+.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .stats-row, .glass-card, .admin-setting, .summary-card, .pay-status, .tariff-term, .ui-stat, .feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */
 .chip.is-active, .segmented button.is-active, .feed-switch button.is-active, .admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active {
   background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
@@ -798,8 +791,7 @@ html, body, .app-shell, .screen {
 /* ═══ ЧАТЫ И ПРОФИЛЬ В ОБЩЕМ СТИЛЕ ═══════════════════════════════════════
    Список диалогов и строки профиля приводятся к той же поверхности, что
    кнопки меню: один фон, один блик, один радиус. */
-.chat-list { display: flex; flex-direction: column; gap: 8px; padding: 0; }
-.chat-row, .dialog-row {
+.chat-list { display: flex; flex-direction: column; gap: 8px; padding: 0; }.dialog-row {
   background: var(--card-primary);
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10), var(--shadow-soft);
@@ -807,20 +799,9 @@ html, body, .app-shell, .screen {
   margin: 0;
   border: 0;
 }
-.chat-meta { min-width: 0; }
-.chat-name, .chat-ad { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.chat-time { font-size: 12px; color: var(--text-muted); }
 
 /* Пузыри чата: тот же язык — тёмная поверхность и акцент */
-.chat-bubble { border-radius: 20px; }
-.chat-row:not(.is-me) .chat-bubble {
-  background: var(--card-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
-}
-.chat-row.is-me .chat-bubble {
-  background: var(--accent-primary);
-  color: #fff;
-}/* ═══════════════════════════════════════════════════════════════════════
+.chat-bubble { border-radius: 20px; }/* ═══════════════════════════════════════════════════════════════════════
    УНИВЕРСАЛЬНАЯ ПЛАШКА (единый стиль кнопок меню для ВСЕХ поверхностей)
    Одна формула: поверхность #141414 + верхний блик 1px + мягкая тень.
    Селекторы с префиксом .app-shell, чтобы гарантированно перебить любые
@@ -830,22 +811,15 @@ html, body, .app-shell, .screen {
      • пилюли/чипы/поля  — 999 или 20
      • панели и строки    — 20
      • карточки и листы   — 28
-   ═══════════════════════════════════════════════════════════════════════ */
-
-/* ── Поверхности: карточки, панели, строки ───────────────────────────── */
-.app-shell .glass-card, .glass-card, .app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .admin-setting, .admin-setting, .app-shell .chat-row, .chat-row, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .feed-reminder, .feed-reminder, .app-shell .summary-card, .summary-card, .app-shell .stats-row, .stats-row, .app-shell .pay-status, .pay-status, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .admin-kpi-cell, .admin-kpi-cell, .app-shell .admin-health-item, .admin-health-item, .app-shell .tariff-term, .tariff-term, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .stat-card, .stat-card, .app-shell .banner-card, .banner-card {
+   ═══════════════════════════════════════════════════════════════════════ *//* ── Поверхности: карточки, панели, строки ───────────────────────────── */
+.app-shell .glass-card, .glass-card, .app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .admin-setting, .admin-setting, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .feed-reminder, .feed-reminder, .app-shell .summary-card, .summary-card, .app-shell .stats-row, .stats-row, .app-shell .pay-status, .pay-status, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .admin-kpi-cell, .admin-kpi-cell, .app-shell .admin-health-item, .admin-health-item, .app-shell .tariff-term, .tariff-term, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .stat-card, .stat-card, .app-shell .banner-card, .banner-card {
   background: var(--card-primary, #141414);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}
-/* Панели и строки — 20, карточки и листы — 28 */
-.menu-row, .setting-row, .stats-row, .glass-card, .card, .admin-setting,
-.summary-card, .pay-status, .tariff-term, .tariff-compare, .chat-row,
-.ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card,
-.admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card,
-.cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
+}/* Панели и строки — 20, карточки и листы — 28 */
+.menu-row, .setting-row, .stats-row, .glass-card, .card, .admin-setting, .summary-card, .pay-status, .tariff-term, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card, .admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
 .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .chat-chip, .chat-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip, .app-shell .badge, .badge {
   background: var(--card-primary, #141414);
   border: 0;
@@ -1149,19 +1123,11 @@ html, body, .app-shell, .screen {
 .app-shell .feed-switch button:active,
 .app-shell .segmented button:active,
 .feed-switch button:active,
-.segmented button:active { filter: brightness(1.12); }
-
-
-/* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
+.segmented button:active { filter: brightness(1.12); }/* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
    Скан всех экранов нашёл интерактивные элементы без поверхности: они
    выглядели текстом, пока по ним не нажмёшь. Даём им ту же плашку, что у
    кнопок меню. Стрелки «назад» сознательно оставлены без фона. */
-.app-shell a.chat-row, a.chat-row,
-.app-shell a.setting-row, a.setting-row,
-.app-shell a.menu-row, a.menu-row,
-.app-shell button.glass-card, button.glass-card,
-.app-shell button.plan-row, button.plan-row,
-.app-shell .chat-list > a, .chat-list > a {
+.app-shell a.chat-row, a.chat-row, .app-shell a.setting-row, a.setting-row, .app-shell a.menu-row, a.menu-row, .app-shell button.glass-card, button.glass-card, .app-shell button.plan-row, button.plan-row {
   background: var(--card-primary, #141414);
   border-radius: 20px;
   box-shadow: none;

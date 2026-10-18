@@ -17,7 +17,6 @@
 .screen.hunt-screen,
 .screen.hunt-screen.padded { padding-left: 0; padding-right: 0; }
 .hunt-screen .topbar { padding-left: 0; padding-right: 0; }
-.chat-list { padding-left: 0; padding-right: 0; }
 .chat-start { padding-left: 0; padding-right: 0; }
 .chat-input { padding-left: 0; padding-right: 0; }
 
@@ -145,7 +144,6 @@
   margin-bottom: 16px;
   background: transparent;
 }
-.chat-row.is-me { justify-content: flex-end; }
 
 /* ═══ 4. ИТОГОВАЯ ПЛАШКА «БУДУ ИСКАТЬ» ════════════════════════════════════
    Кнопки — общий Button (accent + ghost), как в остальных экранах ТЗ. */
@@ -391,4 +389,3 @@
   font-size: 15px;
   line-height: 1.4;
 }
-.chat-row.is-me .chat-bubble { font-size: 15px; }

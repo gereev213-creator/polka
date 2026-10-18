@@ -1070,24 +1070,6 @@ input, textarea, select { font-family: inherit; }
 
 /* ── Список диалогов ─────────────────────────────────────────────────── */
 .chat-row:active { transform: scale(.99); }
-.chat-row .avatar { width: 48px; height: 48px; }
-.chat-meta strong { font-size: 14px; font-weight: 700; letter-spacing: -.01em; }
-.chat-meta span {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.chat-row .product-city {
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin: 0;
-  padding-top: 3px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
 
 /* ── Экран диалога ───────────────────────────────────────────────────── */
 .chat-screen {
@@ -1952,14 +1934,6 @@ button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .do
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
 }
-.chat-row {
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  animation: chat-in .22s cubic-bezier(.2, .8, .3, 1);
-}
 
 /* Кнопка отправки: заметнее при готовности к отправке */
 .chat-send {
@@ -2070,14 +2044,6 @@ button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .do
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-}
-.chat-ad {
-  font-size: 14.5px;
-  font-weight: 600;
-  color: var(--accent);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .chat-last {
   font-size: 13px;
