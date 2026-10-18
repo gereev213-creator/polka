@@ -1981,3 +1981,41 @@ html, body, .app-shell, .screen {
 }
 .app-shell .tabbar-wrap, .tabbar-wrap { gap: 16px !important; }
 .app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.16); }
+
+
+/* ═══ ВСЕ ПИЛЮЛИ ПО ФОРМУЛЕ ПАНЕЛИ ═══════════════════════════════════════
+   Панель получила градиент, блик и кромку, а вкладки, «Фильтр» и поиск
+   остались плоскими — из-за этого выглядели из другого набора. Приводим
+   их к той же формуле: те же четыре эффекта, те же значения. */
+.app-shell .feed-switch button,
+.app-shell .segmented button,
+.feed-switch button,
+.segmented button,
+.app-shell .filter-pill, .filter-pill,
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
+.app-shell .chip, .chip,
+.app-shell .hint-chip, .hint-chip {
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+  border-radius: 999px !important;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+/* Активная — светлее основы, как активная вкладка в меню */
+.app-shell .feed-switch button.is-active,
+.app-shell .segmented button.is-active,
+.feed-switch button.is-active,
+.segmented button.is-active,
+.app-shell .chip.is-active, .chip.is-active {
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+  color: #fff !important;
+}
+/* «Фильтр» — действие, текст ярче */
+.app-shell .filter-pill, .filter-pill,
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input { color: #fff !important; }
+.app-shell .feed-switch button:active, .feed-switch button:active,
+.app-shell .segmented button:active, .segmented button:active,
+.app-shell .filter-pill:active, .filter-pill:active { filter: brightness(1.14); }
