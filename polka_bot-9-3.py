@@ -23683,8 +23683,12 @@ async def _cispay_poll_loop() -> None:
             if cispay_enabled():
                 since = (get_moscow_time() - timedelta(hours=CISPAY_WATCH_HOURS)).isoformat()
                 cursor = db.conn.cursor()
+                # Проверяем не только 'waiting': CISPay может держать заявку
+                # на проверке, и без этих статусов сервер перестал бы её
+                # отслеживать — человек оплатил, а «Плюс» не пришёл.
                 cursor.execute("SELECT order_uuid FROM payments WHERE credited=0 "
-                               "AND status IN ('waiting') AND created_at >= ? "
+                               "AND status IN ('waiting','pending','processing',"
+                               "'moderation','checking','review') AND created_at >= ? "
                                "ORDER BY id DESC LIMIT 50", (since,))
                 for row in cursor.fetchall():
                     try:

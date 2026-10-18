@@ -3290,11 +3290,19 @@ function TariffsPage() {
           } else if (s && s.status === 'expired') {
             clearInterval(timer)
             setPay({ state: 'expired', text: 'Счёт истёк — создайте новый', tries })
+          } else if (s && ['rejected', 'canceled', 'declined', 'failed'].includes(s.status)) {
+            // CISPay может отклонить заявку — человек должен это увидеть,
+            // а не ждать в тишине.
+            clearInterval(timer)
+            setPay({ state: 'rejected', text: 'Заявка отклонена платежным сервисом. Создайте новую.', tries })
+          } else if (s && ['pending', 'processing', 'moderation', 'checking', 'review'].includes(s.status)) {
+            // Заявка ушла на проверку — опрос продолжаем, но говорим об этом.
+            setPay({ state: 'review', text: 'Заявка на проверке. Обычно это занимает пару минут.', tries })
           } else {
             setPay((cur) => ({ ...cur, tries }))
           }
         } catch { /* сеть вернётся — попробуем снова */ }
-        if (tries >= 40) clearInterval(timer)
+        if (tries >= 120) clearInterval(timer)
       }, 15000)
     } catch (e) {
       setPay({ state: 'error', text: (e && e.detail) || 'Не удалось создать счёт', tries: 0 })
@@ -3420,8 +3428,11 @@ function TariffsPage() {
         {pay.state ? (
           <div className={`pay-status pay-${pay.state}`}>
             <span>{pay.text}</span>
-            {pay.state === 'error' ? (
-              <button type="button" className="ghost-btn" onClick={buyCard}>Повторить</button>
+            {pay.state === 'error' || pay.state === 'rejected' || pay.state === 'expired' ? (
+              <button type="button" className="ghost-btn" onClick={buyCard}>Новая заявка</button>
+            ) : null}
+            {pay.state === 'review' || pay.state === 'waiting' ? (
+              <span className="pay-spinner" aria-hidden="true" />
             ) : null}
           </div>
         ) : null}

@@ -1137,3 +1137,60 @@
 .app-shell .market-toolbar .search-input, .market-toolbar .search-input {
   max-width: none;
 }
+
+/* ── 18. Статус заявки на оплату ──────────────────────────────────────────
+   Заявка CISPay проходит стадии: ожидание оплаты → проверка → оплачено
+   либо отклонено. Каждое состояние должно читаться: цвет текста и, где
+   нужно, индикатор ожидания и кнопка новой заявки. */
+.app-shell .pay-status, .pay-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.app-shell .pay-status > span:first-child, .pay-status > span:first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Ожидание и проверка — нейтральный синеватый тон */
+.app-shell .pay-waiting, .pay-waiting,
+.app-shell .pay-review, .pay-review {
+  background: rgba(10, 132, 255, 0.12);
+  color: rgba(255, 255, 255, 0.82);
+}
+/* Успех — зелёный акцент */
+.app-shell .pay-paid, .pay-paid {
+  background: rgba(132, 255, 57, 0.12);
+  color: #b6ff86;
+}
+/* Отклонено и истекло — тёплый тревожный тон */
+.app-shell .pay-rejected, .pay-rejected,
+.app-shell .pay-expired, .pay-expired,
+.app-shell .pay-error, .pay-error {
+  background: rgba(255, 92, 92, 0.12);
+  color: #ff9a9a;
+}
+/* Тестовый счёт */
+.app-shell .pay-test, .pay-test {
+  background: rgba(255, 184, 77, 0.12);
+  color: #ffcf8a;
+}
+
+/* Индикатор ожидания: тонкое вращающееся кольцо */
+.app-shell .pay-spinner, .pay-spinner {
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  border-top-color: #0a84ff;
+  animation: pay-spin 900ms linear infinite;
+}
+@keyframes pay-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .pay-spinner, .pay-spinner { animation: none; border-top-color: #0a84ff; }
+}
