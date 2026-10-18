@@ -1678,3 +1678,52 @@ html, body, .app-shell, .screen {
 }
 /* Панели, которые прибиты к краям, тоже во всю ширину */
 .topbar { width: 100% !important; }
+
+
+/* ═══ СТРОКА ПОИСКА И КНОПКА ФИЛЬТРА ═════════════════════════════════════
+   Вместо сетки категорий — одна строка: поле поиска и пилюля «Фильтр».
+   Обе в стиле кнопок меню: тёмная поверхность, радиус 999. */
+.market-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0;
+}
+.market-toolbar .search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--card-primary, #141414);
+  color: var(--text-secondary, rgba(255,255,255,.65));
+  text-decoration: none;
+  font-size: 16px;
+  box-shadow: none;
+  border: 0;
+}
+.market-toolbar .filter-pill {
+  flex: 0 0 auto;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: var(--card-primary, #141414);
+  color: var(--text-primary, #fff);
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.market-toolbar .filter-pill .icon-svg,
+.market-toolbar .search-input .icon-svg { width: 20px; height: 20px; }
+.market-toolbar .filter-pill:active,
+.market-toolbar .search-input:active { filter: brightness(1.12); }
+/* Категорийные плитки в этом разделе больше не нужны */
+.category-cards { display: none !important; }

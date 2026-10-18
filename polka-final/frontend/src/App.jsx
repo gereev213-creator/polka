@@ -1557,8 +1557,12 @@ function FeedPage() {
         <Link to="/create" className="cta-primary">Выставить товар</Link>
       </div>
       <FeedBanner />
-      <CategoryCards categories={CATEGORY_LABELS} activeCategory={activeCategory} onSelect={changeCategory} />
-      <Link to="/search" className="search-input glass-card compact"><Icon name="search" />Поиск вещей</Link>
+      {/* Категории убраны: сетка плиток занимала пол-экрана. Вместо неё
+          строка поиска и кнопка «Фильтр» — привычный вид маркетплейса. */}
+      <div className="market-toolbar">
+        <Link to="/search" className="search-input compact"><Icon name="search" />Поиск вещей</Link>
+        <Link to="/search" className="filter-pill"><Icon name="filter" />Фильтр</Link>
+      </div>
       <RecommendCard items={items} />
       <div className="section-head"><strong>{loading ? 'Загрузка…' : 'Свежее'}</strong><span>{activeCategory}</span></div>
       {error ? <ErrorBlock text={error} onRetry={() => load(activeCategory, 0, false)} /> : null}
