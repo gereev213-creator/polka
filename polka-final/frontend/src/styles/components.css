@@ -1371,3 +1371,28 @@ html, body, .app-shell, .screen {
 }
 .list-stack > .menu-row:active .menu-arrow,
 .list-stack > .setting-row:active .menu-arrow { background: #303030; }
+
+
+/* ═══ КНОПКИ ТОЛЬШЕ НЕ ЖИРНЫЕ ════════════════════════════════════════════
+   Синие пилюли выглядели тяжёлыми: 56/52 по высоте, 20px кегль и жирный
+   текст из старых правил styles.css (.product-price { font-weight: 700 }).
+   Уменьшаем высоту, кегль и вес — таблетка остаётся, но становится легче. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn {
+  height: 48px !important;
+  min-height: 48px !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+.app-shell .product-price, .product-price,
+.app-shell .product-body .product-price {
+  height: 44px !important;
+  min-height: 44px !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+}
+/* Текст внутри кнопок — обычный вес, без «жирных» наследств */
+.app-shell .cta-primary strong, .cta-primary strong,
+.app-shell .primary-btn strong, .primary-btn strong,
+.app-shell .product-price strong, .product-price strong { font-weight: 600 !important; }
