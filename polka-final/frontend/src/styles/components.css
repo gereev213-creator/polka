@@ -2019,3 +2019,43 @@ html, body, .app-shell, .screen {
 .app-shell .feed-switch button:active, .feed-switch button:active,
 .app-shell .segmented button:active, .segmented button:active,
 .app-shell .filter-pill:active, .filter-pill:active { filter: brightness(1.14); }
+
+
+/* ═══ БЕЗ АНИМАЦИИ ПЕРЕХОДА, ТОЛЬКО НАЖАТИЕ ══════════════════════════════
+   Вкладки и пилюли плавно перекрашивались и «переезжали» при переключении.
+   Этого быть не должно: кнопка — статичная плашка в нашем стиле, реакция
+   только на нажатие. Убираем все переходы, трансформации и анимации,
+   фиксируем одинаковые размеры у активного и неактивного состояния, чтобы
+   ряд не дёргался. */
+.app-shell .feed-switch button,
+.app-shell .segmented button,
+.feed-switch button,
+.segmented button,
+.app-shell .filter-pill, .filter-pill,
+.app-shell .chip, .chip,
+.app-shell .admin-tab, .admin-tab,
+.app-shell .tariff-method, .tariff-method {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+  font-weight: 600 !important;
+  border-width: 1px !important;
+  border-style: solid !important;
+  box-sizing: border-box;
+}
+/* Переключение вкладки — мгновенная смена состояния, без движения */
+.feed-switch button.is-active,
+.segmented button.is-active { transition: none !important; transform: none !important; }
+
+/* Нажатие: короткое затемнение, без плавности */
+.app-shell .feed-switch button:active,
+.feed-switch button:active,
+.app-shell .segmented button:active,
+.segmented button:active,
+.app-shell .filter-pill:active,
+.filter-pill:active,
+.app-shell .chip:active,
+.chip:active {
+  filter: brightness(0.88) !important;
+  transition: none !important;
+}
