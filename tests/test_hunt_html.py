@@ -25,7 +25,8 @@ def cut(start_marker, stop_regex, what):
     return SRC[i:m.start()]
 
 
-ns = {'_html': html, 'Dict': dict, 'logger': type('L', (), {
+from typing import Any, List, Optional, Set, Tuple
+ns = {'Optional': Optional, 'List': List, 'Set': Set, 'Tuple': Tuple, 'Any': Any, '_html': html, 'Dict': dict, 'logger': type('L', (), {
     'warning': staticmethod(lambda *a, **k: None)})(), 'ParseMode': type('P', (), {'HTML': 'HTML'})}
 for name, stop in [
     ('_hunt_escape', r'^(async )?def '),
