@@ -442,11 +442,6 @@ input, textarea, select { font-family: inherit; }
   /* Плавно уезжает при листании вниз и возвращается при листании вверх */
   transition: transform 0.25s ease, opacity 0.2s ease;
 }
-.dock.hidden {
-  transform: translateX(-50%) translateY(120%);
-  opacity: 0;
-  pointer-events: none;
-}
 .dock-item {
   display: flex;
   flex-direction: column;
@@ -1631,17 +1626,11 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   font-weight: 600;
   color: var(--accent);
   margin-bottom: 4px;
-}
-
-/* ── Стеклянные плавающие плашки ───────────────────────────────────────── */
+}/* ── Стеклянные плавающие плашки ───────────────────────────────────────── */
 /* Полупрозрачный фон + размытие того, что под ним, + мягкая тень.
    Так выглядят панели в новых браузерах: элемент «парит» над содержимым.
    Используем переменные темы через color-mix, чтобы работало и в тёмной. */
-.chat-tabs,
-.field-label-row.is-toggle,
-.chat-crit-card,
-.chat-summary,
-.dock {
+.chat-tabs, .field-label-row.is-toggle, .chat-crit-card, .chat-summary {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   border: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 }
@@ -1998,8 +1987,7 @@ html, body, #root {
 /* Всё остальное, что раньше было «стеклянным», становится плоским. */
 .chat-tabs, .chat-crit-card, .chat-summary, .field-label-row.is-toggle, .chat-example {
   background: var(--surface);
-}
-.dock, .chat-header, .chat-input {
+}.chat-header, .chat-input {
   background: var(--bg-glass);
   border-top: 0.5px solid var(--hairline);
   border-bottom: none;
@@ -2399,23 +2387,14 @@ html, body, #root {
   transition: transform 0.38s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.3s ease;
   will-change: transform, opacity;
-}
-.dock.hidden {
-  transform: translateX(-50%) translateY(140%);
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* ── Этап S: панели больше не «стекло» ───────────────────────────────────
+}/* ── Этап S: панели больше не «стекло» ───────────────────────────────────
    Шапка, нижнее меню, шапка чата и нижняя панель лота были полупрозрачными
    с размытием подложки. Размытие убрано: без непрозрачного
    фона сквозь них просвечивало содержимое. Теперь сплошной фон и тонкая
    линия-разделитель — как у обычного сервиса объявлений. */
-.topbar, .topbar.is-scrolled, .chat-header, .chat-input, .detail-bar,
-.recommend-chip, .back-to-top, .dock {
+.topbar, .topbar.is-scrolled, .chat-header, .chat-input, .detail-bar, .recommend-chip, .back-to-top {
   background: var(--surface);
-}.topbar.is-scrolled, .chat-header { border-bottom: 1px solid var(--border); }
-.dock, .detail-bar { border-top: 1px solid var(--border); }
+}.topbar.is-scrolled, .chat-header { border-bottom: 1px solid var(--border); }.detail-bar { border-top: 1px solid var(--border); }
 
 /* 2. Карточка товара: фото отдельно, текст под ним слева, без серой плашки */
 .product-card {

@@ -356,10 +356,6 @@
 
 /* ── Чипы подсказок (этап V5) ──────────────────────────────────────────── */
 .hint-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.hint-chip { min-height: 32px; padding: 4px 10px; border: 1px solid var(--line);
-  border-radius: 4px; background: var(--bg); font: inherit; font-size: 12px;
-  color: var(--text-secondary); cursor: pointer; }
-.hint-chip:active { border-color: var(--accent); color: var(--accent); }
 
 /* ── Итоговая карточка критерия (этап V5) ──────────────────────────────── */
 .summary-card { margin-top: 12px; padding: 12px; border: 1px solid var(--line);

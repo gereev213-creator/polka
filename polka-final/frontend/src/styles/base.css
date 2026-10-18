@@ -54,10 +54,6 @@ body {
   padding-top: env(safe-area-inset-top);
   min-height: calc(var(--topbar-h) + env(safe-area-inset-top));
 }
-.dock {
-  z-index: var(--z-dock);
-  bottom: calc(var(--dock-offset) + env(safe-area-inset-bottom));
-}
 /* Чат: компенсируем вырез снизу, иначе поле ввода упирается в полосу жестов */
 .chat-input { padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom)); }
 
