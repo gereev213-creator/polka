@@ -118,7 +118,6 @@
 .tariff-method { flex: 1; min-height: 44px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: var(--radius-btn);
   background: var(--surface); cursor: pointer; font: inherit; color: inherit; }
-.tariff-method.is-active { border-color: var(--accent); }
 .tariff-pay { width: 100%; margin-top: var(--space-4); }
 .pay-waiting { border-color: var(--accent); }
 .pay-paid { border-color: var(--success); }
@@ -133,7 +132,6 @@
 .admin-tab { flex: 0 0 auto; min-height: 40px; padding: 8px 14px;
   border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
   font: inherit; color: inherit; cursor: pointer; }
-.admin-tab.is-active { border-color: var(--accent); }
 .admin-toast { position: sticky; top: 8px; z-index: 20; margin-top: 8px; padding: 10px 12px;
   border: 1px solid var(--border); border-radius: var(--radius-btn);
   background: var(--surface); font-size: 13px; }

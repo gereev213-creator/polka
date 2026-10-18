@@ -58,7 +58,6 @@
   color: var(--text-secondary); background: var(--surface);
   border: 1px solid var(--border); border-radius: var(--radius-pill);
 }
-.chip.is-active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* ── Card, Badge, Avatar, ListRow, Segmented ────────────────────────────── */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); overflow: hidden; }
@@ -126,9 +125,6 @@
 .ui-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
 .ui-tab { position: relative; min-height: 44px; padding: 0; border: 0; background: none;
   font: inherit; font-size: 15px; color: var(--text-secondary); cursor: pointer; }
-.ui-tab.is-active { color: var(--text); font-weight: 600; }
-.ui-tab.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px;
-  height: 2px; background: var(--accent); border-radius: 2px; }
 
 .ui-stat { display: flex; border: 1px solid var(--line); border-radius: 12px;
   background: var(--surface); }
@@ -350,11 +346,6 @@ body, button, input, select, textarea {
   align-items: center;
   gap: 12px;
 }
-.segmented button.is-active {
-  background: var(--card-secondary);
-  color: var(--text-primary);
-  box-shadow: none;
-}
 
 .menu-arrow, .plan-arrow {
   width: 36px; height: 36px; border-radius: 50%;
@@ -374,7 +365,7 @@ body, button, input, select, textarea {
   gap: 10px;
   transition: background-color 250ms var(--ease-default), color 250ms var(--ease-default),
               transform 250ms var(--ease-default);
-}.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active, .hint-chip:active, .feed-status-chip:active, .admin-tab.is-active, .tariff-method.is-active, .ui-tab.is-active {
+}.chip[aria-pressed="true"], .hint-chip:active, .feed-status-chip:active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
   color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -411,11 +402,6 @@ body, button, input, select, textarea {
   line-height: 1;
   box-shadow: inset 0 0 0 1px var(--border-secondary);
 }
-.chat-tab.is-active, .ui-tab.is-active, .segmented button.is-active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  color: var(--text-primary);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
 .chat-tab::after, .ui-tab::after, .chat-tabs-pill { display: none; }
 .chat-tab:active, .ui-tab:active { transform: scale(.97); }
 .feed-switch button {
@@ -430,11 +416,6 @@ body, button, input, select, textarea {
   font-weight: 600;
   line-height: 1;
   box-shadow: inset 0 0 0 1px var(--border-secondary);
-}
-.feed-switch button.is-active {
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)) !important;
-  color: var(--text-primary) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
 }
 .pill-btn:active { transform: scale(.97); }
 .pill-chevron {
@@ -489,12 +470,6 @@ body, button, input, select, textarea {
   color: var(--text-secondary) !important;
   font-size: 16px !important;
   font-weight: 600 !important;
-}
-.feed-switch button.is-active,
-.segmented button.is-active {
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04)) !important;
-  color: var(--text-primary) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.18) !important;
 }
 .chat-tabs-pill, .chat-tab::after, .ui-tab::after { display: none !important; }
 
@@ -718,11 +693,7 @@ input[type="checkbox"]:checked::after {
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
 }/* Пилюли — скругление 999, панели — 20, карточки — 28 */
-.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */.chip.is-active, .segmented button.is-active, .feed-switch button.is-active, .admin-tab.is-active, .tariff-method.is-active {
-  background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  color: var(--text-primary);
-}/* Поля ввода — та же формула, но без тени */
+.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом *//* Поля ввода — та же формула, но без тени */
 .text-input, input[type="text"], input[type="number"], input[type="search"], textarea, select {
   background: var(--card-secondary);
   border: 0;
@@ -805,11 +776,7 @@ html, body, .app-shell, .screen {
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #fff);
-}/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */.app-shell .chip.is-active, .chip.is-active, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .admin-tab.is-active, .admin-tab.is-active, .app-shell .tariff-method.is-active, .tariff-method.is-active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
-  color: var(--text-primary, #fff);
-}/* ═══════════════════════════════════════════════════════════════════════
+}/* ── Активное состояние — светлее, с более ярким бликом ──────────────── *//* ═══════════════════════════════════════════════════════════════════════
    ЭТАЛОН MEMGIFT (по файлу владельца: синяя кнопка + список с кружками)
    Значения перенесены 1:1 с коэффициентом 0.5 (1px скриншота = 0.5px CSS):
      кнопка 52px, радиус-таблетка, градиент #1f78ff→#0a62f0, светлая кромка сверху rgba(255,255,255,.28);
@@ -1046,14 +1013,6 @@ html, body, .app-shell, .screen {
   box-shadow: none !important;
   border: 0 !important;
 }
-.app-shell .feed-switch button.is-active,
-.app-shell .segmented button.is-active,
-.feed-switch button.is-active,
-.segmented button.is-active {
-  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
-  color: var(--text-primary, #fff) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
-}
 .app-shell .feed-switch button:active,
 .app-shell .segmented button:active,
 .feed-switch button:active,
@@ -1143,13 +1102,8 @@ html, body, .app-shell, .screen {
   box-shadow: none !important;
   border-radius: 999px !important;
   color: rgba(255, 255, 255, 0.65) !important;
-}
-/* Активное состояние — тот же приём, что у активной вкладки меню */
-.app-shell .feed-switch button.is-active,
-.app-shell .segmented button.is-active,
-.feed-switch button.is-active,
-.segmented button.is-active,
-.app-shell .chip.is-active, .chip.is-active {
+}/* Активное состояние — тот же приём, что у активной вкладки меню */
+.app-shell .feed-switch button.is-active {
   background: #242424 !important;
   background-image: none !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
@@ -1213,13 +1167,8 @@ html, body, .app-shell, .screen {
   border-radius: 999px !important;
   box-sizing: border-box;
   color: rgba(255, 255, 255, 0.62) !important;
-}
-/* Активная — светлее основы, как активная вкладка в меню */
-.app-shell .feed-switch button.is-active,
-.app-shell .segmented button.is-active,
-.feed-switch button.is-active,
-.segmented button.is-active,
-.app-shell .chip.is-active, .chip.is-active {
+}/* Активная — светлее основы, как активная вкладка в меню */
+.app-shell .feed-switch button.is-active {
   background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%) !important;
   border-color: rgba(255, 255, 255, 0.14) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
@@ -1254,10 +1203,8 @@ html, body, .app-shell, .screen {
   border-width: 1px !important;
   border-style: solid !important;
   box-sizing: border-box;
-}
-/* Переключение вкладки — мгновенная смена состояния, без движения */
-.feed-switch button.is-active,
-.segmented button.is-active { transition: none !important; transform: none !important; }
+}/* Переключение вкладки — мгновенная смена состояния, без движения */
+.feed-switch button.is-active { transition: none !important; transform: none !important; }
 
 /* Нажатие: короткое затемнение, без плавности */
 .app-shell .feed-switch button:active,
@@ -1270,19 +1217,10 @@ html, body, .app-shell, .screen {
 .chip:active {
   filter: brightness(0.88) !important;
   transition: none !important;
-}
-
-
-/* ═══ ВКЛАДКИ НЕ МЕНЯЮТ ВИД ══════════════════════════════════════════════
-   Активная и неактивная вкладки должны выглядеть ОДИНАКОВО: ни цвета,
-   ни фона, ни кромки, ни блика. Меняется только содержимое экрана.
+}/* ═══ ВКЛАДКИ НЕ МЕНЯЮТ ВИД ══════════════════════════════════════════════
+   Активная и неактивная вкладки должны выглядеть ОДИНАКОВО: ни цвета, ни фона, ни кромки, ни блика. Меняется только содержимое экрана.
    Остаётся единственная реакция — затемнение при нажатии. */
-.app-shell .feed-switch button,
-.app-shell .feed-switch button.is-active,
-.app-shell .feed-switch button:focus,
-.feed-switch button,
-.feed-switch button.is-active,
-.feed-switch button:focus {
+.app-shell .feed-switch button, .app-shell .feed-switch button:focus, .feed-switch button, .feed-switch button:focus {
   background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   background-image: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.10) !important;
@@ -1292,11 +1230,7 @@ html, body, .app-shell, .screen {
   transition: none !important;
   transform: none !important;
   outline: none !important;
-}
-.app-shell .segmented button,
-.app-shell .segmented button.is-active,
-.segmented button,
-.segmented button.is-active {
+}.app-shell .segmented button, .segmented button {
   background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   background-image: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.10) !important;
@@ -1316,17 +1250,12 @@ html, body, .app-shell, .screen {
    Кромка 1px у плашек постоянно вылезала: то между меню и «+», то по краям.
    Убираем её полностью — и у панели, и у пилюль, и у вкладок.
    Глубина при этом остаётся: градиент + верхний блик + тень. Именно они
-   дают объём, а рамка для этого не нужна. */.app-shell .feed-switch button, .feed-switch button, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .segmented button, .segmented button, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method {
+   дают объём, а рамка для этого не нужна. */.app-shell .feed-switch button, .feed-switch button, .app-shell .segmented button, .segmented button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method {
   border: 0 !important;
   border-width: 0 !important;
   outline: 0 !important;
   outline-offset: 0 !important;
-}/* Объём — только градиентом, бликом и тенью */
-.app-shell .feed-switch button, .feed-switch button,
-.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
-.app-shell .segmented button, .segmented button,
-.app-shell .filter-pill, .filter-pill,
-.app-shell .market-toolbar .search-input, .market-toolbar .search-input {
+}/* Объём — только градиентом, бликом и тенью */.app-shell .feed-switch button, .feed-switch button, .app-shell .segmented button, .segmented button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input {
   background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
 }

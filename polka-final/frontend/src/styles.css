@@ -93,11 +93,6 @@ input, textarea, select { font-family: inherit; }
   white-space: nowrap;
   transition: all .2s ease;
 }
-.chip.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
 
 /* Cards */
 .glass-card {
@@ -1890,11 +1885,7 @@ button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .do
     color .24s ease,
     transform .14s ease;
 }
-.chat-tab:active { transform: scale(.97); }
-.chat-tab.is-active {
-  color: #fff;
-  background: var(--accent);
-}/* Поля ввода: мягкое появление рамки при фокусе */
+.chat-tab:active { transform: scale(.97); }/* Поля ввода: мягкое появление рамки при фокусе */
 .chat-input .text-input, .input {
   transition: border-color .18s ease, background-color .18s ease;
 }.chat-input .text-input:focus, .input:focus {
