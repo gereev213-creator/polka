@@ -998,11 +998,13 @@
   border-radius: inherit;
   z-index: -1;
   pointer-events: none;
+  /* Только голубые оттенки: холодное свечение без пёстрых переходов */
   background: conic-gradient(
     from 0deg,
     rgba(10, 132, 255, 0.95),
-    rgba(122, 92, 255, 0.85),
-    rgba(255, 107, 43, 0.75),
+    rgba(102, 195, 255, 0.85),
+    rgba(31, 120, 255, 0.75),
+    rgba(0, 92, 214, 0.85),
     rgba(10, 132, 255, 0.95)
   );
   filter: blur(9px) saturate(140%);
@@ -1173,4 +1175,18 @@
   flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+}
+
+/* ── 17. Поле ввода уже ───────────────────────────────────────────────────
+   Плашка ввода растягивалась на всю ширину и выглядела тяжёлой. Делаем её
+   компактнее и по центру — как в Gemini: поле занимает примерно 92% ширины
+   на телефоне, но не больше 360px, и стоит по центру. */
+.app-shell .chat-input, .chat-input {
+  max-width: 360px;
+  margin: 0 auto;
+  width: 100%;
+}
+/* Строка поиска в Барахолке — тоже компактнее, фильтр остаётся справа */
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input {
+  max-width: none;
 }
