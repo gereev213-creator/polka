@@ -1754,3 +1754,35 @@ html, body, .app-shell, .screen {
 .app-shell .segmented button:active,
 .feed-switch button:active,
 .segmented button:active { filter: brightness(1.12); }
+
+
+/* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
+   Скан всех экранов нашёл интерактивные элементы без поверхности: они
+   выглядели текстом, пока по ним не нажмёшь. Даём им ту же плашку, что у
+   кнопок меню. Стрелки «назад» сознательно оставлены без фона. */
+.app-shell a.chat-row, a.chat-row,
+.app-shell a.setting-row, a.setting-row,
+.app-shell a.menu-row, a.menu-row,
+.app-shell button.glass-card, button.glass-card,
+.app-shell button.plan-row, button.plan-row,
+.app-shell .chat-list > a, .chat-list > a {
+  background: var(--card-primary, #141414);
+  border-radius: 20px;
+  box-shadow: none;
+  border: 0;
+}
+/* Иконка профиля в шапке — круглая кнопка, а не просто иконка */
+.app-shell .topbar .icon-btn,
+.app-shell a.icon-btn, a.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--elevated, #242424);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary, #fff);
+}
+.app-shell .topbar .icon-btn:active, a.icon-btn:active { filter: brightness(1.15); }
+/* Статистика профиля: ячейки внутри общей плашки — без своей поверхности */
+.app-shell a.stats-cell, a.stats-cell { background: transparent !important; border-radius: 0; }
