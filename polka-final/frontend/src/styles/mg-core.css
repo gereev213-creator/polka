@@ -67,3 +67,78 @@
   height: 22px;
   flex: none;
 }
+
+/* ── 2. Шапка (topbar) ────────────────────────────────────────────────────
+   Шапка уезжает при прокрутке (не sticky), фон прозрачный, логотип опущен
+   под системную панель Telegram. Своих плашек «Закрыть/⌄/•••» нет —
+   закрытие даёт Telegram, поэтому .topbar-pills и .top-actions скрыты. */
+.app-shell .topbar, .topbar {
+  position: static;
+  top: auto;
+  z-index: auto;
+  display: block;
+  width: 100%;
+  padding: 26px 0 6px;
+  background: transparent;
+  border: 0;
+  border-bottom: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  /* Нейтрализуем min-height из base.css: он добавлял высоту сверх отступа */
+  min-height: 0;
+}
+
+.app-shell .topbar-row, .topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.app-shell .topbar-side, .topbar-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.app-shell .topbar-side--right, .topbar-side--right { justify-content: flex-end; }
+.app-shell .topbar-center, .topbar-center { flex: 1; min-width: 0; }
+
+/* Логотип: высота задана, ширина по пропорции (соотношение 5.65:1) */
+.app-shell .brand-logo, .brand-logo {
+  height: 26px;
+  width: auto;
+  max-width: none;
+  display: block;
+  object-fit: contain;
+}
+
+/* Стрелка назад — без плашки, только иконка */
+.app-shell .topbar-back, .topbar-back {
+  width: 44px;
+  height: 44px;
+  margin-left: -8px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+.app-shell .topbar-back .icon-svg, .topbar-back .icon-svg { width: 22px; height: 22px; stroke-width: 2; }
+.app-shell .topbar-back:active, .topbar-back:active { opacity: 0.6; }
+
+/* Свои плашки шапки не нужны: закрытие — встроенное в Telegram */
+.app-shell .topbar-pills, .topbar-pills,
+.app-shell .top-actions, .top-actions { display: none; }
+
+/* Линия под шапкой при прокрутке не появляется — шапка уезжает */
+.app-shell .topbar.is-scrolled, .topbar.is-scrolled {
+  border-bottom: 0;
+  box-shadow: none;
+}

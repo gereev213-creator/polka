@@ -331,15 +331,7 @@
   -webkit-backdrop-filter: blur(14px) saturate(140%);
 }
 .product-card .product-media .save-btn .icon-svg,
-.product-card .save-btn .icon-svg { width: 15px; height: 15px; }
-
-.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row,
-.setting-row, .feed-reminder, .summary-card, .stats-row,
-.pay-status, .admin-sheet, .admin-save-bar, .tariff-compare,
-.admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip,
-.tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body,
-.ui-plan, .chat-input, .chat-header, .topbar, .detail-bar,
-.media-placeholder {
+.product-card .save-btn .icon-svg { width: 15px; height: 15px; }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
@@ -632,7 +624,6 @@ body, button, input, select, textarea {
   color: var(--text-primary) !important;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
 }
-.topbar-pills-right { display: flex; align-items: center; gap: 8px; }
 .pill-btn:active { transform: scale(.97); }
 .pill-chevron {
   width: 12px; height: 12px;
@@ -646,26 +637,12 @@ body, button, input, select, textarea {
   background:
     radial-gradient(circle, currentColor 1.6px, transparent 1.8px) 0 50% / 6px 4px repeat-x;
 }
-.topbar-center { flex: 1; }
-.topbar-side--right { justify-content: flex-end; }
-
-.topbar { display: block !important; width: 100%; }
-.topbar-pills {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 8px; width: 100%; height: 48px;
-}
-.topbar-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 2px 0 6px; width: 100%;
-}
 .pill-btn {
   height: 48px; min-height: 48px; padding: 0 16px;
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }
-.topbar-side, .topbar-center { min-width: 0; }
-.brand-logo { max-width: 118px; height: 20px; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip, .tabbar-item {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip, .tabbar-item {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -1533,14 +1510,11 @@ html, body, .app-shell, .screen {
   border: 0 !important;
   outline: 0 !important;
   background: transparent !important;
-}
-
-
-/* ═══ ШАПКА НЕ ЛИПНЕТ ════════════════════════════════════════════════════
+}/* ═══ ШАПКА НЕ ЛИПНЕТ ════════════════════════════════════════════════════
    У .topbar стоял position: sticky с top: 0 — логотип и пилюли ехали за
    пальцем и висели над контентом. По просьбе владельца шапка должна
    уезжать вместе со страницей: ставим static, убираем sticky-контекст. */
-.app-shell .topbar, .topbar {
+.app-shell .topbar {
   position: static !important;
   top: auto !important;
   z-index: auto !important;
@@ -1567,29 +1541,17 @@ html, body, .app-shell, .screen {
 .app-shell .tabbar, .tabbar { background: #141414 !important; }
 .app-shell .tabbar-fab, .tabbar-fab { background: #141414 !important; }
 /* Точка непрочитанных — без обводки */
-.tabbar-dot { box-shadow: none !important; border: 0 !important; }
-
-
-/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
+.tabbar-dot { box-shadow: none !important; border: 0 !important; }/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
    Свои панели «Закрыть» / «⌄» / «•••» убраны: кнопку закрытия рисует сам
    Telegram над webview. Сверху оставляем воздух под неё, чтобы логотип
    не прилипал к системной панели. */
-.app-shell .topbar, .topbar {
+.app-shell .topbar {
   padding: 12px 0 4px !important;
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
-}
-.topbar-pills { display: none !important; }
-.topbar-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-height: 44px;
-  padding: 0;
-}
-/* Стрелка назад — без плашки, только иконка */
-.app-shell .topbar-back, .topbar-back {
+}/* Стрелка назад — без плашки, только иконка */
+.app-shell .topbar-back {
   width: 44px;
   height: 44px;
   margin-left: -8px;
@@ -1602,10 +1564,6 @@ html, body, .app-shell, .screen {
   cursor: pointer;
   padding: 0;
 }
-.app-shell .topbar-back .icon-svg, .topbar-back .icon-svg {
-  width: 22px; height: 22px; stroke-width: 2;
-}
-.app-shell .topbar-back:active, .topbar-back:active { opacity: .6; }
 
 
 /* ═══ УБРАТЬ ЧЁРНЫЕ ПОЛОСЫ ПО БОКАМ СТРАНИЦЫ ═════════════════════════════
@@ -1732,8 +1690,7 @@ html, body, .app-shell, .screen {
   align-items: center;
   justify-content: center;
   color: var(--text-primary, #fff);
-}
-.app-shell .topbar .icon-btn:active, a.icon-btn:active { filter: brightness(1.15); }
+}a.icon-btn:active { filter: brightness(1.15); }
 /* Статистика профиля: ячейки внутри общей плашки — без своей поверхности */
 .app-shell a.stats-cell, a.stats-cell { background: transparent !important; border-radius: 0; }
 
@@ -1872,31 +1829,18 @@ html, body, .app-shell, .screen {
   color: #fff !important;
 }
 /* Зазор чуть больше, чтобы плашки читались как две отдельные кнопки */
-.app-shell .tabbar-wrap, .tabbar-wrap { gap: 10px !important; }
-
-
-/* ═══ ЛОГОТИП НИЖЕ ════════════════════════════════════════════════════════
+.app-shell .tabbar-wrap, .tabbar-wrap { gap: 10px !important; }/* ═══ ЛОГОТИП НИЖЕ ════════════════════════════════════════════════════════
    Вверху логотип прилипал к системной панели Telegram и выглядел зажатым.
    Опускаем его: отступ шапки сверху больше, а разрыв до вкладок меньше —
    блок читается спокойнее. */
-.app-shell .topbar, .topbar {
+.app-shell .topbar {
   padding-top: 26px !important;
   padding-bottom: 6px !important;
-}
-.app-shell .topbar-row, .topbar-row {
-  min-height: 40px;
-  align-items: center;
-}
-/* Логотип — своя строка, без лишней высоты */
-.app-shell .topbar .logo, .topbar .logo,
-.app-shell .topbar-row > .topbar-side:first-child { line-height: 1; }
-
-
-/* ═══ БЕЛЫЙ ЛОГОТИП ══════════════════════════════════════════════════════
-   Логотип заменён на белый. Соотношение сторон у него 5.65:1 (520×92),
-   а прежнее правило задавало height 20px при max-width 118 — оно сплющивало
+}/* Логотип — своя строка, без лишней высоты */
+.app-shell .topbar .logo { line-height: 1; }/* ═══ БЕЛЫЙ ЛОГОТИП ══════════════════════════════════════════════════════
+   Логотип заменён на белый. Соотношение сторон у него 5.65:1 (520×92), а прежнее правило задавало height 20px при max-width 118 — оно сплющивало
    картинку. Теперь размер по высоте, ширина считается сама. */
-.app-shell .brand-logo, .brand-logo {
+.app-shell .brand-logo {
   height: 26px;
   width: auto;
   max-width: none;

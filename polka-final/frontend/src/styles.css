@@ -34,19 +34,8 @@ input, textarea, select { font-family: inherit; }
 .category-cards .cat-tile {
   flex: 0 0 152px;
   height: 116px;
-}
-
-.brand-logo {
-  height: 22px;
-  width: auto;
-  max-width: 140px;
-  display: block;
-  object-fit: contain;
-}
-
-/* TopBar */
-.topbar-side:last-child,
-.topbar-side--right { justify-content: flex-end; }
+}/* TopBar */
+.topbar-side:last-child { justify-content: flex-end; }
 /* Ряд иконок в шапке: без этого кнопки встают столбиком */
 .top-actions {
   display: flex;
@@ -2505,23 +2494,6 @@ html, body, #root {
   min-width: 0;
   flex: 0 0 auto;
 }
-.topbar-center {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: var(--text-tertiary);
-  text-align: center;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1 1 auto;
-}
-.topbar img, .topbar svg { flex: 0 0 auto; max-height: 32px; }
 
 /* ── Шапка без поддержки blur: без белой полосы ────────────────────────── */
 /* Запасной вариант с плотным белым фоном срабатывал ВСЕГДА: в Telegram
@@ -2650,8 +2622,7 @@ html, body, #root {
 .topbar, .topbar.is-scrolled, .chat-header, .chat-input, .detail-bar,
 .recommend-chip, .back-to-top, .dock {
   background: var(--surface);
-}
-.topbar, .topbar.is-scrolled, .chat-header { border-bottom: 1px solid var(--border); }
+}.topbar.is-scrolled, .chat-header { border-bottom: 1px solid var(--border); }
 .dock, .detail-bar { border-top: 1px solid var(--border); }
 
 /* 2. Карточка товара: фото отдельно, текст под ним слева, без серой плашки */
@@ -2718,7 +2689,6 @@ html, body, #root {
 .product-media .save-btn .icon-svg,
 .save-btn .icon-svg { width: 15px; height: 15px; }
 .hunt-cta { display: none; }
-.brand-logo { height: 18px; width: auto; }
 
 /* ═══ СТАТИСТИКА ПРОФИЛЯ ОДНОЙ СТРОКОЙ ═══════════════════════════════════ */
 .stats-head { display: flex; align-items: baseline; justify-content: space-between;
