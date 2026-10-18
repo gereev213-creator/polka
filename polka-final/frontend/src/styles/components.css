@@ -1618,3 +1618,41 @@ html, body, .app-shell, .screen {
 .app-shell .tabbar-fab, .tabbar-fab { background: #141414 !important; }
 /* Точка непрочитанных — без обводки */
 .tabbar-dot { box-shadow: none !important; border: 0 !important; }
+
+
+/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
+   Свои панели «Закрыть» / «⌄» / «•••» убраны: кнопку закрытия рисует сам
+   Telegram над webview. Сверху оставляем воздух под неё, чтобы логотип
+   не прилипал к системной панели. */
+.app-shell .topbar, .topbar {
+  padding: 12px 0 4px !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.topbar-pills { display: none !important; }
+.topbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0;
+}
+/* Стрелка назад — без плашки, только иконка */
+.app-shell .topbar-back, .topbar-back {
+  width: 44px;
+  height: 44px;
+  margin-left: -8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--text-primary, #fff);
+  cursor: pointer;
+  padding: 0;
+}
+.app-shell .topbar-back .icon-svg, .topbar-back .icon-svg {
+  width: 22px; height: 22px; stroke-width: 2;
+}
+.app-shell .topbar-back:active, .topbar-back:active { opacity: .6; }
