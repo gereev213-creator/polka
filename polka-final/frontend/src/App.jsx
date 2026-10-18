@@ -3175,7 +3175,12 @@ function ProfilePage() {
   // Пункт «Админ» показываем только администратору (этап J3)
   const [isAdmin, setIsAdmin] = useState(false)
   // Ссылки на документы берём с сервера: меняются из админки, без релиза
-  const [docs, setDocs] = useState({ privacy_url: '', terms_url: '' })
+  // Ссылки на документы. Запасные адреса нужны, чтобы строки не исчезали,
+  // если сервер не ответил: политика и условия — обязательные документы.
+  const [docs, setDocs] = useState({
+    privacy_url: 'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
+    terms_url: 'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
+  })
   const [sub, setSub] = useState(null)
   useEffect(() => {
     api.getPlan().then(setSub).catch(() => {})
@@ -3239,20 +3244,16 @@ function ProfilePage() {
 
         {/* Документы — отдельными строками в профиле: так их видно сразу,
             без прокрутки до самого низа и без поиска по футеру. */}
-        {docs.privacy_url ? (
-          <a href={docs.privacy_url} target="_blank" rel="noreferrer"
-            className="setting-row glass-card menu-row">
-            <span className="menu-left"><Icon name="shield" /><span>Политика конфиденциальности</span></span>
-            <span className="menu-arrow" aria-hidden="true">›</span>
-          </a>
-        ) : null}
-        {docs.terms_url || docs.privacy_url ? (
-          <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer"
-            className="setting-row glass-card menu-row">
-            <span className="menu-left"><Icon name="tag" /><span>Условия пользования</span></span>
-            <span className="menu-arrow" aria-hidden="true">›</span>
-          </a>
-        ) : null}
+        <a href={docs.privacy_url} target="_blank" rel="noreferrer"
+          className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="shield" /><span>Политика конфиденциальности</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </a>
+        <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer"
+          className="setting-row glass-card menu-row">
+          <span className="menu-left"><Icon name="tag" /><span>Условия пользования</span></span>
+          <span className="menu-arrow" aria-hidden="true">›</span>
+        </a>
       </div>
       <AppFooter />
     </Screen>
@@ -4052,17 +4053,15 @@ function AppFooter() {
           надписи «Документы»: лишний клик на ровном месте. */}
       <div className="app-footer-copy">Полка © {year} — все права защищены
             <span className="build-mark">сборка {APP_BUILD}</span></div>
-      {docs && docs.privacy_url ? (
-        <div className="app-footer-links">
-          <a href={docs.privacy_url} target="_blank" rel="noreferrer">
+      <div className="app-footer-links">
+          <a href={(docs && docs.privacy_url) || 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'} target="_blank" rel="noreferrer">
             Политика конфиденциальности
           </a>
           <span className="app-footer-sep">·</span>
-          <a href={docs.terms_url || docs.privacy_url} target="_blank" rel="noreferrer">
+          <a href={(docs && (docs.terms_url || docs.privacy_url)) || 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'} target="_blank" rel="noreferrer">
             Условия пользования
           </a>
         </div>
-      ) : null}
     </div>
   )
 }
