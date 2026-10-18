@@ -1544,3 +1544,23 @@ html, body, .app-shell, .screen {
   border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
   box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
 }
+
+
+/* ═══ ИКОНКИ БЕЗ ЯРКИХ СТЫКОВ ════════════════════════════════════════════
+   У иконок стоял stroke-linejoin="round" и толщина 1.8 — на стыках линий
+   (угол крыши, стены) круглые соединения накладывались друг на друга и
+   читались как светлые точки. Ставим острые соединения и чуть тоньше
+   линию: угол остаётся угол, артефактов нет. */
+.icon-svg {
+  stroke-linejoin: miter;
+  stroke-miterlimit: 4;
+  stroke-linecap: round;
+  stroke-width: 1.6;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+}
+/* Внутри навигации иконки чуть тоньше — там они крупнее */
+.app-shell .tabbar-item .icon-svg, .tabbar-item .icon-svg {
+  stroke-width: 1.7;
+  color: currentColor;
+}
