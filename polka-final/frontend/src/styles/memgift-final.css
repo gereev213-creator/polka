@@ -104,11 +104,8 @@
   background: transparent;
   border-bottom: 0;
   backdrop-filter: none;
-}
-
-/* ── Профиль: меню-строки как Memgift ──────────────────────────────────── */
-.app-shell .menu-row,
-.app-shell .setting-row {
+}/* ── Профиль: меню-строки как Memgift ──────────────────────────────────── */
+.app-shell .menu-row {
   border-radius: 0;
   background: transparent;
 }/* ── Поля ввода ─────────────────────────────────────────────────────────── */

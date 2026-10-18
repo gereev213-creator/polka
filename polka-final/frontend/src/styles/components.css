@@ -159,10 +159,10 @@
 /* Заголовки экранов: плотнее и с отрицательным трекингом */
 .page-title, .section-title, h2, h3 {
   letter-spacing: -.02em;
-}/* Карточка: палец чувствует нажатие */.product-card, .menu-row, .setting-row, .plan-row, .ui-group-body > * {
+}/* Карточка: палец чувствует нажатие */.product-card, .plan-row, .ui-group-body > * {
   transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
   -webkit-tap-highlight-color: transparent;
-}.menu-row:active, .setting-row:active, .plan-row:active, .hint-chip:active, .feed-status-chip:active {
+}.plan-row:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
 }/* Базовое определение .cta-primary переехало в styles/mg-core.css —
@@ -240,7 +240,7 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-.product-media { border-radius: 20px; }.menu-row, .setting-row, .plan-row {
+.product-media { border-radius: 20px; }.plan-row {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
@@ -257,7 +257,7 @@
   border: 1px solid rgba(255, 255, 255, .12);
   color: rgba(255, 255, 255, .92);
 }
-.save-btn.is-on { color: var(--danger); }.card, .plan-row, .menu-row, .setting-row, .admin-sheet, .admin-save-bar, .tariff-compare, .feed-status-chip, .hint-chip, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
+.save-btn.is-on { color: var(--danger); }.card, .plan-row, .admin-sheet, .admin-save-bar, .tariff-compare, .feed-status-chip, .hint-chip, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
@@ -320,13 +320,7 @@ body, button, input, select, textarea {
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-}
-
-.menu-arrow, .plan-arrow {
-  width: 36px; height: 36px; border-radius: 50%;
-  display: inline-flex; align-items: center; justify-content: center;
-  background: var(--card-secondary); color: var(--text-secondary);
-}.hint-chip, .feed-status-chip, .tariff-method {
+}.hint-chip, .feed-status-chip {
   border-radius: 999px;
   background: var(--card-primary);
   color: var(--text-secondary);
@@ -344,7 +338,7 @@ body, button, input, select, textarea {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
   color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}.hint-chip:active, .tariff-method:active {
+}.hint-chip:active {
   transform: scale(.97);
 }input, textarea, select {
   border-radius: 999px;
@@ -379,7 +373,7 @@ body, button, input, select, textarea {
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .tariff-method, .hint-chip {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .hint-chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -388,7 +382,7 @@ body, button, input, select, textarea {
   white-space: nowrap;
   font-family: inherit;
   vertical-align: middle;
-}.pill-btn, .hint-chip, .tariff-method { height: 48px; min-height: 48px; }.pill-btn, .tariff-method { padding: 0 20px; }
+}.pill-btn, .hint-chip { height: 48px; min-height: 48px; }.pill-btn { padding: 0 20px; }
 
 .feed-switch {
   display: inline-flex !important;
@@ -507,30 +501,12 @@ input[type="checkbox"]:checked::after {
 
 /* Переключатель-сегмент «Скидки / Все» — пилюли, не underline */
 .segmented, .feed-switch { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-.segmented::-webkit-scrollbar, .feed-switch::-webkit-scrollbar { display: none; }
-
-/* Профиль: строки меню с круглой кнопкой-шевроном справа (как в Memgift) */
-.menu-row, .setting-row {
+.segmented::-webkit-scrollbar, .feed-switch::-webkit-scrollbar { display: none; }/* Профиль: строки меню с круглой кнопкой-шевроном справа (как в Memgift) */
+.menu-row {
   min-height: 64px;
   padding: 0 4px;
   border-bottom: 1px solid var(--border-primary);
 }
-.menu-row:last-child, .setting-row:last-child { border-bottom: 0; }
-.menu-arrow {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--card-secondary);
-  color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1;
-}
-.menu-left { gap: 14px; font-size: 16px; font-weight: 500; }
-.menu-left span { font-size: 16px; }
 
 /* Статистика профиля — три числа в общей плашке (Memgift) */
 .stats-row {
@@ -614,13 +590,13 @@ input[type="checkbox"]:checked::after {
 }
 .feed-grid { align-items: start; }
 .feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
-   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .hint-chip, .hint-chip, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat {
+   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .pill-btn, .pill-btn, .app-shell .hint-chip, .hint-chip, .app-shell .ui-stat, .ui-stat {
   background: var(--card-primary);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}/* Пилюли — скругление 999, панели — 20, карточки — 28 */.pill-btn, .hint-chip, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом *//* Поля ввода — та же формула, но без тени */
+}/* Пилюли — скругление 999, панели — 20, карточки — 28 */.pill-btn, .hint-chip { border-radius: 999px; }.ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом *//* Поля ввода — та же формула, но без тени */
 .text-input, input[type="text"], input[type="number"], input[type="search"], textarea, select {
   background: var(--card-secondary);
   border: 0;
@@ -683,13 +659,13 @@ html, body, .app-shell, .screen {
      • пилюли/чипы/поля  — 999 или 20
      • панели и строки    — 20
      • карточки и листы   — 28
-   ═══════════════════════════════════════════════════════════════════════ *//* ── Поверхности: карточки, панели, строки ───────────────────────────── */.app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .banner-card, .banner-card {
+   ═══════════════════════════════════════════════════════════════════════ *//* ── Поверхности: карточки, панели, строки ───────────────────────────── */.app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .banner-card, .banner-card {
   background: var(--card-primary, #141414);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}/* Панели и строки — 20, карточки и листы — 28 */.menu-row, .setting-row, .card, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */.app-shell .hint-chip, .hint-chip, .app-shell .pill-btn, .pill-btn, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip {
+}/* Панели и строки — 20, карточки и листы — 28 */.card, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */.app-shell .hint-chip, .hint-chip, .app-shell .pill-btn, .pill-btn, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip {
   background: var(--card-primary, #141414);
   border: 0;
   border-radius: 999px;
@@ -733,11 +709,8 @@ html, body, .app-shell, .screen {
   padding: 0 12px 0 28px;
   overflow: hidden;
 }/* Псевдоэлемент-разделитель из старых правил больше не нужен */
-.list-stack > .menu-row::after { display: none; }
-
-/* ── 3. Кружок-шеврон ────────────────────────────────────────────────── */
-.app-shell .menu-arrow, .menu-arrow,
-.app-shell .plan-arrow, .plan-arrow {
+.list-stack > .menu-row::after { display: none; }/* ── 3. Кружок-шеврон ────────────────────────────────────────────────── */
+.app-shell .menu-arrow {
   width: 44px;
   height: 44px;
   min-width: 44px;
@@ -1053,7 +1026,7 @@ html, body, .app-shell, .screen {
    Вкладки и пилюли плавно перекрашивались и «переезжали» при переключении.
    Этого быть не должно: кнопка — статичная плашка в нашем стиле, реакция
    только на нажатие. Убираем все переходы, трансформации и анимации, фиксируем одинаковые размеры у активного и неактивного состояния, чтобы
-   ряд не дёргался. */.app-shell .filter-pill, .filter-pill, .app-shell .tariff-method, .tariff-method {
+   ряд не дёргался. */.app-shell .filter-pill, .filter-pill {
   transition: none !important;
   animation: none !important;
   transform: none !important;
@@ -1070,7 +1043,7 @@ html, body, .app-shell, .screen {
    Кромка 1px у плашек постоянно вылезала: то между меню и «+», то по краям.
    Убираем её полностью — и у панели, и у пилюль, и у вкладок.
    Глубина при этом остаётся: градиент + верхний блик + тень. Именно они
-   дают объём, а рамка для этого не нужна. */.app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .hint-chip, .hint-chip, .app-shell .tariff-method, .tariff-method {
+   дают объём, а рамка для этого не нужна. */.app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .hint-chip, .hint-chip {
   border: 0 !important;
   border-width: 0 !important;
   outline: 0 !important;
