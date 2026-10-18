@@ -83,16 +83,6 @@ input, textarea, select { font-family: inherit; }
   scrollbar-width: none;
 }
 .chip-row::-webkit-scrollbar { display: none; }
-.chip {
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all .2s ease;
-}
 
 /* Cards */
 .glass-card {
@@ -269,27 +259,6 @@ input, textarea, select { font-family: inherit; }
   color: #fff;
   padding: 0 22px;
 }.cta-dark:active { transform: scale(.97); }.cta-dark .icon-svg { width: 18px; height: 18px; }
-.cta-round {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: transform .18s ease;
-}
-.cta-round:active { transform: scale(.9); }
-.cta-round.is-on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.cta-round.is-on .icon-svg { fill: #fff; }
-.cta-round .icon-svg { width: 20px; height: 20px; }
 
 .field-wrap { position: relative; }
 .field-hint {
@@ -1010,17 +979,6 @@ input, textarea, select { font-family: inherit; }
 .section-head--tight { margin-bottom: 6px; }
 .tab-row,
 .dots { display: flex; align-items: center; gap: 6px; }
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: .03em;
-}
 
 /* Карточки-состояния (загрузка / успех / ошибка) */
 .success-box {
@@ -1562,11 +1520,9 @@ select.text-input {
 }
 .board-note strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
 .board-note span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
-.board-note .cta-primary { align-self: flex-start; margin-top: 4px; }/* ── Правки по замечаниям ───────────────────────────────────────────────── */
-
-/* 1. Свечение при нажатии. На плашках с overflow:hidden тень-свечение
+.board-note .cta-primary { align-self: flex-start; margin-top: 4px; }/* ── Правки по замечаниям ───────────────────────────────────────────────── *//* 1. Свечение при нажатии. На плашках с overflow:hidden тень-свечение
    обрезалась по краю и выглядела криво. Оставляем только лёгкое сжатие. */
-.product-card:active, .cat-tile:active, .setting-row:active, .dock-item:active, .chip:active, /* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
+.product-card:active, .cat-tile:active, .setting-row:active, .dock-item:active, /* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
    подложка цвета плашки, справа иллюстрация остаётся открытой. */
 .cat-tile::after {
   content: '';
@@ -1639,15 +1595,6 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
   gap: 8px;
   padding: 2px 0 6px;
 }
-.chat-chip {
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-size: 14px;
-}
-.chat-chip:active { transform: scale(.96); }
 .chat-send .icon-svg { width: 20px; height: 20px; fill: #fff; }
 .chat-send:disabled { opacity: .45; }
 .chat-summary-line { font-size: 16px; font-weight: 700; }
@@ -1852,15 +1799,14 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 }
 .chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── *//* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
    Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
-   лёгкое сжатие: палец чувствует, что нажал. */button, .dock-create, .chat-chip, .chat-example, .chat-back, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
+   лёгкое сжатие: палец чувствует, что нажал. */button, .dock-create, .chat-example, .chat-back, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
     border-color .18s ease,
     color .18s ease;
   -webkit-tap-highlight-color: transparent;
-}/* Нажатие: сжатие до 94% — ощущается как живая кнопка */
-button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .dock-create:active, .chat-back:active {
+}/* Нажатие: сжатие до 94% — ощущается как живая кнопка */button:active, .chat-example:active, .chat-crit-x:active, .dock-create:active, .chat-back:active {
   transform: scale(.94);
 }
 
@@ -2165,7 +2111,7 @@ html, body, #root {
   border-radius: 14px;
   text-align: left;
 }/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── *//* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
-   это требование доступности, а не вкусовщина. */.chat-chip, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .cta-round, .mic-btn {
+   это требование доступности, а не вкусовщина. */.chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .mic-btn {
   min-height: 44px;
   min-width: 44px;
 }
