@@ -1899,3 +1899,30 @@ html, body, .app-shell, .screen {
 .app-shell .filter-pill, .filter-pill { color: #fff !important; }
 .app-shell .filter-pill:active, .filter-pill:active,
 .app-shell .feed-switch button:active, .feed-switch button:active { filter: brightness(1.16); }
+
+
+/* ═══ ПЛАШКИ БЕЗ КРОМОК — ФИНАЛ ══════════════════════════════════════════
+   Две кромки в зазоре (правая у капсулы, левая у «+») читались как линия
+   между плашками. Плюс кромки были разной яркости: .10 у кнопки и .08 у
+   капсулы, из-за чего «+» выглядел иначе.
+
+   Решение: кромок нет ни у кого. Плашки отличаются от фона только тоном
+   #1C1C1E против #050505 — этого достаточно, а стыков и линий нет вообще.
+   Активная вкладка внутри капсулы — #2E2E30, чтобы читалась на новом фоне. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab {
+  background: #1c1c1e !important;
+  background-image: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: #2e2e30 !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: #fff !important;
+}
+/* Зазор чуть больше, чтобы плашки читались как две отдельные кнопки */
+.app-shell .tabbar-wrap, .tabbar-wrap { gap: 10px !important; }
