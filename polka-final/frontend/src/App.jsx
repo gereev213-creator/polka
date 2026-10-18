@@ -334,7 +334,14 @@ function relTime(item) {
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
   // Карточка в духе Memgift: фото живёт в своей внутренней плашке, бейдж
   // источника лежит на фото, ниже название, внизу — синяя пилюля цены.
+  //
+  // Переход сделан ОБРАБОТЧИКОМ, а не <Link>: в Telegram Mini App клиент
+  // перехватывает нажатия на <a href="#/..."> и пытается открыть их как
+  // внешнюю ссылку. Со стороны это выглядит так, будто карточка не
+  // открывается вовсе. navigate() такого перехвата не даёт.
+  const navigate = useNavigate()
   if (!item || typeof item !== 'object') return null
+  const openCard = () => { if (item.id) navigate(`/listing/${item.id}`) }
   const handleFavorite = (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -346,7 +353,9 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
   const showDiscount = reliable && discount > 0 && discount <= 50
 
   return (
-    <Link to={`/listing/${item.id}`} className="product-card">
+    <div className="product-card" role="link" tabIndex={0}
+      onClick={openCard}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard() } }}>
       <div className="product-figure">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
         {showDiscount ? (
@@ -362,7 +371,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         <div className="product-name">{item.title}</div>
         <div className="product-price">{Number(item.price || 0).toLocaleString('ru-RU')} ₽</div>
       </div>
-    </Link>
+    </div>
   )
 }
 
