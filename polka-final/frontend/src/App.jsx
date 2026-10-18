@@ -1489,7 +1489,7 @@ function FeedPage() {
       // .feed-screen вместо <Screen>: ленте нужен собственный, более широкий
       // контейнер под сетки 3/4–5 колонок (см. styles/pages/feed.css).
       <div className="screen padded feed-screen">
-        <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+        <TopBar left={<Logo />} />
         <div className="feed-skeleton">
           <div className="skeleton-banner" />
           <Skeleton variant="grid" />
@@ -1501,7 +1501,7 @@ function FeedPage() {
   if (loading && items.length === 0) {
     return (
       <div className="screen padded feed-screen">
-        <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+        <TopBar left={<Logo />} />
         <div className="feed-skeleton">
           <div className="skeleton-banner" />
           <Skeleton variant="grid" />
@@ -1513,7 +1513,7 @@ function FeedPage() {
   if (error && items.length === 0) {
     return (
       <div className="screen padded feed-screen">
-        <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+        <TopBar left={<Logo />} />
         <ErrorBlock text={error || 'Не удалось загрузить ленту'} onRetry={() => load(activeCategory, 0, false)} />
       </div>
     )
@@ -1521,7 +1521,7 @@ function FeedPage() {
 
   return (
     <div className="screen padded feed-screen">
-      <TopBar left={<Logo />} right={<div className="top-actions"><IconButton icon="user" to="/profile" /></div>} />
+      <TopBar left={<Logo />} />
       <SegmentedControl
         className="feed-switch"
         value={feedTab}
