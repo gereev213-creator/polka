@@ -27,3 +27,6 @@ collector/config.json
 
 # состояние ротации целей — создаётся сборщиком при работе
 collector/targets_state.json
+
+# cookies сборщика — локальные сессии, не для репозитория
+collector/cookies.json

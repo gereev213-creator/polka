@@ -111,6 +111,79 @@ IMPERSONATE_POOL = ('safari', 'safari17_0', 'safari15_3', 'chrome131',
 _WORKING_PROFILE = None
 
 
+# ── Cookies между проходами ────────────────────────────────────────────────
+# Авито лучше относится к «постоянному посетителю», чем к потоку запросов без
+# памяти: с сохранённой сессией меньше поводов выдать 429/439. Cookies лежат
+# рядом со сборщиком, по одному набору на отпечаток браузера. При блокировке
+# набор сбрасывается и запрос повторяется как «новый посетитель».
+COOKIES_FILE = os.environ.get(
+    'POLKA_COOKIES',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cookies.json'))
+_COOKIE_JAR = None          # профиль → {имя: значение}
+_SESSIONS = {}              # профиль → curl_cffi.Session
+
+
+def _cookies_load() -> dict:
+    global _COOKIE_JAR
+    if _COOKIE_JAR is None:
+        try:
+            with open(COOKIES_FILE, encoding='utf-8') as fh:
+                data = json.load(fh)
+            _COOKIE_JAR = data if isinstance(data, dict) else {}
+        except Exception:
+            _COOKIE_JAR = {}
+    return _COOKIE_JAR
+
+
+def _cookies_save() -> None:
+    try:
+        with open(COOKIES_FILE, 'w', encoding='utf-8') as fh:
+            json.dump(_COOKIE_JAR or {}, fh, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _session_for(profile: str):
+    """Сессия для отпечатка: держит cookies между запросами и проходами."""
+    if _cffi is None:
+        return None
+    sess = _SESSIONS.get(profile)
+    if sess is None:
+        try:
+            sess = _cffi.Session(impersonate=profile)
+        except Exception:
+            return None
+        saved = _cookies_load().get(profile) or {}
+        for name, value in saved.items():
+            try:
+                sess.cookies.set(name, value)
+            except Exception:
+                pass
+        _SESSIONS[profile] = sess
+    return sess
+
+
+def _cookies_remember(profile: str, sess) -> None:
+    """Запоминает cookies после удачного ответа."""
+    jar = _cookies_load()
+    try:
+        jar[profile] = {c.name: c.value for c in sess.cookies.jar}
+    except Exception:
+        try:
+            jar[profile] = dict(sess.cookies)
+        except Exception:
+            return
+    _cookies_save()
+
+
+def _cookies_drop(profile: str) -> None:
+    """Сбрасывает набор: при блокировке начинаем как новый посетитель."""
+    jar = _cookies_load()
+    if jar.pop(profile, None) is not None:
+        _cookies_save()
+    _SESSIONS.pop(profile, None)
+
+
 def _opener():
     """Открывалка запросов. Собирается один раз, с прокси или без."""
     global _OPENER
@@ -198,15 +271,26 @@ def fetch(url: str, timeout: int = 25) -> str:
             order.insert(0, _WORKING_PROFILE)
         last_error = 'ни один отпечаток не прошёл'
         for profile in order:
+            # Сессия нужна, чтобы cookies жили между запросами и проходами
+            sess = _session_for(profile)
             try:
-                r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+                if sess is not None:
+                    r = sess.get(url, timeout=timeout, proxies=proxies)
+                else:
+                    r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
             except Exception as exc:
                 last_error = f"{profile}: {str(exc)[:70]}"
                 continue
             if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
+                # Блокировка: старые cookies могли «запомнить» нас как проблемного
+                # посетителя — сбрасываем и в следующий раз приходим заново.
+                if r.status_code in (403, 429) and sess is not None:
+                    _cookies_drop(profile)
                 time.sleep(random.uniform(2.0, 5.0))
                 continue
+            if sess is not None:
+                _cookies_remember(profile, sess)
             _WORKING_PROFILE = profile
             if profile != IMPERSONATE:
                 print(f"  (сработал отпечаток {profile})")
