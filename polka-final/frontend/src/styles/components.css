@@ -1511,3 +1511,36 @@ html, body, .app-shell, .screen {
 .app-shell .tabbar-fab .icon-svg, .tabbar-fab .icon-svg { width: 26px; height: 26px; }
 .app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.15); }
 .tabbar-dot { top: 12px !important; right: 14px !important; }
+
+
+/* ═══ ПАНЕЛЬ БЕЗ ЧЁРНЫХ РАМОК ════════════════════════════════════════════
+   «Рамки» по краям давала большая размытая тень 0 10px 30px rgba(0,0,0,.6):
+   у круглого элемента она рисует тёмные прямоугольники по углам.
+   Убираем большой блюр, оставляем короткую тень и светлый блик сверху. */
+.app-shell .tabbar-wrap, .tabbar-wrap {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: 0 !important;
+}
+.app-shell .tabbar, .tabbar {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 4px 12px rgba(0, 0, 0, 0.45) !important;
+}
+.app-shell .tabbar-fab, .tabbar-fab {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 4px 12px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
+   Кромка была приглушена до .16 и на тёмном фоне почти не читалась.
+   Возвращаем заметную светлую линию сверху — как в эталоне владельца. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn,
+.app-shell .product-price, .product-price,
+.app-shell .product-body .product-price {
+  border: 0 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
+}
