@@ -659,3 +659,43 @@
   justify-content: center;
   flex: none;
 }
+
+/* ── 8. Панели (glass-card и родственные поверхности) ─────────────────────
+   Один материал для всех блоков-панелей: поверхность #141414, верхний блик
+   и радиус 20. Обводок нет. Внутренние отступы не задаются — у каждой
+   панели они свои, иначе поедут сетки внутри (статистика, тарифы). */
+.app-shell .glass-card, .glass-card,
+.app-shell .summary-card, .summary-card,
+.app-shell .pay-status, .pay-status,
+.app-shell .admin-setting, .admin-setting,
+.app-shell .feed-reminder, .feed-reminder,
+.app-shell .tariff-term, .tariff-term,
+.app-shell .stats-row, .stats-row,
+.app-shell .stat-card, .stat-card,
+.app-shell .admin-kpi-cell, .admin-kpi-cell,
+.app-shell .admin-health-item, .admin-health-item {
+  background: var(--card-primary, #141414);
+  border: 0;
+  border-radius: 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* Псевдоэлементы-обводки у панелей не нужны: блик уже нарисован тенью */
+.app-shell .glass-card::before, .glass-card::before,
+.app-shell .glass-card::after, .glass-card::after,
+.app-shell .summary-card::after, .summary-card::after,
+.app-shell .pay-status::after, .pay-status::after,
+.app-shell .admin-setting::after, .admin-setting::after {
+  display: none;
+}
+
+/* Список-группа: одна плашка, строки внутри без своих поверхностей */
+.app-shell .list-stack, .list-stack {
+  background: var(--card-primary, #141414);
+  border-radius: 28px;
+  padding: 0 12px 0 28px;
+  overflow: hidden;
+  box-shadow: none;
+  border: 0;
+}
+.app-shell .list-stack > *, .list-stack > * { background: transparent; box-shadow: none; border: 0; }

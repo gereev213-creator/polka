@@ -111,12 +111,6 @@
 .app-shell .setting-row {
   border-radius: 0;
   background: transparent;
-}
-.app-shell .glass-card.menu-block {
-  background: var(--card-primary);
-  border-radius: 20px;
-  padding: 4px 16px;
-  box-shadow: var(--shadow-soft);
 }/* ── Поля ввода ─────────────────────────────────────────────────────────── */
 .app-shell .text-input {
   min-height: 48px;

@@ -616,24 +616,6 @@ input, textarea, select { font-family: inherit; }
 }
 .stats-head strong { font-size: 17px; font-weight: 800; letter-spacing: -.02em; }
 .stats-head span { font-size: 12px; color: var(--text-secondary); }
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  min-height: 104px;
-  padding: 13px 14px;
-  border-radius: 20px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  text-align: left;
-  transition: transform .2s ease;
-}
-.stat-card:active { transform: scale(.96); }
 .stat-card-label {
   font-size: 11px;
   font-weight: 700;
@@ -1585,20 +1567,11 @@ select.text-input {
 }
 .board-note strong { font-size: 15px; font-weight: 800; letter-spacing: -.02em; }
 .board-note span { font-size: 12.5px; line-height: 1.45; color: var(--text-secondary); }
-.board-note .cta-primary { align-self: flex-start; margin-top: 4px; }
-
-/* ── Правки по замечаниям ───────────────────────────────────────────────── */
+.board-note .cta-primary { align-self: flex-start; margin-top: 4px; }/* ── Правки по замечаниям ───────────────────────────────────────────────── */
 
 /* 1. Свечение при нажатии. На плашках с overflow:hidden тень-свечение
    обрезалась по краю и выглядела криво. Оставляем только лёгкое сжатие. */
-.product-card:active,
-.cat-tile:active,
-.setting-row:active,
-.stat-card:active,
-.dock-item:active,
-.chip:active,
-
-/* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
+.product-card:active, .cat-tile:active, .setting-row:active, .dock-item:active, .chip:active, /* 2. Плашки категорий: текст читался поверх картинки. Слева — мягкая
    подложка цвета плашки, справа иллюстрация остаётся открытой. */
 .cat-tile::after {
   content: '';
@@ -2579,8 +2552,6 @@ html, body, #root {
   margin: 24px 0 8px; }
 .stats-head-label { font-size: 12px; font-weight: 600; letter-spacing: .06em;
   text-transform: uppercase; color: var(--text-tertiary); }
-.stats-row { display: flex; border: 1px solid var(--line); border-radius: 12px;
-  overflow: hidden; }
 .stats-cell { flex: 1; display: flex; flex-direction: column-reverse; gap: 2px;
   padding: 12px; text-decoration: none; color: inherit; text-align: center; }
 .stats-cell + .stats-cell { border-left: 1px solid var(--line); }

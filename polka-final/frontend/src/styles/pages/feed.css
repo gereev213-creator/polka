@@ -228,8 +228,6 @@
 .feed-status-chip { min-height: 36px; padding: 6px 14px; border: 1px solid var(--border);
   border-radius: 999px; background: var(--surface); font: inherit; color: inherit;
   font-size: 13px; cursor: pointer; }
-.feed-reminder { grid-column: 1 / -1; padding: var(--space-3); border: 1px solid var(--border);
-  border-radius: var(--radius); background: var(--surface); }
 .feed-reminder-head { display: flex; justify-content: space-between; align-items: center;
   gap: var(--space-2); }
 

@@ -171,11 +171,10 @@
 /* Заголовки экранов: плотнее и с отрицательным трекингом */
 .page-title, .section-title, h2, h3 {
   letter-spacing: -.02em;
-}/* Карточка: палец чувствует нажатие */
-.product-card, .menu-row, .setting-row, .plan-row, .admin-setting, .tariff-term, .ui-group-body > * {
+}/* Карточка: палец чувствует нажатие */.product-card, .menu-row, .setting-row, .plan-row, .ui-group-body > * {
   transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
   -webkit-tap-highlight-color: transparent;
-}.menu-row:active, .setting-row:active, .plan-row:active, .tariff-term:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
+}.menu-row:active, .setting-row:active, .plan-row:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
 }/* Базовое определение .cta-primary переехало в styles/mg-core.css —
@@ -195,34 +194,24 @@
 }
 
 /* Вкладка меню в активном состоянии — жирнее, чтобы «где я» читалось */
-.tabbar-item.is-active .tabbar-label { font-weight: 600; }
-
-/* ═══ Плоский список вместо «карточек» ═══════════════════════════════════
+.tabbar-item.is-active .tabbar-label { font-weight: 600; }/* ═══ Плоский список вместо «карточек» ═══════════════════════════════════
    Главный признак «сгенерированного» интерфейса — каждый элемент в своей
    плашке со скруглением. В настоящих продуктовых списках строки лежат
-   вплотную и разделены тонкой линией: глазу не нужно разбирать 8 рамок,
-   он читает строки.
+   вплотную и разделены тонкой линией: глазу не нужно разбирать 8 рамок, он читает строки.
 
    Поэтому внутри списков убираем рамку и радиус, оставляем линию-разделитель.
    Одиночные блоки (статус, итоговая карточка, лист) остаются с рамкой —
    они и должны читаться как отдельные блоки. */
-.list-stack > .glass-card,
-.list-stack > .plan-row,
-.ui-group-body > .glass-card {
+.list-stack > .glass-card, .ui-group-body > .glass-card {
   border: 0;
   border-radius: 0;
   background: transparent;
   border-bottom: 1px solid var(--line);
-}
-.list-stack > .glass-card:last-child,
-.list-stack > .plan-row:last-child,
-.ui-group-body > .glass-card:last-child {
+}.ui-group-body > .glass-card:last-child {
   border-bottom: 0;
 }
 /* Плотность: строки списка чуть ниже, воздуха между ними — больше не нужно */
 .list-stack { display: flex; flex-direction: column; }
-.list-stack > .glass-card,
-.list-stack > .plan-row { padding: 16px 0; min-height: 44px; }
 
 /* Заголовки секций — мелкие, с разрядкой: типографский приём, а не «плашка» */
 .section-title, .admin-group-title {
@@ -232,9 +221,7 @@
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin: 24px 0 8px;
-}
-
-/* ═══ Врезной разделитель и сетка 8 ══════════════════════════════════════
+}/* ═══ Врезной разделитель и сетка 8 ══════════════════════════════════════
    Две детали, которые отличают спроектированный интерфейс от собранного:
 
    1. Разделитель не идёт от края до края, а начинается на уровне текста
@@ -244,15 +231,12 @@
       осознаёт, но строка «дрожит» относительно остальных.
 
    Линию рисуем псевдоэлементом, а не border: border всегда во всю ширину. */
-.list-stack > .glass-card,
-.list-stack > .plan-row {
+.list-stack > .glass-card {
   position: relative;
   border-bottom: 0;
   padding: 16px 0;
   min-height: 44px;
 }
-.list-stack > .glass-card:last-child::after,
-.list-stack > .plan-row:last-child::after { display: none; }
 
 
 /* ═══ MEMGIFT COMPONENT LAYER (перенесено из tokens.css) ═══════════════
@@ -285,12 +269,11 @@
   border: 1px solid rgba(255, 255, 255, .12);
   color: rgba(255, 255, 255, .92);
 }
-.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
+.save-btn.is-on { color: var(--danger); }.card, .plan-row, .menu-row, .setting-row, .admin-sheet, .admin-save-bar, .tariff-compare, .feed-status-chip, .hint-chip, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
-}
-.glass-card, .admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .feed-reminder, .badge, .plan-desc, .spec-chip, .stats-head-label {
+}.admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .badge, .plan-desc, .spec-chip, .stats-head-label {
   background-color: transparent;
 }
 .badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }input, textarea, select, .chat-input input {
@@ -300,9 +283,6 @@
 }input::placeholder, textarea::placeholder {
   color: var(--text-tertiary);
 }
-
-.list-stack > .glass-card::after,
-.list-stack > .plan-row::after { background: var(--line); }
 
 .detail-bar,
 .listing .detail-bar,
@@ -335,10 +315,10 @@ body, button, input, select, textarea {
 .product-meta { font-size: 12px; color: var(--text-secondary); }
 .segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
   background: var(--surface-secondary); color: var(--text-secondary);
-  font-size: 16px; font-weight: 600; }.glass-card, .summary-card, .pay-status, .admin-setting, .tariff-term, .ui-stat, .chip, .badge, .tag {
+  font-size: 16px; font-weight: 600; }.ui-stat, .chip, .badge, .tag {
   border: 0;
   position: relative;
-}.glass-card::after, .summary-card::after, .pay-status::after, .admin-setting::after, .tariff-term::after, .ui-stat::after, .chip::after, .badge::after, .tag::after {
+}.ui-stat::after, .chip::after, .badge::after, .tag::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -380,10 +360,7 @@ body, button, input, select, textarea {
   width: 36px; height: 36px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--card-secondary); color: var(--text-secondary);
-}
-
-.chip, .segmented button, .hint-chip, .feed-status-chip, .admin-tab,
-.tariff-method, .tariff-term, .chat-chip, .ui-tab {
+}.chip, .segmented button, .hint-chip, .feed-status-chip, .admin-tab, .tariff-method, .chat-chip, .ui-tab {
   border-radius: 999px;
   background: var(--card-primary);
   color: var(--text-secondary);
@@ -397,13 +374,11 @@ body, button, input, select, textarea {
   gap: 10px;
   transition: background-color 250ms var(--ease-default), color 250ms var(--ease-default),
               transform 250ms var(--ease-default);
-}.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active, .hint-chip:active, .feed-status-chip:active, .admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active, .ui-tab.is-active {
+}.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active, .hint-chip:active, .feed-status-chip:active, .admin-tab.is-active, .tariff-method.is-active, .ui-tab.is-active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
   color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-.chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active,
-.tariff-method:active, .tariff-term:active, .chat-chip:active {
+}.chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active, .tariff-method:active, .chat-chip:active {
   transform: scale(.97);
 }input, textarea, select {
   border-radius: 999px;
@@ -479,7 +454,7 @@ body, button, input, select, textarea {
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .hint-chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -736,15 +711,14 @@ input[type="checkbox"]:checked::after {
 }
 .feed-grid { align-items: start; }
 .feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
-   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .stats-row, .stats-row, .app-shell .glass-card, .glass-card, .app-shell .admin-setting, .admin-setting, .app-shell .summary-card, .summary-card, .app-shell .pay-status, .pay-status, .app-shell .tariff-term, .tariff-term, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat, .app-shell .feed-reminder, .feed-reminder {
+   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat {
   background: var(--card-primary);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
 }/* Пилюли — скругление 999, панели — 20, карточки — 28 */
-.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .stats-row, .glass-card, .admin-setting, .summary-card, .pay-status, .tariff-term, .ui-stat, .feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */
-.chip.is-active, .segmented button.is-active, .feed-switch button.is-active, .admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active {
+.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */.chip.is-active, .segmented button.is-active, .feed-switch button.is-active, .admin-tab.is-active, .tariff-method.is-active {
   background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary);
@@ -811,15 +785,13 @@ html, body, .app-shell, .screen {
      • пилюли/чипы/поля  — 999 или 20
      • панели и строки    — 20
      • карточки и листы   — 28
-   ═══════════════════════════════════════════════════════════════════════ *//* ── Поверхности: карточки, панели, строки ───────────────────────────── */
-.app-shell .glass-card, .glass-card, .app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .admin-setting, .admin-setting, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .feed-reminder, .feed-reminder, .app-shell .summary-card, .summary-card, .app-shell .stats-row, .stats-row, .app-shell .pay-status, .pay-status, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .admin-kpi-cell, .admin-kpi-cell, .app-shell .admin-health-item, .admin-health-item, .app-shell .tariff-term, .tariff-term, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .stat-card, .stat-card, .app-shell .banner-card, .banner-card {
+   ═══════════════════════════════════════════════════════════════════════ *//* ── Поверхности: карточки, панели, строки ───────────────────────────── */.app-shell .card, .card, .app-shell .plan-row, .plan-row, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .admin-save-bar, .admin-save-bar, .app-shell .tariff-compare, .tariff-compare, .app-shell .cat-tile, .cat-tile, .app-shell .ui-stat, .ui-stat, .app-shell .ui-group-body, .ui-group-body, .app-shell .ui-plan, .ui-plan, .app-shell .banner-card, .banner-card {
   background: var(--card-primary, #141414);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}/* Панели и строки — 20, карточки и листы — 28 */
-.menu-row, .setting-row, .stats-row, .glass-card, .card, .admin-setting, .summary-card, .pay-status, .tariff-term, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .stat-card, .admin-kpi-cell, .admin-health-item, .feed-reminder, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
+}/* Панели и строки — 20, карточки и листы — 28 */.menu-row, .setting-row, .card, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
 .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .chat-chip, .chat-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip, .app-shell .badge, .badge {
   background: var(--card-primary, #141414);
   border: 0;
@@ -833,8 +805,7 @@ html, body, .app-shell, .screen {
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #fff);
-}/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
-.app-shell .chip.is-active, .chip.is-active, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .admin-tab.is-active, .admin-tab.is-active, .app-shell .tariff-method.is-active, .tariff-method.is-active, .app-shell .tariff-term.is-active, .tariff-term.is-active {
+}/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */.app-shell .chip.is-active, .chip.is-active, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .admin-tab.is-active, .admin-tab.is-active, .app-shell .tariff-method.is-active, .tariff-method.is-active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary, #fff);
@@ -859,10 +830,8 @@ html, body, .app-shell, .screen {
   letter-spacing: -.01em;
   box-shadow: none;
   -webkit-tap-highlight-color: transparent;
-}
-
-/* ── 2. Список — ОДНА плашка с разделителями ─────────────────────────── */
-.app-shell .list-stack, .list-stack {
+}/* ── 2. Список — ОДНА плашка с разделителями ─────────────────────────── */
+.app-shell .list-stack {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -870,41 +839,8 @@ html, body, .app-shell, .screen {
   border-radius: 28px;
   padding: 0 12px 0 28px;
   overflow: hidden;
-}
-.app-shell .list-stack > .menu-row,
-.app-shell .list-stack > .setting-row,
-.app-shell .list-stack > .glass-card,
-.app-shell .list-stack > .plan-row,
-.list-stack > .menu-row,
-.list-stack > .setting-row,
-.list-stack > .glass-card,
-.list-stack > .plan-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  height: 74px;
-  min-height: 74px;
-  margin: 0;
-  padding: 0;
-  background: none;
-  border: 0;
-  border-top: 1px solid #262626;
-  border-radius: 0;
-  box-shadow: none;
-  color: #fff;
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: -.015em;
-  text-align: left;
-}
-.app-shell .list-stack > :first-child,
-.list-stack > :first-child { border-top: 0; }
-/* Псевдоэлемент-разделитель из старых правил больше не нужен */
-.list-stack > .menu-row::after,
-.list-stack > .setting-row::after,
-.list-stack > .glass-card::after,
-.list-stack > .plan-row::after { display: none; }
+}/* Псевдоэлемент-разделитель из старых правил больше не нужен */
+.list-stack > .menu-row::after { display: none; }
 
 /* ── 3. Кружок-шеврон ────────────────────────────────────────────────── */
 .app-shell .menu-arrow, .menu-arrow,
@@ -921,8 +857,6 @@ html, body, .app-shell, .screen {
   font-size: 18px;
   line-height: 1;
 }
-.list-stack > .menu-row:active .menu-arrow,
-.list-stack > .setting-row:active .menu-arrow { background: #303030; }
 
 
 /* ═══ КНОПКИ ТОЛЬШЕ НЕ ЖИРНЫЕ ════════════════════════════════════════════
