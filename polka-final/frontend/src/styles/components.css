@@ -1816,3 +1816,17 @@ html, body, .app-shell, .screen {
 }
 /* Сама панель выше затемнения */
 .app-shell .tabbar-wrap, .tabbar-wrap { z-index: 1000; }
+
+
+/* ═══ ЕДИНАЯ КРОМКА У КАПСУЛЫ И «+» ══════════════════════════════════════
+   «+» без кромки сливался с фоном, хотя капсула читалась. Даём обеим
+   одинаковую тонкую рамку 1px — они снова одно семейство, но линия больше
+   не «тянется» между ними: зазор затемнён градиентом под панелью. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab {
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-sizing: border-box;
+}
+/* Кромка не должна съедать высоту */
+.app-shell .tabbar, .tabbar { height: 68px; }
+.app-shell .tabbar-fab, .tabbar-fab { width: 68px; height: 68px; }
