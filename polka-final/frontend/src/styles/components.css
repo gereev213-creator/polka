@@ -1564,3 +1564,23 @@ html, body, .app-shell, .screen {
   stroke-width: 1.7;
   color: currentColor;
 }
+
+
+/* ═══ ПАНЕЛЬ БЕЗ ТЕНИ ВООБЩЕ ═════════════════════════════════════════════
+   Тёмный ореол по краям капсулы — это её drop-shadow на светлых карточках.
+   Убираем внешнюю тень полностью: остаётся только внутренний блик сверху.
+   Так концы плашек чистые при любом фоне под ними. */
+.app-shell .tabbar, .tabbar,
+.app-shell .tabbar-fab, .tabbar-fab {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+  filter: none !important;
+  outline: 0 !important;
+  border: 0 !important;
+}
+.app-shell .tabbar-wrap, .tabbar-wrap {
+  box-shadow: none !important;
+  filter: none !important;
+  border: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+}
