@@ -1584,3 +1584,18 @@ html, body, .app-shell, .screen {
   outline: 0 !important;
   background: transparent !important;
 }
+
+
+/* ═══ ШАПКА НЕ ЛИПНЕТ ════════════════════════════════════════════════════
+   У .topbar стоял position: sticky с top: 0 — логотип и пилюли ехали за
+   пальцем и висели над контентом. По просьбе владельца шапка должна
+   уезжать вместе со страницей: ставим static, убираем sticky-контекст. */
+.app-shell .topbar, .topbar {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+/* Линия под шапкой при прокрутке больше не нужна — шапка уходит */
+.topbar.is-scrolled { border-bottom: 0 !important; box-shadow: none !important; }
