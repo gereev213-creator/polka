@@ -25,20 +25,22 @@ export function BottomNav() {
     ['/profile', 'user'],
   ]
   return (
-    <nav className="tabbar" aria-label="Основная навигация">
-      <div className="tabbar-group">
-        {tabs.map(([to, icon]) => (
-          <NavLink key={to} to={to} end={to === '/'}
-            className={({ isActive }) => (isActive ? 'tabbar-item is-active' : 'tabbar-item')}
-            aria-label={icon}>
-            <Icon name={icon} />
-            {to === '/chats' && unread > 0 ? <span className="tabbar-dot" /> : null}
-          </NavLink>
-        ))}
+    <div className="tabbar-wrap">
+      <div className="tabbar" role="navigation" aria-label="Основная навигация">
+        <div className="tabbar-group">
+          {tabs.map(([to, icon]) => (
+            <NavLink key={to} to={to} end={to === '/'}
+              className={({ isActive }) => (isActive ? 'tabbar-item is-active' : 'tabbar-item')}
+              aria-label={icon}>
+              <Icon name={icon} />
+              {to === '/chats' && unread > 0 ? <span className="tabbar-dot" /> : null}
+            </NavLink>
+          ))}
+        </div>
       </div>
       <NavLink to="/create" className="tabbar-fab" aria-label="Подать объявление">
         <Icon name="plus" />
       </NavLink>
-    </nav>
+    </div>
   )
 }
