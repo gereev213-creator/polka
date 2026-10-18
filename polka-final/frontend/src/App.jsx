@@ -1548,7 +1548,7 @@ function FeedPage() {
       {/* Категории убраны: сетка плиток занимала пол-экрана. Вместо неё
           строка поиска и кнопка «Фильтр» — привычный вид маркетплейса. */}
       <div className="market-toolbar">
-        <Link to="/search" className="search-input compact"><Icon name="search" />Поиск вещей</Link>
+        <Link to="/search" className="search-input compact glow-field"><Icon name="search" />Поиск вещей</Link>
         <Link to="/search" className="filter-pill"><Icon name="filter" />Фильтр</Link>
       </div>
       <RecommendCard items={items} />
