@@ -479,3 +479,83 @@
   height: 20px;
   flex: none;
 }
+
+/* ── 6. Поля ввода и поиск ────────────────────────────────────────────────
+   Поля — тёмная поверхность #181818 с внутренним бликом и радиусом 20.
+   Шрифт 16px обязателен: при меньшем Safari зумит страницу на фокусе.
+   Поиск — пилюля того же материала, что нижняя панель. */
+.app-shell .text-input, .text-input,
+.app-shell input[type="text"], input[type="text"],
+.app-shell input[type="number"], input[type="number"],
+.app-shell input[type="search"], input[type="search"],
+.app-shell input[type="tel"], input[type="tel"],
+.app-shell input[type="email"], input[type="email"],
+.app-shell input[type="password"], input[type="password"],
+.app-shell textarea, textarea,
+.app-shell select, select {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 20px;
+  background: #181818;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell textarea, textarea {
+  min-height: 96px;
+  padding: 14px 18px;
+  line-height: 1.45;
+  resize: none;
+}
+
+.app-shell .text-input::placeholder, .text-input::placeholder,
+.app-shell input::placeholder, input::placeholder,
+.app-shell textarea::placeholder, textarea::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* Фокус: тонкая светлая рамка вместо системной */
+.app-shell .text-input:focus, .text-input:focus,
+.app-shell input:focus, input:focus,
+.app-shell textarea:focus, textarea:focus,
+.app-shell select:focus, select:focus {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.20);
+  outline: none;
+}
+
+/* Поиск — пилюля, работает и как поле, и как ссылка на экран поиска */
+.app-shell .ui-search, .ui-search,
+.app-shell .search-input, .search-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  height: 52px;
+  min-height: 52px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  outline: none;
+}
+.app-shell .search-input .icon-svg, .search-input .icon-svg,
+.app-shell .ui-search .icon-svg, .ui-search .icon-svg {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  color: rgba(255, 255, 255, 0.55);
+}

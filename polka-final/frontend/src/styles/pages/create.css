@@ -61,9 +61,7 @@
   line-height: 18px;
   font-weight: 600;
   color: var(--danger-ink);
-}
-.text-input.is-invalid,
-.text-area.is-invalid { border-color: var(--danger-ink); }
+}.text-area.is-invalid { border-color: var(--danger-ink); }
 .step-hint {
   margin-top: var(--space-4);
   font-size: 12.5px;

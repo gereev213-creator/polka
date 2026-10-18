@@ -117,12 +117,8 @@
   border-radius: 20px;
   padding: 4px 16px;
   box-shadow: var(--shadow-soft);
-}
-
-/* ── Поля ввода ─────────────────────────────────────────────────────────── */
-.app-shell .text-input,
-.app-shell .ui-search,
-.app-shell .search-input {
+}/* ── Поля ввода ─────────────────────────────────────────────────────────── */
+.app-shell .text-input {
   min-height: 48px;
   border-radius: 999px;
   background: var(--card-primary, var(--surface-2));

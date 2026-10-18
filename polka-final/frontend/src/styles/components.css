@@ -122,9 +122,6 @@
 .ui-search { display: flex; align-items: center; gap: 8px; height: 40px;
   padding: 0 12px; border: 1px solid var(--line); border-radius: 8px;
   background: var(--surface); color: var(--text-secondary); }
-.ui-search input { flex: 1; height: 100%; border: 0; outline: 0; background: none;
-  font: inherit; font-size: 14px; color: var(--text); }
-.ui-search input::placeholder { color: var(--text-tertiary); }
 
 .ui-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
 .ui-tab { position: relative; min-height: 44px; padding: 0; border: 0; background: none;
@@ -291,7 +288,7 @@
   border: 1px solid rgba(255, 255, 255, .12);
   color: rgba(255, 255, 255, .92);
 }
-.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-search, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
+.save-btn.is-on { color: var(--danger); }.glass-card, .card, .plan-row, .admin-setting, .chat-row, .menu-row, .setting-row, .feed-reminder, .summary-card, .stats-row, .pay-status, .admin-sheet, .admin-save-bar, .tariff-compare, .admin-kpi-cell, .admin-health-item, .feed-status-chip, .hint-chip, .tariff-term, .tariff-method, .cat-tile, .ui-stat, .ui-group-body, .ui-plan, .chat-input, .chat-header, .detail-bar, .media-placeholder {
   background: var(--surface);
   border-color: var(--line);
   color: var(--text);
@@ -299,14 +296,11 @@
 .glass-card, .admin-sheet { border: 1px solid var(--line); }.icon-btn, .chat-chip, .feed-reminder, .badge, .chat-time, .plan-desc, .spec-chip, .stats-head-label {
   background-color: transparent;
 }
-.badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }
-
-.text-input, input, textarea, select, .chat-input input {
+.badge, .tag, .spec-chip, .chat-chip { background: var(--surface-2); color: var(--text-secondary); }input, textarea, select, .chat-input input {
   background: var(--surface-2);
   border: 1px solid var(--line);
   color: var(--text);
-}
-.text-input::placeholder, input::placeholder, textarea::placeholder {
+}input::placeholder, textarea::placeholder {
   color: var(--text-tertiary);
 }
 
@@ -340,7 +334,6 @@ body, button, input, select, textarea {
 }
 .page-title { font-size: var(--font-h3-size); font-weight: 600; line-height: 30px; }
 .section-title, .admin-group-title { font-size: var(--font-small-size); }
-.ui-search, .text-input { min-height: var(--filter-height); border-radius: var(--radius-md); }
 .product-info { padding: 10px 2px 0; gap: 6px; }
 .product-meta { font-size: 12px; color: var(--text-secondary); }
 .segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
@@ -415,10 +408,9 @@ body, button, input, select, textarea {
 .chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active,
 .tariff-method:active, .tariff-term:active, .chat-chip:active {
   transform: scale(.97);
-}.ui-search, .text-input, input, textarea, select {
+}input, textarea, select {
   border-radius: 999px;
-}
-.text-input, input, textarea, select { padding: 0 20px; }
+}input, textarea, select { padding: 0 20px; }
 
 .segmented { display: inline-flex; gap: 8px; background: transparent; border: 0; padding: 0; }
 
@@ -763,19 +755,15 @@ input[type="checkbox"]:checked::after {
   background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary);
-}
-
-/* Поля ввода — та же формула, но без тени */
-.text-input, input[type="text"], input[type="number"], input[type="search"],
-textarea, select, .ui-search {
+}/* Поля ввода — та же формула, но без тени */
+.text-input, input[type="text"], input[type="number"], input[type="search"], textarea, select {
   background: var(--card-secondary);
   border: 0;
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
   padding: 0 18px;
-}
-.ui-search { border-radius: 999px; }/* ═══ КАРТОЧКА БЕЗ РАМКИ ═════════════════════════════════════════════════
+}/* ═══ КАРТОЧКА БЕЗ РАМКИ ═════════════════════════════════════════════════
    У карточки рисовалось светлое кольцо (градиентная обводка из блока
    «плашка Memgift»), и оно читалось как рамка по бокам. У карточек его
    убираем: глубину даёт сама поверхность + тень, кольцо оставляем только
@@ -864,23 +852,14 @@ html, body, .app-shell, .screen {
   border-radius: 999px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   color: var(--text-secondary, rgba(255,255,255,.65));
-}
-
-/* ── Поля ввода ──────────────────────────────────────────────────────── */
-.app-shell .text-input, .text-input,
-.app-shell input[type="text"], input[type="text"],
-.app-shell input[type="number"], input[type="number"],
-.app-shell input[type="search"], input[type="search"],
-.app-shell textarea, textarea,
-.app-shell select, select,
-.app-shell .ui-search, .ui-search {
+}/* ── Поля ввода ──────────────────────────────────────────────────────── */
+.app-shell .text-input, .app-shell input[type="text"], input[type="text"], .app-shell input[type="number"], input[type="number"], .app-shell input[type="search"], input[type="search"], .app-shell textarea, textarea, .app-shell select, select {
   background: var(--card-secondary, #181818);
   border: 0;
   border-radius: 20px;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #fff);
-}
-.ui-search { border-radius: 999px; }/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
+}/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
 .app-shell .chip.is-active, .chip.is-active, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .admin-tab.is-active, .admin-tab.is-active, .app-shell .tariff-method.is-active, .tariff-method.is-active, .app-shell .tariff-term.is-active, .tariff-term.is-active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);

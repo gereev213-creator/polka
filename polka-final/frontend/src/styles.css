@@ -73,9 +73,6 @@ input, textarea, select { font-family: inherit; }
   margin: 12px 0;
   transition: all .2s ease;
 }
-.search-input:focus-within {
-  border-color: var(--accent);
-}
 
 /* Chips */
 .chip-row {
@@ -439,8 +436,7 @@ input, textarea, select { font-family: inherit; }
   font-size: 15px;
   outline: none;
   transition: all .2s ease;
-}
-.text-input:focus, .text-area:focus, select.text-input:focus {
+}.text-area:focus, select.text-input:focus {
   border-color: var(--accent);
 }
 .text-area { min-height: 100px; resize: vertical; }
@@ -1943,17 +1939,10 @@ button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .do
 .chat-tab.is-active {
   color: #fff;
   background: var(--accent);
-}
-
-/* Поля ввода: мягкое появление рамки при фокусе */
-.chat-input .text-input,
-.text-input,
-.input {
+}/* Поля ввода: мягкое появление рамки при фокусе */
+.chat-input .text-input, .input {
   transition: border-color .18s ease, background-color .18s ease;
-}
-.chat-input .text-input:focus,
-.text-input:focus,
-.input:focus {
+}.chat-input .text-input:focus, .input:focus {
   border-color: var(--accent);
   outline: none;
 }
