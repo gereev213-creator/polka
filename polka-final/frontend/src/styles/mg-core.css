@@ -267,3 +267,107 @@
   color: #fff;
   z-index: 3;
 }
+
+/* ── 4. Нижняя панель (tabbar) ────────────────────────────────────────────
+   Капсула с четырьмя разделами и отдельная круглая кнопка «+» справа.
+   Глубина — градиент, верхний блик и тень; обводки нет ни у одной плашки,
+   иначе две рамки в зазоре читались как линия между ними.
+   Панель поднята над контентом (z-index 1000) и не пропускает его сквозь
+   себя: фон сплошной, без размытия. */
+.app-shell .tabbar-wrap, .tabbar-wrap {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 1000;
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
+
+.app-shell .tabbar, .tabbar {
+  flex: 1 1 auto;
+  height: 68px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.45);
+  position: static;
+}
+
+.app-shell .tabbar-group, .tabbar-group {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  gap: 4px;
+}
+
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
+  color: #fff;
+}
+
+.app-shell .tabbar-item .icon-svg, .tabbar-item .icon-svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 1.7;
+}
+
+/* Кнопка «+» — отдельная плашка того же материала, что и капсула */
+.app-shell .tabbar-fab, .tabbar-fab {
+  flex: 0 0 auto;
+  width: 68px;
+  height: 68px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 6px 18px rgba(0, 0, 0, 0.45);
+  color: #fff;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-shell .tabbar-fab .icon-svg, .tabbar-fab .icon-svg { width: 26px; height: 26px; stroke-width: 2; }
+.app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.16); }
+
+/* Точка непрочитанных */
+.app-shell .tabbar-dot, .tabbar-dot {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-primary, #0a84ff);
+  box-shadow: none;
+  border: 0;
+}

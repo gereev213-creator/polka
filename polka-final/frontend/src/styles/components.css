@@ -291,7 +291,7 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-.product-media { border-radius: 20px; }.chat-row, .menu-row, .setting-row, .plan-row, .tabbar-item, .chip, .segmented button {
+.product-media { border-radius: 20px; }.chat-row, .menu-row, .setting-row, .plan-row, .chip, .segmented button {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
@@ -359,21 +359,15 @@ body, button, input, select, textarea {
 }
 .page-title { font-size: var(--font-h3-size); font-weight: 600; line-height: 30px; }
 .section-title, .admin-group-title { font-size: var(--font-small-size); }
-.tabbar-label { font-size: 11px; font-weight: 500; }
 .ui-search, .text-input { min-height: var(--filter-height); border-radius: var(--radius-md); }
-.tabbar-group { display: flex; align-items: center; flex: 1; gap: 4px; }
-.tabbar-item .icon-svg { width: 22px; height: 22px; }
-.tabbar-dot { position: absolute; top: 12px; right: 16px; width: 7px; height: 7px;
-  border-radius: 50%; background: var(--accent-primary); }
-.tabbar-fab .icon-svg { width: 24px; height: 24px; }
 .product-info { padding: 10px 2px 0; gap: 6px; }
 .product-meta { font-size: 12px; color: var(--text-secondary); }
 .segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
   background: var(--surface-secondary); color: var(--text-secondary);
-  font-size: 16px; font-weight: 600; }.glass-card, .summary-card, .pay-status, .admin-setting, .tariff-term, .ui-stat, .tabbar, .chip, .badge, .tag {
+  font-size: 16px; font-weight: 600; }.glass-card, .summary-card, .pay-status, .admin-setting, .tariff-term, .ui-stat, .chip, .badge, .tag {
   border: 0;
   position: relative;
-}.glass-card::after, .summary-card::after, .pay-status::after, .admin-setting::after, .tariff-term::after, .ui-stat::after, .tabbar::after, .chip::after, .badge::after, .tag::after {
+}.glass-card::after, .summary-card::after, .pay-status::after, .admin-setting::after, .tariff-term::after, .ui-stat::after, .chip::after, .badge::after, .tag::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -411,14 +405,6 @@ body, button, input, select, textarea {
   box-shadow: none;
 }
 
-.tabbar { border: 1px solid transparent; }
-.tabbar-fab {
-  background: var(--card-primary);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.18),
-    0 4px 16px rgba(0, 0, 0, .5);
-}
-
 .menu-arrow, .plan-arrow {
   width: 36px; height: 36px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
@@ -440,11 +426,7 @@ body, button, input, select, textarea {
   gap: 10px;
   transition: background-color 250ms var(--ease-default), color 250ms var(--ease-default),
               transform 250ms var(--ease-default);
-}
-.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active,
-.hint-chip:active, .feed-status-chip:active, .admin-tab.is-active,
-.tariff-method.is-active, .tariff-term.is-active, .ui-tab.is-active,
-.tabbar-item.is-active {
+}.chip.is-active, .chip[aria-pressed="true"], .segmented button.is-active, .hint-chip:active, .feed-status-chip:active, .admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active, .ui-tab.is-active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
   color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
@@ -460,19 +442,6 @@ body, button, input, select, textarea {
   min-height: 48px; box-shadow: inset 0 0 0 1px var(--border-secondary); }
 
 .segmented { display: inline-flex; gap: 8px; background: transparent; border: 0; padding: 0; }
-
-.tabbar-item {
-  background: transparent;
-  border-radius: 999px;
-  min-height: 52px;
-  padding: 0;
-  color: var(--text-muted);
-}
-.tabbar-item.is-active {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-  color: var(--text-primary);
-}
 
 .chat-tabs, .ui-tabs, .segmented {
   display: inline-flex;
@@ -542,7 +511,7 @@ body, button, input, select, textarea {
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip, .tabbar-item {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .ghost-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .tariff-term, .hint-chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -727,71 +696,10 @@ input[type="checkbox"]:checked::after {
 }
 .stats-cell { flex: 1; padding: 16px 8px; }
 .stats-value { font-size: 22px; font-weight: 700; }
-.stats-label { font-size: 12px; color: var(--text-secondary); }
-
-
-/* ═══ ФИНАЛЬНАЯ ПАНЕЛЬ (исправляет развал после дедупликации) ═══════════
+.stats-label { font-size: 12px; color: var(--text-secondary); }/* ═══ ФИНАЛЬНАЯ ПАНЕЛЬ (исправляет развал после дедупликации) ═══════════
    При дедупликации из дублей остался последний блок .tabbar, а в нём не было
    позиционирования — панель уехала в поток и сжалась. Здесь полный набор
-   свойств, который не должен теряться никогда. */
-.app-shell .tabbar,
-.tabbar {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  width: auto;
-  height: 68px;
-  margin: 0;
-  padding: 0 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border-radius: 999px;
-  background: var(--memgift-tabbar-bg);
-  backdrop-filter: blur(30px) saturate(160%);
-  -webkit-backdrop-filter: blur(30px) saturate(160%);
-  box-shadow: var(--shadow-large);
-  z-index: 100;
-}
-.app-shell .tabbar-group,
-.tabbar-group { display: flex; align-items: center; flex: 1; gap: 4px; }
-.app-shell .tabbar-item,
-.tabbar-item {
-  flex: 1;
-  min-width: 0;
-  min-height: 52px;
-  height: 52px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-muted);
-}
-.app-shell .tabbar-item.is-active,
-.tabbar-item.is-active {
-  background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
-  color: var(--text-primary);
-}
-.app-shell .tabbar-item .icon-svg,
-.tabbar-item .icon-svg { width: 22px; height: 22px; }
-.app-shell .tabbar-fab,
-.tabbar-fab {
-  flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--card-primary);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.18);
-  color: var(--text-primary);
-}/* ═══ РИББОН (диагональная лента, как «author / rare» в Memgift) ═════════
+   свойств, который не должен теряться никогда. *//* ═══ РИББОН (диагональная лента, как «author / rare» в Memgift) ═════════
    Лента идёт из правого верхнего угла под 45°, выходит за край и обрезается
    скруглением фото (у .product-figure стоит overflow: hidden). */
 .app-shell .product-badge--offer {
@@ -896,12 +804,8 @@ input[type="checkbox"]:checked::after {
 .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }
 .menu-row, .setting-row, .stats-row, .glass-card, .admin-setting,
 .summary-card, .pay-status, .tariff-term, .chat-row, .ui-stat,
-.feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }
-
-/* Активное состояние — светлее и с более ярким бликом */
-.chip.is-active, .segmented button.is-active, .feed-switch button.is-active,
-.admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active,
-.tabbar-item.is-active {
+.feed-reminder { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом */
+.chip.is-active, .segmented button.is-active, .feed-switch button.is-active, .admin-tab.is-active, .tariff-method.is-active, .tariff-term.is-active {
   background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary);
@@ -1038,16 +942,8 @@ html, body, .app-shell, .screen {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   color: var(--text-primary, #fff);
 }
-.ui-search { border-radius: 999px; }
-
-/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
-.app-shell .chip.is-active, .chip.is-active,
-.app-shell .segmented button.is-active, .segmented button.is-active,
-.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
-.app-shell .admin-tab.is-active, .admin-tab.is-active,
-.app-shell .tariff-method.is-active, .tariff-method.is-active,
-.app-shell .tariff-term.is-active, .tariff-term.is-active,
-.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+.ui-search { border-radius: 999px; }/* ── Активное состояние — светлее, с более ярким бликом ──────────────── */
+.app-shell .chip.is-active, .chip.is-active, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .admin-tab.is-active, .admin-tab.is-active, .app-shell .tariff-method.is-active, .tariff-method.is-active, .app-shell .tariff-term.is-active, .tariff-term.is-active {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
   color: var(--text-primary, #fff);
@@ -1155,117 +1051,26 @@ html, body, .app-shell, .screen {
   background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
   border-top: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow: none;
-}
-
-
-/* ═══ ПАНЕЛЬ ПОВЕРХ ВСЕГО ════════════════════════════════════════════════
+}/* ═══ ПАНЕЛЬ ПОВЕРХ ВСЕГО ════════════════════════════════════════════════
    По краям капсулы просвечивали карточки товаров: они оказывались выше
    навигации в порядке слоёв (карточка создаёт свой контекст наложения
    через isolation и псевдоэлементы). Поднимаем панель над всем и убираем
-   лишний контекст у карточки. */
-.app-shell .tabbar, .tabbar {
-  position: fixed !important;
-  z-index: 1000 !important;
-}
-.app-shell .tabbar-item, .tabbar-item,
-.app-shell .tabbar-fab, .tabbar-fab {
-  z-index: 1001;
-  position: relative;
-}/* Карточка не должна уходить выше панели */
+   лишний контекст у карточки. *//* Карточка не должна уходить выше панели */
 .app-shell .product-card {
   isolation: auto;
   z-index: auto;
   transform: none;
 }
 /* Старый «док» из legacy-стилей, если он ещё в DOM, — скрыть */
-.dock { display: none !important; }
-
-
-/* ═══ ПАНЕЛЬ СПЛОШНАЯ ════════════════════════════════════════════════════
+.dock { display: none !important; }/* ═══ ПАНЕЛЬ СПЛОШНАЯ ════════════════════════════════════════════════════
    Фон капсулы был полупрозрачным (rgba(20,20,20,.9)) — сквозь него и сквозь
    скруглённые концы просвечивали карточки и читались как чёрные полосы.
-   Делаем сплошной фон: перекрытий по краям больше нет. */
-.app-shell .tabbar, .tabbar {
-  background: #141414 !important;
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  left: 10px !important;
-  right: 10px !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 30px rgba(0, 0, 0, 0.65) !important;
-}
-
-
-/* ═══ КНОПКА «+» ОТДЕЛЬНОЙ ПЛАШКОЙ ═══════════════════════════════════════
+   Делаем сплошной фон: перекрытий по краям больше нет. *//* ═══ КНОПКА «+» ОТДЕЛЬНОЙ ПЛАШКОЙ ═══════════════════════════════════════
    Как в Memgift: капсула с четырьмя иконками и справа от неё — отдельная
-   круглая кнопка в том же стиле, с зазором. Раньше плюс жил внутри капсулы. */
-.app-shell .tabbar-wrap, .tabbar-wrap {
-  position: fixed !important;
-  left: 10px;
-  right: 10px;
-  bottom: calc(10px + env(safe-area-inset-bottom));
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 1000;
-}
-.app-shell .tabbar, .tabbar {
-  position: static !important;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  flex: 1 1 auto;
-  height: 68px;
-  display: flex;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #141414;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 10px 30px rgba(0, 0, 0, 0.60);
-  z-index: auto !important;
-}
-.app-shell .tabbar-fab, .tabbar-fab {
-  flex: 0 0 auto;
-  width: 68px;
-  height: 68px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: #141414;
-  color: var(--text-primary, #fff);
-  text-decoration: none;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    0 10px 30px rgba(0, 0, 0, 0.60);
-}
-.app-shell .tabbar-fab .icon-svg, .tabbar-fab .icon-svg { width: 26px; height: 26px; }
-.app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.15); }
-.tabbar-dot { top: 12px !important; right: 14px !important; }
-
-
-/* ═══ ПАНЕЛЬ БЕЗ ЧЁРНЫХ РАМОК ════════════════════════════════════════════
+   круглая кнопка в том же стиле, с зазором. Раньше плюс жил внутри капсулы. *//* ═══ ПАНЕЛЬ БЕЗ ЧЁРНЫХ РАМОК ════════════════════════════════════════════
    «Рамки» по краям давала большая размытая тень 0 10px 30px rgba(0,0,0,.6):
    у круглого элемента она рисует тёмные прямоугольники по углам.
-   Убираем большой блюр, оставляем короткую тень и светлый блик сверху. */
-.app-shell .tabbar-wrap, .tabbar-wrap {
-  background: transparent !important;
-  box-shadow: none !important;
-  border: 0 !important;
-}
-.app-shell .tabbar, .tabbar {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 4px 12px rgba(0, 0, 0, 0.45) !important;
-}
-.app-shell .tabbar-fab, .tabbar-fab {
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.14),
-    0 4px 12px rgba(0, 0, 0, 0.45) !important;
-}/* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
+   Убираем большой блюр, оставляем короткую тень и светлый блик сверху. *//* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
    Кромка была приглушена до .16 и на тёмном фоне почти не читалась.
    Возвращаем заметную светлую линию сверху — как в эталоне владельца. */.app-shell .cta-primary {
   border: 0 !important;
@@ -1286,32 +1091,10 @@ html, body, .app-shell, .screen {
   stroke-width: 1.6;
   vector-effect: non-scaling-stroke;
   shape-rendering: geometricPrecision;
-}
-/* Внутри навигации иконки чуть тоньше — там они крупнее */
-.app-shell .tabbar-item .icon-svg, .tabbar-item .icon-svg {
-  stroke-width: 1.7;
-  color: currentColor;
-}
-
-
-/* ═══ ПАНЕЛЬ БЕЗ ТЕНИ ВООБЩЕ ═════════════════════════════════════════════
+}/* Внутри навигации иконки чуть тоньше — там они крупнее *//* ═══ ПАНЕЛЬ БЕЗ ТЕНИ ВООБЩЕ ═════════════════════════════════════════════
    Тёмный ореол по краям капсулы — это её drop-shadow на светлых карточках.
    Убираем внешнюю тень полностью: остаётся только внутренний блик сверху.
-   Так концы плашек чистые при любом фоне под ними. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab {
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
-  filter: none !important;
-  outline: 0 !important;
-  border: 0 !important;
-}
-.app-shell .tabbar-wrap, .tabbar-wrap {
-  box-shadow: none !important;
-  filter: none !important;
-  border: 0 !important;
-  outline: 0 !important;
-  background: transparent !important;
-}/* ═══ ШАПКА НЕ ЛИПНЕТ ════════════════════════════════════════════════════
+   Так концы плашек чистые при любом фоне под ними. *//* ═══ ШАПКА НЕ ЛИПНЕТ ════════════════════════════════════════════════════
    У .topbar стоял position: sticky с top: 0 — логотип и пилюли ехали за
    пальцем и висели над контентом. По просьбе владельца шапка должна
    уезжать вместе со страницей: ставим static, убираем sticky-контекст. */
@@ -1323,24 +1106,11 @@ html, body, .app-shell, .screen {
   -webkit-backdrop-filter: none !important;
 }
 /* Линия под шапкой при прокрутке больше не нужна — шапка уходит */
-.topbar.is-scrolled { border-bottom: 0 !important; box-shadow: none !important; }
-
-
-/* ═══ БЕЗ СЛЕДОВ ОБВОДКИ У ПАНЕЛИ ════════════════════════════════════════
+.topbar.is-scrolled { border-bottom: 0 !important; box-shadow: none !important; }/* ═══ БЕЗ СЛЕДОВ ОБВОДКИ У ПАНЕЛИ ════════════════════════════════════════
    Светлая линия, идущая к кнопке «+», — это внутренний блик
    inset 0 1px 0 rgba(255,255,255,.14) у капсулы и у круга. На скруглениях
    он идёт по дуге и читается как обводка, соединяющая плашки.
    Убираем блики и любые тени: остаётся чистый сплошной #141414. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab,
-.app-shell .tabbar-wrap, .tabbar-wrap {
-  box-shadow: none !important;
-  border: 0 !important;
-  outline: 0 !important;
-  filter: none !important;
-}
-.app-shell .tabbar, .tabbar { background: #141414 !important; }
-.app-shell .tabbar-fab, .tabbar-fab { background: #141414 !important; }
 /* Точка непрочитанных — без обводки */
 .tabbar-dot { box-shadow: none !important; border: 0 !important; }/* ═══ ШАПКА БЕЗ ПЛАШЕК ═══════════════════════════════════════════════════
    Свои панели «Закрыть» / «⌄» / «•••» убраны: кнопку закрытия рисует сам
@@ -1518,46 +1288,15 @@ html, body, .app-shell, .screen {
     rgba(5, 5, 5, 0.96) 75%,
     #050505 100%
   );
-}
-/* Сама панель выше затемнения */
-.app-shell .tabbar-wrap, .tabbar-wrap { z-index: 1000; }
-
-
-/* ═══ ЕДИНАЯ КРОМКА У КАПСУЛЫ И «+» ══════════════════════════════════════
+}/* Сама панель выше затемнения *//* ═══ ЕДИНАЯ КРОМКА У КАПСУЛЫ И «+» ══════════════════════════════════════
    «+» без кромки сливался с фоном, хотя капсула читалась. Даём обеим
    одинаковую тонкую рамку 1px — они снова одно семейство, но линия больше
-   не «тянется» между ними: зазор затемнён градиентом под панелью. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab {
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-sizing: border-box;
-}
-/* Кромка не должна съедать высоту */
-.app-shell .tabbar, .tabbar { height: 68px; }
-.app-shell .tabbar-fab, .tabbar-fab { width: 68px; height: 68px; }
-
-
-/* ═══ «+» КАК АКТИВНАЯ ВКЛАДКА МЕНЮ ══════════════════════════════════════
+   не «тянется» между ними: зазор затемнён градиентом под панелью. *//* Кромка не должна съедать высоту *//* ═══ «+» КАК АКТИВНАЯ ВКЛАДКА МЕНЮ ══════════════════════════════════════
    Капсула — основа #141414, а внутри неё активная вкладка приподнята
    градиентом. Кнопка «+» была просто #141414 и потому казалась «плоской»
    на фоне меню. Даём ей ту же приподнятую поверхность — теперь это один
-   визуальный элемент системы. */
-.app-shell .tabbar-fab, .tabbar-fab {
-  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
-  color: #fff !important;
-}
-.app-shell .tabbar-fab:active, .tabbar-fab:active {
-  filter: brightness(1.14);
-}
-.app-shell .tabbar-fab .icon-svg, .tabbar-fab .icon-svg {
-  width: 26px;
-  height: 26px;
-  stroke-width: 2;
-}
-/* Активная вкладка — та же формула, чтобы не было расхождения */
-.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+   визуальный элемент системы. *//* Активная вкладка — та же формула, чтобы не было расхождения */
+.app-shell .tabbar-item.is-active {
   background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
 }
@@ -1603,34 +1342,14 @@ html, body, .app-shell, .screen {
 /* «Фильтр» — действие, поэтому текст ярче */
 .app-shell .filter-pill, .filter-pill { color: #fff !important; }
 .app-shell .filter-pill:active, .filter-pill:active,
-.app-shell .feed-switch button:active, .feed-switch button:active { filter: brightness(1.16); }
-
-
-/* ═══ ПЛАШКИ БЕЗ КРОМОК — ФИНАЛ ══════════════════════════════════════════
+.app-shell .feed-switch button:active, .feed-switch button:active { filter: brightness(1.16); }/* ═══ ПЛАШКИ БЕЗ КРОМОК — ФИНАЛ ══════════════════════════════════════════
    Две кромки в зазоре (правая у капсулы, левая у «+») читались как линия
    между плашками. Плюс кромки были разной яркости: .10 у кнопки и .08 у
    капсулы, из-за чего «+» выглядел иначе.
 
    Решение: кромок нет ни у кого. Плашки отличаются от фона только тоном
    #1C1C1E против #050505 — этого достаточно, а стыков и линий нет вообще.
-   Активная вкладка внутри капсулы — #2E2E30, чтобы читалась на новом фоне. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab {
-  background: #1c1c1e !important;
-  background-image: none !important;
-  border: 0 !important;
-  outline: 0 !important;
-  box-shadow: none !important;
-  filter: none !important;
-}
-.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
-  background: #2e2e30 !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  color: #fff !important;
-}
-/* Зазор чуть больше, чтобы плашки читались как две отдельные кнопки */
-.app-shell .tabbar-wrap, .tabbar-wrap { gap: 10px !important; }/* ═══ ЛОГОТИП НИЖЕ ════════════════════════════════════════════════════════
+   Активная вкладка внутри капсулы — #2E2E30, чтобы читалась на новом фоне. *//* Зазор чуть больше, чтобы плашки читались как две отдельные кнопки *//* ═══ ЛОГОТИП НИЖЕ ════════════════════════════════════════════════════════
    Вверху логотип прилипал к системной панели Telegram и выглядел зажатым.
    Опускаем его: отступ шапки сверху больше, а разрыв до вкладок меньше —
    блок читается спокойнее. */
@@ -1647,32 +1366,16 @@ html, body, .app-shell, .screen {
   max-width: none;
   object-fit: contain;
   display: block;
-}
-
-
-/* ═══ ЭФФЕКТЫ ПАНЕЛИ ВОЗВРАЩЕНЫ ══════════════════════════════════════════
+}/* ═══ ЭФФЕКТЫ ПАНЕЛИ ВОЗВРАЩЕНЫ ══════════════════════════════════════════
    Убирая «линию между плашками», я снял вообще все эффекты — панель стала
    плоской. Возвращаем глубину: градиент, верхний блик и кромку 1px — у
-   капсулы и у «+» ОДИНАКОВО. Чтобы кромки не читались как линия в зазоре,
-   зазор увеличен до 16px: две тонкие рамки на таком расстоянии не
-   складываются в одну. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab {
-  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 6px 18px rgba(0, 0, 0, 0.45) !important;
-  box-sizing: border-box;
-}
-/* Активная вкладка — заметно светлее основы */
-.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+   капсулы и у «+» ОДИНАКОВО. Чтобы кромки не читались как линия в зазоре, зазор увеличен до 16px: две тонкие рамки на таком расстоянии не
+   складываются в одну. *//* Активная вкладка — заметно светлее основы */
+.app-shell .tabbar-item.is-active {
   background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
   color: #fff !important;
 }
-.app-shell .tabbar-wrap, .tabbar-wrap { gap: 16px !important; }
-.app-shell .tabbar-fab:active, .tabbar-fab:active { filter: brightness(1.16); }
 
 
 /* ═══ ВСЕ ПИЛЮЛИ ПО ФОРМУЛЕ ПАНЕЛИ ═══════════════════════════════════════
@@ -1792,40 +1495,16 @@ html, body, .app-shell, .screen {
 .app-shell .segmented button:active,
 .segmented button:active {
   filter: brightness(0.86) !important;
-}
-
-
-/* ═══ ОБВОДКА УБРАНА НАВСЕГДА ════════════════════════════════════════════
+}/* ═══ ОБВОДКА УБРАНА НАВСЕГДА ════════════════════════════════════════════
    Кромка 1px у плашек постоянно вылезала: то между меню и «+», то по краям.
    Убираем её полностью — и у панели, и у пилюль, и у вкладок.
    Глубина при этом остаётся: градиент + верхний блик + тень. Именно они
-   дают объём, а рамка для этого не нужна. */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab,
-.app-shell .feed-switch button, .feed-switch button,
-.app-shell .feed-switch button.is-active, .feed-switch button.is-active,
-.app-shell .segmented button, .segmented button,
-.app-shell .segmented button.is-active, .segmented button.is-active,
-.app-shell .filter-pill, .filter-pill,
-.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
-.app-shell .chip, .chip,
-.app-shell .hint-chip, .hint-chip,
-.app-shell .admin-tab, .admin-tab,
-.app-shell .tariff-method, .tariff-method,
-.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+   дают объём, а рамка для этого не нужна. */.app-shell .feed-switch button, .feed-switch button, .app-shell .feed-switch button.is-active, .feed-switch button.is-active, .app-shell .segmented button, .segmented button, .app-shell .segmented button.is-active, .segmented button.is-active, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method {
   border: 0 !important;
   border-width: 0 !important;
   outline: 0 !important;
   outline-offset: 0 !important;
-}
-/* Объём — только градиентом, бликом и тенью */
-.app-shell .tabbar, .tabbar,
-.app-shell .tabbar-fab, .tabbar-fab {
-  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
-    0 6px 18px rgba(0, 0, 0, 0.45) !important;
-}
+}/* Объём — только градиентом, бликом и тенью */
 .app-shell .feed-switch button, .feed-switch button,
 .app-shell .feed-switch button.is-active, .feed-switch button.is-active,
 .app-shell .segmented button, .segmented button,
