@@ -1926,3 +1926,20 @@ html, body, .app-shell, .screen {
 }
 /* Зазор чуть больше, чтобы плашки читались как две отдельные кнопки */
 .app-shell .tabbar-wrap, .tabbar-wrap { gap: 10px !important; }
+
+
+/* ═══ ЛОГОТИП НИЖЕ ════════════════════════════════════════════════════════
+   Вверху логотип прилипал к системной панели Telegram и выглядел зажатым.
+   Опускаем его: отступ шапки сверху больше, а разрыв до вкладок меньше —
+   блок читается спокойнее. */
+.app-shell .topbar, .topbar {
+  padding-top: 26px !important;
+  padding-bottom: 6px !important;
+}
+.app-shell .topbar-row, .topbar-row {
+  min-height: 40px;
+  align-items: center;
+}
+/* Логотип — своя строка, без лишней высоты */
+.app-shell .topbar .logo, .topbar .logo,
+.app-shell .topbar-row > .topbar-side:first-child { line-height: 1; }
