@@ -23,9 +23,9 @@
   font-weight: 600;
   line-height: 1;
   text-decoration: none;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.26),
-    0 6px 18px rgba(10, 132, 255, 0.25);
+  /* Кольцо по всем сторонам убрано: давало обводку снизу. Светлая кромка
+     сверху задаётся border-top, её и оставляем. */
+  box-shadow: none;
   flex: none;
 }
 .app-shell .cta-primary:disabled,
@@ -135,9 +135,7 @@
   font-size: 16px;
   font-weight: 700;
   text-align: center;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    0 6px 18px rgba(10, 132, 255, 0.28);
+  box-shadow: none;
 }
 /* Превью в мастере создания — цена не CTA */
 .app-shell .create-preview .product-price,
