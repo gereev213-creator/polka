@@ -1862,3 +1862,40 @@ html, body, .app-shell, .screen {
    В верхней панели была круглая кнопка профиля. Профиль уже есть в нижней
    навигации, дублировать его сверху не нужно — шапка остаётся чистой. */
 .top-actions { display: none !important; }
+
+
+/* ═══ ЕДИНАЯ ФОРМУЛА ПИЛЮЛЬ ══════════════════════════════════════════════
+   «Барахолка» и «Фильтр» выбивались из стиля: у них был градиент и не было
+   кромки, а у капсулы меню — плоский #141414 с кромкой 1px. Приводим все
+   пилюли к одной формуле. Градиенты и внутренние блики убраны. */
+.app-shell .feed-switch button,
+.app-shell .segmented button,
+.feed-switch button,
+.segmented button,
+.app-shell .filter-pill, .filter-pill,
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
+.app-shell .chip, .chip,
+.app-shell .hint-chip, .hint-chip {
+  background: #141414 !important;
+  background-image: none !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: none !important;
+  border-radius: 999px !important;
+  color: rgba(255, 255, 255, 0.65) !important;
+}
+/* Активное состояние — тот же приём, что у активной вкладки меню */
+.app-shell .feed-switch button.is-active,
+.app-shell .segmented button.is-active,
+.feed-switch button.is-active,
+.segmented button.is-active,
+.app-shell .chip.is-active, .chip.is-active {
+  background: #242424 !important;
+  background-image: none !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+  box-shadow: none !important;
+}
+/* «Фильтр» — действие, поэтому текст ярче */
+.app-shell .filter-pill, .filter-pill { color: #fff !important; }
+.app-shell .filter-pill:active, .filter-pill:active,
+.app-shell .feed-switch button:active, .feed-switch button:active { filter: brightness(1.16); }
