@@ -1830,3 +1830,29 @@ html, body, .app-shell, .screen {
 /* Кромка не должна съедать высоту */
 .app-shell .tabbar, .tabbar { height: 68px; }
 .app-shell .tabbar-fab, .tabbar-fab { width: 68px; height: 68px; }
+
+
+/* ═══ «+» КАК АКТИВНАЯ ВКЛАДКА МЕНЮ ══════════════════════════════════════
+   Капсула — основа #141414, а внутри неё активная вкладка приподнята
+   градиентом. Кнопка «+» была просто #141414 и потому казалась «плоской»
+   на фоне меню. Даём ей ту же приподнятую поверхность — теперь это один
+   визуальный элемент системы. */
+.app-shell .tabbar-fab, .tabbar-fab {
+  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+  color: #fff !important;
+}
+.app-shell .tabbar-fab:active, .tabbar-fab:active {
+  filter: brightness(1.14);
+}
+.app-shell .tabbar-fab .icon-svg, .tabbar-fab .icon-svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2;
+}
+/* Активная вкладка — та же формула, чтобы не было расхождения */
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+}
