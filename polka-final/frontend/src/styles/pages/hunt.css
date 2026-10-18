@@ -357,7 +357,6 @@
 /* Админка (этап J): строка настройки с полем и кнопками */
 .admin-actions { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 .admin-input { width: 92px; }
-.chat-tab { cursor: pointer; }
 
 /* ── Чипы подсказок (этап V5) ──────────────────────────────────────────── */
 .hint-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }

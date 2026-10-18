@@ -1852,7 +1852,7 @@ textarea.input { resize: none; line-height: 1.45; min-height: 62px; }
 }
 .chat-back:active { transform: scale(.94); }/* ── Плавные нажатия и переходы ────────────────────────────────────────── *//* Было: кнопки переключались мгновенно, рывком — выглядело дёшево.
    Теперь у всего интерактивного общий мягкий переход, а нажатие даёт
-   лёгкое сжатие: палец чувствует, что нажал. */button, .dock-create, .chat-tab, .chat-chip, .chat-example, .chat-back, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
+   лёгкое сжатие: палец чувствует, что нажал. */button, .dock-create, .chat-chip, .chat-example, .chat-back, .chat-crit-card, .chat-crit-x, .field-label-row.is-toggle {
   transition:
     transform .14s cubic-bezier(.2, .8, .3, 1),
     background-color .18s ease,
@@ -1884,8 +1884,7 @@ button:active, .chat-chip:active, .chat-example:active, .chat-crit-x:active, .do
   transition: background-color .24s cubic-bezier(.2, .8, .3, 1),
     color .24s ease,
     transform .14s ease;
-}
-.chat-tab:active { transform: scale(.97); }/* Поля ввода: мягкое появление рамки при фокусе */
+}/* Поля ввода: мягкое появление рамки при фокусе */
 .chat-input .text-input, .input {
   transition: border-color .18s ease, background-color .18s ease;
 }.chat-input .text-input:focus, .input:focus {
@@ -2166,8 +2165,7 @@ html, body, #root {
   border-radius: 14px;
   text-align: left;
 }/* ── ТЗ, чек-лист: тач-таргеты не меньше 44×44 px ──────────────────────── *//* Палец не должен промахиваться. Мельче 44 px по высоте делать нельзя —
-   это требование доступности, а не вкусовщина. */
-.chat-chip, .chat-tab, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .cta-round, .mic-btn {
+   это требование доступности, а не вкусовщина. */.chat-chip, .chat-example, .chat-crit-x, .chat-back, .chat-send, .icon-btn, .send-btn, .cta-round, .mic-btn {
   min-height: 44px;
   min-width: 44px;
 }

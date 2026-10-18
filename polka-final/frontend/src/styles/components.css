@@ -123,8 +123,6 @@
   background: var(--surface); color: var(--text-secondary); }
 
 .ui-tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
-.ui-tab { position: relative; min-height: 44px; padding: 0; border: 0; background: none;
-  font: inherit; font-size: 15px; color: var(--text-secondary); cursor: pointer; }
 
 .ui-stat { display: flex; border: 1px solid var(--line); border-radius: 12px;
   background: var(--surface); }
@@ -170,7 +168,7 @@
 }/* Карточка: палец чувствует нажатие */.product-card, .menu-row, .setting-row, .plan-row, .ui-group-body > * {
   transition: transform 120ms var(--tap-ease), opacity 120ms var(--tap-ease);
   -webkit-tap-highlight-color: transparent;
-}.menu-row:active, .setting-row:active, .plan-row:active, .admin-tab:active, .ui-tab:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
+}.menu-row:active, .setting-row:active, .plan-row:active, .chip:active, .hint-chip:active, .feed-status-chip:active {
   transform: scale(var(--tap-scale));
   opacity: .82;
 }/* Базовое определение .cta-primary переехало в styles/mg-core.css —
@@ -248,7 +246,7 @@
   --warning: #E0A23C; --warning-bg: #33270E;
   --danger: #FF6B6B; --danger-bg: #3A1A1A; --danger-ink: #FF6B6B;
 }
-.product-media { border-radius: 20px; }.menu-row, .setting-row, .plan-row, .chip, .segmented button {
+.product-media { border-radius: 20px; }.menu-row, .setting-row, .plan-row, .chip {
   transition: transform 250ms ease, opacity 250ms ease,
               background-color 250ms ease, color 250ms ease;
 }
@@ -308,10 +306,7 @@ body, button, input, select, textarea {
 .page-title { font-size: var(--font-h3-size); font-weight: 600; line-height: 30px; }
 .section-title, .admin-group-title { font-size: var(--font-small-size); }
 .product-info { padding: 10px 2px 0; gap: 6px; }
-.product-meta { font-size: 12px; color: var(--text-secondary); }
-.segmented button { height: 48px; padding: 0 20px; border-radius: 999px;
-  background: var(--surface-secondary); color: var(--text-secondary);
-  font-size: 16px; font-weight: 600; }.ui-stat, .chip, .badge, .tag {
+.product-meta { font-size: 12px; color: var(--text-secondary); }.ui-stat, .chip, .badge, .tag {
   border: 0;
   position: relative;
 }.ui-stat::after, .chip::after, .badge::after, .tag::after {
@@ -332,9 +327,7 @@ body, button, input, select, textarea {
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   pointer-events: none;
-}
-
-.chip, .segmented button {
+}.chip {
   height: 56px;
   padding: 0 20px;
   border-radius: 999px;
@@ -351,7 +344,7 @@ body, button, input, select, textarea {
   width: 36px; height: 36px; border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--card-secondary); color: var(--text-secondary);
-}.chip, .segmented button, .hint-chip, .feed-status-chip, .admin-tab, .tariff-method, .chat-chip, .ui-tab {
+}.chip, .hint-chip, .feed-status-chip, .tariff-method, .chat-chip {
   border-radius: 999px;
   background: var(--card-primary);
   color: var(--text-secondary);
@@ -369,7 +362,7 @@ body, button, input, select, textarea {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
   color: var(--text-primary);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}.chip:active, .segmented button:active, .hint-chip:active, .admin-tab:active, .tariff-method:active, .chat-chip:active {
+}.chip:active, .hint-chip:active, .tariff-method:active, .chat-chip:active {
   transform: scale(.97);
 }input, textarea, select {
   border-radius: 999px;
@@ -385,25 +378,7 @@ body, button, input, select, textarea {
   border: 0;
   padding: 0;
   min-height: 0;
-}
-.chat-tab, .ui-tab, .segmented button {
-  flex: 0 0 auto;
-  height: 52px;
-  padding: 0 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-radius: 999px;
-  background: var(--card-primary);
-  color: var(--text-secondary);
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1;
-  box-shadow: inset 0 0 0 1px var(--border-secondary);
-}
-.chat-tab::after, .ui-tab::after, .chat-tabs-pill { display: none; }
-.chat-tab:active, .ui-tab:active { transform: scale(.97); }
+}.chat-tabs-pill { display: none; }
 .feed-switch button {
   flex: 0 0 auto;
   height: 52px;
@@ -435,7 +410,7 @@ body, button, input, select, textarea {
   border-radius: 16px; font-size: 16px; font-weight: 600;
   white-space: nowrap; flex: 0 0 auto;
 }
-.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .chip, .segmented button, .feed-switch button, .chat-tab, .ui-tab, .admin-tab, .tariff-method, .hint-chip {
+.pill-btn--icon { width: 48px; min-width: 48px; padding: 0; }button, .pill-btn, .chip, .feed-switch button, .tariff-method, .hint-chip {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -444,8 +419,7 @@ body, button, input, select, textarea {
   white-space: nowrap;
   font-family: inherit;
   vertical-align: middle;
-}.pill-btn, .chip, .hint-chip, .admin-tab, .tariff-method, .chat-tab, .ui-tab { height: 48px; min-height: 48px; }.pill-btn, .chip, .admin-tab, .tariff-method { padding: 0 20px; }
-.chat-tab, .ui-tab, .feed-switch button { padding: 0 22px; }
+}.pill-btn, .chip, .hint-chip, .tariff-method { height: 48px; min-height: 48px; }.pill-btn, .chip, .tariff-method { padding: 0 20px; }.feed-switch button { padding: 0 22px; }
 
 .feed-switch {
   display: inline-flex !important;
@@ -457,9 +431,7 @@ body, button, input, select, textarea {
   border: 0 !important;
   background: transparent !important;
   padding: 0 !important;
-}
-.feed-switch button,
-.segmented button {
+}.feed-switch button {
   height: 48px !important;
   min-height: 48px !important;
   padding: 0 22px !important;
@@ -470,8 +442,7 @@ body, button, input, select, textarea {
   color: var(--text-secondary) !important;
   font-size: 16px !important;
   font-weight: 600 !important;
-}
-.chat-tabs-pill, .chat-tab::after, .ui-tab::after { display: none !important; }
+}.chat-tabs-pill { display: none !important; }
 
 .pill-glyph {
   font-size: 18px;
@@ -686,14 +657,13 @@ input[type="checkbox"]:checked::after {
 }
 .feed-grid { align-items: start; }
 .feed-grid > * { min-width: 0; }.product-media { width: 100%; min-width: 0; }/* ═══ ЕДИНЫЙ СТИЛЬ ПОВЕРХНОСТЕЙ (как кнопки в меню) ═════════════════════
-   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .chip, .chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat {
+   Одна формула для всего, что лежит на тёмном фоне: поверхность #141414, верхний блик 1px, мягкая тень. Так интерфейс читается как одно семейство, а не как набор разных блоков. Радиус: пилюли — 999, панели — 20, карточки — 28. */.app-shell .chip, .chip, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .menu-row, .menu-row, .app-shell .setting-row, .setting-row, .app-shell .hint-chip, .hint-chip, .app-shell .tariff-method, .tariff-method, .app-shell .ui-stat, .ui-stat {
   background: var(--card-primary);
   border: 0;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}/* Пилюли — скругление 999, панели — 20, карточки — 28 */
-.chip, .segmented button, .feed-switch button, .pill-btn, .hint-chip, .admin-tab, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом *//* Поля ввода — та же формула, но без тени */
+}/* Пилюли — скругление 999, панели — 20, карточки — 28 */.chip, .feed-switch button, .pill-btn, .hint-chip, .tariff-method { border-radius: 999px; }.menu-row, .setting-row, .ui-stat { border-radius: 20px; }.admin-sheet { border-radius: 28px; }/* Активное состояние — светлее и с более ярким бликом *//* Поля ввода — та же формула, но без тени */
 .text-input, input[type="text"], input[type="number"], input[type="search"], textarea, select {
   background: var(--card-secondary);
   border: 0;
@@ -762,8 +732,7 @@ html, body, .app-shell, .screen {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.10),
     var(--shadow-soft);
-}/* Панели и строки — 20, карточки и листы — 28 */.menu-row, .setting-row, .card, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */
-.app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .segmented button, .segmented button, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .chat-chip, .chat-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip, .app-shell .badge, .badge {
+}/* Панели и строки — 20, карточки и листы — 28 */.menu-row, .setting-row, .card, .tariff-compare, .ui-stat, .ui-group-body, .ui-plan, .plan-row, .banner-card, .cat-tile { border-radius: 20px; }.admin-sheet, .admin-save-bar { border-radius: 28px; }/* ── Пилюли, чипы, бейджи ────────────────────────────────────────────── */.app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .feed-switch button, .feed-switch button, .app-shell .pill-btn, .pill-btn, .app-shell .tariff-method, .tariff-method, .app-shell .feed-status-chip, .feed-status-chip, .app-shell .chat-chip, .chat-chip, .app-shell .tag, .tag, .app-shell .spec-chip, .spec-chip, .app-shell .badge, .badge {
   background: var(--card-primary, #141414);
   border: 0;
   border-radius: 999px;
@@ -997,26 +966,16 @@ html, body, .app-shell, .screen {
 .market-toolbar .filter-pill:active,
 .market-toolbar .search-input:active { filter: brightness(1.12); }
 /* Категорийные плитки в этом разделе больше не нужны */
-.category-cards { display: none !important; }
-
-
-/* ═══ ВКЛАДКИ — ВСЕГДА КНОПКИ ════════════════════════════════════════════
+.category-cards { display: none !important; }/* ═══ ВКЛАДКИ — ВСЕГДА КНОПКИ ════════════════════════════════════════════
    Раньше плашку получала только активная вкладка: неактивная сливалась с
    фоном и выглядела текстом, пока по ней не нажмёшь. Теперь обе — видимые
    пилюли: неактивная на приподнятой поверхности #242424, активная светлее. */
-.app-shell .feed-switch button,
-.app-shell .segmented button,
-.feed-switch button,
-.segmented button {
+.app-shell .feed-switch button, .feed-switch button {
   background: var(--elevated, #242424) !important;
   color: var(--text-secondary, rgba(255,255,255,.65)) !important;
   box-shadow: none !important;
   border: 0 !important;
-}
-.app-shell .feed-switch button:active,
-.app-shell .segmented button:active,
-.feed-switch button:active,
-.segmented button:active { filter: brightness(1.12); }/* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
+}.app-shell .feed-switch button:active, .feed-switch button:active { filter: brightness(1.12); }/* ═══ НЕВИДИМЫЕ КНОПКИ СТАЛИ ВИДИМЫМИ ════════════════════════════════════
    Скан всех экранов нашёл интерактивные элементы без поверхности: они
    выглядели текстом, пока по ним не нажмёшь. Даём им ту же плашку, что у
    кнопок меню. Стрелки «назад» сознательно оставлены без фона. */
@@ -1081,21 +1040,11 @@ html, body, .app-shell, .screen {
 /* ═══ ИКОНКА ПРОФИЛЯ УБРАНА ИЗ ШАПКИ ═════════════════════════════════════
    В верхней панели была круглая кнопка профиля. Профиль уже есть в нижней
    навигации, дублировать его сверху не нужно — шапка остаётся чистой. */
-.top-actions { display: none !important; }
-
-
-/* ═══ ЕДИНАЯ ФОРМУЛА ПИЛЮЛЬ ══════════════════════════════════════════════
+.top-actions { display: none !important; }/* ═══ ЕДИНАЯ ФОРМУЛА ПИЛЮЛЬ ══════════════════════════════════════════════
    «Барахолка» и «Фильтр» выбивались из стиля: у них был градиент и не было
    кромки, а у капсулы меню — плоский #141414 с кромкой 1px. Приводим все
    пилюли к одной формуле. Градиенты и внутренние блики убраны. */
-.app-shell .feed-switch button,
-.app-shell .segmented button,
-.feed-switch button,
-.segmented button,
-.app-shell .filter-pill, .filter-pill,
-.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
-.app-shell .chip, .chip,
-.app-shell .hint-chip, .hint-chip {
+.app-shell .feed-switch button, .feed-switch button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip {
   background: #141414 !important;
   background-image: none !important;
   border: 1px solid rgba(255, 255, 255, 0.08) !important;
@@ -1146,21 +1095,11 @@ html, body, .app-shell, .screen {
   background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
   color: #fff;
-}
-
-
-/* ═══ ВСЕ ПИЛЮЛИ ПО ФОРМУЛЕ ПАНЕЛИ ═══════════════════════════════════════
+}/* ═══ ВСЕ ПИЛЮЛИ ПО ФОРМУЛЕ ПАНЕЛИ ═══════════════════════════════════════
    Панель получила градиент, блик и кромку, а вкладки, «Фильтр» и поиск
    остались плоскими — из-за этого выглядели из другого набора. Приводим
    их к той же формуле: те же четыре эффекта, те же значения. */
-.app-shell .feed-switch button,
-.app-shell .segmented button,
-.feed-switch button,
-.segmented button,
-.app-shell .filter-pill, .filter-pill,
-.app-shell .market-toolbar .search-input, .market-toolbar .search-input,
-.app-shell .chip, .chip,
-.app-shell .hint-chip, .hint-chip {
+.app-shell .feed-switch button, .feed-switch button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip {
   background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   border: 1px solid rgba(255, 255, 255, 0.10) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
@@ -1176,26 +1115,12 @@ html, body, .app-shell, .screen {
 }
 /* «Фильтр» — действие, текст ярче */
 .app-shell .filter-pill, .filter-pill,
-.app-shell .market-toolbar .search-input, .market-toolbar .search-input { color: #fff !important; }
-.app-shell .feed-switch button:active, .feed-switch button:active,
-.app-shell .segmented button:active, .segmented button:active,
-.app-shell .filter-pill:active, .filter-pill:active { filter: brightness(1.14); }
-
-
-/* ═══ БЕЗ АНИМАЦИИ ПЕРЕХОДА, ТОЛЬКО НАЖАТИЕ ══════════════════════════════
+.app-shell .market-toolbar .search-input, .market-toolbar .search-input { color: #fff !important; }.app-shell .feed-switch button:active, .feed-switch button:active, .app-shell .filter-pill:active, .filter-pill:active { filter: brightness(1.14); }/* ═══ БЕЗ АНИМАЦИИ ПЕРЕХОДА, ТОЛЬКО НАЖАТИЕ ══════════════════════════════
    Вкладки и пилюли плавно перекрашивались и «переезжали» при переключении.
    Этого быть не должно: кнопка — статичная плашка в нашем стиле, реакция
-   только на нажатие. Убираем все переходы, трансформации и анимации,
-   фиксируем одинаковые размеры у активного и неактивного состояния, чтобы
+   только на нажатие. Убираем все переходы, трансформации и анимации, фиксируем одинаковые размеры у активного и неактивного состояния, чтобы
    ряд не дёргался. */
-.app-shell .feed-switch button,
-.app-shell .segmented button,
-.feed-switch button,
-.segmented button,
-.app-shell .filter-pill, .filter-pill,
-.app-shell .chip, .chip,
-.app-shell .admin-tab, .admin-tab,
-.app-shell .tariff-method, .tariff-method {
+.app-shell .feed-switch button, .feed-switch button, .app-shell .filter-pill, .filter-pill, .app-shell .chip, .chip, .app-shell .tariff-method, .tariff-method {
   transition: none !important;
   animation: none !important;
   transform: none !important;
@@ -1204,17 +1129,8 @@ html, body, .app-shell, .screen {
   border-style: solid !important;
   box-sizing: border-box;
 }/* Переключение вкладки — мгновенная смена состояния, без движения */
-.feed-switch button.is-active { transition: none !important; transform: none !important; }
-
-/* Нажатие: короткое затемнение, без плавности */
-.app-shell .feed-switch button:active,
-.feed-switch button:active,
-.app-shell .segmented button:active,
-.segmented button:active,
-.app-shell .filter-pill:active,
-.filter-pill:active,
-.app-shell .chip:active,
-.chip:active {
+.feed-switch button.is-active { transition: none !important; transform: none !important; }/* Нажатие: короткое затемнение, без плавности */
+.app-shell .feed-switch button:active, .feed-switch button:active, .app-shell .filter-pill:active, .filter-pill:active, .app-shell .chip:active, .chip:active {
   filter: brightness(0.88) !important;
   transition: none !important;
 }/* ═══ ВКЛАДКИ НЕ МЕНЯЮТ ВИД ══════════════════════════════════════════════
@@ -1230,32 +1146,19 @@ html, body, .app-shell, .screen {
   transition: none !important;
   transform: none !important;
   outline: none !important;
-}.app-shell .segmented button, .segmented button {
-  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
-  background-image: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
-  color: #ffffff !important;
-  transition: none !important;
-  transform: none !important;
-  outline: none !important;
-}
-/* Единственная реакция — нажатие */
-.app-shell .feed-switch button:active,
-.feed-switch button:active,
-.app-shell .segmented button:active,
-.segmented button:active {
+}/* Единственная реакция — нажатие */
+.app-shell .feed-switch button:active, .feed-switch button:active {
   filter: brightness(0.86) !important;
 }/* ═══ ОБВОДКА УБРАНА НАВСЕГДА ════════════════════════════════════════════
    Кромка 1px у плашек постоянно вылезала: то между меню и «+», то по краям.
    Убираем её полностью — и у панели, и у пилюль, и у вкладок.
    Глубина при этом остаётся: градиент + верхний блик + тень. Именно они
-   дают объём, а рамка для этого не нужна. */.app-shell .feed-switch button, .feed-switch button, .app-shell .segmented button, .segmented button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .admin-tab, .admin-tab, .app-shell .tariff-method, .tariff-method {
+   дают объём, а рамка для этого не нужна. */.app-shell .feed-switch button, .feed-switch button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input, .app-shell .chip, .chip, .app-shell .hint-chip, .hint-chip, .app-shell .tariff-method, .tariff-method {
   border: 0 !important;
   border-width: 0 !important;
   outline: 0 !important;
   outline-offset: 0 !important;
-}/* Объём — только градиентом, бликом и тенью */.app-shell .feed-switch button, .feed-switch button, .app-shell .segmented button, .segmented button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input {
+}/* Объём — только градиентом, бликом и тенью */.app-shell .feed-switch button, .feed-switch button, .app-shell .filter-pill, .filter-pill, .app-shell .market-toolbar .search-input, .market-toolbar .search-input {
   background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%) !important;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
 }

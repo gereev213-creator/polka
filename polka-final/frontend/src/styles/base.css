@@ -82,7 +82,7 @@ button:disabled, [aria-disabled="true"] {
   height: 44px;
   min-width: 44px;
   min-height: 44px;
-}.chat-chip, .chat-tab, .chat-example, .send-btn, .cta-round {
+}.chat-chip, .chat-example, .send-btn, .cta-round {
   min-height: 44px;
 }
 
