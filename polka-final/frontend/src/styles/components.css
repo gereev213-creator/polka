@@ -1656,3 +1656,25 @@ html, body, .app-shell, .screen {
   width: 22px; height: 22px; stroke-width: 2;
 }
 .app-shell .topbar-back:active, .topbar-back:active { opacity: .6; }
+
+
+/* ═══ УБРАТЬ ЧЁРНЫЕ ПОЛОСЫ ПО БОКАМ СТРАНИЦЫ ═════════════════════════════
+   У оболочки .app-frame стоял padding: 16px — контент отступал от краёв на
+   16 px, а фон страницы чёрный. На любом экране это читалось как чёрные
+   полосы слева и справа. Отступ переносим внутрь .screen: карточки и текст
+   по-прежнему не липнут к краю, но сама страница занимает всю ширину. */
+.app-frame {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+.app-shell { width: 100% !important; }
+.screen {
+  padding-left: 16px !important;
+  padding-right: 16px !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+/* Панели, которые прибиты к краям, тоже во всю ширину */
+.topbar { width: 100% !important; }
