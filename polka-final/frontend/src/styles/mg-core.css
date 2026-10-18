@@ -1256,3 +1256,36 @@
   color: rgba(255, 255, 255, 0.22);
   letter-spacing: 0.02em;
 }
+
+/* ── 20. Место под встроенную панель Telegram ─────────────────────────────
+   У экранов со своей шапкой (ИИ-чат, диалог) не было отступа сверху — они
+   прилипали к системной панели «Закрыть / мини-приложение». У экранов с
+   общим TopBar отступ даёт сам TopBar (26px), поэтому здесь только то,
+   что живёт без него.
+
+   env(safe-area-inset-top) добавляем на случай полноэкранного режима, где
+   содержимое заходит под вырез и под кнопки клиента. */
+.app-shell .chat-wrap, .chat-wrap {
+  padding-top: calc(14px + env(safe-area-inset-top, 0px));
+}
+.app-shell .chat-header, .chat-header {
+  padding-top: 4px;
+}
+/* Ручной поиск использует Screen — даём ему тот же воздух сверху */
+.app-shell .screen.hunt-screen, .screen.hunt-screen {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
+/* Экраны без TopBar (оплата, админка, новости, чаты) — небольшой отступ,
+   чтобы первый элемент не лип к панели */
+.app-shell .screen, .screen {
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+}
+/* Вкладки ИИ-чата: ряд не должен упираться в шапку */
+.app-shell .chat-wrap > .chat-tabs, .chat-wrap > .chat-tabs {
+  margin-top: 6px;
+}
+
+/* Экран диалога (открытый чат): своя шапка, значит свой отступ сверху */
+.app-shell .chat-screen, .chat-screen {
+  padding-top: calc(10px + env(safe-area-inset-top, 0px));
+}
