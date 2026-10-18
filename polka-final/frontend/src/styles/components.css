@@ -931,11 +931,11 @@ html, body, .app-shell, .screen {
    Уменьшаем высоту, кегль и вес — таблетка остаётся, но становится легче. */
 .app-shell .cta-primary, .cta-primary,
 .app-shell .primary-btn, .primary-btn {
-  height: 48px !important;
-  min-height: 48px !important;
-  font-size: 16px !important;
-  font-weight: 600 !important;
-}/* Текст внутри кнопок — обычный вес, без «жирных» наследств */.app-shell .cta-primary strong { font-weight: 600 !important; }/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
+  height: 48px;
+  min-height: 48px;
+  font-size: 16px;
+  font-weight: 600;
+}/* Текст внутри кнопок — обычный вес, без «жирных» наследств */.app-shell .cta-primary strong { font-weight: 600; }/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
    Градиент был насыщенным (#1f78ff → #0a62f0) и кромка сверху яркой —
    вместе это давало «тяжёлое» ощущение. Сдвигаем в светлую сторону и
    приглушаем кромку: та же таблетка, но воздушнее. */.app-shell .cta-primary {
@@ -964,9 +964,9 @@ html, body, .app-shell, .screen {
    Убираем большой блюр, оставляем короткую тень и светлый блик сверху. *//* ═══ ВЕРНУТЬ ОБВОДКУ СИНЕЙ ПЛАШКЕ ═══════════════════════════════════════
    Кромка была приглушена до .16 и на тёмном фоне почти не читалась.
    Возвращаем заметную светлую линию сверху — как в эталоне владельца. */.app-shell .cta-primary {
-  border: 0 !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.38) !important;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18) !important;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.18);
 }
 
 
@@ -1180,8 +1180,8 @@ html, body, .app-shell, .screen {
    на фоне меню. Даём ей ту же приподнятую поверхность — теперь это один
    визуальный элемент системы. *//* Активная вкладка — та же формула, чтобы не было расхождения */
 .app-shell .tabbar-item.is-active {
-  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16) !important;
+  background: linear-gradient(180deg, #2e2e30 0%, #232325 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 
 
@@ -1255,9 +1255,9 @@ html, body, .app-shell, .screen {
    капсулы и у «+» ОДИНАКОВО. Чтобы кромки не читались как линия в зазоре, зазор увеличен до 16px: две тонкие рамки на таком расстоянии не
    складываются в одну. *//* Активная вкладка — заметно светлее основы */
 .app-shell .tabbar-item.is-active {
-  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%) !important;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
-  color: #fff !important;
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.20);
+  color: #fff;
 }
 
 
