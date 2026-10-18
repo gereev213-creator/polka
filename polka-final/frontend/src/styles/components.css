@@ -1396,3 +1396,27 @@ html, body, .app-shell, .screen {
 .app-shell .cta-primary strong, .cta-primary strong,
 .app-shell .primary-btn strong, .primary-btn strong,
 .app-shell .product-price strong, .product-price strong { font-weight: 600 !important; }
+
+
+/* ═══ КНОПКА ЛЕГЧЕ ═══════════════════════════════════════════════════════
+   Градиент был насыщенным (#1f78ff → #0a62f0) и кромка сверху яркой —
+   вместе это давало «тяжёлое» ощущение. Сдвигаем в светлую сторону и
+   приглушаем кромку: та же таблетка, но воздушнее. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn,
+.app-shell .product-price, .product-price,
+.app-shell .product-body .product-price {
+  background: linear-gradient(180deg, #3890ff 0%, #1470f5 100%);
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: none;
+}
+.app-shell .cta-primary:hover, .cta-primary:hover,
+.app-shell .primary-btn:hover, .primary-btn:hover,
+.app-shell .product-price:hover, .product-price:hover {
+  filter: brightness(1.04);
+}
+.app-shell .cta-primary:active, .cta-primary:active,
+.app-shell .primary-btn:active, .primary-btn:active,
+.app-shell .product-price:active, .product-price:active {
+  filter: brightness(.96);
+}
