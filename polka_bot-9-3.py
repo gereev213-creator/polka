@@ -23888,7 +23888,8 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
     url = PAW_FORM_URL + '?' + '&'.join(
         f'{k}={_up.quote(str(v))}' for k, v in query.items())
     now = get_moscow_time().isoformat()
-    try:
+
+    def _save() -> None:
         cursor = db.conn.cursor()
         cursor.execute(
             "INSERT INTO payments (user_id, provider, product, order_uuid, amount,"
@@ -23897,6 +23898,9 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
             (int(user_id), 'paw', product, order_uuid, float(amount),
              int(days), url, now, now))
         db.conn.commit()
+
+    try:
+        await asyncio.to_thread(_db_locked, _save)
     except Exception as e:
         logger.warning(f"paw save: {e}")
         return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:150]}
@@ -31203,17 +31207,27 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         return _miniapp_err('unauthorized', 401)
     init_data = request.headers.get('X-Telegram-Init-Data', '')
     user = _miniapp_ensure_user(viewer_id, init_data) or {}
-    try:
+
+    # Счётчики читаем в отдельном потоке под блокировкой: общее соединение
+    # SQLite нельзя использовать из двух задач одновременно — иначе
+    # sqlite3.InterfaceError «bad parameter or other API misuse» и 500 на
+    # /api/me (было в логе 23.10 в 20:50).
+    def _counts() -> tuple:
         cur = db.conn.cursor()
         cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='active'",
                     (viewer_id,))
-        active_count = _row_get(cur.fetchone(), 'c', 0)
+        active = _row_get(cur.fetchone(), 'c', 0)
         cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status='moderation'",
                     (viewer_id,))
-        moderation_count = _row_get(cur.fetchone(), 'c', 0)
+        mod = _row_get(cur.fetchone(), 'c', 0)
         cur.execute("SELECT COUNT(*) AS c FROM favorites WHERE user_id=?", (viewer_id,))
-        fav_count = _row_get(cur.fetchone(), 'c', 0)
-    except Exception:
+        fav = _row_get(cur.fetchone(), 'c', 0)
+        return active, mod, fav
+
+    try:
+        active_count, moderation_count, fav_count = await asyncio.to_thread(_db_locked, _counts)
+    except Exception as e:
+        logger.warning(f"api/me counts: {e}")
         active_count, moderation_count, fav_count = 0, 0, 0
     verify = None
     try:
