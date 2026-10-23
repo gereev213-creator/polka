@@ -29019,11 +29019,26 @@ async def api_admin_sql(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """Эндпоинт проверки работоспособности сервера"""
-    return aiohttp_web.Response(
-        text='{"status":"ok","server":"polka-bot"}',
-        content_type="application/json"
-    )
+    """Эндпоинт проверки работоспособности сервера.
+
+    Здесь же видно, настроена ли оплата: часто выясняется, что переменные
+    окружения в панели добавлены, но контейнер их ещё не подхватил. Тогда
+    paw.mnt_id = false при заполненном поле — значит нужен перезапуск.
+    """
+    try:
+        paw_state = {
+            'enabled': paw_enabled(),
+            'mnt_id': bool(paw_mnt_id()),
+            'secret': bool(paw_secret()),
+            'test': paw_test_mode() == 1,
+        }
+    except Exception:
+        paw_state = {'error': 'n/a'}
+    body = json.dumps({'status': 'ok', 'server': 'polka-bot',
+                       'payment': {'paw': paw_state,
+                                   'cispay': bool(cispay_enabled())}},
+                      ensure_ascii=False)
+    return aiohttp_web.Response(text=body, content_type="application/json")
 
 
 # ═══════════════════════════════════════════════════════════════════════
