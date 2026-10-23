@@ -29039,11 +29039,24 @@ async def api_admin_sql(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """Эндпоинт проверки работоспособности сервера"""
-    return aiohttp_web.Response(
-        text='{"status":"ok","server":"polka-bot"}',
-        content_type="application/json"
-    )
+    """Эндпоинт проверки работоспособности сервера.
+
+    Показываем только ФАКТ наличия ключей оплаты (true/false), без значений:
+    так видно, подхватил ли контейнер переменные окружения, и не утекают
+    сами секреты.
+    """
+    try:
+        keys = {
+            'mnt_id': bool(paw_mnt_id()),
+            'secret': bool(paw_secret()),
+            'paw_enabled': paw_enabled(),
+            'paw_test': paw_test_mode() == 1,
+            'cispay': bool(cispay_enabled()),
+        }
+    except Exception:
+        keys = {'error': 'n/a'}
+    body = json.dumps({'status': 'ok', 'server': 'polka-bot', 'payment': keys})
+    return aiohttp_web.Response(text=body, content_type="application/json")
 
 
 # ═══════════════════════════════════════════════════════════════════════
