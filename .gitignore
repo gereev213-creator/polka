@@ -34,3 +34,14 @@ collector/cookies.json
 # поэтому dist нужен в git (в .dockerignore он тоже разрешён).
 !polka-final/frontend/dist/
 !polka-final/frontend/dist/**
+
+# Эта ветка для BOTHOST: исходники фронтенда не нужны, только dist.
+# Платформа иначе находит package.json и запускает Node вместо Python.
+/polka-final/frontend/package.json
+/polka-final/frontend/package-lock.json
+/polka-final/frontend/vite.config.js
+/polka-final/frontend/index.html
+/polka-final/frontend/src/
+/polka-final/frontend/public/
+/polka-final/frontend/node_modules/
+/polka-final/frontend/CSS_ПРАВИЛА.md
