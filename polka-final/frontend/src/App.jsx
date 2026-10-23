@@ -3244,18 +3244,20 @@ function ProfilePage() {
                 : 'Бесплатно'}
           </span>
         </Link>
-        {isAdmin ? (
-          <Link to="/admin" className="setting-row glass-card menu-row">
-            <span className="menu-left"><Icon name="shield" /><span>Админ</span></span>
-            <span className="menu-arrow" aria-hidden="true">›</span>
-          </Link>
-        ) : null}
         <Link to="/create" className="setting-row glass-card menu-row">
           <span className="menu-left"><Icon name="plus" /><span>Разместить объявление</span></span>
           <span className="menu-arrow" aria-hidden="true">›</span>
         </Link>
 
-        {/* Документы — отдельными строками в профиле: так их видно сразу,
+        {/* По ТЗ: «Админ» не в общем списке, а отдельной строкой ниже —
+            чтобы не путался с пользовательскими разделами. */}
+        {isAdmin ? (
+          <Link to="/admin" className="setting-row glass-card menu-row mt-14">
+            <span className="menu-left"><Icon name="shield" /><span>Админ</span></span>
+            <span className="menu-arrow" aria-hidden="true">›</span>
+          </Link>
+        ) : null}
+        {anchor}
             без прокрутки до самого низа и без поиска по футеру. */}
         <a href={docs.privacy_url} target="_blank" rel="noreferrer"
           className="setting-row glass-card menu-row">

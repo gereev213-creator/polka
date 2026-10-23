@@ -26079,7 +26079,7 @@ async def api_ingest_checklist(request: aiohttp_web.Request) -> aiohttp_web.Resp
 def get_user_chats(user_id: int, limit: int = 20) -> List[Dict]:
     cursor = db.conn.cursor()
     cursor.execute('''
-        SELECT cs.*, a.title, a.price,
+        SELECT cs.*, a.title AS ad_title, a.title, a.price,
                ub.first_name AS buyer_name, ub.anon_id AS buyer_anon,
                us.first_name AS seller_name, us.anon_id AS seller_anon,
                (SELECT sender_id FROM chat_messages cm
