@@ -24172,7 +24172,16 @@ async def api_pay_paw_create(request: aiohttp_web.Request) -> aiohttp_web.Respon
         body = {}
     product = str((body or {}).get('product') or '')
     base = str(body.get('base_url') or '') or f"{request.scheme}://{request.host}"
-    res = await paw_order_create(int(viewer_id), product, base.rstrip('/'))
+    try:
+        res = await paw_order_create(int(viewer_id), product, base.rstrip('/'))
+    except Exception as e:
+        # Наружу отдаём точную причину: иначе на экране «не удалось создать
+        # счёт» без деталей, и приходится гадать по логам.
+        logger.warning(f"paw create crash: {e}")
+        res = {'ok': False, 'error': 'crash', 'detail': f'{type(e).__name__}: {e}'[:200]}
+    if not res.get('ok'):
+        logger.warning(f"paw create fail: product={product} res={res}")
+        res.setdefault('detail', res.get('error') or 'unknown')
     status = 200 if res.get('ok') else 400
     return _miniapp_json(res, status=status)
 

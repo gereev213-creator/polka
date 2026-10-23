@@ -3360,7 +3360,9 @@ function TariffsPage() {
         if (tries >= 120) clearInterval(timer)
       }, 15000)
     } catch (e) {
-      setPay({ state: 'error', text: (e && e.detail) || 'Не удалось создать счёт', tries: 0 })
+      // Показываем точную причину: код ошибки и пояснение от сервера.
+      const why = [e && e.detail, e && e.error].filter(Boolean).join(' · ')
+      setPay({ state: 'error', text: why ? `Не удалось создать счёт: ${why}` : 'Не удалось создать счёт', tries: 0 })
     } finally {
       setBusy(false)
     }
