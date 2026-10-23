@@ -1322,3 +1322,153 @@
 @media (min-width: 768px) {
   .app-shell .hunt-banner, .hunt-banner { height: 190px; }
 }
+
+/* ── 22. Экран тарифов и оплаты ───────────────────────────────────────────
+   Структура из ТЗ (этап T) уже собрана: статус → сравнение → сроки →
+   способ оплаты → кнопка → статус → промокод. Здесь только внешний вид:
+   один ритм, читаемая иерархия, выбранный срок видно сразу. */
+.app-shell .page-narrow, .page-narrow {
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 16px calc(96px + env(safe-area-inset-bottom));
+}
+
+/* 1. Плашка статуса */
+.app-shell .tariff-status, .tariff-status {
+  margin-top: 4px;
+  padding: 16px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.app-shell .tariff-status .plan-name, .tariff-status .plan-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+.app-shell .tariff-status .plan-desc, .tariff-status .plan-desc {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* 2. Сравнение «Бесплатно / Плюс» */
+.app-shell .tariff-compare, .tariff-compare {
+  margin-top: 12px;
+  padding: 6px 16px;
+  border-radius: 22px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.app-shell .tariff-row, .tariff-row {
+  display: grid;
+  grid-template-columns: 1fr 88px 88px;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.78);
+}
+.app-shell .tariff-row:first-child, .tariff-row:first-child {
+  border-top: 0;
+  padding-top: 10px;
+  padding-bottom: 8px;
+}
+.app-shell .tariff-row.tariff-head, .tariff-row.tariff-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.38);
+}
+.app-shell .tariff-row > span:not(:first-child), .tariff-row > span:not(:first-child) {
+  text-align: center;
+  font-weight: 600;
+}
+/* Колонка «Плюс» — главное, поэтому ярче */
+.app-shell .tariff-row > span:last-child, .tariff-row > span:last-child { color: #fff; }
+/* «—» в колонках бесплатного — приглушённо */
+.app-shell .tariff-row > span:nth-child(2), .tariff-row > span:nth-child(2) {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* 3. Сроки: три плитки */
+.app-shell .tariff-terms, .tariff-terms {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.app-shell .tariff-term, .tariff-term {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 84px;
+  padding: 12px 8px;
+  border: 1.5px solid transparent;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  transition: none;
+}
+.app-shell .tariff-term-days, .tariff-term-days {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+}
+.app-shell .tariff-term-price, .tariff-term-price {
+  font-size: 17px;
+  font-weight: 700;
+  color: #fff;
+}
+/* Выбранный срок */
+.app-shell .tariff-term.is-active, .tariff-term.is-active {
+  border-color: #1f78ff;
+  background: linear-gradient(180deg, rgba(31, 120, 255, 0.18), rgba(31, 120, 255, 0.06));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.app-shell .tariff-term .badge, .tariff-term .badge {
+  position: absolute;
+  top: -7px;
+  right: 8px;
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--success, #84ff39);
+  color: #06210a;
+}
+
+/* 4. Способ оплаты */
+.app-shell .tariff-methods, .tariff-methods {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.app-shell .tariff-method, .tariff-method {
+  flex: 1;
+  justify-content: center;
+  font-size: 15px;
+}
+.app-shell .tariff-method:disabled, .tariff-method:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* 5. Главная кнопка */
+.app-shell .tariff-pay, .tariff-pay {
+  width: 100%;
+  margin-top: 14px;
+  height: 54px;
+  font-size: 17px;
+}
+.app-shell .tariff-pay:disabled, .tariff-pay:disabled { opacity: 0.5; }
