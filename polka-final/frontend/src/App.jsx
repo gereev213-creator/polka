@@ -3453,27 +3453,6 @@ function TariffsPage() {
           </div>
         </div>
 
-        {/* 2. Сравнение «Бесплатно / Плюс» — все числа из данных */}
-        <div className="glass-card tariff-compare">
-          <div className="tariff-row tariff-head">
-            <span />
-            <span>Бесплатно</span>
-            <span>Плюс</span>
-          </div>
-          <div className="tariff-row">
-            <span>Критерии</span><span>{freeMax}</span><span>{plusMax}</span>
-          </div>
-          <div className="tariff-row">
-            <span>Чат</span><span>через {freeDelay} мин</span><span>сразу</span>
-          </div>
-          <div className="tariff-row">
-            <span>Отбор по описанию</span><span>—</span><span>есть</span>
-          </div>
-          <div className="tariff-row">
-            <span>«Цена снижена»</span><span>—</span><span>есть</span>
-          </div>
-        </div>
-
         {/* 3. Срок и план — по макету 35_: переключатель «30 / 90 дней −20%»,
             карточка «Плюса» с составом, недельный вход отдельной строкой. */}
         {cardPlans.length ? (
@@ -3521,22 +3500,12 @@ function TariffsPage() {
           <EmptyState text="Оплата картой пока не настроена" icon={<Icon name="card" />} />
         )}
 
-        {calcOn ? (
-          <div className="calc-row" aria-disabled="true">
-            <span>Подобрать свой тариф</span>
-            <span className="calc-soon">скоро</span>
-          </div>
-        ) : null}
-
-        {/* 4. Способ оплаты */}
-        {cryptoOn ? (
-          <div className="tariff-methods">
-            <button type="button" className={`tariff-method${method === 'card' ? ' is-active' : ''}`}
-              onClick={() => setMethod('card')}>Картой</button>
-            <button type="button" className={`tariff-method${method === 'crypto' ? ' is-active' : ''}`}
-              onClick={() => setMethod('crypto')}>Криптой · скоро</button>
-          </div>
-        ) : null}
+        {/* По макету строка есть всегда; калькулятора пока нет, поэтому
+            она неактивная с пометкой «скоро». */}
+        <div className="calc-row" aria-disabled="true">
+          <span>Подобрать свой тариф</span>
+          <span className="calc-soon">скоро</span>
+        </div>
 
         {/* 5. Оплата */}
         {chosen ? (
@@ -3552,7 +3521,7 @@ function TariffsPage() {
                     : `Оплатить ${chosen.amount} ₽`}
             </button>
             <div className="chat-note">
-              Откроется страница оплаты. «Плюс» включится сам, даже если закрыть приложение.
+              Разовая оплата, без автопродления. «Плюс» включится сам, даже если закрыть приложение.
             </div>
           </>
         ) : null}
