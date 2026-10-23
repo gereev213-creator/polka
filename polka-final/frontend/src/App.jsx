@@ -398,6 +398,14 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
       </div>
       <div className="product-body">
         <div className="product-name">{item.title}</div>
+        {/* По ТЗ: «Город · 12 мин назад». Если города нет — только время,
+            без бессмысленного «Россия · только что». */}
+        {(() => {
+          const city = String(item.city || '').trim()
+          const when = relTime(item)
+          const meta = [city, when].filter(Boolean).join(' · ')
+          return meta ? <div className="product-meta">{meta}</div> : null
+        })()}
         <div className="product-price">{Number(item.price || 0).toLocaleString('ru-RU')} ₽</div>
       </div>
     </div>
@@ -1312,7 +1320,7 @@ function SellerStats({ profile, caption = '' }) {
   // со следующим пунктом меню «Избранное».
   const cards = [
     { key: 'ads', label: 'Объявления', value: profile.active_ads || 0, icon: 'tag', to: '/my' },
-    { key: 'mod', label: 'На модерации', value: profile.moderation_ads || 0, icon: 'clock', to: '/my' },
+    { key: 'mod', label: 'Модерация', value: profile.moderation_ads || 0, icon: 'clock', to: '/my' },
     { key: 'fav', label: 'В избранном', value: profile.favorites || 0, icon: 'heart', to: '/favorites' },
   ]
   // Статистика одной строкой (спека v2): три числа в общей рамке с
