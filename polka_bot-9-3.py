@@ -22568,11 +22568,15 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                        'Секретный код для подписи (код проверки целостности)'),
     'pay.paw_test': ('str', None, None, '1',
                      '1 — тестовый режим PayAnyWay, 0 — боевой'),
-    'pay.rub_week': ('str', None, None, '149',
+    'pay.rub_week': ('str', None, None, '79',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
-    'pay.rub_month': ('str', None, None, '499',
+    'pay.rub_30': ('str', None, None, '199',
+                   'Цена «Плюса» на 30 дней, ₽'),
+    'pay.rub_90': ('str', None, None, '478',
+                   'Цена «Плюса» на 90 дней, ₽ (−20 % к месяцу)'),
+    'pay.rub_month': ('str', None, None, '199',
                       'Цена «Плюса» на месяц, ₽ (0 — не показывать)'),
-    'pay.rub_quarter': ('str', None, None, '1299',
+    'pay.rub_quarter': ('str', None, None, '478',
                         'Цена «Плюса» на 3 месяца, ₽ (0 — не показывать)'),
     'pay.rub_year': ('str', None, None, '3990',
                      'Цена «Плюса» на год, ₽ (0 — не показывать)'),
@@ -23487,7 +23491,15 @@ CISPAY_ORDER_TTL_SEC = 3600
 # Счёт живёт час; опрашиваем сутки — потом уже неважно.
 CISPAY_WATCH_HOURS = 24
 # товар → (дней «Плюса», настройка с ценой в рублях)
+# Продукты по рекомендации 35_ (обновление от 23.10): один платный продукт
+# «Плюс» с двумя сроками и дешёвый недельный вход. Старые ключи оставлены,
+# чтобы уже созданные ссылки и записи платежей не сломались.
 CISPAY_PLANS = {
+    # новые имена из рекомендации
+    'plus_30': (30, 'pay.rub_30'),
+    'plus_90': (90, 'pay.rub_90'),
+    'week': (7, 'pay.rub_week'),
+    # совместимость с прежними именами
     'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
     'plus_quarter': (90, 'pay.rub_quarter'),
@@ -23555,13 +23567,23 @@ async def cispay_call(path: str, payload: Dict) -> Dict:
             'detail': str(data.get('message') or data)[:200]}
 
 
+# Старые имена продуктов оставлены для уже выданных ссылок, но в витрине
+# не показываются: иначе один и тот же срок висел бы дважды (week и plus_week).
+_LEGACY_PRODUCTS = ('plus_week', 'plus_month', 'plus_quarter')
+
+
 def cispay_plans_public() -> List[Dict]:
-    """Витрина тарифов: только те, у кого задана цена (настройка в админке)."""
+    """Витрина тарифов: только те, у которых задана цена (настройка в админке)."""
     out = []
     for product, (days, key) in CISPAY_PLANS.items():
+        if product in _LEGACY_PRODUCTS:
+            continue
         amount = _cispay_price(key)
         if amount > 0:
             out.append({'product': product, 'days': days, 'amount': int(amount)})
+    # Порядок по сроку: неделя → 30 → 90. Так витрина выглядит одинаково
+    # независимо от порядка ключей в словаре.
+    out.sort(key=lambda p: p['days'])
     return out
 
 

@@ -55,7 +55,8 @@ conn = sqlite3.connect(':memory:')
 conn.row_factory = sqlite3.Row
 
 SETTINGS = {'pay.enabled': '1', 'pay.cispay_shop_uuid': 'shop-uuid-test',
-            'pay.rub_week': '69', 'pay.rub_month': '199', 'pay.rub_quarter': '499',
+            'pay.rub_week': '69', 'pay.rub_30': '199', 'pay.rub_90': '478',
+            'pay.rub_month': '199', 'pay.rub_quarter': '499',
             'pay.allow_test': '0'}
 GRANTS = []
 CALLS = []
@@ -67,7 +68,8 @@ class FakeLog:
     def error(self, *a, **k): pass
 
 
-ns = {'os': os, 're': re, 'json': __import__('json'), 'sqlite3': sqlite3,
+ns = {'_LEGACY_PRODUCTS': ('plus_week', 'plus_month', 'plus_quarter'),
+      'os': os, 're': re, 'json': __import__('json'), 'sqlite3': sqlite3,
       'Any': Any, 'Dict': Dict, 'List': List, 'Optional': Optional,
       'logger': FakeLog(),
       'db': type('D', (), {'conn': conn})(),
@@ -111,11 +113,12 @@ ns['ensure_payments']()
 
 # ── 1. Витрина: только тарифы с ценой
 plans = ns['cispay_plans_public']()
-assert [p['product'] for p in plans] == ['plus_week', 'plus_month', 'plus_quarter'], plans
+# По рекомендации 35_: в витрине три продукта — неделя, 30 и 90 дней.
+assert [p['product'] for p in plans] == ['week', 'plus_30', 'plus_90'], plans
 assert plans[0]['amount'] == 69 and plans[0]['days'] == 7, plans
-SETTINGS['pay.rub_quarter'] = '0'
-assert [p['product'] for p in ns['cispay_plans_public']()] == ['plus_week', 'plus_month']
-SETTINGS['pay.rub_quarter'] = '499'
+SETTINGS['pay.rub_90'] = '0'
+assert [p['product'] for p in ns['cispay_plans_public']()] == ['week', 'plus_30']
+SETTINGS['pay.rub_90'] = '478'
 print('1) витрина показывает только тарифы с заданной ценой')
 
 # ── 2. Создание счёта: запись в базе, ссылка наружу

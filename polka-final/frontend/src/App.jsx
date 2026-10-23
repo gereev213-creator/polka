@@ -3298,6 +3298,9 @@ function TariffsPage() {
   useEffect(() => { load() }, [])
 
   const chosen = cardPlans.find((p) => p.product === term) || null
+  // По макету: сроки 30 и 90 отдельным переключателем, неделя — строкой ниже.
+  const longPlans = cardPlans.filter((p) => Number(p.days) >= 30)
+  const weekPlan = cardPlans.find((p) => Number(p.days) === 7) || null
   const isPlus = plan?.plan === 'plus'
   const trialLeft = Number(plan?.trial_days_left || 0)
   const freeDelay = plan?.free_delay_min ?? 15
@@ -3430,21 +3433,49 @@ function TariffsPage() {
           </div>
         </div>
 
-        {/* 3. Срок */}
+        {/* 3. Срок и план — по макету 35_: переключатель «30 / 90 дней −20%»,
+            карточка «Плюса» с составом, недельный вход отдельной строкой. */}
         {cardPlans.length ? (
-          <div className="tariff-terms">
-            {cardPlans.map((pl) => (
-              <button key={pl.product} type="button"
-                className={`glass-card tariff-term${term === pl.product ? ' is-active' : ''}`}
-                onClick={() => setTerm(pl.product)} disabled={busy}>
-                <span className="tariff-term-days">{pl.days} дн.</span>
-                <span className="tariff-term-price">{pl.amount} ₽</span>
-                {pl.days === 30 && oldPrice > pl.amount ? (
-                  <span className="badge">выгодно</span>
-                ) : null}
-              </button>
-            ))}
-          </div>
+          <>
+            {longPlans.length ? (
+              <div className="tg2">
+                {longPlans.map((pl) => (
+                  <button key={pl.product} type="button"
+                    className={term === pl.product ? 'on' : ''}
+                    onClick={() => setTerm(pl.product)} disabled={busy}>
+                    {pl.days} дней
+                    {pl.days >= 90 ? <em> −20 %</em> : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+
+            {chosen ? (
+              <div className="plan-card">
+                <span className="plan-badge">Чаще берут</span>
+                <div className="plan-top">
+                  <b>Плюс</b>
+                  <span>{chosen.amount} ₽<small> / {chosen.days} дн</small></span>
+                </div>
+                <div className="plan-ft"><i>✓</i>{plusMax} критериев</div>
+                <div className="plan-ft"><i>✓</i>В чат сразу, без задержки</div>
+                <div className="plan-ft"><i>✓</i>Отбор по описанию, снижение цены</div>
+              </div>
+            ) : null}
+
+            {weekPlan ? (
+              <div className="week-row">
+                <div className="week-info">
+                  <b>Неделя Плюса</b>
+                  <span>Попробовать без обязательств</span>
+                </div>
+                <button type="button" className="week-btn"
+                  onClick={() => setTerm(weekPlan.product)} disabled={busy}>
+                  {weekPlan.amount} ₽
+                </button>
+              </div>
+            ) : null}
+          </>
         ) : (
           <EmptyState text="Оплата картой пока не настроена" icon={<Icon name="card" />} />
         )}
