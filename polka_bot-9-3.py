@@ -185,16 +185,20 @@ PAW_TEST_MODE      = int(os.environ.get("PAW_TEST_MODE",  "0"))   # 1 = тест
 # с дефолтом "12345" подпись PayAnyWay-вебхуков проверялась бы тривиально
 # угадываемым ключом, и платёж можно было бы подделать. Теперь дефолты пустые,
 # а здесь — явная громкая проверка при старте вместо тихой работы вполсилы.
+# Падать из-за платёжного ключа нельзя: без него бот продолжает работать,
+# просто оплата через PayAnyWay выключена. Иначе одна незаполненная
+# переменная роняет всё приложение — так и случилось 23.10.
 _missing_secrets = [name for name, val in {
     "BOT_TOKEN": TOKEN,
-    "PAW_INTEGRITY_CODE": PAW_INTEGRITY_CODE,
 }.items() if not val]
 if _missing_secrets:
     raise RuntimeError(
         f"Не заданы обязательные переменные окружения: {', '.join(_missing_secrets)}. "
-        f"Задайте их в настройках окружения Amvera — без них бот либо не сможет "
-        f"подключиться к Telegram, либо небезопасно проверяет оплату."
+        f"Задайте их в настройках окружения Amvera — без них бот не подключится к Telegram."
     )
+if not PAW_INTEGRITY_CODE:
+    print("[startup] PAW_INTEGRITY_CODE не задан — оплата PayAnyWay выключена "
+          "(бот и приложение работают)", flush=True)
 for _name, _val in {
     "CRYPTO_BOT_TOKEN": CRYPTO_BOT_TOKEN,
     "MAX_BOT_TOKEN": MAX_BOT_TOKEN,
@@ -23715,11 +23719,20 @@ PAW_FORM_URL = os.environ.get('PAW_FORM_URL', 'https://www.payanyway.ru/assistan
 # Поэтому каждая настройка читается так: сначала база (админка), затем
 # переменная окружения с подчёркиваниями. Секреты удобнее держать в
 # переменных — они не попадают в дамп настроек.
-def _paw_get(cfg_key: str, env_key: str, default: str = '') -> str:
+def _paw_get(cfg_key: str, env_key: str, default: str = '', *aliases: str) -> str:
+    """Значение настройки: база → переменная → её синонимы → значение по умолчанию.
+
+    Синонимы нужны потому, что переменные уже заводили под именами
+    PAW_MNT_ID / PAW_INTEGRITY_CODE / PAW_TEST_MODE — их и читаем.
+    """
     val = str(cfg_get(cfg_key) or '').strip()
     if val:
         return val
-    return str(os.environ.get(env_key) or default).strip()
+    for name in (env_key,) + aliases:
+        got = str(os.environ.get(name) or '').strip()
+        if got:
+            return got
+    return str(default).strip()
 
 
 def paw_enabled() -> bool:
@@ -23728,15 +23741,15 @@ def paw_enabled() -> bool:
 
 
 def paw_mnt_id() -> str:
-    return _paw_get('pay.paw_mnt_id', 'PAY_PAW_MNT_ID')
+    return _paw_get('pay.paw_mnt_id', 'PAY_PAW_MNT_ID', '', 'PAW_MNT_ID')
 
 
 def paw_secret() -> str:
-    return _paw_get('pay.paw_secret', 'PAY_PAW_SECRET')
+    return _paw_get('pay.paw_secret', 'PAY_PAW_SECRET', '', 'PAW_INTEGRITY_CODE')
 
 
 def paw_test_mode() -> int:
-    return 1 if _paw_get('pay.paw_test', 'PAY_PAW_TEST', '1') == '1' else 0
+    return 1 if _paw_get('pay.paw_test', 'PAY_PAW_TEST', '1', 'PAW_TEST_MODE') == '1' else 0
 
 
 def _paw_sign(**fields) -> str:
