@@ -22566,8 +22566,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                        'Номер бизнес-счёта (MNT_ID) из кабинета PayAnyWay'),
     'pay.paw_secret': ('str', None, None, '',
                        'Секретный код для подписи (код проверки целостности)'),
-    'pay.paw_test': ('str', None, None, '1',
-                     '1 — тестовый режим PayAnyWay, 0 — боевой'),
+    'pay.paw_test': ('str', None, None, '0',
+                     '1 — тестовый режим PayAnyWay, 0 — боевой. '
+                     'Тестовый работает, только если включён в кабинете'),
     'pay.rub_week': ('str', None, None, '79',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_30': ('str', None, None, '199',
@@ -23893,7 +23894,9 @@ def paw_secret() -> str:
 
 
 def paw_test_mode() -> int:
-    return 1 if _paw_get('pay.paw_test', 'PAY_PAW_TEST', '1', 'PAW_TEST_MODE') == '1' else 0
+    # По умолчанию боевой режим: на боевом счёте тестовый выключен, и запрос
+    # с MNT_TEST_MODE=1 отклоняется с «Не включен тестовый режим на счёте».
+    return 1 if _paw_get('pay.paw_test', 'PAY_PAW_TEST', '0', 'PAW_TEST_MODE') == '1' else 0
 
 
 def _paw_sign(**fields) -> str:
