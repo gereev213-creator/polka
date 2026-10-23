@@ -1750,3 +1750,317 @@
   font-size: 12px;
   font-weight: 700;
 }
+
+/* ── 26. Страница лота ────────────────────────────────────────────────────
+   Самый посещаемый экран после ленты и единственное место, где человек
+   решает покупать. Оформление точечное: фото, цена, продавец, описание,
+   нижняя панель. Раскладку не трогаем — только поверхности и типографика. */
+.app-shell .detail-hero, .detail-hero,
+.app-shell .detail-gallery, .detail-gallery {
+  border-radius: 24px;
+  overflow: hidden;
+  background: #171a20;
+}
+.app-shell .detail-slide, .detail-slide { border-radius: 24px; overflow: hidden; }
+.app-shell .detail-dots, .detail-dots {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  margin-top: 8px;
+}
+.app-shell .detail-counter, .detail-counter {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+  margin-top: 6px;
+}
+.app-shell .detail-head, .detail-head {
+  margin: 14px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.app-shell .detail-price-block, .detail-price-block { margin: 10px 0 0; }
+.app-shell .detail-price, .detail-price {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.app-shell .detail-price-label, .detail-price-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.app-shell .detail-desc, .detail-desc,
+.app-shell .listing-desc, .listing-desc {
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+}
+.app-shell .listing-desc-toggle, .listing-desc-toggle {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #6fb4ff;
+  cursor: pointer;
+}
+.app-shell .spec-row, .spec-row {
+  display: flex;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 14px;
+}
+.app-shell .spec-row:first-child, .spec-row:first-child { border-top: 0; }
+.app-shell .detail-bar, .detail-bar {
+  background: #141414;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.5);
+}
+.app-shell .copy-block, .copy-block {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #181818;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  word-break: break-all;
+}
+.app-shell .feed-queued-line, .feed-queued-line,
+.app-shell .feed-desc-unknown, .feed-desc-unknown {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ── 27. Диалог (переписка) ───────────────────────────────────────────────
+   Пузыри, время, вложения и поле ввода. Входящие — поверхность, исходящие —
+   акцент. Медиа и аудио скруглены, вложения открываются как обычно. */
+.app-shell .chat-messages, .chat-messages { display: flex; flex-direction: column; gap: 8px; }
+.app-shell .bubble, .bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: #1c1c1e;
+  color: #fff;
+  font-size: 15px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.app-shell .bubble-a, .bubble-a {
+  align-self: flex-end;
+  background: linear-gradient(180deg, #1f78ff 0%, #0a62f0 100%);
+  border-bottom-right-radius: 6px;
+}
+.app-shell .bubble:not(.bubble-a), .bubble:not(.bubble-a) { border-bottom-left-radius: 6px; }
+.app-shell .bubble-time, .bubble-time {
+  margin-top: 4px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: right;
+}
+.app-shell .bubble-media-img, .bubble-media-img {
+  display: block;
+  max-width: 100%;
+  border-radius: 14px;
+}
+.app-shell .bubble-audio, .bubble-audio { width: 100%; max-width: 240px; }
+.app-shell .bubble-menu, .bubble-menu {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+.app-shell .chat-day, .chat-day {
+  align-self: center;
+  margin: 6px 0;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #1c1c1e;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.app-shell .chat-input-wrap, .chat-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.app-shell .chat-field, .chat-field {
+  flex: 1;
+  min-width: 0;
+  height: 42px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  padding: 0 8px;
+  outline: none;
+}
+.app-shell .attach-btn, .attach-btn,
+.app-shell .send-btn, .send-btn {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #242424;
+  color: #fff;
+  cursor: pointer;
+}
+.app-shell .send-btn, .send-btn {
+  background: linear-gradient(180deg, #1f78ff 0%, #0a62f0 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+.app-shell .send-btn:disabled, .send-btn:disabled { opacity: 0.45; }
+.app-shell .chat-top, .chat-top { background: transparent; }
+.app-shell .chat-header-left, .chat-header-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+/* ── 28. Мои объявления и Избранное ───────────────────────────────────────
+   Те же плашки, что у карточек: #141414, радиус 18, превью 56. */
+.app-shell .myad-card, .myad-card,
+.app-shell .favorite-row, .favorite-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+  color: inherit;
+}
+.app-shell .result-thumb, .result-thumb,
+.app-shell .myad-thumb, .myad-thumb {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #181818;
+  object-fit: cover;
+}
+.app-shell .myad-body, .myad-body { flex: 1; min-width: 0; }
+.app-shell .row-title, .row-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-shell .myad-price, .myad-price,
+.app-shell .result-price, .result-price {
+  font-size: 15px;
+  font-weight: 700;
+  color: #6fb4ff;
+}
+.app-shell .product-city, .product-city {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-shell .favorite-remove, .favorite-remove {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+}
+.app-shell .tool-row, .tool-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.app-shell .tool-btn, .tool-btn {
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-shell .tab-row, .tab-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.app-shell .tab-row::-webkit-scrollbar { display: none; }
+
+/* ── 29. Критерии, новости, онбординг ─────────────────────────────────────
+   Остатки старых экранов: карточка критерия, блок новостей, служебные
+   отступы. Приводим к общему ритму. */
+.app-shell .chat-crit-card, .chat-crit-card {
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.app-shell .chat-crit-title, .chat-crit-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.app-shell .chat-crit-sub, .chat-crit-sub {
+  margin-top: 4px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.app-shell .chat-crit-x, .chat-crit-x {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 18px;
+  cursor: pointer;
+}
+.app-shell .chat-note, .chat-note,
+.app-shell .muted-line, .muted-line {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.45);
+}
+.app-shell .error, .error { color: #ff9a9a; font-size: 13px; }
+.app-shell .lastnews, .lastnews {
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--card-primary, #141414);
+}
+.app-shell .lastnews-thumb, .lastnews-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  overflow: hidden;
+  object-fit: cover;
+}
+.app-shell .lastnews-copy, .lastnews-copy { flex: 1; min-width: 0; font-size: 13px; color: rgba(255, 255, 255, 0.6); }
+.app-shell .lastnews-arrow, .lastnews-arrow { color: rgba(255, 255, 255, 0.4); }
+.app-shell .onboarding, .onboarding { color: #fff; }
+.app-shell .onboarding .big, .onboarding .big {
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.app-shell .onboarding .dots, .onboarding .dots { display: flex; gap: 6px; justify-content: center; }
+.app-shell .onboarding .blob, .onboarding .blob { border-radius: 32px; overflow: hidden; }
+
+/* Служебные отступы — одна шкала вместо случайных значений */
+.app-shell .mt-8, .mt-8 { margin-top: 8px; }
+.app-shell .mt-12, .mt-12 { margin-top: 12px; }
+.app-shell .mt-14, .mt-14 { margin-top: 14px; }
