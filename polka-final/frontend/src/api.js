@@ -374,10 +374,11 @@ export const api = {
   // ВАЖНО: тело должно быть строкой JSON, как у payCard. Объект fetch
   // превращает в «[object Object]», сервер получает пустое тело и отвечает
   // unknown_product — именно это и ломало оплату.
-  pawCreate: (product, baseUrl) => request('/api/pay/paw/create', {
-    method: 'POST', body: JSON.stringify({ product, base_url: baseUrl }),
+  pawCreate: (product, baseUrl, promo = '') => request('/api/pay/paw/create', {
+    method: 'POST', body: JSON.stringify({ product, base_url: baseUrl, promo }),
   }),
   pawStatus: (uuid) => request(`/api/pay/paw/status?uuid=${encodeURIComponent(uuid)}`),
+  promoCheck: (code) => request(`/api/pay/promo-check?code=${encodeURIComponent(code)}`),
   getReferral: () => request('/api/referral'),
   // Документы: политика конфиденциальности и условия пользования
   getLegal: () => request('/api/legal'),

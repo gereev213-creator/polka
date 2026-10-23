@@ -22797,10 +22797,11 @@ def _cfg_ab_bucket(user_id: int) -> bool:
 
 
 # ── Промокоды под текущую модель (Плюс, монеты, слот, пробный период) ───────
-PROMO_KINDS = (('plus_days', 'coins', 'criterion_days', 'trial_days')
-                if COINS_ENABLED else ('plus_days', 'criterion_days', 'trial_days'))
+PROMO_KINDS = (('plus_days', 'discount', 'coins', 'criterion_days', 'trial_days')
+                if COINS_ENABLED else ('plus_days', 'discount', 'criterion_days', 'trial_days'))
 PROMO_KIND_TITLES = {
     'plus_days': 'дней «Плюса»',
+    'discount': 'скидка на оплату, %',
     'coins': 'монет',
     'criterion_days': 'дней дополнительного критерия',
     'trial_days': 'дней пробного периода',
@@ -22860,7 +22861,11 @@ def promo_create(code: str, kind: str, value: int, max_uses: int = 0, per_user: 
         return {'ok': False, 'error': 'bad_value'}
     if value <= 0:
         return {'ok': False, 'error': 'bad_value'}
-    value = min(value, 3650 if kind != 'coins' else 100000)
+    if kind == 'discount':
+        if value > 90:
+            return {'ok': False, 'error': 'bad_value', 'detail': 'скидка не больше 90 %'}
+    else:
+        value = min(value, 3650 if kind != 'coins' else 100000)
     try:
         cursor = db.conn.cursor()
         cursor.execute(
@@ -22901,6 +22906,67 @@ def promo_deactivate(code: str, by: int = 0) -> Dict:
     except Exception as e:
         logger.warning(f"promo_deactivate: {e}")
         return {'ok': False, 'error': 'save_failed'}
+
+
+def promo_set_active(code: str, active: bool, by: int = 0) -> Dict:
+    """Включает или выключает промокод. Выключенный нельзя применить повторно."""
+    code = str(code or '').strip().upper()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("UPDATE promo_codes SET active=? WHERE code=?",
+                       (1 if active else 0, code))
+        db.conn.commit()
+        if not cursor.rowcount:
+            return {'ok': False, 'error': 'not_found'}
+        _plan_event(int(by or 0), 'promo_on' if active else 'promo_off', {'code': code})
+        return {'ok': True, 'code': code, 'active': bool(active)}
+    except Exception as e:
+        logger.warning(f"promo_set_active: {e}")
+        return {'ok': False, 'error': 'save_failed'}
+
+
+def promo_discount(code: str) -> Dict:
+    """Скидка по коду для оплаты: сколько процентов и можно ли применять."""
+    code = str(code or '').strip().upper()[:32]
+    if not code:
+        return {'ok': False, 'error': 'empty'}
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT * FROM promo_codes WHERE code=?", (code,))
+        row = cursor.fetchone()
+    except Exception as e:
+        return {'ok': False, 'error': 'db', 'detail': str(e)[:120]}
+    if not row:
+        return {'ok': False, 'error': 'not_found', 'detail': 'Промокод не найден'}
+    promo = dict(row)
+    if not int(promo.get('active') or 0):
+        return {'ok': False, 'error': 'inactive', 'detail': 'Промокод выключен'}
+    if str(promo.get('kind') or '') != 'discount':
+        return {'ok': False, 'error': 'not_discount', 'detail': 'Это не скидка'}
+    exp = str(promo.get('expires_at') or '')
+    if exp:
+        parsed = _safe_isoparse(exp)
+        if parsed is not None and parsed < get_moscow_time():
+            return {'ok': False, 'error': 'expired', 'detail': 'Срок промокода истёк'}
+    limit = int(promo.get('max_uses') or 0)
+    used = int(promo.get('current_uses') or 0)
+    if limit and used >= limit:
+        return {'ok': False, 'error': 'limit', 'detail': 'Промокод больше не действует'}
+    pct = max(1, min(90, int(promo.get('value') or 0)))
+    return {'ok': True, 'code': code, 'percent': pct}
+
+
+def promo_mark_used(code: str) -> None:
+    """Считает применение скидки. Вызывается после успешной оплаты."""
+    code = str(code or '').strip().upper()
+    if not code:
+        return
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("UPDATE promo_codes SET current_uses=current_uses+1 WHERE code=?", (code,))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"promo_mark_used: {e}")
 
 
 def _grant_plus_days(user_id: int, days: int) -> str:
@@ -23551,6 +23617,8 @@ def ensure_payments() -> None:
         'paid_at': 'TEXT',
         'credited': 'INTEGER DEFAULT 0',
         'tariff': "TEXT DEFAULT ''",
+        'promo_code': "TEXT DEFAULT ''",
+        'discount_percent': 'INTEGER DEFAULT 0',
     }
     try:
         cursor = db.conn.cursor()
@@ -23855,7 +23923,8 @@ def _paw_check_sign(data: Dict) -> bool:
     ))
 
 
-async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
+async def paw_order_create(user_id: int, product: str, base_url: str,
+                           promo: str = '') -> Dict:
     """Создаёт счёт PayAnyWay и запись о платеже.
 
     Написано заново и максимально просто: проверка продукта → цена → подпись
@@ -23872,6 +23941,18 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
     if amount <= 0:
         return {'ok': False, 'error': 'price_not_set',
                 'detail': f'цена {price_key} не задана в админке'}
+
+    # 2б. Скидка по промокоду: цена уменьшается до создания счёта,
+    # иначе человек заплатит полную сумму и скидку придётся возвращать.
+    promo_code, discount = '', 0
+    if promo:
+        chk = promo_discount(promo)
+        if chk.get('ok'):
+            promo_code, discount = chk['code'], int(chk['percent'])
+            amount = round(amount * (100 - discount) / 100, 2)
+        else:
+            return {'ok': False, 'error': chk.get('error') or 'bad_promo',
+                    'detail': chk.get('detail') or 'Промокод не подошёл'}
 
     # 3. Номер счёта и реквизиты
     mnt_id = paw_mnt_id()
@@ -23910,10 +23991,10 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
         cur = db.conn.cursor()
         cur.execute(
             "INSERT INTO payments (user_id, provider, product, order_uuid, amount,"
-            " days, url, status, created_at, checked_at) "
-            "VALUES (?,?,?,?,?,?,?,'waiting',?,?)",
+            " days, url, status, created_at, checked_at, promo_code, discount_percent) "
+            "VALUES (?,?,?,?,?,?,?,'waiting',?,?,?,?)",
             (int(user_id), 'paw', product, order_uuid, float(amount),
-             int(days), url, now, now))
+             int(days), url, now, now, promo_code, int(discount)))
         db.conn.commit()
 
     try:
@@ -23931,7 +24012,8 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
         logger.warning(f"paw event: {e}")
 
     return {'ok': True, 'order_uuid': order_uuid, 'url': url,
-            'amount': int(amount), 'days': int(days), 'provider': 'paw'}
+            'amount': int(amount), 'days': int(days), 'provider': 'paw',
+            'promo': promo_code, 'discount': int(discount)}
 
 
 async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.0) -> Dict:
@@ -23965,6 +24047,11 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
         db.conn.commit()
     except Exception as e:
         logger.warning(f"paw mark paid: {e}")
+    try:
+        if pay.get('promo_code'):
+            promo_mark_used(str(pay.get('promo_code')))
+    except Exception as e:
+        logger.warning(f"promo usage: {e}")
     _plan_event(int(pay['user_id']), 'paw_paid',
                 {'product': pay.get('product'), 'amount': pay.get('amount'),
                  'days': days, 'test': bool(is_test)})
@@ -24196,9 +24283,10 @@ async def api_pay_paw_create(request: aiohttp_web.Request) -> aiohttp_web.Respon
     except Exception:
         body = {}
     product = str((body or {}).get('product') or '')
+    promo = str((body or {}).get('promo') or '')
     base = str(body.get('base_url') or '') or f"{request.scheme}://{request.host}"
     try:
-        res = await paw_order_create(int(viewer_id), product, base.rstrip('/'))
+        res = await paw_order_create(int(viewer_id), product, base.rstrip('/'), promo)
     except Exception as e:
         # Наружу отдаём точную причину: иначе на экране «не удалось создать
         # счёт» без деталей, и приходится гадать по логам.
@@ -24209,6 +24297,20 @@ async def api_pay_paw_create(request: aiohttp_web.Request) -> aiohttp_web.Respon
         res.setdefault('detail', res.get('error') or 'unknown')
     status = 200 if res.get('ok') else 400
     return _miniapp_json(res, status=status)
+
+
+async def api_pay_promo_check(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/pay/promo-check?code= — подходит ли код как скидка на оплату.
+
+    Отдельно от promo_redeem: скидка не выдаётся сразу, она уменьшает сумму
+    счёта. Поэтому проверяем её до оплаты, а не «активируем».
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    code = str(request.query.get('code') or '')
+    res = await asyncio.to_thread(_db_read, promo_discount, code)
+    return _miniapp_json(res, status=200 if res.get('ok') else 400)
 
 
 async def api_pay_paw_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -28710,8 +28812,16 @@ async def api_admin_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
         body = await request.json()
     except Exception:
         body = {}
-    if str((body or {}).get('action') or '') == 'deactivate':
-        res = promo_deactivate(str((body or {}).get('code') or ''), by=admin_id)
+    action = str((body or {}).get('action') or '')
+    if action in ('deactivate', 'activate', 'toggle'):
+        code = str((body or {}).get('code') or '')
+        if action == 'activate':
+            active = True
+        elif action == 'deactivate':
+            active = False
+        else:
+            active = bool((body or {}).get('active'))
+        res = promo_set_active(code, active, by=admin_id)
         return _miniapp_json(res, status=200 if res.get('ok') else 400)
     res = promo_create(
         code=str((body or {}).get('code') or ''),
@@ -31427,6 +31537,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/pay/paw/create', api_pay_paw_create)
     app.router.add_get('/api/pay/paw/status', api_pay_paw_status)
     app.router.add_post('/api/pay/paw/notify', api_pay_paw_notify)
+    app.router.add_get('/api/pay/promo-check', api_pay_promo_check)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)
     app.router.add_get('/api/admin/settings', api_admin_settings)

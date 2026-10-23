@@ -3283,6 +3283,9 @@ function TariffsPage() {
   // Калькулятор «Подобрать свой тариф» — по рекомендации 35_ он отложен:
   // строка показывается только при включённом флаге и остаётся неактивной.
   const [calcOn, setCalcOn] = useState(false)
+  // Код-скидка, подтверждённый до оплаты: применяется при создании счёта.
+  const [discountCode, setDiscountCode] = useState('')
+  const [discountPct, setDiscountPct] = useState(0)
   const [err, setErr] = useState('')
 
   const load = () => {
@@ -3321,8 +3324,11 @@ function TariffsPage() {
     setBusy(true)
     setPay({ state: 'waiting', text: 'Открыл страницу оплаты. Проверяем автоматически…', tries: 0 })
     try {
+      // Промокод-скидка передаётся при создании счёта: сумма уменьшается
+      // до оплаты, а не после.
+      const promoCode = discountCode
       const r = pawOn
-        ? await api.pawCreate(chosen.product, window.location.origin)
+        ? await api.pawCreate(chosen.product, window.location.origin, promoCode)
         : await api.payCard(chosen.product)
       if (!r.url) throw new Error('нет ссылки оплаты')
       const tg = window.Telegram?.WebApp
@@ -3369,15 +3375,28 @@ function TariffsPage() {
   }
 
   const applyPromo = async () => {
-    if (!promo.trim()) return
+    const code = promo.trim()
+    if (!code) return
     setBusy(true)
     try {
-      const r = await api.redeemPromo(promo.trim())
+      // Сначала пробуем как код на дни/критерий — он выдаётся сразу.
+      const r = await api.redeemPromo(code)
       setPay({ state: 'paid', text: r.granted ? `Промокод активирован: ${r.granted}` : 'Промокод принят', tries: 0 })
       setPromo('')
       load()
     } catch (e) {
-      setPay({ state: 'error', text: (e && e.detail) || 'Промокод не подошёл', tries: 0 })
+      // Не подошёл как «дни» — возможно, это скидка на оплату.
+      try {
+        const d = await api.promoCheck(code)
+        setDiscountCode(d.code || code)
+        setDiscountPct(Number(d.percent) || 0)
+        setPay({ state: 'review', text: `Скидка ${d.percent} % применится при оплате`, tries: 0 })
+        setPromo('')
+      } catch (e2) {
+        setDiscountCode('')
+        setDiscountPct(0)
+        setPay({ state: 'error', text: (e2 && e2.detail) || (e && e.detail) || 'Промокод не подошёл', tries: 0 })
+      }
     } finally {
       setBusy(false)
     }
@@ -3508,7 +3527,11 @@ function TariffsPage() {
           <>
             <button type="button" className="cta-primary tariff-pay" disabled={busy}
               onClick={buyCard}>
-              {busy ? 'Открываю…' : `Оплатить ${chosen.amount} ₽`}
+              {busy
+                ? 'Открываю…'
+                : discountPct > 0
+                  ? `Оплатить ${Math.round(chosen.amount * (100 - discountPct) / 100)} ₽ · скидка ${discountPct} %`
+                  : `Оплатить ${chosen.amount} ₽`}
             </button>
             <div className="chat-note">
               Откроется страница оплаты. «Плюс» включится сам, даже если закрыть приложение.
@@ -3732,6 +3755,15 @@ function AdminPage() {
     }
   }
 
+  const togglePromo = async (code, active) => {
+    try {
+      const r = await api.adminPromoCreate({ action: active ? 'activate' : 'deactivate', code })
+      flash(r.ok ? (active ? `Промокод ${code} включён` : `Промокод ${code} выключен`)
+                 : `Не вышло: ${r.error}`)
+      api.adminPromo().then((d) => setPromo({ items: d.items || [], titles: d.titles || {} }))
+    } catch (e) { flash((e && e.detail) || 'Ошибка переключения') }
+  }
+
   const createPromo = async () => {
     try {
       const r = await api.adminPromoCreate({ ...promoForm, value: Number(promoForm.value) })
@@ -3894,6 +3926,7 @@ function AdminPage() {
             value={promoForm.code} onChange={(e) => setPromoForm({ ...promoForm, code: e.target.value })} />
           <select className="text-input" value={promoForm.kind}
             onChange={(e) => setPromoForm({ ...promoForm, kind: e.target.value })}>
+            <option value="discount">скидка на оплату, %</option>
             <option value="plus_days">дни «Плюса»</option>
             <option value="criterion_days">дни доп. критерия</option>
             <option value="trial_days">дни пробного</option>
@@ -3911,7 +3944,16 @@ function AdminPage() {
               </div>
               <div className="plan-desc">
                 использовано {p.used ?? 0} из {p.max_uses || '∞'}
-                {p.active === false ? ' · выключен' : ''}
+                {p.active ? '' : ' · выключен'}
+              </div>
+              {/* Включать и выключать код можно в любой момент: выключенный
+                  нельзя применить при оплате. */}
+              <div className="admin-actions">
+                <button type="button"
+                  className={p.active ? 'tool-btn' : 'tool-btn is-on'}
+                  onClick={() => togglePromo(p.code, !p.active)}>
+                  {p.active ? 'Выключить' : 'Включить'}
+                </button>
               </div>
             </div>
           ))}

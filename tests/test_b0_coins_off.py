@@ -20,8 +20,9 @@ assert re.search(r'COINS_ENABLED = os\.environ\.get\("COINS_ENABLED", "0"\) == "
 print('1) COINS_ENABLED по умолчанию выключен')
 
 # 2. Промокоды: вид «монеты» только при включённом флаге
-assert ("PROMO_KINDS = (('plus_days', 'coins', 'criterion_days', 'trial_days')\n"
-        "                if COINS_ENABLED else ('plus_days', 'criterion_days', 'trial_days'))") in SRC, \
+assert ("PROMO_KINDS = (('plus_days', 'discount', 'coins', 'criterion_days', 'trial_days')\n"
+        "                if COINS_ENABLED else ('plus_days', 'discount', 'criterion_days',"
+        " 'trial_days'))") in SRC, \
     'PROMO_KINDS не зависит от флага'
 print('2) промокоды без вида «монеты» при выключенном флаге')
 
