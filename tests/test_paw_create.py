@@ -24,7 +24,6 @@ class Conn:
 ns = {
     'asyncio': asyncio, 'hashlib': hashlib, 'os': os, 'Dict': dict, 'Any': object,
     'List': list, '_time': types.SimpleNamespace(time=lambda: 1700000000.0),
-    '_up': types.SimpleNamespace(quote=lambda s: s),
     'db': types.SimpleNamespace(conn=Conn()),
     'logger': types.SimpleNamespace(warning=lambda *a, **k: None, info=lambda *a, **k: None),
     'get_moscow_time': lambda: types.SimpleNamespace(isoformat=lambda: '2026-10-24T01:00:00'),

@@ -23896,8 +23896,12 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
         ('MNT_SUCCESS_URL', f'{base_url}/pay/ok'),
         ('MNT_FAIL_URL', f'{base_url}/pay/fail'),
     ]
+    # quote импортируем здесь же: в проекте urllib.parse подключается
+    # локально внутри функций, модульного псевдонима _up нет — из-за этого
+    # создание счёта падало с NameError (в логе 23.10 в 21:34).
+    from urllib.parse import quote as _quote
     url = PAW_FORM_URL + '?' + '&'.join(
-        f'{_up.quote(str(k))}={_up.quote(str(v))}' for k, v in params)
+        f'{_quote(str(k))}={_quote(str(v))}' for k, v in params)
 
     # 5. Запись о платеже. Ошибку базы возвращаем честно, а не глотаем.
     now = get_moscow_time().isoformat()
