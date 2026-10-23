@@ -1492,3 +1492,172 @@
   background: rgba(132, 255, 57, 0.14);
   color: #b6ff86;
 }
+
+/* ── 24. Админка ──────────────────────────────────────────────────────────
+   Функциональность по ТЗ уже собрана (вкладки, группы, степперы, поиск,
+   сохранение, метрики, история, предпросмотр). Здесь только внешний вид:
+   один ритм, крупные числа в метриках, статусы здоровья цветом, панель
+   сохранения не теряется. */
+.app-shell .admin-tabs, .admin-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0 8px;
+  scrollbar-width: none;
+}
+.app-shell .admin-tabs::-webkit-scrollbar, .admin-tabs::-webkit-scrollbar { display: none; }
+.app-shell .admin-tabs button, .admin-tabs button {
+  height: 38px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.65);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.app-shell .admin-tabs button.is-active, .admin-tabs button.is-active {
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+/* Группы настроек */
+.app-shell .admin-group-title, .admin-group-title {
+  margin: 20px 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-shell .admin-setting, .admin-setting {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  margin-bottom: 8px;
+}
+.app-shell .admin-setting-head, .admin-setting-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-shell .admin-key, .admin-key {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+/* Изменённая настройка — видно сразу */
+.app-shell .admin-setting.is-changed, .admin-setting.is-changed {
+  background: rgba(31, 120, 255, 0.10);
+  box-shadow: inset 0 0 0 1px rgba(31, 120, 255, 0.5);
+}
+
+/* Степпер «− значение +» */
+.app-shell .admin-stepper, .admin-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.app-shell .admin-stepper button, .admin-stepper button {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border: 0;
+  border-radius: 12px;
+  background: #242424;
+  color: #fff;
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-shell .admin-stepper button:active, .admin-stepper button:active { filter: brightness(1.3); }
+.app-shell .admin-stepper input, .admin-stepper input {
+  flex: 1;
+  min-width: 0;
+  height: 38px;
+  text-align: center;
+  border: 0;
+  border-radius: 12px;
+  background: #181818;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+/* Панель сохранения: прилипает внизу над навигацией */
+.app-shell .admin-save-bar, .admin-save-bar {
+  position: sticky;
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  margin-top: 16px;
+  padding: 10px;
+  display: flex;
+  gap: 8px;
+  border-radius: 20px;
+  background: rgba(20, 20, 20, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 8px 24px rgba(0, 0, 0, 0.55);
+  z-index: 30;
+}
+
+/* Метрики */
+.app-shell .admin-kpi, .admin-kpi {
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+.app-shell .admin-kpi-value, .admin-kpi-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+  line-height: 1.1;
+}
+.app-shell .admin-kpi-label, .admin-kpi-label {
+  margin-top: 2px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Статусы здоровья: точка + текст */
+.app-shell .admin-health-item, .admin-health-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 16px;
+  background: var(--card-primary, #141414);
+  font-size: 14px;
+}
+.app-shell .admin-health-item::before, .admin-health-item::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  min-width: 8px;
+  border-radius: 50%;
+  background: #84ff39;
+}
+.app-shell .admin-health-item.is-warn::before, .admin-health-item.is-warn::before { background: #ffb84d; }
+.app-shell .admin-health-item.is-bad::before, .admin-health-item.is-bad::before { background: #ff5c5c; }
+
+/* Плашка уведомления о сохранении */
+.app-shell .admin-toast, .admin-toast {
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  margin: 4px 0 10px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(132, 255, 57, 0.14);
+  color: #b6ff86;
+  font-size: 13px;
+  font-weight: 500;
+}
