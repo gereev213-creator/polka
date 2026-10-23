@@ -22554,6 +22554,16 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                     '1 — включить оплату картой (CISPay)'),
     'pay.cispay_shop_uuid': ('str', None, None, '',
                              'UUID мерчанта CISPay из личного кабинета'),
+    # PayAnyWay (НКО «МОНЕТА»): карты, СБП, SberPay. Подпись запросов
+    # считается по секретному коду из кабинета — впишите его в админке.
+    'pay.paw_enabled': ('str', None, None, '0',
+                        '1 — принимать оплату через PayAnyWay'),
+    'pay.paw_mnt_id': ('str', None, None, '',
+                       'Номер бизнес-счёта (MNT_ID) из кабинета PayAnyWay'),
+    'pay.paw_secret': ('str', None, None, '',
+                       'Секретный код для подписи (код проверки целостности)'),
+    'pay.paw_test': ('str', None, None, '1',
+                     '1 — тестовый режим PayAnyWay, 0 — боевой'),
     'pay.rub_week': ('str', None, None, '149',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_month': ('str', None, None, '499',
@@ -23686,6 +23696,155 @@ async def _notify_payment_paid(user_id: int, days: int, expires: str, amount: fl
         logger.warning(f"notify payment: {e}")
 
 
+# ── PayAnyWay (НКО «МОНЕТА») ────────────────────────────────────────────────
+# Карты МИР/Visa/MC, СБП, SberPay. Работает так: магазин открывает платёжную
+# форму со ссылкой, человек платит, PayAnyWay присылает POST на notify-URL с
+# параметрами MNT_* и подписью MNT_SIGNATURE.
+#
+# ВАЖНО: точный порядок полей в подписи берётся из кабинета PayAnyWay
+# («Код проверки целостности» → пример строки подписи). Здесь он собран в
+# ОДНОЙ функции _paw_sign, чтобы при расхождении править одно место, а не
+# весь код. Формула вынесена по той же схеме, что уведомления МОНЕТЫ:
+#   md5(MNT_ID + MNT_TRANSACTION_ID + MNT_AMOUNT + MNT_CURRENCY_CODE
+#       + MNT_TEST_MODE + секрет)
+PAW_FORM_URL = os.environ.get('PAW_FORM_URL', 'https://www.payanyway.ru/assistant.htm')
+
+
+def paw_enabled() -> bool:
+    return str(cfg_get('pay.paw_enabled') or '0') == '1' and bool(str(cfg_get('pay.paw_mnt_id') or '').strip())
+
+
+def paw_mnt_id() -> str:
+    return str(cfg_get('pay.paw_mnt_id') or '').strip()
+
+
+def paw_secret() -> str:
+    return str(cfg_get('pay.paw_secret') or '').strip()
+
+
+def paw_test_mode() -> int:
+    return 1 if str(cfg_get('pay.paw_test') or '1') == '1' else 0
+
+
+def _paw_sign(**fields) -> str:
+    """Подпись запроса. Порядок полей — как в кабинете PayAnyWay.
+
+    Если PayAnyWay начнёт отклонять уведомления (ответ не SUCCESS), сверьте
+    порядок и состав полей здесь: это единственное место, где он задан.
+    """
+    order = ('MNT_ID', 'MNT_TRANSACTION_ID', 'MNT_AMOUNT', 'MNT_CURRENCY_CODE',
+             'MNT_TEST_MODE')
+    parts = [str(fields.get(k, '') or '') for k in order]
+    raw = ''.join(parts) + paw_secret()
+    return hashlib.md5(raw.encode('utf-8')).hexdigest()
+
+
+def _paw_check_sign(data: Dict) -> bool:
+    """Сверяет подпись уведомления с расчётной."""
+    got = str((data or {}).get('MNT_SIGNATURE') or '').strip().lower()
+    if not got:
+        return False
+    return hmac.compare_digest(got, _paw_sign(
+        MNT_ID=(data or {}).get('MNT_ID'),
+        MNT_TRANSACTION_ID=(data or {}).get('MNT_TRANSACTION_ID'),
+        MNT_AMOUNT=(data or {}).get('MNT_AMOUNT'),
+        MNT_CURRENCY_CODE=(data or {}).get('MNT_CURRENCY_CODE'),
+        MNT_TEST_MODE=(data or {}).get('MNT_TEST_MODE'),
+    ))
+
+
+async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
+    """Готовит ссылку на платёжную форму и запись о платеже."""
+    if product not in CISPAY_PLANS:
+        return {'ok': False, 'error': 'unknown_product'}
+    days, key = CISPAY_PLANS[product]
+    amount = _cispay_price(key)
+    if amount <= 0:
+        return {'ok': False, 'error': 'price_not_set',
+                'detail': 'Цена не задана: впишите её в админке'}
+    order_uuid = f"paw-{int(user_id)}-{int(_time.time() * 1000)}"
+    fields = {
+        'MNT_ID': paw_mnt_id(),
+        'MNT_TRANSACTION_ID': order_uuid,
+        'MNT_AMOUNT': f'{amount:.2f}',
+        'MNT_CURRENCY_CODE': 'RUB',
+        'MNT_TEST_MODE': str(paw_test_mode()),
+    }
+    sign = _paw_sign(**fields)
+    query = {
+        'MNT_ID': fields['MNT_ID'],
+        'MNT_TRANSACTION_ID': fields['MNT_TRANSACTION_ID'],
+        'MNT_AMOUNT': fields['MNT_AMOUNT'],
+        'MNT_CURRENCY_CODE': fields['MNT_CURRENCY_CODE'],
+        'MNT_DESCRIPTION': f'POLKA Plus {product} ({days} дн.)',
+        'MNT_TEST_MODE': fields['MNT_TEST_MODE'],
+        'MNT_SIGNATURE': sign,
+        'MNT_SUCCESS_URL': f'{base_url}/pay/ok',
+        'MNT_FAIL_URL': f'{base_url}/pay/fail',
+        'MNT_RETURN_URL': f'{base_url}/pay/ok',
+    }
+    url = PAW_FORM_URL + '?' + '&'.join(
+        f'{k}={_up.quote(str(v))}' for k, v in query.items())
+    now = get_moscow_time().isoformat()
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "INSERT INTO payments (user_id, provider, product, order_uuid, amount,"
+            " days, url, status, created_at, checked_at) "
+            "VALUES (?,?,?,?,?,?,?,'waiting',?,?)",
+            (int(user_id), 'paw', product, order_uuid, float(amount),
+             int(days), url, now, now))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"paw save: {e}")
+        return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:150]}
+    _plan_event(int(user_id), 'paw_order', {'product': product, 'amount': amount})
+    return {'ok': True, 'order_uuid': order_uuid, 'url': url,
+            'amount': int(amount), 'days': int(days), 'provider': 'paw'}
+
+
+async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.0) -> Dict:
+    """Начисляет «Плюс» по подтверждённому платежу. Ровно один раз."""
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM payments WHERE order_uuid=?", (order_uuid,))
+        row = cursor.fetchone()
+    except Exception as e:
+        return {'ok': False, 'error': 'db', 'detail': str(e)[:120]}
+    if not row:
+        return {'ok': False, 'error': 'not_found'}
+    pay = dict(row)
+    if int(pay.get('credited') or 0):
+        return {'ok': True, 'credited': True, 'days': int(pay.get('days') or 0)}
+    if is_test and str(cfg_get('pay.allow_test') or '0') != '1':
+        try:
+            cursor.execute("UPDATE payments SET status='test_paid', checked_at=?, is_test=1 "
+                           "WHERE order_uuid=?", (get_moscow_time().isoformat(), order_uuid))
+            db.conn.commit()
+        except Exception:
+            pass
+        return {'ok': True, 'credited': False, 'status': 'test_paid'}
+    days = int(pay.get('days') or 0)
+    expires = _grant_plus_days(int(pay['user_id']), days)
+    now = get_moscow_time().isoformat()
+    try:
+        cursor.execute("UPDATE payments SET status='paid', paid_at=?, checked_at=?, "
+                       "is_test=?, credited=1 WHERE order_uuid=?",
+                       (now, now, 1 if is_test else 0, order_uuid))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"paw mark paid: {e}")
+    _plan_event(int(pay['user_id']), 'paw_paid',
+                {'product': pay.get('product'), 'amount': pay.get('amount'),
+                 'days': days, 'test': bool(is_test)})
+    try:
+        await _notify_payment_paid(int(pay['user_id']), days, expires,
+                                   float(pay.get('amount') or 0))
+    except Exception as e:
+        logger.warning(f"paw notify: {e}")
+    return {'ok': True, 'credited': True, 'days': days, 'expires_at': expires}
+
+
 async def _cispay_poll_loop() -> None:
     """Опрос неоплаченных счетов: CISPay не умеет вебхуки.
 
@@ -23853,8 +24012,12 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'offer_url': str(cfg_get('pay.offer_url') or ''),
         'privacy_url': str(cfg_get('pay.privacy_url') or ''),
     }
-    return _miniapp_json({'ok': True, 'plans': plans, 'enabled': cispay_enabled(),
-                          'provider': 'cispay', 'legal': legal,
+    return _miniapp_json({'ok': True, 'plans': plans,
+                          'enabled': cispay_enabled() or paw_enabled(),
+                          'cispay_enabled': cispay_enabled(),
+                          'paw_enabled': paw_enabled(),
+                          'provider': 'paw' if paw_enabled() else 'cispay',
+                          'legal': legal,
                           # Этап T: вариант «Криптой» показываем только когда включён
                           'crypto_enabled': str(cfg_get('pay.crypto_enabled') or '0') == '1'})
 
@@ -23886,6 +24049,74 @@ async def api_pay_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
     order_uuid = str(request.query.get('uuid') or '')
     res = await cispay_order_sync(order_uuid, user_id=int(viewer_id))
     return _miniapp_json(res)
+
+
+async def api_pay_paw_create(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/pay/paw/create {product} — ссылка на платёжную форму PayAnyWay."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    if not paw_enabled():
+        return _miniapp_json({'ok': False, 'error': 'disabled',
+                              'detail': 'Оплата через PayAnyWay не включена'}, status=503)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    product = str((body or {}).get('product') or '')
+    base = str(body.get('base_url') or '') or f"{request.scheme}://{request.host}"
+    res = await paw_order_create(int(viewer_id), product, base.rstrip('/'))
+    status = 200 if res.get('ok') else 400
+    return _miniapp_json(res, status=status)
+
+
+async def api_pay_paw_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/pay/paw/status?uuid= — состояние заявки PayAnyWay."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    order_uuid = str(request.query.get('uuid') or '')
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("SELECT * FROM payments WHERE order_uuid=?", (order_uuid,))
+        row = cursor.fetchone()
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'error': 'db', 'detail': str(e)[:120]})
+    if not row:
+        return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+    pay = dict(row)
+    if int(pay.get('user_id') or 0) != int(viewer_id):
+        return _miniapp_err('forbidden', 403)
+    credited = bool(int(pay.get('credited') or 0))
+    return _miniapp_json({'ok': True, 'status': pay.get('status') or 'waiting',
+                          'credited': credited, 'days': int(pay.get('days') or 0),
+                          'provider': 'paw'})
+
+
+async def api_pay_paw_notify(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/pay/paw/notify — уведомление PayAnyWay об оплате.
+
+    PayAnyWay ждёт в ответ ровно строку SUCCESS. Любой другой ответ означает
+    «не принято», и они будут повторять запрос — поэтому отвечаем SUCCESS
+    только когда платёж действительно обработан.
+    """
+    try:
+        data = dict(await request.post())
+    except Exception:
+        data = {}
+    if not _paw_check_sign(data):
+        logger.warning(f"paw notify: подпись не совпала, поля={list(data)[:8]}")
+        return aiohttp_web.Response(text='FAIL')
+    order_uuid = str(data.get('MNT_TRANSACTION_ID') or '')
+    try:
+        is_test = int(str(data.get('MNT_TEST_MODE') or '0') or 0)
+    except ValueError:
+        is_test = 0
+    res = await paw_payment_done(order_uuid, is_test=is_test)
+    if not res.get('ok'):
+        logger.warning(f"paw notify {order_uuid}: {res}")
+        return aiohttp_web.Response(text='FAIL')
+    return aiohttp_web.Response(text='SUCCESS')
 
 
 def ensure_monetization() -> None:
@@ -31028,6 +31259,10 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/news', api_news)
     app.router.add_post('/api/admin/news', api_admin_news)
     app.router.add_post('/api/pay/cispay/create', api_pay_create)
+    # PayAnyWay: карты, СБП, SberPay
+    app.router.add_post('/api/pay/paw/create', api_pay_paw_create)
+    app.router.add_get('/api/pay/paw/status', api_pay_paw_status)
+    app.router.add_post('/api/pay/paw/notify', api_pay_paw_notify)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)
     app.router.add_get('/api/admin/settings', api_admin_settings)

@@ -370,6 +370,11 @@ export const api = {
   payCard: (product) => request('/api/pay/cispay/create',
     { method: 'POST', body: JSON.stringify({ product }) }),
   payCardStatus: (uuid) => request(`/api/pay/cispay/status?uuid=${encodeURIComponent(uuid)}`),
+  // PayAnyWay: карты, СБП, SberPay
+  pawCreate: (product, baseUrl) => request('/api/pay/paw/create', {
+    method: 'POST', body: { product, base_url: baseUrl },
+  }),
+  pawStatus: (uuid) => request(`/api/pay/paw/status?uuid=${encodeURIComponent(uuid)}`),
   getReferral: () => request('/api/referral'),
   // Документы: политика конфиденциальности и условия пользования
   getLegal: () => request('/api/legal'),

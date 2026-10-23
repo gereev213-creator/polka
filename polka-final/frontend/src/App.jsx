@@ -3280,6 +3280,9 @@ function TariffsPage() {
   const [pay, setPay] = useState({ state: '', text: '', tries: 0 })
   // Реквизиты исполнителя с сервера: CISPay проверяет страницу оплаты
   const [legal, setLegal] = useState(null)
+  // Какой провайдер активен: PayAnyWay или CISPay. Выбор делает сервер,
+  // экран только следует за ним — переключать вручную не нужно.
+  const [pawOn, setPawOn] = useState(false)
   const [err, setErr] = useState('')
 
   const load = () => {
@@ -3287,6 +3290,7 @@ function TariffsPage() {
     api.getReferral().then(setRef).catch(() => {})
     api.payPlans().then((d) => {
       setLegal(d.legal || null)
+      setPawOn(Boolean(d.paw_enabled))
       const list = d.plans || []
       setCardPlans(list)
       setCryptoOn(!!d.crypto_enabled)
@@ -3313,7 +3317,9 @@ function TariffsPage() {
     setBusy(true)
     setPay({ state: 'waiting', text: 'Открыл страницу оплаты. Проверяем автоматически…', tries: 0 })
     try {
-      const r = await api.payCard(chosen.product)
+      const r = pawOn
+        ? await api.pawCreate(chosen.product, window.location.origin)
+        : await api.payCard(chosen.product)
       if (!r.url) throw new Error('нет ссылки оплаты')
       const tg = window.Telegram?.WebApp
       if (tg && typeof tg.openLink === 'function') tg.openLink(r.url)
@@ -3322,7 +3328,9 @@ function TariffsPage() {
       const timer = setInterval(async () => {
         tries += 1
         try {
-          const s = await api.payCardStatus(r.order_uuid)
+          const s = pawOn
+            ? await api.pawStatus(r.order_uuid)
+            : await api.payCardStatus(r.order_uuid)
           if (s && s.credited) {
             clearInterval(timer)
             setPay({ state: 'paid', text: `Оплачено — «Плюс» продлён на ${s.days} дней`, tries })
