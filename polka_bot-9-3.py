@@ -22582,6 +22582,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                      'Цена «Плюса» на год, ₽ (0 — не показывать)'),
     'pay.crypto_enabled': ('str', None, None, '0',
                            '1 — показать способ оплаты «Криптой» (скоро)'),
+    'pay.calc_enabled': ('str', None, None, '0',
+                         '1 — показать строку «Подобрать свой тариф» (калькулятор, пока не готов)'),
     # Реквизиты продавца. CISPay проверяет платёжную страницу: на ней должны
     # быть исполнитель, ИНН, условия возврата, оферта, политика и поддержка.
     'pay.legal_name': ('str', None, None, '',
@@ -24074,7 +24076,8 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
                           'provider': 'paw' if paw_enabled() else 'cispay',
                           'legal': legal,
                           # Этап T: вариант «Криптой» показываем только когда включён
-                          'crypto_enabled': str(cfg_get('pay.crypto_enabled') or '0') == '1'})
+                          'crypto_enabled': str(cfg_get('pay.crypto_enabled') or '0') == '1',
+                          'calc_enabled': str(cfg_get('pay.calc_enabled') or '0') == '1'})
 
 
 async def api_pay_create(request: aiohttp_web.Request) -> aiohttp_web.Response:

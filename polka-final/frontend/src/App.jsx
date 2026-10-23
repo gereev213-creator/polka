@@ -3280,6 +3280,9 @@ function TariffsPage() {
   // Какой провайдер активен: PayAnyWay или CISPay. Выбор делает сервер,
   // экран только следует за ним — переключать вручную не нужно.
   const [pawOn, setPawOn] = useState(false)
+  // Калькулятор «Подобрать свой тариф» — по рекомендации 35_ он отложен:
+  // строка показывается только при включённом флаге и остаётся неактивной.
+  const [calcOn, setCalcOn] = useState(false)
   const [err, setErr] = useState('')
 
   const load = () => {
@@ -3288,6 +3291,7 @@ function TariffsPage() {
     api.payPlans().then((d) => {
       setLegal(d.legal || null)
       setPawOn(Boolean(d.paw_enabled))
+      setCalcOn(Boolean(d.calc_enabled))
       const list = d.plans || []
       setCardPlans(list)
       setCryptoOn(!!d.crypto_enabled)
@@ -3479,6 +3483,13 @@ function TariffsPage() {
         ) : (
           <EmptyState text="Оплата картой пока не настроена" icon={<Icon name="card" />} />
         )}
+
+        {calcOn ? (
+          <div className="calc-row" aria-disabled="true">
+            <span>Подобрать свой тариф</span>
+            <span className="calc-soon">скоро</span>
+          </div>
+        ) : null}
 
         {/* 4. Способ оплаты */}
         {cryptoOn ? (

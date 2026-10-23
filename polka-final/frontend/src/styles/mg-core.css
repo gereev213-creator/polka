@@ -2608,3 +2608,29 @@
   cursor: pointer;
 }
 .app-shell .week-btn:active, .week-btn:active { filter: brightness(1.2); }
+
+/* Строка «Подобрать свой тариф» — по рекомендации 35_ отложена,
+   поэтому выглядит как намёк, а не как рабочая ссылка. */
+.app-shell .calc-row, .calc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.app-shell .calc-soon, .calc-soon {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
