@@ -29354,7 +29354,16 @@ async def api_health(request: aiohttp_web.Request) -> aiohttp_web.Response:
         }
     except Exception:
         keys = {'error': 'n/a'}
-    body = json.dumps({'status': 'ok', 'server': 'polka-bot', 'payment': keys})
+    # Диагностика сборки: видно, попал ли фронтенд в образ. Если index=false,
+    # значит собирали не нашим Dockerfile — Mini App не отдаётся.
+    try:
+        dist = os.environ.get('FRONTEND_DIST', '')
+        front = {'dist': dist or '(не задан)',
+                 'index': bool(dist and os.path.isfile(os.path.join(dist, 'index.html')))}
+    except Exception:
+        front = {'error': 'n/a'}
+    body = json.dumps({'status': 'ok', 'server': 'polka-bot',
+                       'payment': keys, 'front': front})
     return aiohttp_web.Response(text=body, content_type="application/json")
 
 
