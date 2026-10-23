@@ -1661,3 +1661,92 @@
   font-size: 13px;
   font-weight: 500;
 }
+
+/* ── 25. Поиск с фильтрами ────────────────────────────────────────────────
+   Экран держался на старом CSS: заголовок, строка поиска, рейлы фильтров и
+   счётчик выглядели из другого набора. Приводим к общему языку: пилюли,
+   один ритм, горизонтальные рейлы с прокруткой. */
+.app-shell .page-title, .page-title {
+  margin: 4px 0 12px;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+
+/* Строка поиска: поле и кнопка поиска по фото в один ряд */
+.app-shell .search-row, .search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.app-shell .search-row .text-input, .search-row .text-input {
+  flex: 1;
+  min-width: 0;
+  height: 52px;
+  min-height: 52px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  border: 0;
+  padding: 0 18px;
+  font-size: 16px;
+}
+.app-shell .photo-search-btn, .photo-search-btn {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  color: #fff;
+  cursor: pointer;
+}
+.app-shell .photo-search-btn .icon-svg, .photo-search-btn .icon-svg { width: 22px; height: 22px; }
+.app-shell .photo-search-btn:active, .photo-search-btn:active { filter: brightness(1.16); }
+
+/* Рейл фильтров: горизонтальная прокрутка без полосы */
+.app-shell .chip-rail, .chip-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0 6px;
+  scrollbar-width: none;
+}
+.app-shell .chip-rail::-webkit-scrollbar, .chip-rail::-webkit-scrollbar { display: none; }
+.app-shell .chip-rail > *, .chip-rail > * { flex: 0 0 auto; }
+.app-shell .chip-rail-label, .chip-rail-label {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* Применённые фильтры и счётчик */
+.app-shell .active-filters, .active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 12px;
+}
+.app-shell .count-chip-n, .count-chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 700;
+}
