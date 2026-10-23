@@ -18,3 +18,5 @@ ngrok
 polka_max_bot.py
 run_bots.py
 entrypoint.sh
+!polka-final/frontend/dist
+!polka-final/frontend/dist/**
