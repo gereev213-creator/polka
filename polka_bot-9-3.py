@@ -23912,6 +23912,47 @@ def _paw_sign(**fields) -> str:
     return hashlib.md5(raw.encode('utf-8')).hexdigest()
 
 
+def _paw_notify_sign(data: Dict, op_id: str = '') -> str:
+    """Подпись уведомления PayAnyWay.
+
+    В отличие от формы, в уведомлении между номером счёта и транзакцией стоит
+    MNT_OPERATION_ID — без него подпись не сходится.
+    """
+    parts = [
+        str(data.get('MNT_ID') or ''),
+        str(data.get('MNT_TRANSACTION_ID') or ''),
+        op_id,
+        str(data.get('MNT_AMOUNT') or ''),
+        str(data.get('MNT_CURRENCY_CODE') or ''),
+        str(data.get('MNT_SUBSCRIBER_ID') or ''),
+        str(data.get('MNT_TEST_MODE') or ''),
+    ]
+    return hashlib.md5((''.join(parts) + paw_secret()).encode('utf-8')).hexdigest()
+
+
+def _paw_check_notify(data: Dict) -> bool:
+    """Проверяет подпись уведомления, пробуя оба варианта состава полей.
+
+    PayAnyWay менял схему: в некоторых версиях MNT_OPERATION_ID входит в
+    подпись, в некоторых нет. Проверяем оба — секрет всё равно обязателен,
+    так что подделать запрос по-прежнему нельзя.
+    """
+    got = str((data or {}).get('MNT_SIGNATURE') or '').strip().lower()
+    if not got:
+        return False
+    op_id = str((data or {}).get('MNT_OPERATION_ID') or '')
+    variants = {
+        _paw_notify_sign(data, op_id),
+        _paw_notify_sign(data, ''),
+        _paw_sign(MNT_ID=data.get('MNT_ID'),
+                  MNT_TRANSACTION_ID=data.get('MNT_TRANSACTION_ID'),
+                  MNT_AMOUNT=data.get('MNT_AMOUNT'),
+                  MNT_CURRENCY_CODE=data.get('MNT_CURRENCY_CODE'),
+                  MNT_TEST_MODE=data.get('MNT_TEST_MODE')),
+    }
+    return any(hmac.compare_digest(got, v) for v in variants if v)
+
+
 def _paw_check_sign(data: Dict) -> bool:
     """Сверяет подпись уведомления с расчётной."""
     got = str((data or {}).get('MNT_SIGNATURE') or '').strip().lower()
@@ -24346,11 +24387,16 @@ async def api_pay_paw_notify(request: aiohttp_web.Request) -> aiohttp_web.Respon
     «не принято», и они будут повторять запрос — поэтому отвечаем SUCCESS
     только когда платёж действительно обработан.
     """
-    try:
-        data = dict(await request.post())
-    except Exception:
-        data = {}
-    if not _paw_check_sign(data):
+    # PayAnyWay присылает результат GET-запросом с параметрами в строке
+    # (проверено на живом платеже 23.10 в 21:59). POST тоже поддерживаем —
+    # в разных версиях кабинета встречается оба варианта.
+    data = dict(request.query)
+    if not data:
+        try:
+            data = dict(await request.post())
+        except Exception:
+            data = {}
+    if not _paw_check_notify(data):
         logger.warning(f"paw notify: подпись не совпала, поля={list(data)[:8]}")
         return aiohttp_web.Response(text='FAIL')
     order_uuid = str(data.get('MNT_TRANSACTION_ID') or '')
@@ -31540,6 +31586,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/pay/paw/create', api_pay_paw_create)
     app.router.add_get('/api/pay/paw/status', api_pay_paw_status)
     app.router.add_post('/api/pay/paw/notify', api_pay_paw_notify)
+    app.router.add_get('/api/pay/paw/notify', api_pay_paw_notify)
     app.router.add_get('/api/pay/promo-check', api_pay_promo_check)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
     app.router.add_get('/api/admin/me', api_admin_me)

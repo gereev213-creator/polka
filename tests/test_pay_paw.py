@@ -74,3 +74,20 @@ for name, res in checks:
 
 print('\nPayAnyWay: все проверки пройдены' if ok else '\nPayAnyWay: есть ошибки')
 sys.exit(0 if ok else 1)
+
+# ── Уведомление: PayAnyWay присылает GET с параметрами ──────────────────────
+checks2 = []
+checks2.append(("маршрут notify принимает GET",
+                "add_get('/api/pay/paw/notify'" in SRC))
+checks2.append(("параметры читаются из query",
+                "data = dict(request.query)" in SRC))
+checks2.append(("подпись с MNT_OPERATION_ID",
+                '_paw_notify_sign' in SRC and 'MNT_OPERATION_ID' in SRC))
+checks2.append(("проверка пробует оба варианта",
+                'any(hmac.compare_digest(got, v)' in SRC))
+ok2 = True
+for name, res in checks2:
+    print(f"  {'✓' if res else '✗'} {name}")
+    ok2 = ok2 and res
+print('уведомление GET/POST: ок' if ok2 else 'уведомление: есть ошибки')
+sys.exit(0 if (ok and ok2) else 1)
