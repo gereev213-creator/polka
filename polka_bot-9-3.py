@@ -23736,8 +23736,15 @@ def _paw_get(cfg_key: str, env_key: str, default: str = '', *aliases: str) -> st
 
 
 def paw_enabled() -> bool:
-    on = _paw_get('pay.paw_enabled', 'PAY_PAW_ENABLED', '0')
-    return on == '1' and bool(paw_mnt_id())
+    """Оплата через PayAnyWay доступна.
+
+    Достаточно, чтобы были заданы номер счёта и код целостности: держать
+    ещё и отдельный флаг «включено» — лишний шаг, на котором легко забыть
+    и решить, что интеграция не работает. Явный флаг тоже уважаем.
+    """
+    if _paw_get('pay.paw_enabled', 'PAY_PAW_ENABLED', '0') == '1':
+        return bool(paw_mnt_id())
+    return bool(paw_mnt_id()) and bool(paw_secret())
 
 
 def paw_mnt_id() -> str:
