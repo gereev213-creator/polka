@@ -23533,6 +23533,51 @@ def ensure_payments() -> None:
     except Exception as e:
         logger.warning(f"ensure_payments: {e}")
 
+    # На боевой базе таблица payments могла остаться от ручной оплаты по
+    # скриншоту: там другие колонки, и CREATE TABLE IF NOT EXISTS ничего не
+    # меняет. Из-за этого любая оплата падала на вставке (save_failed).
+    # Здесь досоздаём недостающие колонки — идемпотентно.
+    needed = {
+        'provider': "TEXT DEFAULT 'paw'",
+        'product': "TEXT DEFAULT ''",
+        'order_uuid': 'TEXT',
+        'amount': 'REAL DEFAULT 0',
+        'days': 'INTEGER DEFAULT 0',
+        'url': "TEXT DEFAULT ''",
+        'status': "TEXT DEFAULT 'waiting'",
+        'is_test': 'INTEGER DEFAULT 0',
+        'created_at': 'TEXT',
+        'checked_at': 'TEXT',
+        'paid_at': 'TEXT',
+        'credited': 'INTEGER DEFAULT 0',
+        'tariff': "TEXT DEFAULT ''",
+    }
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute("SELECT name FROM pragma_table_info('payments')")
+        have = {row[0] for row in cursor.fetchall()}
+        added = []
+        for col, ddl in needed.items():
+            if col in have:
+                continue
+            try:
+                db.conn.execute(f"ALTER TABLE payments ADD COLUMN {col} {ddl}")
+                added.append(col)
+            except Exception as e:
+                logger.warning(f"ensure_payments add {col}: {e}")
+        if added:
+            db.conn.commit()
+            logger.info(f"payments: добавлены колонки {', '.join(added)}")
+        # Уникальный индекс по order_uuid нужен для защиты от двойного зачисления
+        try:
+            db.conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_payments_order ON payments(order_uuid)")
+            db.conn.commit()
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"ensure_payments columns: {e}")
+
 
 def cispay_shop_uuid() -> str:
     return str(cfg_get('pay.cispay_shop_uuid') or '').strip()
