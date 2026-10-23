@@ -1472,3 +1472,23 @@
   font-size: 17px;
 }
 .app-shell .tariff-pay:disabled, .tariff-pay:disabled { opacity: 0.5; }
+
+/* ── 23. Чип подписки в профиле ───────────────────────────────────────────
+   Вместо «Плюс / Пробный / Бесплатно» голым текстом — чип с датой продления.
+   Платный тариф выделяется цветом, пробный остаётся нейтральным. */
+.app-shell .plan-chip, .plan-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.app-shell .plan-chip.is-plus, .plan-chip.is-plus {
+  background: rgba(132, 255, 57, 0.14);
+  color: #b6ff86;
+}

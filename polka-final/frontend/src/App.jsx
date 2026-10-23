@@ -3227,8 +3227,13 @@ function ProfilePage() {
         </Link>
         <Link to="/tariffs" className="setting-row glass-card menu-row">
           <span className="menu-left"><Icon name="crown" /><span>Подписка</span></span>
-          <span className="menu-arrow" aria-hidden="true">
-            {sub?.plan === 'plus' ? 'Плюс' : Number(sub?.trial_days_left || 0) > 0 ? 'Пробный' : 'Бесплатно'}
+          {/* Дата продления вместо сухого «Плюс»: человеку важно знать, до когда */}
+          <span className={`plan-chip${sub?.plan === 'plus' ? ' is-plus' : ''}`}>
+            {sub?.plan === 'plus'
+              ? (sub?.plus_until ? `до ${String(sub.plus_until).slice(8, 10)}.${String(sub.plus_until).slice(5, 7)}` : 'Плюс')
+              : Number(sub?.trial_days_left || 0) > 0
+                ? `Пробный · ${sub.trial_days_left} дн`
+                : 'Бесплатно'}
           </span>
         </Link>
         {isAdmin ? (
