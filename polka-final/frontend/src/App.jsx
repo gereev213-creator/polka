@@ -3330,6 +3330,14 @@ function TariffsPage() {
       const r = pawOn
         ? await api.pawCreate(chosen.product, window.location.origin, promoCode)
         : await api.payCard(chosen.product)
+      // Скидка 100 %: шлюз не нужен, «Плюс» уже начислен.
+      if (r.free) {
+        setPay({ state: 'paid', tries: 0,
+                 text: `Промокод 100 % — «Плюс» на ${r.days} дн. активирован` })
+        setDiscountCode(''); setDiscountPct(0)
+        load()
+        return
+      }
       if (!r.url) throw new Error('нет ссылки оплаты')
       const tg = window.Telegram?.WebApp
       if (tg && typeof tg.openLink === 'function') tg.openLink(r.url)
@@ -3537,9 +3545,11 @@ function TariffsPage() {
               onClick={buyCard}>
               {busy
                 ? 'Открываю…'
-                : discountPct > 0
-                  ? `Оплатить ${Math.round(chosen.amount * (100 - discountPct) / 100)} ₽ · скидка ${discountPct} %`
-                  : `Оплатить ${chosen.amount} ₽`}
+                : discountPct >= 100
+                  ? 'Активировать бесплатно'
+                  : discountPct > 0
+                    ? `Оплатить ${Math.round(chosen.amount * (100 - discountPct) / 100)} ₽ · скидка ${discountPct} %`
+                    : `Оплатить ${chosen.amount} ₽`}
             </button>
             <div className="chat-note">
               Откроется страница оплаты. «Плюс» включится сам, даже если закрыть приложение.

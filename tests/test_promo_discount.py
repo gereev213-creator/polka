@@ -13,7 +13,9 @@ checks = []
 checks.append(("тип discount в PROMO_KINDS", "'discount'" in SRC))
 checks.append(("подпись типа для админки", "'discount': 'скидка на оплату, %'" in SRC))
 # 2. ограничение 90 %
-checks.append(("скидка не больше 90 %", "скидка не больше 90 %" in SRC))
+checks.append(("скидка до 100 %", "скидка не больше 100 %" in SRC))
+checks.append(("100 % — выдача без счёта", "'free': True" in SRC))
+checks.append(("предел процента в проверке", "min(100, int(promo.get('value')" in SRC))
 # 3. включение и выключение
 checks.append(("функция promo_set_active", 'def promo_set_active(' in SRC))
 checks.append(("админка принимает activate", "'activate'" in SRC))

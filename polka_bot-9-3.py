@@ -22863,8 +22863,8 @@ def promo_create(code: str, kind: str, value: int, max_uses: int = 0, per_user: 
     if value <= 0:
         return {'ok': False, 'error': 'bad_value'}
     if kind == 'discount':
-        if value > 90:
-            return {'ok': False, 'error': 'bad_value', 'detail': 'скидка не больше 90 %'}
+        if value > 100:
+            return {'ok': False, 'error': 'bad_value', 'detail': 'скидка не больше 100 %'}
     else:
         value = min(value, 3650 if kind != 'coins' else 100000)
     try:
@@ -22953,7 +22953,7 @@ def promo_discount(code: str) -> Dict:
     used = int(promo.get('current_uses') or 0)
     if limit and used >= limit:
         return {'ok': False, 'error': 'limit', 'detail': 'Промокод больше не действует'}
-    pct = max(1, min(90, int(promo.get('value') or 0)))
+    pct = max(1, min(100, int(promo.get('value') or 0)))
     return {'ok': True, 'code': code, 'percent': pct}
 
 
@@ -23997,6 +23997,23 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
         else:
             return {'ok': False, 'error': chk.get('error') or 'bad_promo',
                     'detail': chk.get('detail') or 'Промокод не подошёл'}
+
+    # 2в. Скидка 100 % — платить нечего. Платёжный шлюз не умеет счёт на
+    # 0 ₽, поэтому выдаём «Плюс» сразу и помечаем код использованным.
+    if amount <= 0 and promo_code:
+        try:
+            expires = _grant_plus_days(int(user_id), int(days))
+            promo_mark_used(promo_code)
+            _plan_event(int(user_id), 'paw_free',
+                        {'product': product, 'promo': promo_code, 'days': int(days)})
+            return {'ok': True, 'free': True, 'days': int(days),
+                    'amount': 0, 'expires_at': expires, 'promo': promo_code,
+                    'discount': 100, 'provider': 'paw'}
+        except Exception as e:
+            logger.warning(f"paw free grant: {e}")
+            return {'ok': False, 'error': 'grant_failed', 'detail': str(e)[:150]}
+    if amount <= 0:
+        return {'ok': False, 'error': 'zero_amount', 'detail': 'Нечего оплачивать'}
 
     # 3. Номер счёта и реквизиты
     mnt_id = paw_mnt_id()
