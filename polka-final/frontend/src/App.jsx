@@ -347,19 +347,6 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
   const navigate = useNavigate()
   if (!item || typeof item !== 'object') return null
   const openCard = () => {
-    // ДИАГНОСТИКА: показывает номер объявления в момент нажатия. Если плашка
-    // не появилась — нажатие не доходит до карточки (перехватывает что-то
-    // сверху). Если появилась, а экран не сменился — дело в навигации.
-    // Убрать после того, как причина будет найдена.
-    try {
-      const mark = document.createElement('div')
-      mark.textContent = item.id ? `Открываю №${item.id}` : 'У карточки нет id'
-      mark.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:120px;'
-        + 'z-index:9999;padding:10px 16px;border-radius:999px;background:#1f78ff;color:#fff;'
-        + 'font:600 14px system-ui;pointer-events:none;opacity:.95'
-      document.body.appendChild(mark)
-      setTimeout(() => mark.remove(), 1600)
-    } catch (e) { /* диагностика не должна ломать нажатие */ }
     if (!item.id) return
     const target = `/listing/${item.id}`
     navigate(target)
