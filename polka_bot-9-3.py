@@ -22566,6 +22566,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                        'Номер бизнес-счёта (MNT_ID) из кабинета PayAnyWay'),
     'pay.paw_secret': ('str', None, None, '',
                        'Секретный код для подписи (код проверки целостности)'),
+    'pay.paw_currency': ('str', None, None, 'RUB',
+                         'Код валюты для PayAnyWay: RUB или 643 (если шлюз '
+                         'пишет «нет доступных платёжных систем»)'),
     'pay.paw_test': ('str', None, None, '0',
                      '1 — тестовый режим PayAnyWay, 0 — боевой. '
                      'Тестовый работает, только если включён в кабинете'),
@@ -23893,6 +23896,12 @@ def paw_secret() -> str:
     return _paw_get('pay.paw_secret', 'PAY_PAW_SECRET', '', 'PAW_INTEGRITY_CODE')
 
 
+def _paw_currency() -> str:
+    """Код валюты. RUB — по документации, 643 — если шлюз не принимает RUB."""
+    val = str(_paw_get('pay.paw_currency', 'PAY_PAW_CURRENCY', 'RUB')).strip().upper()
+    return val if val in ('RUB', '643') else 'RUB'
+
+
 def paw_test_mode() -> int:
     # По умолчанию боевой режим: на боевом счёте тестовый выключен, и запрос
     # с MNT_TEST_MODE=1 отклоняется с «Не включен тестовый режим на счёте».
@@ -24023,7 +24032,7 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
     order_uuid = f"paw-{int(user_id)}-{int(_time.time() * 1000)}"
     test_mode = str(paw_test_mode())
     sign = _paw_sign(MNT_ID=mnt_id, MNT_TRANSACTION_ID=order_uuid,
-                     MNT_AMOUNT=f'{amount:.2f}', MNT_CURRENCY_CODE='RUB',
+                     MNT_AMOUNT=f'{amount:.2f}', MNT_CURRENCY_CODE=_paw_currency(),
                      MNT_TEST_MODE=test_mode)
 
     # 4. Ссылка на форму
@@ -24031,7 +24040,7 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
         ('MNT_ID', mnt_id),
         ('MNT_TRANSACTION_ID', order_uuid),
         ('MNT_AMOUNT', f'{amount:.2f}'),
-        ('MNT_CURRENCY_CODE', 'RUB'),
+        ('MNT_CURRENCY_CODE', _paw_currency()),
         ('MNT_DESCRIPTION', f'POLKA Plus {days} дней'),
         ('MNT_TEST_MODE', test_mode),
         ('MNT_SIGNATURE', sign),
