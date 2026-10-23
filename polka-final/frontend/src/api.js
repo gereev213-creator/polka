@@ -371,8 +371,11 @@ export const api = {
     { method: 'POST', body: JSON.stringify({ product }) }),
   payCardStatus: (uuid) => request(`/api/pay/cispay/status?uuid=${encodeURIComponent(uuid)}`),
   // PayAnyWay: карты, СБП, SberPay
+  // ВАЖНО: тело должно быть строкой JSON, как у payCard. Объект fetch
+  // превращает в «[object Object]», сервер получает пустое тело и отвечает
+  // unknown_product — именно это и ломало оплату.
   pawCreate: (product, baseUrl) => request('/api/pay/paw/create', {
-    method: 'POST', body: { product, base_url: baseUrl },
+    method: 'POST', body: JSON.stringify({ product, base_url: baseUrl }),
   }),
   pawStatus: (uuid) => request(`/api/pay/paw/status?uuid=${encodeURIComponent(uuid)}`),
   getReferral: () => request('/api/referral'),
