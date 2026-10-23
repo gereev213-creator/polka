@@ -32,11 +32,12 @@ ns = {
     'paw_mnt_id': lambda: '12345678',
     'paw_test_mode': lambda: 1,
     'paw_secret': lambda: 'secret',
+    'cfg_get': lambda k, d=None: {'pay.paw_currency': 'RUB', 'pay.paw_test': '0'}.get(k, d),
     'PAW_FORM_URL': 'https://www.payanyway.ru/assistant.htm',
     '_db_locked': lambda fn, *a, **k: fn(),
     '_plan_event': lambda *a, **k: None,
 }
-for name in ('_paw_sign', 'paw_order_create'):
+for name in ('_paw_sign', '_paw_get', '_paw_currency', 'paw_order_create'):
     exec(cut(name), ns)
 
 async def main():
