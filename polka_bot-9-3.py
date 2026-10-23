@@ -23856,42 +23856,55 @@ def _paw_check_sign(data: Dict) -> bool:
 
 
 async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
-    """Готовит ссылку на платёжную форму и запись о платеже."""
+    """Создаёт счёт PayAnyWay и запись о платеже.
+
+    Написано заново и максимально просто: проверка продукта → цена → подпись
+    и ссылка → запись в базу. Каждый шаг изолирован, поэтому сбой во
+    вспомогательном действии (журнал событий) не мешает оплате.
+    """
+    # 1. Продукт
     if product not in CISPAY_PLANS:
-        return {'ok': False, 'error': 'unknown_product'}
-    days, key = CISPAY_PLANS[product]
-    amount = _cispay_price(key)
+        return {'ok': False, 'error': 'unknown_product', 'detail': f'нет продукта {product}'}
+    days, price_key = CISPAY_PLANS[product]
+
+    # 2. Цена
+    amount = _cispay_price(price_key)
     if amount <= 0:
         return {'ok': False, 'error': 'price_not_set',
-                'detail': 'Цена не задана: впишите её в админке'}
+                'detail': f'цена {price_key} не задана в админке'}
+
+    # 3. Номер счёта и реквизиты
+    mnt_id = paw_mnt_id()
+    if not mnt_id:
+        return {'ok': False, 'error': 'no_merchant',
+                'detail': 'не задан номер бизнес-счёта PayAnyWay'}
     order_uuid = f"paw-{int(user_id)}-{int(_time.time() * 1000)}"
-    fields = {
-        'MNT_ID': paw_mnt_id(),
-        'MNT_TRANSACTION_ID': order_uuid,
-        'MNT_AMOUNT': f'{amount:.2f}',
-        'MNT_CURRENCY_CODE': 'RUB',
-        'MNT_TEST_MODE': str(paw_test_mode()),
-    }
-    sign = _paw_sign(**fields)
-    query = {
-        'MNT_ID': fields['MNT_ID'],
-        'MNT_TRANSACTION_ID': fields['MNT_TRANSACTION_ID'],
-        'MNT_AMOUNT': fields['MNT_AMOUNT'],
-        'MNT_CURRENCY_CODE': fields['MNT_CURRENCY_CODE'],
-        'MNT_DESCRIPTION': f'POLKA Plus {product} ({days} дн.)',
-        'MNT_TEST_MODE': fields['MNT_TEST_MODE'],
-        'MNT_SIGNATURE': sign,
-        'MNT_SUCCESS_URL': f'{base_url}/pay/ok',
-        'MNT_FAIL_URL': f'{base_url}/pay/fail',
-        'MNT_RETURN_URL': f'{base_url}/pay/ok',
-    }
+    test_mode = str(paw_test_mode())
+    sign = _paw_sign(MNT_ID=mnt_id, MNT_TRANSACTION_ID=order_uuid,
+                     MNT_AMOUNT=f'{amount:.2f}', MNT_CURRENCY_CODE='RUB',
+                     MNT_TEST_MODE=test_mode)
+
+    # 4. Ссылка на форму
+    params = [
+        ('MNT_ID', mnt_id),
+        ('MNT_TRANSACTION_ID', order_uuid),
+        ('MNT_AMOUNT', f'{amount:.2f}'),
+        ('MNT_CURRENCY_CODE', 'RUB'),
+        ('MNT_DESCRIPTION', f'POLKA Plus {days} дней'),
+        ('MNT_TEST_MODE', test_mode),
+        ('MNT_SIGNATURE', sign),
+        ('MNT_SUCCESS_URL', f'{base_url}/pay/ok'),
+        ('MNT_FAIL_URL', f'{base_url}/pay/fail'),
+    ]
     url = PAW_FORM_URL + '?' + '&'.join(
-        f'{k}={_up.quote(str(v))}' for k, v in query.items())
+        f'{_up.quote(str(k))}={_up.quote(str(v))}' for k, v in params)
+
+    # 5. Запись о платеже. Ошибку базы возвращаем честно, а не глотаем.
     now = get_moscow_time().isoformat()
 
     def _save() -> None:
-        cursor = db.conn.cursor()
-        cursor.execute(
+        cur = db.conn.cursor()
+        cur.execute(
             "INSERT INTO payments (user_id, provider, product, order_uuid, amount,"
             " days, url, status, created_at, checked_at) "
             "VALUES (?,?,?,?,?,?,?,'waiting',?,?)",
@@ -23902,9 +23915,17 @@ async def paw_order_create(user_id: int, product: str, base_url: str) -> Dict:
     try:
         await asyncio.to_thread(_db_locked, _save)
     except Exception as e:
-        logger.warning(f"paw save: {e}")
-        return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:150]}
-    _plan_event(int(user_id), 'paw_order', {'product': product, 'amount': amount})
+        logger.warning(f"paw save: {type(e).__name__}: {e}")
+        return {'ok': False, 'error': 'save_failed',
+                'detail': f'{type(e).__name__}: {e}'[:160]}
+
+    # 6. Журнал — необязателен: платёж уже создан, и его сбой не должен
+    #    отменять оплату.
+    try:
+        _plan_event(int(user_id), 'paw_order', {'product': product, 'amount': amount})
+    except Exception as e:
+        logger.warning(f"paw event: {e}")
+
     return {'ok': True, 'order_uuid': order_uuid, 'url': url,
             'amount': int(amount), 'days': int(days), 'provider': 'paw'}
 
