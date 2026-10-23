@@ -2467,7 +2467,13 @@ class Database:
                 # Раньше путь по умолчанию был просто "polka.db" (= /app/polka.db),
                 # а /app пересобирается с нуля при каждом деплое — поэтому база
                 # полностью терялась при каждом обновлении кода.
-                db_path = os.environ.get("DB_PATH", "/data/polka.db")
+                # Путь по умолчанию подстраивается под площадку: Amvera даёт
+                # /data, BOTHOST — /app/data (их папка персистентного хранилища).
+                # Явный DB_PATH всегда главнее.
+                _default_db = "/data/polka.db"
+                if os.path.isdir("/app/data"):
+                    _default_db = "/app/data/polka.db"
+                db_path = os.environ.get("DB_PATH", _default_db)
 
             directory = os.path.dirname(db_path)
             if directory:
