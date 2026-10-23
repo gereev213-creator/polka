@@ -2064,3 +2064,368 @@
 .app-shell .mt-8, .mt-8 { margin-top: 8px; }
 .app-shell .mt-12, .mt-12 { margin-top: 12px; }
 .app-shell .mt-14, .mt-14 { margin-top: 14px; }
+
+/* ── 30. Раскладка и остатки ──────────────────────────────────────────────
+   Классы, которые держат сетки и мелкие блоки. Меняем только то, что не
+   ломает раскладку: числа колонок, отступы, радиусы, цвета. Никаких
+   переносов и перестановок — экран должен остаться там же, где был. */
+.app-shell .grid-two, .grid-two {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.app-shell .feed-grid, .feed-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.app-shell .form-stack, .form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.app-shell .field-wrap, .field-wrap { margin-top: 4px; }
+.app-shell .field-hint, .field-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-shell .field-error, .field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #ff9a9a;
+}
+.app-shell .is-ok, .is-ok { color: #b6ff86; }
+
+/* Категории в поиске — плитки */
+.app-shell .category-grid, .category-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.app-shell .cat-tile, .cat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 84px;
+  padding: 10px 6px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+.app-shell .cat-tile.is-active, .cat-tile.is-active {
+  background: rgba(31, 120, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(31, 120, 255, 0.55);
+  color: #fff;
+}
+.app-shell .cat-tile-art, .cat-tile-art { display: flex; align-items: center; justify-content: center; }
+.app-shell .cat-tile-label, .cat-tile-label {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* Баннеры ленты */
+.app-shell .feed-banner, .feed-banner {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+}
+.app-shell .feed-banner-slide, .feed-banner-slide { border-radius: 20px; overflow: hidden; }
+.app-shell .feed-banner-slide img, .feed-banner-slide img { object-fit: cover; }
+
+/* Статус ленты и напоминание */
+.app-shell .feed-status-row, .feed-status-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.app-shell .feed-status-chip, .feed-status-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  font-weight: 600;
+}
+.app-shell .feed-reminder-head, .feed-reminder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Переключатели hunt и второй ряд вкладок */
+.app-shell .hunt-toggles, .hunt-toggles { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.app-shell .chat-tabs.is-second, .chat-tabs.is-second { margin-top: 0; }
+.app-shell .chat-tabs-pill, .chat-tabs-pill { display: none; }
+.app-shell .chat-replies, .chat-replies { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+
+/* Мелочи форм и лота */
+.app-shell .ad-form, .ad-form { padding: 0; }
+.app-shell .price-pair, .price-pair {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.app-shell .avatar, .avatar {
+  border-radius: 50%;
+  overflow: hidden;
+  background: #242424;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .padded-inline, .padded-inline { padding-left: 16px; padding-right: 16px; }
+.app-shell .chat-media-busy, .chat-media-busy { opacity: 0.6; }
+
+/* Подвал приложения */
+.app-shell .app-footer, .app-footer {
+  margin-top: 24px;
+  padding: 16px 0 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  text-align: center;
+}
+.app-shell .app-footer-copy, .app-footer-copy {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+.app-shell .app-footer-links, .app-footer-links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.app-shell .app-footer-links a, .app-footer-links a {
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-shell .app-footer-sep, .app-footer-sep { color: rgba(255, 255, 255, 0.2); }
+
+/* ── 31. Последние остатки ────────────────────────────────────────────────
+   Точечные классы, которые ещё не были оформлены: заголовок и теги лота,
+   фильтры поиска, блоки успеха и состояния, шапки списков. */
+.app-shell .listing-title, .listing-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: #fff;
+}
+.app-shell .listing-tags, .listing-tags,
+.app-shell .feed-banner-dots, .feed-banner-dots {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.app-shell .feed-banner-dots, .feed-banner-dots {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
+}
+.app-shell .feed-banner-dots i, .feed-banner-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+}
+.app-shell .feed-banner-dots i.is-on, .feed-banner-dots i.is-on { background: #fff; }
+.app-shell .feed-banner-track, .feed-banner-track { display: flex; }
+
+/* Фильтры поиска */
+.app-shell .filter-chip, .filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #242424;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.app-shell .filter-chip.is-on, .filter-chip.is-on {
+  background: rgba(31, 120, 255, 0.18);
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(31, 120, 255, 0.5);
+}
+.app-shell .filter-chip-label, .filter-chip-label { font-size: 13px; }
+
+/* Блоки успеха и состояния */
+.app-shell .success-box, .success-box {
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(132, 255, 57, 0.10);
+  color: #b6ff86;
+  font-size: 14px;
+}
+.app-shell .success-actions, .success-actions { display: flex; gap: 8px; margin-top: 12px; }
+.app-shell .status-line, .status-line { font-size: 13px; color: rgba(255, 255, 255, 0.45); }
+.app-shell .board-note, .board-note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.45);
+}
+.app-shell .back-to-top, .back-to-top {
+  position: fixed;
+  right: 16px;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: #242424;
+  color: #fff;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+/* Списки: шапки и метаданные */
+.app-shell .chat-last, .chat-last {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-shell .chat-meta-bottom, .chat-meta-bottom { display: flex; align-items: center; gap: 8px; }
+.app-shell .chat-bubble, .chat-bubble {
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--card-primary, #141414);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.app-shell .chat-back, .chat-back {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+/* Профиль: аватар и группы */
+.app-shell .profile-avatar-img, .profile-avatar-img {
+  border-radius: 50%;
+  object-fit: cover;
+}
+.app-shell .profile-avatar-fallback, .profile-avatar-fallback {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .menu-list, .menu-list { margin-top: 14px; }
+
+/* Тарифы и админка: мелкие строки */
+.app-shell .plan-left, .plan-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.app-shell .plan-balance, .plan-balance {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+.app-shell .admin-actions, .admin-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.app-shell .admin-diff, .admin-diff { font-size: 12px; color: #6fb4ff; }
+.app-shell .admin-health-dot, .admin-health-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #84ff39;
+}
+.app-shell .admin-health-dot.is-warn, .admin-health-dot.is-warn { background: #ffb84d; }
+.app-shell .admin-health-dot.is-bad, .admin-health-dot.is-bad { background: #ff5c5c; }
+.app-shell .feed-screen, .feed-screen { padding-top: 0; }
+.app-shell .compact, .compact { min-height: 44px; }
+
+/* ── 32. Последние штрихи ─────────────────────────────────────────────────
+   Заголовки секций, скелетоны, панель фильтров и строки истории. */
+.app-shell .section-head, .section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+.app-shell .section-head strong, .section-head strong {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+.app-shell .section-head span, .section-head span {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-shell .feed-skeleton, .feed-skeleton {
+  border-radius: 20px;
+  background: linear-gradient(180deg, #1a1a1c 0%, #151517 100%);
+}
+.app-shell .filters-panel, .filters-panel {
+  padding: 14px;
+  border-radius: 20px;
+  background: var(--card-primary, #141414);
+}
+.app-shell .listing-page, .listing-page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
+.app-shell .favorites-page, .favorites-page { padding-top: 4px; }
+.app-shell .profile-id, .profile-id {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.4);
+}
+.app-shell .profile-top, .profile-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+.app-shell .admin-history-line, .admin-history-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.65);
+}
+.app-shell .admin-plan-line, .admin-plan-line { font-size: 13px; color: rgba(255, 255, 255, 0.65); }
+.app-shell .lastnews-avatars, .lastnews-avatars { display: flex; }
+.app-shell .lastnews-avatars > *, .lastnews-avatars > * {
+  margin-left: -6px;
+  border-radius: 50%;
+  border: 2px solid #141414;
+}
+.app-shell .recommend-card, .recommend-card {
+  padding: 12px;
+  border-radius: 18px;
+  background: var(--card-primary, #141414);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+.app-shell .plan-row, .plan-row { min-height: 56px; }
+.app-shell .mt-10, .mt-10 { margin-top: 10px; }
