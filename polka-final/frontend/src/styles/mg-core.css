@@ -2479,3 +2479,10 @@
 /* Иерархия текста: главное — белое, второстепенное — 55 %, третье — 35 % */
 .app-shell .plan-desc, .plan-desc { color: rgba(255, 255, 255, 0.55); }
 .app-shell .hint-note, .hint-note { color: rgba(255, 255, 255, 0.38); }
+
+/* ── 34. Пузыри чата по ТЗ ────────────────────────────────────────────────
+   Спецификация v2 требует радиус 12: при 18 переписка выглядит «мягкой»
+   и на длинных сообщениях теряется строй. */
+.app-shell .bubble, .bubble { border-radius: 12px; }
+.app-shell .bubble-a, .bubble-a { border-bottom-right-radius: 4px; }
+.app-shell .bubble:not(.bubble-a), .bubble:not(.bubble-a) { border-bottom-left-radius: 4px; }

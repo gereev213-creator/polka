@@ -3561,7 +3561,9 @@ function TariffsPage() {
             <div className="admin-actions mt-8">
               <input className="text-input" placeholder="КОД" value={promo}
                 onChange={(e) => setPromo(e.target.value.toUpperCase())} />
-              <button type="button" className="cta-primary" disabled={busy}
+              {/* По ТЗ на экране одна главная кнопка — это «Оплатить».
+                  Применение промокода делаем вторичным действием. */}
+              <button type="button" className="ghost-btn" disabled={busy}
                 onClick={applyPromo}>Применить</button>
             </div>
           ) : null}
