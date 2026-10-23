@@ -23710,20 +23710,33 @@ async def _notify_payment_paid(user_id: int, days: int, expires: str, amount: fl
 PAW_FORM_URL = os.environ.get('PAW_FORM_URL', 'https://www.payanyway.ru/assistant.htm')
 
 
+# Имена настроек в админке содержат точку (pay.paw_mnt_id), но переменные
+# окружения в Amvera допускают только латиницу, цифры и подчёркивание.
+# Поэтому каждая настройка читается так: сначала база (админка), затем
+# переменная окружения с подчёркиваниями. Секреты удобнее держать в
+# переменных — они не попадают в дамп настроек.
+def _paw_get(cfg_key: str, env_key: str, default: str = '') -> str:
+    val = str(cfg_get(cfg_key) or '').strip()
+    if val:
+        return val
+    return str(os.environ.get(env_key) or default).strip()
+
+
 def paw_enabled() -> bool:
-    return str(cfg_get('pay.paw_enabled') or '0') == '1' and bool(str(cfg_get('pay.paw_mnt_id') or '').strip())
+    on = _paw_get('pay.paw_enabled', 'PAY_PAW_ENABLED', '0')
+    return on == '1' and bool(paw_mnt_id())
 
 
 def paw_mnt_id() -> str:
-    return str(cfg_get('pay.paw_mnt_id') or '').strip()
+    return _paw_get('pay.paw_mnt_id', 'PAY_PAW_MNT_ID')
 
 
 def paw_secret() -> str:
-    return str(cfg_get('pay.paw_secret') or '').strip()
+    return _paw_get('pay.paw_secret', 'PAY_PAW_SECRET')
 
 
 def paw_test_mode() -> int:
-    return 1 if str(cfg_get('pay.paw_test') or '1') == '1' else 0
+    return 1 if _paw_get('pay.paw_test', 'PAY_PAW_TEST', '1') == '1' else 0
 
 
 def _paw_sign(**fields) -> str:

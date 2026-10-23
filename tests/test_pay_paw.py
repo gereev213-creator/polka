@@ -22,11 +22,12 @@ def cut(name, stop=r'^(async )?def |^# ── '):
     return SRC[i:m.start() if m else len(SRC)]
 
 
-ns = {'hashlib': hashlib, 'hmac': hmac, 'Dict': dict, 'Any': object,
+ns = {'hashlib': hashlib, 'hmac': hmac, 'os': os, 'Dict': dict, 'Any': object,
       'cfg_get': lambda k, d=None: {'pay.paw_secret': SECRET}.get(k, d),
       'logger': type('L', (), {'warning': staticmethod(lambda *a, **k: None),
                                'info': staticmethod(lambda *a, **k: None)})()}
 
+exec(cut('_paw_get'), ns)
 exec(cut('paw_secret'), ns)
 exec(cut('_paw_sign'), ns)
 exec(cut('_paw_check_sign'), ns)
