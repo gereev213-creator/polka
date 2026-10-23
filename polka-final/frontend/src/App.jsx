@@ -3244,7 +3244,7 @@ function ProfilePage() {
             <span className="menu-arrow" aria-hidden="true">›</span>
           </Link>
         ) : null}
-        {anchor}
+        {/* Документы — отдельными строками в профиле: так их видно сразу,
             без прокрутки до самого низа и без поиска по футеру. */}
         <a href={docs.privacy_url} target="_blank" rel="noreferrer"
           className="setting-row glass-card menu-row">
