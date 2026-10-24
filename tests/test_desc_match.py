@@ -6,7 +6,7 @@ SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'polka
 
 checks = [
     ("настройка hunt.match_description", "'hunt.match_description'" in SRC),
-    ("описание участвует в поиске", 'hay = (title' in SRC),
+    ("описание участвует в поиске", "_desc_text" in SRC and "' '.join([title" in SRC),
     ("слова ищутся в объединённом тексте",
      'not any(v in hay for v in variants)' in SRC),
     ("числа ищутся там же",

@@ -21540,7 +21540,20 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     except Exception:
         _match_desc = True
     _desc_text = str(ad.get('description') or '').lower() if _match_desc else ''
-    hay = (title + ' ' + _desc_text).strip() if _desc_text else title
+    # Всё, что описывает сам товар, а не площадку: заголовок, описание,
+    # размер, состояние, пол, теги с фото, адрес и имя продавца. Раньше
+    # сопоставление шло только по заголовку, потом только по заголовку и
+    # описанию — из-за этого важное терялось («АКБ 100 %» в описании,
+    # размер в поле size, бренд в тегах фото).
+    # Категорию в этот текст НЕ кладём: она слишком общая («Электроника»),
+    # и слово оттуда давало бы ложные совпадения. Она проверяется отдельно.
+    _extra_parts = []
+    for _field in ('size', 'condition', 'gender', 'photo_tags', 'address',
+                   'seller_name', 'search_index'):
+        _val = ad.get(_field)
+        if _val:
+            _extra_parts.append(str(_val).lower())
+    hay = ' '.join([title, _desc_text] + _extra_parts).strip() or title
     if not _condition_ok(crit.get('condition'), title):
         return no('condition_new_used')
     alts = _query_alt_numbers(crit.get('query'))
