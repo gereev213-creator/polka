@@ -43,4 +43,15 @@ big = parse(complex_url)
 print('5) сложная ссылка: категория', big['slug'], '· фильтры целы:', big['filters'] == '&f=' + blob)
 assert big['filters'] == '&f=' + blob, big
 
+# 6) Живая ссылка владельца: /all/ = все регионы, цена лежит внутри f=…
+real = ('https://m.avito.ru/all/telefony/mobilnye_telefony/apple/iphone_15_pro-ASgBAgICA0SywA2Sn~0RtMANzqs5sMENiPw3'
+        '?f=ASgBAQECA0SywA2Sn~0RtMANzqs5sMENiPw3AUDo6w40~P3bAvr92wL8_dsCAkXGmgwVeyJmcm9tIjowLCJ0byI6MzUwMDB9'
+        'gu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ&user=1')
+r = parse(real)
+print('6) живая ссылка: категория', r['slug'], '· город', repr(r['city']),
+      '· цена в фильтрах:', r['has_price'])
+assert r['ok'] and r['city'] == '', r
+assert r['has_price'], r
+assert 'from' in r['filters'] or r['filters'].startswith('&f='), r
+
 print('\nразбор ссылок Авито: все проверки пройдены')

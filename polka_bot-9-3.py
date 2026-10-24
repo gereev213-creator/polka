@@ -23366,9 +23366,16 @@ def parse_avito_filter_url(url: str) -> Dict:
             if base in AVITO_CATEGORY_SLUGS:
                 slug = base
                 break
+        # /all/ значит «все регионы», а не город с названием all.
+        city = parts[0] if parts else ''
+        if city.lower() in ('all', 'rossiya', 'russia'):
+            city = ''
+        # Цена может лежать не в pmin/pmax, а внутри набора f= — тогда в нём
+        # есть закодированный кусок с from/to (так и пришла живая ссылка).
+        has_price = ('pmin' in query or 'pmax' in query
+                     or 'eyJmcm9t' in blob or '"from"' in blob)
         return {'ok': True, 'slug': slug, 'filters': '&f=' + blob,
-                'city': (parts[0] if parts else ''),
-                'has_price': ('pmin' in query or 'pmax' in query)}
+                'city': city, 'has_price': has_price}
     except Exception as e:
         return {'ok': False, 'error': 'parse_failed', 'detail': str(e)[:120]}
 
