@@ -4016,3 +4016,20 @@
   cursor: pointer;
   flex: none;
 }
+
+/* Экран «Поиск словами» по макету 02: метка, крупный заголовок, примеры */
+.app-shell .chat-kicker, .chat-kicker {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+  margin-bottom: 8px;
+}
+.app-shell .chat-final-actions, .chat-final-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+.app-shell .chat-final-actions > *, .chat-final-actions > * { flex: 1; }

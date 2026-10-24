@@ -209,43 +209,11 @@ export default function HuntChat() {
           <div className="chat-start">
             {/* Главный путь — ссылка с Авито: фильтры ставит человек на самой
                 площадке, мы не угадываем параметры. */}
-            <div className="chat-hello">Настройте фильтры на Авито</div>
+            <div className="chat-kicker">Опишите словами</div>
+            <div className="chat-hello">Скажите, что ищете — поиск идёт без вас</div>
             <div className="chat-hello-sub">
-              Откройте Авито, выставьте фильтры как вам нужно и вставьте ссылку сюда.
-              Всё, что вы отметили, бот будет забирать как есть.
+              Проверяем Авито каждые 15 минут и присылаем только новые объявления.
             </div>
-            <div className="link-form">
-              <input className="text-input" placeholder="https://avito.ru/..." value={link}
-                onChange={(e) => setLink(e.target.value)} inputMode="url" />
-              <button type="button" className="primary-btn" disabled={busy || !link.trim()}
-                onClick={submitLink}>{busy ? 'Проверяю…' : 'Проверить ссылку'}</button>
-            </div>
-            {linkResult ? <div className="link-result">{linkResult}</div> : null}
-            {linkLimit ? (
-              <div className="link-limit">
-                <div className="link-limit-text">
-                  Критерий {1} из {1} занят на бесплатном плане. Освободите место
-                  или откройте «Плюс» — там до 10 критериев.
-                </div>
-                <div className="link-limit-actions">
-                  <button type="button" className="primary-btn"
-                    onClick={() => navigate('/tariffs')}>Открыть Плюс</button>
-                </div>
-              </div>
-            ) : null}
-            <div className="chat-hello-sub mt-14">Как это сделать</div>
-            <div className="chat-hello-sub">
-              1. Откройте Авито и выставьте фильтры<br />
-              2. Скопируйте адрес из строки браузера<br />
-              3. Вставьте его в поле выше
-            </div>
-            <div className="chat-hello-sub mt-14">
-              Или опишите словами — подберу фильтры сам.
-            </div>
-            {/* Ручную форму из навигации убрали: она повторяла фильтры Авито
-                приблизительно, и человек заполнял 20 полей ради худшего
-                результата. Сам экран остался — вернём одним правилом, если
-                понадобится. */}
             {/* Тап по примеру сразу отправляет его: раньше он только
                 подставлял текст в поле, и человек искал, что нажать. */}
             <div className="chat-examples">
@@ -298,9 +266,16 @@ export default function HuntChat() {
                 <button type="button" className="link-btn" onClick={() => navigate('/tariffs')}>Тарифы</button>
               </div>
             ) : null}
+            {/* По макету 02: «Изменить» и «Показать N находок» рядом.
+                «Заново» осталось в шапке — в теле оно мешало. */}
             <div className="chat-final-actions">
-              <button type="button" className="cta-primary" onClick={create} disabled={busy}>Найти лоты</button>
-              <button type="button" className="chat-chip" onClick={restart}>Заново</button>
+              <button type="button" className="ghost-btn"
+                onClick={() => document.querySelector('.chat-input input')?.focus()}>
+                Изменить
+              </button>
+              <button type="button" className="cta-primary" onClick={create} disabled={busy}>
+                Показать находки
+              </button>
             </div>
           </div>
         ) : null}
