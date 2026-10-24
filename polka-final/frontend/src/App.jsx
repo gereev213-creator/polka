@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-1'
+const APP_BUILD = '2026-10-25-2'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -728,7 +728,11 @@ function CriteriaPage() {
         <div className="crit-promo">
           <div className="crit-promo-badge">П</div>
           <div className="crit-promo-body">
-            <div className="crit-promo-title">{activeItems.length} из {limitCount}</div>
+            <div className="crit-promo-title">
+              {activeItems.length > limitCount
+                ? `Занято ${activeItems.length}, в бесплатном ${limitCount}`
+                : `${activeItems.length} из ${limitCount}`}
+            </div>
             <div className="crit-promo-sub">В «Плюсе» — 10 критериев и находки без задержки</div>
           </div>
           <button type="button" className="crit-promo-btn" onClick={() => navigate('/tariffs')}>Плюс</button>

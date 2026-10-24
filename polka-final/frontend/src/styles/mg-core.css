@@ -3284,9 +3284,16 @@
   color: #fff;
 }
 /* Подпись под CTA: отступ снизу с запасом под док, иначе её режет капсула */
-.app-shell .screen .chat-note, .screen .chat-note {
+/* Отступ «под док» нужен только подписи ПОД главной кнопкой экрана,
+   а не любой подсказке. Из-за этого правила подсказка внутри карточки
+   критерия растягивала её на 256 px пустоты. */
+.app-shell .screen > .chat-note, .screen > .chat-note {
   padding-bottom: calc(var(--dock-space, 96px) + 16px);
   line-height: 1.45;
+}
+.app-shell .hunt-crit .chat-note, .hunt-crit .chat-note,
+.app-shell .crit-card .chat-note, .crit-card .chat-note {
+  padding-bottom: 0;
 }
 
 /* ── 47. Рельс чипов по снимку: обрезка у правого края ───────────────────── */
@@ -4242,4 +4249,17 @@
 }
 .app-shell .screen .crit-create, .screen .crit-create {
   margin-bottom: 8px;
+}
+
+/* Карточка критерия: одна поверхность. Внутренний .hunt-row приносил
+   собственную плашку — получалась карточка в карточке. */
+.app-shell .hunt-crit .hunt-row, .hunt-crit .hunt-row,
+.app-shell .hunt-crit .hunt-row > *, .hunt-crit .hunt-row > * {
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+/* Кнопка «Создать критерий» не должна прятаться под доком */
+.app-shell .crit-create, .crit-create {
+  margin-bottom: calc(var(--dock-space, 96px) + 12px);
 }
