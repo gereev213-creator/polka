@@ -32,6 +32,7 @@ export default function HuntChat() {
   // Ссылка с Авито — главный способ задать критерий.
   const [link, setLink] = useState('')
   const [linkResult, setLinkResult] = useState('')
+  const [linkLimit, setLinkLimit] = useState(false)
   const [busy, setBusy] = useState(false)
   const [sessionId, setSessionId] = useState('')
   const [ask, setAsk] = useState(null)
@@ -177,9 +178,15 @@ export default function HuntChat() {
       setLink('')
       load()
     } catch (e) {
-      const why = [e && e.detail, e && e.error, e && e.status ? `код ${e.status}` : '']
-        .filter(Boolean).join(' · ')
-      setLinkResult(why || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
+      // Лимит критериев — самый частый случай: ссылка верная, но мест нет.
+      if ((e && e.error) === 'limit' || String(e && e.detail || '').includes('лимит')) {
+        setLinkLimit(true)
+        setLinkResult('')
+      } else {
+        const why = [e && e.detail, e && e.error, e && e.status ? `код ${e.status}` : '']
+          .filter(Boolean).join(' · ')
+        setLinkResult(why || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
+      }
     }
   }
 
@@ -214,6 +221,18 @@ export default function HuntChat() {
                 onClick={submitLink}>{busy ? 'Проверяю…' : 'Проверить ссылку'}</button>
             </div>
             {linkResult ? <div className="link-result">{linkResult}</div> : null}
+            {linkLimit ? (
+              <div className="link-limit">
+                <div className="link-limit-text">
+                  Критерий {1} из {1} занят на бесплатном плане. Освободите место
+                  или откройте «Плюс» — там до 10 критериев.
+                </div>
+                <div className="link-limit-actions">
+                  <button type="button" className="primary-btn"
+                    onClick={() => navigate('/tariffs')}>Открыть Плюс</button>
+                </div>
+              </div>
+            ) : null}
             <div className="chat-hello-sub mt-14">Как это сделать</div>
             <div className="chat-hello-sub">
               1. Откройте Авито и выставьте фильтры<br />
