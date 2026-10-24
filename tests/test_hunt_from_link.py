@@ -15,7 +15,9 @@ checks = [
     ("эндпоинт from-link", "'/api/hunt/from-link'" in SRC),
     ("принимает url из тела", "url = str((body or {}).get('url') or '')" in SRC),
     ("требует фильтры в ссылке", "'no_filters'" in SRC),
-    ("колонка filter_blob", 'filter_blob TEXT DEFAULT' in SRC),
+    # миграция переписана: колонки добавляются циклом по списку
+    ("колонка filter_blob", "'filter_blob'" in SRC and 'ALTER TABLE hunt_criteria' in SRC),
+    ("колонка filter_url", "'filter_url'" in SRC),
     ("blob сохраняется в критерии", 'UPDATE hunt_criteria SET filter_blob=?' in SRC),
     ("сборщик получает filters", "row['filters'] = str(row.get('filter_blob')" in SRC),
     ("выборка отдаёт filter_blob", "COALESCE(filter_blob,'')" in SRC),
