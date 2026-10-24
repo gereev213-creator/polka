@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-8'
+const APP_BUILD = '2026-10-24-9'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -2558,12 +2558,9 @@ function CreatePage() {
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="page-title">Новое объявление</div>
-      <div className="create-progress">
-        <span>Шаг {form.step} из {totalSteps}</span>
-        <span className="create-bar">
-          <span style={{ width: `${Math.round((form.step / totalSteps) * 100)}%` }} />
-        </span>
-      </div>
+      {/* Полоса шага живёт в самом мастере (CreateWizard): здесь form
+          и totalSteps не определены, и обращение к ним роняло экран. */}
+      <div className="sub-copy">Заполните информацию о товаре. После публикации объявление уйдёт на модерацию.</div>
       {error ? <div className="status-line error">{error}</div> : null}
       {status === 'success' && created ? (
         <div className="success-box glass-card">
