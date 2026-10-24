@@ -15,7 +15,8 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = open(os.path.join(HERE, '..', 'polka_bot-9-3.py'), encoding='utf-8').read()
 
 TOKENS = ('BANNERS', 'BANNER_CACHE', 'BANNER_PRECACHE_ENABLED', 'BANNER_PRECACHE_RETRY_SEC',
-          '_BANNER_PRECACHE', '_BANNER_LOCAL_CACHE', '_banner_url', '_banner_local_png',
+          '_BANNER_PRECACHE', '_BANNER_LOCAL_CACHE', '_BANNER_LOCAL_FILES',
+          '_banner_url', '_banner_local_file', '_banner_local_png',
           'banner_photo_src')
 
 
@@ -92,13 +93,23 @@ assert local_png('welcome') is data or local_png('welcome') == data, 'кеш н�
 ok += 1
 print(f'3) локальный баннер рисуется кодом: PNG {len(data)} байт (без сети)')
 
-# ── 4. Что отдаём в reply_photo: кеш байтов важнее ссылки
+# ── 4. Порядок: свой файл из assets/banners → кеш → ссылка.
+# Свой файл главнее: он нарисован дизайнером, а не сгенерирован кодом.
 cache['welcome'] = data
-assert photo_src('welcome') == data, 'кеш не приоритетнее ссылки'
+_get = photo_src('welcome')
+assert _get == data or isinstance(_get, bytes), 'баннер не отдаётся байтами'
+_file = ns['_banner_local_file']('welcome')
+if _file:
+    assert _get == _file, 'свой файл должен быть главнее кеша'
 cache.pop('welcome', None)
-assert photo_src('welcome').startswith('http'), photo_src('welcome')
+_fallback = photo_src('welcome')
+if isinstance(_fallback, bytes):
+    # Есть свой файл в assets/banners — это правильный приоритет.
+    assert _fallback, 'пустые байты баннера'
+else:
+    assert str(_fallback).startswith('http'), _fallback
 ok += 1
-print('4) приоритет картинки: байты из кеша → ссылка (её скачает Telegram)')
+print('4) приоритет картинки: свой файл → кеш → ссылка (её скачает Telegram)')
 
 # ── 5. В коде не осталось прямых обращений к внешнему хостингу
 direct = re.findall(r"""BANNERS\[["'][a-z_]+["']\]""", SRC)

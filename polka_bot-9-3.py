@@ -508,6 +508,9 @@ WEBAPP_URL  = os.environ.get("WEBAPP_URL", "https://polka-udmurtii-nikicev2009.w
 WEBAPP_PORT = int(os.environ.get("WEBAPP_PORT", os.environ.get("PORT", "80")))
 
 # Баннеры для разных разделов
+# Кеш своих баннеров из assets/banners (см. _banner_local_file)
+_BANNER_LOCAL_FILES: Dict[str, bytes] = {}
+
 BANNERS = {
     "welcome":       "https://i.ibb.co/cKQX5bpD/Frame-184.png",
     "create_ad":     "https://i.ibb.co/qL7Nx4Fc/Frame-189.png",
@@ -569,8 +572,36 @@ def _banner_local_png(key: str, title: str = 'ПОЛКА', subtitle: str = '') -
         return b''
 
 
+def _banner_local_file(key: str) -> bytes:
+    """Баннер из папки assets/banners: свой файл главнее внешнего хостинга.
+
+    i.ibb.co с Amvera недоступен, а нарисованный на ходу баннер выглядит
+    беднее настоящего. Кладём готовые картинки в репозиторий и отдаём их.
+    """
+    if key in _BANNER_LOCAL_FILES:
+        return _BANNER_LOCAL_FILES[key]
+    data = b''
+    for base in (os.path.join('assets', 'banners'), '/app/assets/banners'):
+        for ext in ('.png', '.jpg'):
+            path = os.path.join(base, f'{key}{ext}')
+            try:
+                if os.path.isfile(path):
+                    with open(path, 'rb') as fh:
+                        data = fh.read()
+                    break
+            except Exception:
+                continue
+        if data:
+            break
+    _BANNER_LOCAL_FILES[key] = data
+    return data
+
+
 def banner_photo_src(key: str):
-    """Что отдать в reply_photo: байты из кеша → ссылка (её скачает Telegram)."""
+    """Что отдать в reply_photo: свой файл → кеш → ссылка."""
+    local = _banner_local_file(key)
+    if local:
+        return local
     cached = BANNER_CACHE.get(key)
     if cached:
         return cached
