@@ -3434,3 +3434,71 @@
   gap: 6px;
   margin: 6px 0 0;
 }
+
+/* ── 50. Плитка категории: содержимое было перекрыто своим же слоем ──────── */
+/* В старом файле у .cat-tile есть ::after с непрозрачным фоном и z-index: 1.
+   Я опустил подпись до z-index: 1, и слой её перекрыл: текст был в DOM, с
+   правильным цветом и размером, но не рисовался (0 ярких пикселей).
+   Убираем слой совсем и поднимаем содержимое над ним. */
+.app-shell .cat-tile::after, .cat-tile::after {
+  content: none;
+}
+.app-shell .cat-tile > *, .cat-tile > * {
+  position: relative;
+  z-index: 2;
+}
+.app-shell .cat-tile-label, .cat-tile-label {
+  z-index: 3;
+  max-width: 100%;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 17px;
+  letter-spacing: 0;
+  color: #fff;
+}
+
+/* Кнопки шага: полоса во всю ширину над доком, а не парящая пилюля */
+.app-shell .step-actions, .step-actions {
+  position: sticky;
+  bottom: calc(var(--dock-space, 96px) + 4px);
+  margin: 16px -16px 0;
+  padding: 12px 16px;
+  border-radius: 0;
+  background: #050505;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, .08);
+}
+
+/* Кнопки шага: закреплены над доком, как подвал экрана, а не «плывут» по сетке */
+.app-shell .screen .step-actions, .screen .step-actions {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--dock-space, 96px) + 4px);
+  z-index: 20;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 12px 16px;
+  background: #050505;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, .08);
+}
+/* Кнопка шага — синяя пилюля с белым текстом, как главное действие */
+.app-shell .step-actions .primary-btn, .step-actions .primary-btn,
+.app-shell .step-actions .cta-button, .step-actions .cta-button {
+  background: linear-gradient(180deg, #1F78FF 0%, #0A62F0 100%);
+  color: #fff;
+  border: 0;
+  border-top: 1px solid rgba(255, 255, 255, .28);
+  border-radius: 999px;
+  height: 52px;
+  font-size: 17px;
+  font-weight: 700;
+}
+/* И запас снизу, чтобы последние плитки не прятались под этой полосой */
+.app-shell .screen .category-grid, .screen .category-grid {
+  padding-bottom: 88px;
+}
+
+/* Запас под полосой «Далее»: последние плитки не должны под неё прятаться */
+.app-shell .screen .category-grid, .screen .category-grid {
+  padding-bottom: 132px;
+}
