@@ -3404,3 +3404,33 @@
 .app-shell .chat-examples, .chat-examples {
   padding-bottom: 8px;
 }
+
+/* Стартовый экран поиска: содержимое должно прокручиваться, а не обрезаться
+   доком. Список получает свою прокрутку и запас снизу под капсулу с «+». */
+.app-shell .chat-wrap .chat-list, .chat-wrap .chat-list {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(var(--dock-space, 96px) + 40px);
+}
+
+/* Плотнее на старте поиска: примеры упирались в капсулу дока на 13 px */
+.app-shell .chat-start, .chat-start {
+  padding-top: 0;
+  padding-bottom: calc(var(--dock-space, 96px) + 8px);
+}
+.app-shell .chat-hello, .chat-hello {
+  margin: 0 0 8px;
+  font-size: 24px;
+  line-height: 30px;
+}
+.app-shell .chat-hello-sub, .chat-hello-sub {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 20px;
+}
+.app-shell .chat-examples, .chat-examples {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 0;
+}
