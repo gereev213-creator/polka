@@ -330,6 +330,8 @@ export const api = {
   getCriteria: () => request('/api/hunt'),
   addCriterion: (body) => request('/api/hunt', { method: 'POST', body: JSON.stringify(body) }),
   removeCriterion: (id) => request(`/api/hunt?id=${id}`, { method: 'DELETE' }),
+  // Пауза и возврат критерия: PATCH с флагом active
+  setCriterionActive: (id, active) => request(`/api/hunt?id=${id}`, { method: 'PATCH', body: JSON.stringify({ active: active ? 1 : 0 }) }),
   // Убрать лот из находок: пропадёт из ленты и больше не придёт в чат
   // ИИ разбирает фразу словами в те же фильтры, что задаются руками
   parseHunt: (text) => request('/api/hunt/ai',

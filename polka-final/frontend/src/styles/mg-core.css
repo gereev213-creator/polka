@@ -3801,3 +3801,113 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ── 54. Критерии по макету 2026 ─────────────────────────────────────────── */
+.app-shell .crit-list, .crit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.app-shell .crit-card, .crit-card {
+  padding: 16px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 5px 30px rgba(0, 0, 0, .40);
+}
+.app-shell .crit-head, .crit-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.app-shell .crit-title, .crit-title {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .crit-switch, .crit-switch {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+  cursor: pointer;
+  transition: background 180ms ease-out;
+}
+.app-shell .crit-switch.is-on, .crit-switch.is-on {
+  background: #0A84FF;
+}
+.app-shell .crit-switch-dot, .crit-switch-dot {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transition: transform 180ms ease-out;
+}
+.app-shell .crit-switch.is-on .crit-switch-dot, .crit-switch.is-on .crit-switch-dot {
+  transform: translateX(20px);
+}
+.app-shell .crit-status, .crit-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .55);
+}
+.app-shell .crit-dot, .crit-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .3);
+}
+.app-shell .crit-dot.is-on, .crit-dot.is-on { background: #38d178; }
+.app-shell .crit-chips, .crit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+.app-shell .crit-chip, .crit-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .85);
+  font-size: 13px;
+}
+.app-shell .crit-hint, .crit-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .crit-foot, .crit-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .08);
+  font-size: 13px;
+  color: rgba(255, 255, 255, .5);
+}
+.app-shell .crit-remove, .crit-remove {
+  border: 0;
+  background: transparent;
+  color: #ff7a7a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
