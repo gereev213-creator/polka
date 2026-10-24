@@ -29291,6 +29291,42 @@ _SQL_FORBIDDEN = re.compile(
     r'reindex|begin|commit|rollback|trigger|grant|savepoint)\b', re.I)
 
 
+async def _prune_loop() -> None:
+    """Держит hunt_matches в разумных размерах без участия человека.
+
+    Сборщик приносит по несколько тысяч находок за проход, и на каждый
+    критерий копились десятки тысяч строк. Таблица перевалила за миллион,
+    база перестала успевать — приложение отвечало секундами. Раз в 15 минут
+    оставляем 400 свежих совпадений на критерий.
+    """
+    await asyncio.sleep(120)
+    while True:
+        try:
+            def _prune() -> int:
+                cur = db.conn.cursor()
+                total = 0
+                while True:
+                    cur.execute(
+                        "DELETE FROM hunt_matches WHERE id IN ("
+                        "  SELECT id FROM ("
+                        "    SELECT id, ROW_NUMBER() OVER ("
+                        "      PARTITION BY user_id, crit_id ORDER BY id DESC) AS rn"
+                        "    FROM hunt_matches"
+                        "  ) WHERE rn > 400 LIMIT 2000)")
+                    n = cur.rowcount or 0
+                    db.conn.commit()
+                    total += n
+                    if n < 2000:
+                        break
+                return total
+            removed = await asyncio.to_thread(_db_locked, _prune)
+            if removed:
+                logger.info(f"prune hunt_matches: удалено {removed}")
+        except Exception as e:
+            logger.warning(f"prune loop: {e}")
+        await asyncio.sleep(900)
+
+
 async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/admin/maintenance — чистка разросшихся таблиц.
 
@@ -32363,6 +32399,9 @@ def main():
             await asyncio.sleep(20)
             await precache_banners()
         asyncio.create_task(_precache_later())
+        # Чистка разросшихся совпадений: иначе лента снова начнёт отвечать
+        # секундами, как это было при 1,16 млн строк.
+        asyncio.create_task(_prune_loop())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:
