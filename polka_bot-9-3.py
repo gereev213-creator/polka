@@ -29343,6 +29343,40 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     days = int((body or {}).get('days') or 14)
     days = max(3, min(120, days))
     keep_per_crit = int((body or {}).get('keep') or 400)
+    action = str((body or {}).get('action') or '')
+
+    # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
+    # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
+    # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'vacuum':
+        def _vacuum() -> dict:
+            cur = db.conn.cursor()
+            before = cur.execute(
+                "SELECT page_count*page_size FROM pragma_page_count(), pragma_page_size()"
+            ).fetchone()[0]
+            try:
+                db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            db.conn.execute("VACUUM")
+            db.conn.commit()
+            try:
+                db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
+            after = cur.execute(
+                "SELECT page_count*page_size FROM pragma_page_count(), pragma_page_size()"
+            ).fetchone()[0]
+            return {'mb_before': round(before / 1048576, 1),
+                    'mb_after': round(after / 1048576, 1),
+                    'freed_mb': round((before - after) / 1048576, 1)}
+        try:
+            res = await asyncio.to_thread(_db_locked, _vacuum)
+        except Exception as e:
+            logger.warning(f"vacuum: {e}")
+            return _miniapp_json({'ok': False, 'error': 'vacuum_failed',
+                                  'detail': str(e)[:200]}, status=500)
+        return _miniapp_json({'ok': True, **res})
 
     def _clean() -> dict:
         cur = db.conn.cursor()
