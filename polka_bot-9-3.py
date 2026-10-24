@@ -21561,6 +21561,17 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('city_mismatch')
 
     title = str(ad.get('title') or '').lower()
+    # Критерий создан из ссылки человека: отбор уже сделал Авито своим
+    # набором фильтров. Наши проверки по словам заголовка здесь только
+    # вредят: они выкидывали подходящие объявления. Доверяем площадке,
+    # оставляя проверки цены, фото и города.
+    if str(crit.get('filter_url') or '').startswith('http'):
+        if int(crit.get('with_photo') or 0):
+            photos = str(ad.get('photos') or '')
+            if photos in ('', '[]', 'null'):
+                return no('no_photo')
+        return Decision(True, 'direct_link', 'по фильтрам Авито')
+
     # Где искать слова критерия. По умолчанию и в описании: важное часто
     # написано не в заголовке («АКБ 100 %», «без сколов», «полный комплект»).
     # Описание уже приходит и хранится — раньше оно использовалось только
