@@ -25501,8 +25501,9 @@ def ensure_filter_blob_column() -> None:
     """
     try:
         db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN filter_blob TEXT DEFAULT ''")
+        db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN filter_url TEXT DEFAULT ''")
         db.conn.commit()
-        logger.info("hunt_criteria: добавлена колонка filter_blob")
+        logger.info("hunt_criteria: добавлена колонка filter_url")
     except Exception:
         pass
 
@@ -25513,7 +25514,7 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   mode: str = 'any', requirements: str = '',
                   requirements_json: Optional[Dict] = None,
                   exclude: str = '', strict_model: int = 0,
-                  filter_blob: str = '') -> Optional[int]:
+                  filter_blob: str = '', filter_url: str = '') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -25565,6 +25566,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             db.conn.commit()
         except Exception as _e:
             logger.warning(f"filter_blob save: {_e}")
+    if filter_url:
+        try:
+            cursor.execute("UPDATE hunt_criteria SET filter_url=? WHERE id=?",
+                           (str(filter_url)[:2000], cursor.lastrowid))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"filter_url save: {_e}")
     db.conn.commit()
     crit_id = cursor.lastrowid
     # K4: медиана ТОЛЬКО этого критерия — один запрос вместо прохода по всем.
@@ -25660,7 +25668,8 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     try:
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), query, category, city,
-            0, 0, 0, 0, 0, 'any', '', None, '', 0, str(parsed.get('filters') or ''))
+            0, 0, 0, 0, 0, 'any', '', None, '', 0,
+            str(parsed.get('filters') or ''), url)
     except Exception as e:
         # Наружу — точная причина: иначе человек видит «не удалось разобрать»,
         # хотя ссылка разобралась, а упало создание критерия.
@@ -25686,6 +25695,31 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
     viewer_id = _miniapp_viewer(request)
     method = request.method.upper()
 
+    # PATCH ?id=N {active:0|1} — поставить критерий на паузу или вернуть.
+    if method == 'PATCH':
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        try:
+            crit_id = int(request.query.get('id') or 0)
+        except (TypeError, ValueError):
+            crit_id = 0
+        if not crit_id:
+            return _miniapp_err('not_found', 404)
+        active = 1 if int((body or {}).get('active') or 0) else 0
+        try:
+            cursor = db.conn.cursor()
+            cursor.execute("UPDATE hunt_criteria SET active=? WHERE id=? AND user_id=?",
+                           (active, crit_id, int(viewer_id)))
+            db.conn.commit()
+            if not cursor.rowcount:
+                return _miniapp_err('not_found', 404)
+        except Exception as e:
+            logger.warning(f"criteria patch: {e}")
+            return _miniapp_err('save_failed', 500)
+        return _miniapp_json({'ok': True, 'id': crit_id, 'active': bool(active)})
+
     # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
     # страницы — он авторизуется токеном, а не initData
     if method == 'GET' and request.query.get('for_collector'):
@@ -25701,7 +25735,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                        "COALESCE(max_price,0) AS max_price, "
                        "COALESCE(max_hours,0) AS max_hours, "
                        "COALESCE(requirements_json,'') AS requirements_json, "
-                       "COALESCE(filter_blob,'') AS filter_blob "
+                       "COALESCE(filter_blob,'') AS filter_blob, "
+                       "COALESCE(filter_url,'') AS filter_url "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
         # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
@@ -25718,6 +25753,9 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             # Фильтры из ссылки человека отдаём сборщику под именем, которое
             # он уже понимает: он подставит их в адрес Авито как есть.
             row['filters'] = str(row.get('filter_blob') or '')
+            # Исходный адрес человека: сборщик откроет именно его, а не
+            # соберёт поиск из слов заново.
+            row['filter_url'] = str(row.get('filter_url') or '')
         # Наборы фильтров Авито по категориям (частные, состояние, АКБ, слова
         # в описании) отдаём вместе с критерием: так их применяет сам Авито,
         # а сборщику не нужно ни файлов, ни переменных окружения.

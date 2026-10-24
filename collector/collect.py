@@ -1142,6 +1142,20 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # ни переменные окружения не нужны (так его и добавляют на будущее:
         # одна ссылка из браузера на категорию).
         server_filters = str(crit.get('filters') or '')
+        # Если критерий создан из ссылки человека — открываем ИМЕННО ЕЁ.
+        # Раньше адрес собирался заново из слов критерия: получался другой
+        # запрос, и приходили не те объявления, что человек видел на Авито.
+        direct_url = str(crit.get('filter_url') or '')
+        if direct_url.startswith('http'):
+            # Первую страницу берём как есть; дальше Авито принимает &p=N.
+            if direct_url in seen:
+                continue
+            seen.add(direct_url)
+            targets.append({'url': direct_url,
+                            'category': crit.get('category') or slug or '',
+                            'query': query, 'page': 1, 'direct': True})
+            built += 1
+            continue
         # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара
         # («АКБ от 80%», «не вскрывался») обнулил бы выдачу — не применяем.
         if any(w in str(crit.get('query') or '').lower() for w in (
