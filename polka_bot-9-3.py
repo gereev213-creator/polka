@@ -20490,6 +20490,16 @@ async def _collector_inline_loop():
             # дают перекупу то, что он ищет, и именно их надо обходить
             # часто. Плюс пара общих категорий — на случай находок, о
             # которых человек не догадался.
+            # Пауза после блокировки: пока не истекла — не трогаем Авито вовсе.
+            try:
+                blocked = int(cfg_get('collector.blocked_until_ts') or 0)
+            except Exception:
+                blocked = 0
+            if blocked and blocked > _time.time():
+                left = int((blocked - _time.time()) / 60)
+                logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
+                await asyncio.sleep(min(300, max(60, left * 60)))
+                continue
             crit_targets = []
             try:
                 crit_targets = collector.targets_from_criteria(cfg['server'], cfg['token'])
@@ -20514,9 +20524,18 @@ async def _collector_inline_loop():
             try:
                 sent = await asyncio.to_thread(collector.run_once, cfg)
             except SystemExit as _se:
+                # 439/429 — блокировка Авито. Раньше мы ждали обычные 5 минут
+                # и снова получали блок: сбор не работал часами. Теперь пауза
+                # растёт и сохраняется в настройке, чтобы перезапуск её не сбрасывал.
+                try:
+                    prev = int(cfg_get('collector.blocked_until_ts') or 0)
+                    wait_min = 45 if not prev or prev < _time.time() else 90
+                except Exception:
+                    wait_min = 45
+                _setting_set('collector.blocked_until_ts', str(int(_time.time() + wait_min * 60)))
                 logger.warning(
-                    f"Авито ограничил запросы (код выхода {_se.code}) — "
-                    f"пауза, чтобы не усугублять")
+                    f"Авито ограничил запросы (код {_se.code}) — пауза {wait_min} мин, "
+                    f"иначе блок только усиливается")
                 sent = 0
             except BaseException as _be:
                 logger.warning(
