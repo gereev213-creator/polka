@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-13'
+const APP_BUILD = '2026-10-24-14'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -669,6 +669,17 @@ function CriteriaPage() {
   // и требованиями — человек выбирает, а не пишет словами
   const [templates, setTemplates] = useState([])
   const [tplGroup, setTplGroup] = useState('')
+  // Сегмент «Активные / Архив»: архив — это критерии на паузе
+  const [critTab, setCritTab] = useState('active')
+  useEffect(() => {
+    api.getPlan()
+      .then((d) => setLimitCount(d?.plan === 'plus' ? 10 : (d?.free_max_criteria ?? 1)))
+      .catch(() => setLimitCount(1))
+  }, [])
+  const activeCount = items.filter((c) => !(c.active === 0 || c.active === false)).length
+  // Лимит по плану берём отдельным запросом: в этом компоненте переменной
+  // plan нет, и обращение к ней роняло весь экран.
+  const [limitCount, setLimitCount] = useState(1)
   // Какой нижний лист открыт: '' | 'tpl'
   const [sheet, setSheet] = useState('')
   const [tplMsg, setTplMsg] = useState('')
@@ -851,7 +862,14 @@ function CriteriaPage() {
   return (
     <Screen className="hunt-screen">
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
-      <div className="page-title">Настроить критерии</div>
+      <div className="crit-top">
+        <div className="page-title">Критерии</div>
+        <button type="button" className="crit-plus" aria-label="Новый критерий"
+          onClick={() => {
+            const el = document.getElementById('crit-form')
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }}>+</button>
+      </div>
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
       <div className="chat-tabs is-second">
         {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
@@ -1134,7 +1152,33 @@ function CriteriaPage() {
         </label>
       </div>
 
-      <CriteriaList items={items} loading={loading} onRemove={remove} onToggle={toggleCriterion} />
+      <div className="crit-seg">
+        <button type="button" className={critTab === 'active' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
+          onClick={() => setCritTab('active')}>
+          Активные {items.filter((c) => !(c.active === 0 || c.active === false)).length}
+        </button>
+        <button type="button" className={critTab === 'archive' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
+          onClick={() => setCritTab('archive')}>
+          Архив {items.filter((c) => c.active === 0 || c.active === false).length}
+        </button>
+      </div>
+
+      {critTab === 'active' && activeCount === limitCount ? (
+        <div className="crit-promo">
+          <div className="crit-promo-badge">П</div>
+          <div className="crit-promo-body">
+            <div className="crit-promo-title">{activeCount} критерий из {limitCount}</div>
+            <div className="crit-promo-sub">В «Плюсе» — 10 критериев и находки без задержки</div>
+          </div>
+          <button type="button" className="crit-promo-btn" onClick={() => navigate('/tariffs')}>Плюс</button>
+        </div>
+      ) : null}
+
+      <CriteriaList
+        items={items.filter((c) => (critTab === 'active'
+          ? !(c.active === 0 || c.active === false)
+          : (c.active === 0 || c.active === false)))}
+        loading={loading} onRemove={remove} onToggle={toggleCriterion} />
     </Screen>
   )
 }
