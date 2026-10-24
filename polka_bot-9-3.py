@@ -22807,6 +22807,13 @@ def _cfg_ab_bucket(user_id: int) -> bool:
 
 
 # ── Промокоды под текущую модель (Плюс, монеты, слот, пробный период) ───────
+# Совпадения, которые лента вообще может показать. Всё остальное — «не
+# подошло»: цена не та, критерий не тот, объявление отклонено. Такие строки
+# можно удалять сразу, они никому не покажутся.
+HUNT_VISIBLE_SQL = ("status IN ('ready','sent','sending','pending_details','send_failed') "
+                    "OR reject_reason IN ('price_below_floor','price_suspect')")
+
+
 PROMO_KINDS = (('plus_days', 'discount', 'coins', 'criterion_days', 'trial_days')
                 if COINS_ENABLED else ('plus_days', 'discount', 'criterion_days', 'trial_days'))
 PROMO_KIND_TITLES = {
@@ -29305,6 +29312,23 @@ async def _prune_loop() -> None:
             def _prune() -> int:
                 cur = db.conn.cursor()
                 total = 0
+                # Сначала — то, что не подошло: такие строки лента не
+                # показывает никогда. Проверяем по каждому совпадению
+                # отдельно, потому что одно и то же объявление может
+                # подойти одному человеку и не подойти другому.
+                while True:
+                    cur.execute(
+                        f"DELETE FROM hunt_matches WHERE id IN ("
+                        f"  SELECT id FROM hunt_matches WHERE NOT ({HUNT_VISIBLE_SQL})"
+                        f"  LIMIT 2000)")
+                    n = cur.rowcount or 0
+                    db.conn.commit()
+                    total += n
+                    if n < 2000:
+                        break
+                # Затем прореживание. PARTITION BY user_id, crit_id — у двух
+                # людей с одинаковым критерием это разные наборы, и удаление
+                # у одного не задевает другого.
                 while True:
                     cur.execute(
                         "DELETE FROM hunt_matches WHERE id IN ("
@@ -29416,6 +29440,19 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             n = cur.rowcount or 0
             db.conn.commit()
             dead += n
+            if n < 2000:
+                break
+
+        # 3б. Не подходящие никому: лента их не показывает никогда.
+        unfit = 0
+        while True:
+            cur.execute(
+                f"DELETE FROM hunt_matches WHERE id IN ("
+                f"  SELECT id FROM hunt_matches WHERE NOT ({HUNT_VISIBLE_SQL})"
+                f"  LIMIT 2000)")
+            n = cur.rowcount or 0
+            db.conn.commit()
+            unfit += n
             if n < 2000:
                 break
 
