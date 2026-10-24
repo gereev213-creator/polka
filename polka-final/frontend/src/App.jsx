@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-18'
+const APP_BUILD = '2026-10-24-19'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -664,310 +664,90 @@ function CategoryArt({ label }) {
  * Раньше их можно было задать ТОЛЬКО командой /hunt в боте: в приложении
  * входа не было вовсе, поэтому человек его и не находил. */
 function CriteriaPage() {
+  /* Экран «Критерии» по макету 03. Собран заново, а не вычищен из старого:
+     прежний компонент был на 300 строк с ручным конструктором на двадцать
+     полей. Критерий теперь создаётся по ссылке с Авито или словами на
+     /hunt — здесь только список, пауза и переход к созданию. */
+  const navigate = useNavigate()
   const [items, setItems] = useState([])
-  // Готовые шаблоны: условия под частые покупки с уже правильной категорией
-  // и требованиями — человек выбирает, а не пишет словами
-  const [templates, setTemplates] = useState([])
-  const [tplGroup, setTplGroup] = useState('')
-  // Сегмент «Активные / Архив»: архив — это критерии на паузе
+  const [loading, setLoading] = useState(true)
   const [critTab, setCritTab] = useState('active')
+  const [limitCount, setLimitCount] = useState(1)
+
+  const load = () => {
+    setLoading(true)
+    api.getCriteria()
+      .then((d) => setItems(d.items || []))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false))
+  }
+
   useEffect(() => {
+    load()
     api.getPlan()
       .then((d) => setLimitCount(d?.plan === 'plus' ? 10 : (d?.free_max_criteria ?? 1)))
       .catch(() => setLimitCount(1))
   }, [])
-  const activeCount = items.filter((c) => !(c.active === 0 || c.active === false)).length
-  // Лимит по плану берём отдельным запросом: в этом компоненте переменной
-  // plan нет, и обращение к ней роняло весь экран.
-  const [limitCount, setLimitCount] = useState(1)
-  // Какой нижний лист открыт: '' | 'tpl'
-  const [sheet, setSheet] = useState('')
-  const [tplMsg, setTplMsg] = useState('')
-  const [cities, setCities] = useState([])
-  const [query, setQuery] = useState('')
-  // Категория для ручного поиска: сужает выдачу на самом Авито
-  const [huntCategory, setHuntCategory] = useState('')
-  // Состояние товара — как фильтр на Авито: новое или б/у
-  const [huntCondition, setHuntCondition] = useState('')
-  // Оригинал или реплика — важно во всех категориях, не только в одежде
-  const [huntOriginal, setHuntOriginal] = useState('')
-  // Магазин или частник: люди хотят объявления с рук, а не из магазина.
-  // Магазины пишут себя латиницей (shop, store, opt), их и отсеиваем.
-  const [huntSeller, setHuntSeller] = useState('')
-  // Требования словами — то же, что ИИ пишет в критерий: «размер 43»,
-  // «АКБ от 85%», «не вскрывался». Скрипт разбирает их и отсеивает.
-  const [huntNotes, setHuntNotes] = useState('')
-  // Свои исключения и строгая модель — универсальные поля любого критерия
-  const [huntExclude, setHuntExclude] = useState('')
-  const [huntStrict, setHuntStrict] = useState(false)
-  const [city, setCity] = useState('')
-  const [maxPrice, setMaxPrice] = useState('')
-  // Фильтры перекупа: свой диапазон цены, свежесть и наличие фото.
-  // Свежесть — главное: перекуп звонит первым, пока товар не ушёл.
-  // Какой раздел фильтров раскрыт. Свёрнутые фильтры продолжают работать:
-  // их значения хранятся в состоянии, а не в разметке.
-  const [openSec, setOpenSec] = useState('')
-  const toggleSec = (name) => setOpenSec(openSec === name ? '' : name)
 
-  const [minPrice, setMinPrice] = useState('')
-  const [maxHours, setMaxHours] = useState(0)
-  const [withPhoto, setWithPhoto] = useState(false)
-  const [minDiscount, setMinDiscount] = useState(15)
-  const [mode, setMode] = useState('any')
-  const [collector, setCollector] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-
-  const load = async () => {
-    setLoading(true)
+  const remove = async (id) => {
     try {
-      const data = await api.getCriteria()
-      setItems(data.items || [])
-      setCollector(data.collector || null)
-      setError('')
-    } catch {
-      setError('Не удалось загрузить критерии.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Готовые шаблоны грузим отдельно и тихо: если эндпоинт недоступен,
-  // форма всё равно работает — человек просто введёт условия сам
-  const loadTemplates = () => {
-    api.getTemplates()
-      .then((d) => setTemplates(d.items || []))
-      .catch(() => setTemplates([]))
-  }
-
-  const applyTemplate = async (slug) => {
-    setTplMsg('')
-    setBusy(true)
-    try {
-      const r = await api.useTemplate(slug)
-      setTplMsg(r.ok ? `Критерий «${r.title}» создан` : 'Не получилось')
-      await load()
-    } catch (e) {
-      if (e && (e.code === 'limit_reached' || e.status === 402)) {
-        setTplMsg((e && e.detail) || 'Достигнут лимит критериев')
-      } else if (e && e.code === 'duplicate') {
-        setTplMsg('Такой критерий уже есть')
-      } else {
-        // Ответ мог не дойти по таймауту, хотя критерий уже создан:
-        // проверяем, вырос ли список критериев, и считаем это успехом
-        try {
-          const data = await api.getCriteria()
-          const grew = (data.items || []).length > items.length
-          setTplMsg(grew ? 'Критерий создан' : ((e && e.detail) || 'Не удалось создать критерий'))
-          if (grew) await load()
-        } catch {
-          setTplMsg((e && e.detail) || 'Не удалось создать критерий')
-        }
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    loadTemplates()
-    load()
-    api.getFilters().then((d) => setCities(d.cities || [])).catch(() => {})
-  }, [])
-
-  const add = async () => {
-    if (query.trim().length < 2) {
-      setError('Напишите, что искать — например «iphone 13»')
-      return
-    }
-    setBusy(true)
-    setError('')
-    try {
-      await api.addCriterion({
-        query: query.trim(),
-        city,
-        max_price: Number(maxPrice) || 0,
-        category: huntCategory || '',
-        condition: huntCondition || '',
-        // Требования словами: скрипт разбирает их и отсеивает реплики
-        // и магазины. Работает по всем категориям.
-        requirements: [
-          huntOriginal === 'original' ? 'только оригинал' : '',
-          huntOriginal === 'replica' ? 'можно реплику' : '',
-          huntSeller === 'private' ? 'не магазин, только с рук' : '',
-          huntNotes.trim(),
-        ].filter(Boolean).join(', '),
-        min_price: Number(minPrice) || 0,
-        max_hours: Number(maxHours) || 0,
-        with_photo: withPhoto ? 1 : 0,
-        min_discount: mode === 'deal' ? minDiscount : 0,
-        mode,
-        exclude: huntExclude.trim(),
-        strict_model: huntStrict ? 1 : 0,
-      })
-      setQuery('')
-      setCity('')
-      setMaxPrice('')
-      await load()
-    } catch (err) {
-      // Сначала проверяем: может, критерий ВСЁ-ТАКИ создался. Запрос мог не
-      // дождаться ответа (таймаут, занятая база), а запись на сервере уже
-      // прошла — тогда «не удалось» было бы ложью и человек создал бы дубль.
-      try {
-        const d = await api.getCriteria()
-        const want = query.trim().toLowerCase()
-        const found = (d.items || []).some(
-          (c) => String(c.query || '').trim().toLowerCase() === want)
-        if (found) {
-          setQuery('')
-          setCity('')
-          setMaxPrice('')
-          setError('')
-          await load()
-          return
-        }
-      } catch { /* список не получен — покажем обычную ошибку */ }
-      // Показываем ПРИЧИНУ, а не «не удалось»: без этого человек не поймёт,
-      // что критерий просто уже есть в списке
-      const code = err?.code || ''
-      if (code === 'duplicate') setError('Такой критерий уже есть — он в списке ниже.')
-      else if (code === 'query_too_short') setError('Напишите, что искать — хотя бы два символа.')
-      else if (err?.status === 401) setError('Откройте приложение через Telegram.')
-      else if (err?.status === 400 && err?.detail) setError(`Не получилось: ${err.detail}`)
-      else setError('Не удалось добавить критерий. Попробуйте ещё раз.')
-    } finally {
-      setBusy(false)
-    }
+      await api.removeCriterion(id)
+      load()
+    } catch (e) { /* оставляем список как был */ }
   }
 
   const toggleCriterion = async (id, active) => {
     try {
       await api.setCriterionActive(id, active)
       setItems((prev) => prev.map((c) => (c.id === id ? { ...c, active: active ? 1 : 0 } : c)))
-    } catch (e) {
-      // Список оставляем как был: пауза не критична, повторить можно
-    }
+    } catch (e) { /* пауза не критична */ }
   }
 
-  const remove = async (id) => {
-    try {
-      await api.removeCriterion(id)
-      await load()
-    } catch {
-      setError('Не удалось убрать критерий.')
-    }
-  }
+  const isActive = (c) => !(c.active === 0 || c.active === false)
+  const activeItems = items.filter(isActive)
+  const archiveItems = items.filter((c) => !isActive(c))
+  const shown = critTab === 'active' ? activeItems : archiveItems
 
   return (
-    <Screen className="hunt-screen">
+    <Screen>
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="crit-top">
         <div className="page-title">Критерии</div>
         <button type="button" className="crit-plus" aria-label="Новый критерий"
-          onClick={() => {
-            const el = document.getElementById('crit-form')
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          }}>+</button>
+          onClick={() => navigate('/hunt')}>+</button>
       </div>
 
       <div className="crit-seg">
         <button type="button" className={critTab === 'active' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
-          onClick={() => setCritTab('active')}>
-          Активные {items.filter((c) => !(c.active === 0 || c.active === false)).length}
-        </button>
+          onClick={() => setCritTab('active')}>Активные {activeItems.length}</button>
         <button type="button" className={critTab === 'archive' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
-          onClick={() => setCritTab('archive')}>
-          Архив {items.filter((c) => c.active === 0 || c.active === false).length}
-        </button>
+          onClick={() => setCritTab('archive')}>Архив {archiveItems.length}</button>
       </div>
 
-      {critTab === 'active' && activeCount === limitCount ? (
+      {critTab === 'active' && activeItems.length >= limitCount ? (
         <div className="crit-promo">
           <div className="crit-promo-badge">П</div>
           <div className="crit-promo-body">
-            <div className="crit-promo-title">{activeCount} критерий из {limitCount}</div>
+            <div className="crit-promo-title">{activeItems.length} из {limitCount}</div>
             <div className="crit-promo-sub">В «Плюсе» — 10 критериев и находки без задержки</div>
           </div>
           <button type="button" className="crit-promo-btn" onClick={() => navigate('/tariffs')}>Плюс</button>
         </div>
       ) : null}
 
-      <CriteriaList
-        items={items.filter((c) => (critTab === 'active'
-          ? !(c.active === 0 || c.active === false)
-          : (c.active === 0 || c.active === false)))}
-        loading={loading} onRemove={remove} onToggle={toggleCriterion} />
-      {/* Те же вкладки, что в чате: переключение между способами не теряется */}
+      <CriteriaList items={shown} loading={loading} onRemove={remove} onToggle={toggleCriterion}
+        title={critTab === 'active' ? 'Мои критерии' : 'На паузе'} />
 
-      <p className="sub-copy">
-        </p>
-
-      {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает.
-          Плашки — общий Chip из дизайн-системы: один компонент на все фильтры. */}
-        {/* Ручной конструктор убран: критерии создаются из ссылки или
-            словами. Форма на двадцать полей дублировала фильтры Авито
-            хуже них — предлагать её значит давать заведомо слабый путь. */}
-        <button type="button" className="cta-primary crit-create"
-          onClick={() => navigate('/hunt')}>
-          Создать критерий
-        </button>
-        <div className="hunt-card-note">
-          Бесплатно — {limitCount} критерий · проверка каждые 15 минут
-        </div>
-
-      {/* Шаблоны живут в нижнем листе: в форме они занимали пол-экрана
-          чипов и мешали дойти до кнопки. */}
-      <Sheet open={sheet === 'tpl'} title="Готовые шаблоны" onClose={() => setSheet('')}>
-        <div className="chat-replies">
-            <button type="button"
-              className={tplGroup === '' ? 'chat-chip is-active' : 'chat-chip'}
-              onClick={() => setTplGroup('')}>все</button>
-            {[...new Set(templates.map((x) => x.group))].map((g) => (
-              <button key={g} type="button"
-                className={tplGroup === g ? 'chat-chip is-active' : 'chat-chip'}
-                onClick={() => setTplGroup(g)}>
-                {templates.find((x) => x.group === g)?.group_title || g}
-              </button>
-            ))}
-          </div>
-          <div className="chat-replies">
-            {templates
-              .filter((x) => !tplGroup || x.group === tplGroup)
-              .map((x) => (
-                <button key={x.slug} type="button" className="chat-chip" disabled={busy}
-                  onClick={() => applyTemplate(x.slug)}>
-                  {x.title}
-                  {x.max_price ? ` · до ${Number(x.max_price).toLocaleString('ru-RU')} ₽` : ''}
-                </button>
-              ))}
-          </div>
-        {tplMsg ? <div className="chat-note">{tplMsg}</div> : null}
-      </Sheet>
-
-      {/* Список критериев — общий компонент: та же разметка, что в ИИ-поиске,
-          иначе один критерий выглядел на двух вкладках по-разному. */}
-      {/* Свои исключения и строгая модель: универсальные поля любого критерия.
-          Исключения спасают от «чехол», «копия», «запчасти»; строгая модель —
-          от «Pro Max» вместо «Pro». */}
-      <div className="glass-card mt-14">
-        <div className="plan-name">Чего не присылать</div>
-        <div className="plan-desc">слова через запятую: чехол, запчасти, копия</div>
-        <input className="text-input mt-8" placeholder="чехол, запчасти"
-          value={huntExclude} onChange={(e) => setHuntExclude(e.target.value)} />
-        <label className="plan-desc mt-8" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="checkbox" checked={huntStrict}
-            onChange={(e) => setHuntStrict(e.target.checked)} />
-          строго эта модель (без «Pro Max» и подобных)
-        </label>
+      <button type="button" className="cta-primary crit-create" onClick={() => navigate('/hunt')}>
+        Создать критерий
+      </button>
+      <div className="hunt-card-note">
+        Бесплатно — {limitCount} критерий · проверка каждые 15 минут
       </div>
-
     </Screen>
   )
 }
 
-/* Находки агрегатора: то, что заметно дешевле медианы по категории.
- * Порядок задаёт сервер — по убыванию выгоды. */
 function FindingsView() {
   const { favoriteIds, toggleFavorite } = useApp()
   const [items, setItems] = useState([])
