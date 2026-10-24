@@ -196,10 +196,10 @@ export default function HuntChat() {
   return (
     <div className="chat-wrap">
       <div className="chat-header">
-        <button type="button" className="chat-back" onClick={() => navigate('/')} aria-label="Назад">
+        <button type="button" className="chat-back" onClick={() => navigate('/hunt')} aria-label="Назад">
           <svg viewBox="0 0 24 24" className="icon-svg" aria-hidden="true"><path d="M15 4l-8 8 8 8" /></svg>
         </button>
-        <div className="page-title chat-header-title">Поиск лотов</div>
+        <div className="page-title chat-header-title">Поиск словами</div>
       </div>
       {/* Вкладки убраны: главный вход — ссылка с Авито. Ручная настройка
           осталась отдельной текстовой ссылкой внизу экрана. */}

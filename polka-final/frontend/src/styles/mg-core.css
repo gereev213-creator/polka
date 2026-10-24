@@ -3599,3 +3599,205 @@
 .app-shell .link-limit-actions, .link-limit-actions {
   margin-top: 10px;
 }
+
+/* ── 53. Поиск лотов по макету 2026 (тёмная стилистика) ─────────────────── */
+.app-shell .hunt-h1, .hunt-h1 {
+  font-size: 28px;
+  line-height: 34px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  margin: 6px 0 10px;
+}
+.app-shell .hunt-sub, .hunt-sub {
+  font-size: 15px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, .60);
+  margin-bottom: 16px;
+}
+.app-shell .hunt-card, .hunt-card {
+  padding: 16px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16), 0 5px 30px rgba(0, 0, 0, .45);
+  margin-bottom: 12px;
+}
+.app-shell .hunt-card-head, .hunt-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 12px;
+}
+.app-shell .hunt-paste, .hunt-paste {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: #6fb6ff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-shell .hunt-paste svg, .hunt-paste svg { width: 18px; height: 18px; }
+.app-shell .hunt-field, .hunt-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .05);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+.app-shell .hunt-field input, .hunt-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 16px;
+  outline: none;
+}
+.app-shell .hunt-field-x, .hunt-field-x {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .7);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-shell .hunt-from-label, .hunt-from-label {
+  margin: 14px 0 8px;
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .hunt-chips, .hunt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.app-shell .hunt-chip, .hunt-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+}
+.app-shell .hunt-chip.is-main, .hunt-chip.is-main {
+  background: rgba(10, 132, 255, .16);
+  color: #8ec4ff;
+}
+.app-shell .hunt-cta, .hunt-cta {
+  width: 100%;
+  height: 52px;
+  margin-top: 16px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 700;
+}
+.app-shell .hunt-card-note, .hunt-card-note {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .hunt-note, .hunt-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .05);
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .72);
+}
+.app-shell .hunt-step, .hunt-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.app-shell .hunt-step:last-child, .hunt-step:last-child { border-bottom: 0; }
+.app-shell .hunt-step-n, .hunt-step-n {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6fb6ff;
+  min-width: 22px;
+}
+.app-shell .hunt-step-text, .hunt-step-text {
+  font-size: 15px;
+  line-height: 20px;
+  color: rgba(255, 255, 255, .78);
+}
+.app-shell .hunt-words-card, .hunt-words-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px;
+  border: 0;
+  border-radius: 22px;
+  background: rgba(10, 132, 255, .12);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, .22);
+  text-align: left;
+  cursor: pointer;
+}
+.app-shell .hunt-words-icon, .hunt-words-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .10);
+  color: #8ec4ff;
+  flex: none;
+}
+.app-shell .hunt-words-body, .hunt-words-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-shell .hunt-words-title, .hunt-words-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .hunt-words-sub, .hunt-words-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .55);
+}
+.app-shell .hunt-words-arrow, .hunt-words-arrow {
+  color: rgba(255, 255, 255, .5);
+  font-size: 20px;
+}
+.app-shell .topbar-link, .topbar-link {
+  border: 0;
+  background: transparent;
+  color: #6fb6ff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}

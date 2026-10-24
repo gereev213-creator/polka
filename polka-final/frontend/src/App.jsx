@@ -1891,6 +1891,154 @@ function SearchPage() {
   )
 }
 
+
+/* Экран «Поиск лотов»: главный вход — ссылка с Авито. Макет 2026:
+   заголовок, карточка со ссылкой и разобранными условиями, инструкция,
+   и отдельная строка «или опишите словами» (чат переехал на /hunt/words). */
+function HuntLinkPage() {
+  const navigate = useNavigate()
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [chips, setChips] = useState([])
+  const [note, setNote] = useState('')
+  const [limit, setLimit] = useState(false)
+  const [critCount, setCritCount] = useState(0)
+
+  useEffect(() => {
+    api.getCriteria()
+      .then((d) => setCritCount((d.items || []).filter((c) => c.active).length))
+      .catch(() => {})
+  }, [])
+
+  const paste = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text) setUrl(text.trim())
+    } catch {
+      setNote('Вставьте ссылку вручную — буфер обмена недоступен')
+    }
+  }
+
+  const send = async () => {
+    const link = url.trim()
+    if (!link) return
+    setBusy(true); setNote(''); setChips([]); setLimit(false)
+    try {
+      const r = await api.huntFromLink(link)
+      const list = []
+      if (r.query) list.push({ label: r.query, kind: 'main' })
+      if (r.city) list.push({ label: r.city })
+      if (r.price_to) list.push({ label: `до ${Number(r.price_to).toLocaleString('ru-RU')} ₽` })
+      if (r.price_from) list.push({ label: `от ${Number(r.price_from).toLocaleString('ru-RU')} ₽` })
+      if (r.battery_from) list.push({ label: `АКБ от ${r.battery_from} %` })
+      if (r.category && r.category !== r.query) list.push({ label: r.category })
+      setChips(list)
+      setNote(r.existing
+        ? 'Такой критерий уже есть — он работает'
+        : 'Критерий создан: условия перенесены с Авито')
+      setUrl('')
+      api.getCriteria()
+        .then((d) => setCritCount((d.items || []).filter((c) => c.active).length))
+        .catch(() => {})
+    } catch (e) {
+      if ((e && e.error) === 'limit' || String((e && e.detail) || '').includes('лимит')) {
+        setLimit(true)
+      } else {
+        setNote([e && e.detail, e && e.error].filter(Boolean).join(' · ')
+          || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Screen>
+      <TopBar
+        title="Поиск лотов"
+        onBack={() => navigate('/')}
+        right={<button type="button" className="topbar-link" onClick={() => navigate('/hunt/manual')}>
+          Критерии{critCount ? ` ${critCount}` : ''}
+        </button>}
+      />
+
+      <div className="section-label">Ссылка с Авито</div>
+      <div className="hunt-h1">Вставьте ссылку с Авито</div>
+      <div className="hunt-sub">
+        Выставьте фильтры на площадке и скопируйте адрес из строки браузера.
+        Город, цена и категория перенесутся сами.
+      </div>
+
+      <div className="hunt-card">
+        <div className="hunt-card-head">
+          <span>Ссылка на поиск</span>
+          <button type="button" className="hunt-paste" onClick={paste}>
+            <Icon name="link" /> Вставить
+          </button>
+        </div>
+        <div className="hunt-field">
+          <input value={url} onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://avito.ru/..." inputMode="url" />
+          {url ? (
+            <button type="button" className="hunt-field-x" aria-label="Очистить"
+              onClick={() => setUrl('')}>×</button>
+          ) : null}
+        </div>
+
+        {chips.length ? (
+          <>
+            <div className="hunt-from-label">Из ссылки</div>
+            <div className="hunt-chips">
+              {chips.map((c) => (
+                <span key={c.label} className={c.kind === 'main' ? 'hunt-chip is-main' : 'hunt-chip'}>{c.label}</span>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        <button type="button" className="cta-primary hunt-cta" disabled={busy || !url.trim()} onClick={send}>
+          {busy ? 'Проверяю…' : 'Найти лоты'}
+        </button>
+        <div className="hunt-card-note">Сохранить как критерий и получать новые</div>
+        {note ? <div className="hunt-note">{note}</div> : null}
+        {limit ? (
+          <div className="link-limit">
+            <div className="link-limit-text">
+              Критерий занят на бесплатном плане. В «Плюсе» — до 10 критериев.
+            </div>
+            <div className="link-limit-actions">
+              <button type="button" className="primary-btn" onClick={() => navigate('/tariffs')}>Открыть Плюс</button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="hunt-card">
+        <div className="hunt-from-label">Как это работает</div>
+        {[
+          ['01', 'Откройте Авито и выставьте фильтры'],
+          ['02', 'Скопируйте адрес из строки браузера'],
+          ['03', 'Вставьте сюда — условия уже перенесены'],
+        ].map(([n, text]) => (
+          <div key={n} className="hunt-step">
+            <span className="hunt-step-n">{n}</span>
+            <span className="hunt-step-text">{text}</span>
+          </div>
+        ))}
+      </div>
+
+      <button type="button" className="hunt-words-card" onClick={() => navigate('/hunt/words')}>
+        <span className="hunt-words-icon"><Icon name="chat" /></span>
+        <span className="hunt-words-body">
+          <span className="hunt-words-title">Или опишите словами</span>
+          <span className="hunt-words-sub">Если проще рассказать, чем настраивать фильтры</span>
+        </span>
+        <span className="hunt-words-arrow">›</span>
+      </button>
+    </Screen>
+  )
+}
+
 function ListingPage() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -4200,7 +4348,8 @@ function Layout() {
         <Route path="/edit/:id" element={<EditAdPage />} />
         <Route path="/my" element={<MyAdsPage />} />
         <Route path="/favorites" element={<FavoritesPage />} />
-        <Route path="/hunt" element={<HuntChat />} />
+        <Route path="/hunt" element={<HuntLinkPage />} />
+        <Route path="/hunt/words" element={<HuntChat />} />
         <Route path="/hunt/manual" element={<CriteriaPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/tariffs" element={<TariffsPage />} />

@@ -23389,6 +23389,43 @@ HUNT_ACCESSORY_QUERY_WORDS = ('чехол', 'чехлы', 'стекло', 'пл�
                               'наклейк', 'сумка', 'кошелёк', 'кошелек')
 
 
+def avito_blob_facts(blob: str) -> Dict:
+    """Достаёт из набора f=… понятные числа: цену и порог АКБ.
+
+    Внутри набора лежат base64-куски, где подряд идут JSON-объекты вида
+    {"from":0,"to":35000} (цена) и {"from":80,"to":null} (АКБ от 80 %).
+    Мы их только ЧИТАЕМ для показа человеку — в сборщик уходит исходная
+    строка, без наших переделок.
+    """
+    import base64
+    import re as _re
+    text = str(blob or '')
+    price_to = price_from = battery_from = 0
+    for m in _re.finditer(r'eyJ[A-Za-z0-9_-]{8,}', text):
+        raw = m.group(0)
+        try:
+            pad = raw + '=' * (-len(raw) % 4)
+            decoded = base64.urlsafe_b64decode(
+                pad.replace('-', '+').replace('_', '/')).decode('utf-8', 'ignore')
+        except Exception:
+            continue
+        # Внутри куска может быть несколько объектов подряд — разбираем все.
+        for chunk in _re.findall(r'\{[^{}]*\}', decoded):
+            try:
+                data = json.loads(chunk)
+            except Exception:
+                continue
+            if not isinstance(data, dict):
+                continue
+            frm, to = data.get('from'), data.get('to')
+            if to and int(to) > 1000 and not price_to:
+                price_to = int(to)
+            elif frm and 0 < int(frm) < 100 and not battery_from and not price_from:
+                battery_from = int(frm)
+            elif frm and int(frm) > 0 and not price_from:
+                price_from = int(frm)
+    return {'price_to': price_to, 'price_from': price_from, 'battery_from': battery_from}
+
 def is_accessory_query(query: str) -> bool:
     """Аксессуар ли это: по таким запросам фильтры товара не применяем."""
     low = str(query or '').lower()
@@ -25636,10 +25673,12 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     if not crit_id:
         return _miniapp_json({'ok': False, 'error': 'duplicate',
                               'detail': 'Такой критерий уже есть'}, status=400)
+    facts = avito_blob_facts(parsed.get('filters') or '')
     return _miniapp_json({'ok': True, 'id': int(crit_id), 'query': query,
                           'city': city, 'category': category,
                           'filters': parsed.get('filters') or '',
-                          'has_price': bool(parsed.get('has_price'))})
+                          'has_price': bool(parsed.get('has_price')),
+                          **facts})
 
 
 async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Response:
