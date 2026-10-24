@@ -57,7 +57,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-2'
+const APP_BUILD = '2026-10-24-3'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -358,6 +358,12 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
       }
     }, 260)
   }
+  // Второй путь на случай, если click не доходит: та же навигация по
+  // pointerup. Двойного перехода не будет — роутер отсекает повтор.
+  const openCardByPointer = (event) => {
+    if (event.target.closest?.('.product-save')) return
+    openCard()
+  }
   const handleFavorite = (event) => {
     event.preventDefault()
     event.stopPropagation()
@@ -369,8 +375,10 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
   const showDiscount = reliable && discount > 0 && discount <= 50
 
   return (
-    <div className="product-card" role="link" tabIndex={0}
-      onClick={openCard}
+    <a className="product-card" role="link" tabIndex={0}
+      href={`#/listing/${item.id}`}
+      onClick={(e) => { e.preventDefault(); openCard() }}
+      onPointerUp={openCardByPointer}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCard() } }}>
       <div className="product-figure">
         <MediaPlaceholder imageUrl={firstPhoto(item)} />
@@ -395,7 +403,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
         })()}
         <div className="product-price">{Number(item.price || 0).toLocaleString('ru-RU')} ₽</div>
       </div>
-    </div>
+    </a>
   )
 }
 
