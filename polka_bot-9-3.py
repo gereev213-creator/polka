@@ -25504,19 +25504,25 @@ def normalize_category(value: str) -> str:
 
 
 def ensure_filter_blob_column() -> None:
-    """Колонка под фильтры Авито из ссылки пользователя.
+    """Колонки под фильтры Авито: набор f=… и исходный адрес.
 
-    Набор f=… непрозрачен и принадлежит площадке: мы его не разбираем, а
-    храним как есть и передаём сборщику. Тогда забор идёт ровно по тем
-    фильтрам, которые человек выставил на Авито своими глазами.
+    Раньше оба ALTER стояли в одном try. На базе, где filter_blob уже был,
+    первый падал с «duplicate column», второй не выполнялся вовсе — и весь
+    /api/hunt отвечал 500 «no such column: filter_url». Теперь каждая
+    колонка добавляется отдельно и только если её нет.
     """
-    try:
-        db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN filter_blob TEXT DEFAULT ''")
-        db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN filter_url TEXT DEFAULT ''")
-        db.conn.commit()
-        logger.info("hunt_criteria: добавлена колонка filter_url")
-    except Exception:
-        pass
+    for column in ('filter_blob', 'filter_url'):
+        try:
+            have = {r[0] for r in db.conn.execute(
+                "SELECT name FROM pragma_table_info('hunt_criteria')")}
+            if column in have:
+                continue
+            db.conn.execute(
+                f"ALTER TABLE hunt_criteria ADD COLUMN {column} TEXT DEFAULT ''")
+            db.conn.commit()
+            logger.info(f"hunt_criteria: добавлена колонка {column}")
+        except Exception as e:
+            logger.warning(f"hunt_criteria {column}: {e}")
 
 
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
