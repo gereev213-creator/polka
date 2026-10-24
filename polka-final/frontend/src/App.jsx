@@ -1617,6 +1617,12 @@ function HuntLinkPage() {
         </button>
         <div className="hunt-card-note">Сохранить как критерий и получать новые</div>
         {note ? <div className="hunt-note">{note}</div> : null}
+        {chips.length ? (
+          <div className="hunt-card-note">
+            Бот откроет эту ссылку и заберёт ровно то, что в ней: категорию,
+            цену и фильтры. Своих условий не добавляет.
+          </div>
+        ) : null}
         {limit ? (
           <div className="link-limit">
             <div className="link-limit-text">

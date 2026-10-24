@@ -23368,6 +23368,18 @@ def parse_avito_filter_url(url: str) -> Dict:
                     'detail': 'В ссылке нет набора фильтров (f=…)'}
         slug = ''
         parts = [x for x in parsed.path.split('/') if x]
+        # Имя для критерия: последний осмысленный сегмент пути, без хвоста
+        # -ASgB… . Для …/apple/iphone_15_pro-ASgB… это «iphone 15 pro»,
+        # а не «Телефоны» — иначе критерий выглядит так, будто ловит всё.
+        title_from_path = ''
+        for part in reversed(parts):
+            if part.lower() in ('all', 'rossiya') or part in AVITO_CATEGORY_SLUGS:
+                continue
+            base = part.split('-')[0]
+            if not base or base in AVITO_CATEGORY_SLUGS or base.isdigit():
+                continue
+            title_from_path = base.replace('_', ' ').strip()
+            break
         for part in parts[1:]:
             candidate = part.strip().lower()
             base = candidate.split('-')[0]
@@ -23386,7 +23398,8 @@ def parse_avito_filter_url(url: str) -> Dict:
         has_price = ('pmin' in query or 'pmax' in query
                      or 'eyJmcm9t' in blob or '"from"' in blob)
         return {'ok': True, 'slug': slug, 'filters': '&f=' + blob,
-                'city': city, 'has_price': has_price}
+                'city': city, 'has_price': has_price,
+                'title_from_path': title_from_path}
     except Exception as e:
         return {'ok': False, 'error': 'parse_failed', 'detail': str(e)[:120]}
 
@@ -25668,7 +25681,11 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
         # Без текстового запроса берём название категории — иначе критерий
         # не создать, а ссылка при этом рабочая.
         slug = str(parsed.get('slug') or '')
-        query = HUNT_SLUG_TITLES.get(slug, '') or 'товар'
+        # Сначала человеческое имя из пути («iphone 15 pro»), потом название
+        # категории. Раньше для ссылки без q= критерий назывался «Телефоны»,
+        # и выглядело так, будто бот собирается присылать все телефоны.
+        query = (str(parsed.get('title_from_path') or '').strip()
+                 or HUNT_SLUG_TITLES.get(slug, '') or 'товар')
     city = str(parsed.get('city') or '').replace('-', ' ').title()
     category = normalize_category(query)
 
@@ -29572,7 +29589,7 @@ async def _backup_loop() -> None:
     await asyncio.sleep(90)
     while True:
         try:
-            if str(cfg_get('backup.enabled') or '1') != '0':
+            if str(cfg_get('backup.enabled') or '0') == '1':
                 path = await asyncio.to_thread(_make_backup_file)
                 if path:
                     await _send_backup(path)
