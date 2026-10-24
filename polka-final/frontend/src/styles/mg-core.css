@@ -4033,3 +4033,35 @@
   margin-top: 12px;
 }
 .app-shell .chat-final-actions > *, .chat-final-actions > * { flex: 1; }
+
+/* Таблица условий в ответе ассистента (макет 02) */
+.app-shell .crit-grid, .crit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin: 12px 0 0;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, .08);
+}
+.app-shell .crit-cell, .crit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  background: #141414;
+}
+.app-shell .crit-cell-k, .crit-cell-k {
+  font-size: 11px;
+  line-height: 15px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .crit-cell-v, .crit-cell-v {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: #fff;
+}

@@ -245,8 +245,28 @@ export default function HuntChat() {
             <div className="chat-crit-card">
               <div className="chat-crit-body">
                 <div className="chat-crit-title">Буду искать: {draft.query}</div>
-                {draft.max_price ? <div className="chat-crit-sub">до {money(draft.max_price)} ₽</div> : null}
-                {draft.city ? <div className="chat-crit-sub">{draft.city}</div> : null}
+                {/* Таблица условий по макету 02: четыре ячейки вместо
+                    сплошного текста — видно, что именно поняли. */}
+                <div className="crit-grid">
+                  <div className="crit-cell">
+                    <span className="crit-cell-k">Категория</span>
+                    <span className="crit-cell-v">{draft.category || 'любая'}</span>
+                  </div>
+                  <div className="crit-cell">
+                    <span className="crit-cell-k">Размер</span>
+                    <span className="crit-cell-v">{draft.size || '—'}</span>
+                  </div>
+                  <div className="crit-cell">
+                    <span className="crit-cell-k">Цена</span>
+                    <span className="crit-cell-v">
+                      {draft.max_price ? `до ${money(draft.max_price)} ₽` : 'любая'}
+                    </span>
+                  </div>
+                  <div className="crit-cell">
+                    <span className="crit-cell-k">Город</span>
+                    <span className="crit-cell-v">{draft.city || 'любой'}</span>
+                  </div>
+                </div>
                 {(draft.exclude || []).length ? (
                   <div className="chat-replies">
                     <span className="chat-chip">не: {(draft.exclude || []).join(', ')}</span>
