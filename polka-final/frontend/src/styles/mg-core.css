@@ -3220,3 +3220,14 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+
+/* Кнопки шага: под кнопкой нужна плотная подложка, иначе она висит синей
+   полосой поверх плиток категорий. Правило с цепочкой экрана, чтобы
+   перебить прозрачный фон из старых файлов по специфичности, без !important. */
+.app-shell .screen .step-actions, .screen .step-actions {
+  background: #050505;
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, .08), 0 -12px 24px rgba(0, 0, 0, .6);
+  border-radius: 16px;
+  padding: 10px;
+  margin-top: 8px;
+}
