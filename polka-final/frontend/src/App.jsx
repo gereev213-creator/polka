@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-7'
+const APP_BUILD = '2026-10-24-8'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -500,14 +500,14 @@ function AppProvider({ children }) {
  * если файла нет, показывается встроенная SVG из CATEGORY_ART.
  */
 const CATEGORIES = [
-  { label: 'Другое', image: 'other.png', art: 'other', aliases: ['Прочие вещи'] },
+  { label: 'Другое', image: '', art: 'other', aliases: ['Прочие вещи'] },
   { label: 'Авто', image: 'auto.png', art: 'car', aliases: [] },
   { label: 'Недвижимость', image: 'realty.png', art: 'home', aliases: ['Продажа жилья'] },
   { label: 'Аренда', image: 'rent.png', art: 'rent', aliases: ['Аренда жилья'] },
   { label: 'Для дома и дачи', image: 'home.png', art: 'home', aliases: [] },
   { label: 'Запчасти', image: 'parts.png', art: 'parts', aliases: [] },
   { label: 'Услуги', image: 'services.png', art: 'jobs', aliases: [] },
-  { label: 'Электроника', image: 'electronics.png', art: 'tech', aliases: ['Техника'] },
+  { label: 'Электроника', image: '', art: 'tech', aliases: ['Техника'] },
   { label: 'Работа и подработка', image: 'jobs.png', art: 'parttime', aliases: ['Вакансии', 'Подработки'] },
   { label: 'Одежда, обувь, аксессуары', image: 'fashion.png', art: 'clothes', aliases: ['Одежда', 'Обувь'] },
 ]
@@ -2558,7 +2558,12 @@ function CreatePage() {
     <Screen>
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="page-title">Новое объявление</div>
-      <div className="sub-copy">Заполните информацию о товаре — это займёт пару минут. После публикации объявление уйдёт на модерацию.</div>
+      <div className="create-progress">
+        <span>Шаг {form.step} из {totalSteps}</span>
+        <span className="create-bar">
+          <span style={{ width: `${Math.round((form.step / totalSteps) * 100)}%` }} />
+        </span>
+      </div>
       {error ? <div className="status-line error">{error}</div> : null}
       {status === 'success' && created ? (
         <div className="success-box glass-card">

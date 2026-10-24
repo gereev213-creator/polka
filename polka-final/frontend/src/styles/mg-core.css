@@ -3070,3 +3070,104 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ── 44. Сетка категорий и создание объявления ───────────────────────────── */
+.app-shell .category-grid, .category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+@media (min-width: 768px) {
+  .category-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.app-shell .cat-tile, .cat-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #1c1c1f 0%, #141414 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+}
+.app-shell .cat-tile.is-selected, .cat-tile.is-selected {
+  box-shadow: inset 0 0 0 1px #0A84FF, inset 0 1px 0 rgba(255, 255, 255, .10);
+}
+.app-shell .cat-tile-label, .cat-tile-label {
+  position: relative;
+  z-index: 1;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 600;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.app-shell .cat-tile-art, .cat-tile-art {
+  position: absolute;
+  right: -6px;
+  bottom: -6px;
+  width: 58%;
+  height: 58%;
+  opacity: .9;
+  pointer-events: none;
+}
+.app-shell .cat-tile-art img, .cat-tile-art img,
+.app-shell .cat-tile-art svg, .cat-tile-art svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Кнопка создания: sticky над доком, не в конце простыни */
+.app-shell .create-actions, .create-actions {
+  position: sticky;
+  bottom: calc(var(--dock-space, 96px) + 8px);
+  padding: 12px 0 8px;
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, #050505 45%);
+}
+
+/* Шаг создания: строка и полоса 4 px */
+.app-shell .create-progress, .create-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .create-bar, .create-bar {
+  flex: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .10);
+  overflow: hidden;
+}
+.app-shell .create-bar > span, .create-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #0A84FF;
+  transition: width 180ms ease-out;
+}
+/* Кнопки шага держим над доком */
+.app-shell .step-actions, .step-actions {
+  position: sticky;
+  bottom: calc(var(--dock-space, 96px) + 8px);
+  display: flex;
+  gap: 8px;
+  padding: 12px 0 8px;
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, #050505 45%);
+}
+.app-shell .step-actions > * , .step-actions > * { flex: 1; }
