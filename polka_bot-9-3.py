@@ -29291,6 +29291,67 @@ _SQL_FORBIDDEN = re.compile(
     r'reindex|begin|commit|rollback|trigger|grant|savepoint)\b', re.I)
 
 
+async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/maintenance — чистка разросшихся таблиц.
+
+    Таблица совпадений доросла до 1,16 млн строк: 55 % старше недели,
+    и ~250 тыс. ссылаются на уже удалённые объявления. Из-за этого лента
+    «Находки» считалась секундами. Чистим пачками, чтобы не блокировать базу.
+    """
+    if not await _admin_read_ok(request):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    days = int((body or {}).get('days') or 14)
+    days = max(3, min(120, days))
+
+    def _clean() -> dict:
+        cur = db.conn.cursor()
+        total_before = cur.execute("SELECT COUNT(*) FROM hunt_matches").fetchone()[0]
+
+        # 1. Совпадения без объявления — показать их невозможно.
+        orphans = 0
+        while True:
+            cur.execute("DELETE FROM hunt_matches WHERE id IN ("
+                        "SELECT hm.id FROM hunt_matches hm "
+                        "LEFT JOIN ads a ON a.id = hm.ad_id "
+                        "WHERE a.id IS NULL LIMIT 2000)")
+            n = cur.rowcount or 0
+            db.conn.commit()
+            orphans += n
+            if n < 2000:
+                break
+
+        # 2. Старые совпадения: в ленте они всё равно не показываются.
+        old = 0
+        while True:
+            cur.execute("DELETE FROM hunt_matches WHERE id IN ("
+                        "SELECT id FROM hunt_matches WHERE created_at < "
+                        "datetime('now', ?) LIMIT 2000)", (f'-{days} days',))
+            n = cur.rowcount or 0
+            db.conn.commit()
+            old += n
+            if n < 2000:
+                break
+
+        total_after = cur.execute("SELECT COUNT(*) FROM hunt_matches").fetchone()[0]
+        try:
+            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+        return {'before': total_before, 'after': total_after,
+                'orphans': orphans, 'old': old, 'days': days}
+
+    try:
+        res = await asyncio.to_thread(_db_locked, _clean)
+    except Exception as e:
+        logger.warning(f"maintenance: {e}")
+        return _miniapp_json({'ok': False, 'error': 'failed', 'detail': str(e)[:200]}, status=500)
+    return _miniapp_json({'ok': True, **res})
+
+
 async def api_admin_sql(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/admin/sql {sql} — диагностика владельца: ТОЛЬКО ЧТЕНИЕ.
 
@@ -31596,6 +31657,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_post('/api/admin/sql', api_admin_sql)
+    app.router.add_post('/api/admin/maintenance', api_admin_maintenance)
     app.router.add_get('/api/views_diag', api_views_diag)
     app.router.add_get('/chat', api_serve_html)
     app.router.add_get('/api/check_promo', api_check_promo)
