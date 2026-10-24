@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-11'
+const APP_BUILD = '2026-10-24-12'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -129,7 +129,12 @@ function firstPhoto(item) {
 }
 
 function priceText(item) {
-  return item?.price_display || (item?.price != null ? `${item.price} ₽` : '')
+  // Деньги с разрядами: «42 900 ₽», а не «42900 ₽». Раньше строка
+  // подставлялась как есть, и суммы читались плохо.
+  if (item?.price_display) return item.price_display
+  if (item?.price == null) return ''
+  const num = Number(item.price)
+  return Number.isFinite(num) ? `${num.toLocaleString('ru-RU')} ₽` : `${item.price} ₽`
 }
 
 /* Компактное время: «14:20» для сегодня, иначе «2 окт». Бэкенд отдаёт ISO
@@ -4260,7 +4265,23 @@ class ErrorBoundary extends React.Component {
       return (
         <Screen>
           <TopBar left={<Logo />} />
-          <ErrorBlock text={`Ошибка приложения: ${this.state.error?.message || 'неизвестная ошибка'}`} />
+          {/* Техническую причину — в консоль, человеку — понятный текст и выход */}
+          <div className="error-boundary">
+            <div className="error-boundary-title">Не удалось показать экран</div>
+            <div className="error-boundary-text">
+              Данные пришли не полностью. Вернитесь на главную или обновите.
+            </div>
+            <div className="error-boundary-actions">
+              <button type="button" className="ghost-btn"
+                onClick={() => { window.location.hash = '#/'; this.setState({ hasError: false }) }}>
+                На главную
+              </button>
+              <button type="button" className="primary-btn"
+                onClick={() => window.location.reload()}>
+                Обновить
+              </button>
+            </div>
+          </div>
         </Screen>
       )
     }

@@ -3502,3 +3502,29 @@
 .app-shell .screen .category-grid, .screen .category-grid {
   padding-bottom: 132px;
 }
+
+/* ── 51. Экран ошибки вместо белого экрана ──────────────────────────────── */
+.app-shell .error-boundary, .error-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 48px 0;
+  text-align: center;
+}
+.app-shell .error-boundary-title, .error-boundary-title {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .error-boundary-text, .error-boundary-text {
+  font-size: 15px;
+  line-height: 22px;
+  color: rgba(255, 255, 255, .65);
+}
+.app-shell .error-boundary-actions, .error-boundary-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.app-shell .error-boundary-actions > *, .error-boundary-actions > * { flex: 1; }
