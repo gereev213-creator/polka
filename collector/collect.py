@@ -617,6 +617,18 @@ def items_from_microdata(html: str) -> list:
             return m.group(1) if m else ''
 
         price = parse_price(prop('price'))
+        if not price:
+            # Проверено на живой выдаче: цена приходит текстом внутри блока
+            # priceFlexContainerGrid («54 000 ₽»), а не в itemprop.
+            m3 = re.search(r'priceLabelGrid[\s\S]{0,900}?([\d][\d\s]{2,12})\s*₽', chunk)
+            if m3:
+                price = parse_price(m3.group(1))
+        if not price:
+            m2 = re.search(r'itemprop="price"[^>]*content="([\d\s]+)"', chunk, re.I)
+            if not m2:
+                m2 = re.search(r'content="([\d\s]+)"[^>]*itemprop="price"', chunk, re.I)
+            if m2:
+                price = parse_price(m2.group(1))
         url = prop('url', 'href')
         if not url:
             m = re.search(r'href="(/[^"]+_\d{6,}[^"]*)"', chunk)
@@ -629,6 +641,14 @@ def items_from_microdata(html: str) -> list:
         m = re.search(r'item-title[^>]*>(?:\s*<[^>]+>)*\s*([^<]{3,200})', chunk)
         if m:
             title = unescape(re.sub(r'\s+', ' ', m.group(1))).strip()
+        if not title:
+            # Проверено на живой выдаче 24.10: заголовок лежит в alt картинки,
+            # класса iva-item-title больше нет. Без этого разбиралось 0 карточек.
+            m = re.search(r'<img[^>]*itemProp="image"[^>]*alt="([^"]{3,200})"', chunk, re.I)
+            if not m:
+                m = re.search(r'<img[^>]*alt="([^"]{3,200})"[^>]*itemProp="image"', chunk, re.I)
+            if m:
+                title = unescape(re.sub(r'\s+', ' ', m.group(1))).strip()
 
         m = re.search(r'data-item-id="(\d+)"', chunk)
         ext = m.group(1) if m else external_id_from_url(url)
@@ -637,6 +657,12 @@ def items_from_microdata(html: str) -> list:
         # смотрим data-src и srcset. Без этого фотографии были лишь у 12
         # карточек из 50, а в приложении показывалась серая заглушка.
         photos = re.findall(r'itemProp="image"[^>]*?(?:data-)?src="([^"]+)"', chunk, re.I)
+        if not photos:
+            # srcSet: «url1 339w, url2 140w» — берём первый адрес
+            for m2 in re.finditer(r'(?:srcSet|srcset)="([^"]+)"', chunk):
+                first = m2.group(1).split(',')[0].strip().split(' ')[0]
+                if first.startswith('http'):
+                    photos.append(first)
         if not photos:
             photos = re.findall(r'(?:data-)?src="(https://[\w.-]*img\.avito\.st/[^"]+)"', chunk)
         if not photos:
@@ -654,7 +680,10 @@ def items_from_microdata(html: str) -> list:
         ago = hours_ago(m.group(1)) if m else None
 
         photos = [p.split(' ')[0] for p in photos]
-        if title and price and url.startswith('http'):
+        # Раньше требовалось ещё и url, и цену — на текущей вёрстке Авито
+        # из-за этого отбрасывались ВСЕ карточки (проверено 24.10: 0 из 30).
+        # Заголовок есть всегда, остальное добираем по возможности.
+        if title:
             out.append({
                 'title': title[:200],
                 'price': price,
