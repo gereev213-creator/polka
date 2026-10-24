@@ -7,6 +7,8 @@ JSX = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
                         'polka-final/frontend/src/HuntChat.jsx'), encoding='utf-8').read()
 API = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
                         'polka-final/frontend/src/api.js'), encoding='utf-8').read()
+APP = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                        'polka-final/frontend/src/App.jsx'), encoding='utf-8').read()
 
 checks = [
     ("парсер ссылки существует", 'def parse_avito_filter_url(' in SRC),
@@ -18,7 +20,9 @@ checks = [
     ("сборщик получает filters", "row['filters'] = str(row.get('filter_blob')" in SRC),
     ("выборка отдаёт filter_blob", "COALESCE(filter_blob,'')" in SRC),
     ("дубль не создаётся", 'AND filter_blob=?' in SRC),
-    ("экран со ссылкой", 'link-form' in JSX and 'submitLink' in JSX),
+    # экран ссылки переехал из чата в отдельный компонент /hunt,
+    # поэтому проверяем его по App.jsx, а не по HuntChat
+    ("экран со ссылкой", 'hunt-field' in APP and 'huntFromLink' in JSX),
     ("вкладки убраны", 'chat-tabs' not in JSX),
     ("клиент зовёт эндпоинт", 'huntFromLink' in API),
 ]
