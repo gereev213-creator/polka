@@ -21808,7 +21808,13 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
     Уже отправленное не перезаписываем: повторный пересчёт не должен
     «оживлять» то, что человеку прислали (`sent` остаётся `sent`).
     """
-    user_id, crit_id, ad_id = int(user_id), int(crit_id), int(ad_id)
+    # Из сборщика иногда приходит None вместо id (объявление без external_id
+    # или критерий без записи) — раньше это валило сохранение совпадения.
+    try:
+        user_id, crit_id, ad_id = int(user_id), int(crit_id), int(ad_id)
+    except (TypeError, ValueError):
+        logger.warning(f"hunt_match_store: пропуск, id не число: {user_id!r} {crit_id!r} {ad_id!r}")
+        return
     if force_status:
         status = force_status
     elif decision.reason == 'desc_needed':
@@ -21820,6 +21826,15 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
         status = 'rejected'
     reject_reason = decision.reason if status == 'rejected' else ''
     now = get_moscow_time().isoformat()
+    with DB_WRITE_LOCK:
+        return _hunt_match_store_locked(
+            user_id, crit_id, ad_id, decision, desc_state, force_status,
+            notified, fingerprint, unverified, deliver_after, deep_check, now)
+
+
+def _hunt_match_store_locked(user_id: int, crit_id: int, ad_id: int, decision,
+                             desc_state, force_status, notified, fingerprint,
+                             unverified, deliver_after, deep_check, now) -> None:
     cursor = db.conn.cursor()
     try:
         cursor.execute("SELECT id, status, notified_at FROM hunt_matches "
@@ -21855,7 +21870,7 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                      1 if deep_check else 0, int(row['id'])))
         else:
             cursor.execute(
-                "INSERT INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
+                "INSERT OR IGNORE INTO hunt_matches (user_id, crit_id, ad_id, status, reason, reject_reason, "
                 "discount, desc_state, created_at, updated_at, notified_at, fingerprint, unverified, "
                 "deliver_after, deep_check) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (user_id, crit_id, ad_id, status, decision.reason, reject_reason,
