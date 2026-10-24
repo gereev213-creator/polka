@@ -3171,3 +3171,52 @@
   background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, #050505 45%);
 }
 .app-shell .step-actions > * , .step-actions > * { flex: 1; }
+
+/* ── 45. Правки по реальным снимкам экранов ─────────────────────────────── */
+
+/* /hunt: у .chat-wrap не было боковых отступов — заголовок «Поиск лотов»
+   обрезался слева, а вкладки уходили за правый край экрана. */
+.app-shell .chat-wrap, .chat-wrap {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+/* Панель ввода при этом тянется до краёв: это фон, а не контент */
+.app-shell .chat-wrap .chat-input-wrap, .chat-wrap .chat-input-wrap {
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+/* Вкладки — ровно по ширине контента, без выхода за край */
+.app-shell .chat-wrap > .chat-tabs, .chat-wrap > .chat-tabs {
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}
+/* Стартовый блок не должен съедать полэкрана пустотой */
+.app-shell .chat-start, .chat-start {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* Шапка и стартовый блок без собственных плашек: на снимке они читались
+   как две серые полосы поверх чёрного экрана. */
+.app-shell .chat-header, .chat-header,
+.app-shell .chat-start, .chat-start,
+.app-shell .chat-list, .chat-list,
+.app-shell .chat-replies, .chat-replies {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
+/* Пустота под примерами: список не растягивается на всю высоту, а панель
+   ввода стоит внизу экрана, а не после контента. */
+.app-shell .chat-wrap, .chat-wrap {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+.app-shell .chat-list, .chat-list {
+  flex: 1 1 auto;
+  min-height: 0;
+}
