@@ -29306,6 +29306,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         body = {}
     days = int((body or {}).get('days') or 14)
     days = max(3, min(120, days))
+    keep_per_crit = int((body or {}).get('keep') or 400)
 
     def _clean() -> dict:
         cur = db.conn.cursor()
@@ -29336,13 +29337,45 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             if n < 2000:
                 break
 
+        # 3. Совпадения от удалённых критериев — их никогда не покажут.
+        dead = 0
+        while True:
+            cur.execute("DELETE FROM hunt_matches WHERE id IN ("
+                        "SELECT hm.id FROM hunt_matches hm WHERE NOT EXISTS ("
+                        "SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id) LIMIT 2000)")
+            n = cur.rowcount or 0
+            db.conn.commit()
+            dead += n
+            if n < 2000:
+                break
+
+        # 4. Прореживание: в ленте видно 40 строк, а на каждый критерий
+        # копились тысячи. Оставляем свежие `keep` на критерий — остальное
+        # только тормозит базу.
+        keep = max(100, min(5000, int(keep_per_crit)))
+        trimmed = 0
+        while True:
+            cur.execute(
+                "DELETE FROM hunt_matches WHERE id IN ("
+                "  SELECT id FROM ("
+                "    SELECT id, ROW_NUMBER() OVER ("
+                "      PARTITION BY user_id, crit_id ORDER BY id DESC) AS rn"
+                "    FROM hunt_matches"
+                "  ) WHERE rn > ? LIMIT 2000)", (keep,))
+            n = cur.rowcount or 0
+            db.conn.commit()
+            trimmed += n
+            if n < 2000:
+                break
+
         total_after = cur.execute("SELECT COUNT(*) FROM hunt_matches").fetchone()[0]
         try:
             db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass
         return {'before': total_before, 'after': total_after,
-                'orphans': orphans, 'old': old, 'days': days}
+                'orphans': orphans, 'old': old, 'dead_criteria': dead,
+                'trimmed': trimmed, 'keep_per_crit': keep, 'days': days}
 
     try:
         res = await asyncio.to_thread(_db_locked, _clean)
