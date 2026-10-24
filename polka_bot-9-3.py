@@ -29556,6 +29556,78 @@ _SQL_FORBIDDEN = re.compile(
     r'reindex|begin|commit|rollback|trigger|grant|savepoint)\b', re.I)
 
 
+async def _backup_loop() -> None:
+    """Ежедневный бэкап базы в Telegram владельцу.
+
+    До этого копия существовала только вручную: если Amvera потеряет диск,
+    уйдут и 200 пользователей, и вся история. SQLite умеет делать
+    согласованную копию на ходу — не останавливаем бота.
+    """
+    await asyncio.sleep(90)
+    while True:
+        try:
+            if str(cfg_get('backup.enabled') or '1') != '0':
+                path = await asyncio.to_thread(_make_backup_file)
+                if path:
+                    await _send_backup(path)
+        except Exception as e:
+            logger.warning(f"backup loop: {e}")
+        await asyncio.sleep(24 * 3600)
+
+
+def _make_backup_file() -> str:
+    """Согласованная копия базы через online backup API SQLite."""
+    import gzip
+    import sqlite3 as _sq
+    src_path = db.db_path
+    stamp = get_moscow_time().strftime('%Y-%m-%d')
+    raw = f'/tmp/polka-{stamp}.db'
+    out = f'/tmp/polka-{stamp}.db.gz'
+    try:
+        src = _sq.connect(src_path, timeout=15)
+        dst = _sq.connect(raw)
+        with dst:
+            src.backup(dst)
+        src.close(); dst.close()
+        with open(raw, 'rb') as fh, gzip.open(out, 'wb', compresslevel=6) as gz:
+            gz.write(fh.read())
+        os.remove(raw)
+        logger.info(f"backup: {out} ({os.path.getsize(out) // 1024} КБ)")
+        return out
+    except Exception as e:
+        logger.warning(f"backup: {e}")
+        for f in (raw, out):
+            try: os.remove(f)
+            except Exception: pass
+        return ''
+
+
+async def _send_backup(path: str) -> None:
+    """Отправляем файл владельцу и убираем копии старше трёх дней."""
+    import glob
+    token = os.environ.get('BOT_TOKEN', '')
+    owner = ADMIN_USER_IDS[0] if ADMIN_USER_IDS else 0
+    if not token or not owner:
+        return
+    try:
+        import aiohttp
+        url = f'https://api.telegram.org/bot{token}/sendDocument'
+        with open(path, 'rb') as fh:
+            form = aiohttp.FormData()
+            form.add_field('chat_id', str(owner))
+            form.add_field('caption', f'Бэкап базы ПОЛКА · {os.path.basename(path)}')
+            form.add_field('document', fh, filename=os.path.basename(path))
+            async with aiohttp.ClientSession() as s:
+                async with s.post(url, data=form, timeout=aiohttp.ClientTimeout(total=120)) as r:
+                    ok = (await r.json()).get('ok')
+        logger.info(f"backup sent: {ok}")
+        for old in sorted(glob.glob('/tmp/polka-*.db.gz'))[:-3]:
+            try: os.remove(old)
+            except Exception: pass
+    except Exception as e:
+        logger.warning(f"backup send: {e}")
+
+
 async def _prune_loop() -> None:
     """Держит hunt_matches в разумных размерах без участия человека.
 
@@ -32818,6 +32890,8 @@ def main():
         # Чистка разросшихся совпадений: иначе лента снова начнёт отвечать
         # секундами, как это было при 1,16 млн строк.
         asyncio.create_task(_prune_loop())
+        # Ежедневный бэкап базы в Telegram владельцу
+        asyncio.create_task(_backup_loop())
         # Ждём вечно
         stop_event = asyncio.Event()
         try:
