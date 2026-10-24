@@ -19,6 +19,7 @@ import { ErrorState } from './components/ErrorState'
 // Сегмент-переключатель из дизайн-системы: та же разметка .segmented,
 // но с ролью tablist и одним источником стилей (этап 1).
 import { SegmentedControl } from './components/SegmentedControl'
+import Sheet from './components/Sheet'
 // Общие компоненты дизайн-системы: подключаются на экранах поиска лотов
 // (этап 3b) вместо самодельных чипов и кнопок legacy-разметки.
 import { Button } from './components/Button'
@@ -57,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-5'
+const APP_BUILD = '2026-10-24-6'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -663,6 +664,8 @@ function CriteriaPage() {
   // и требованиями — человек выбирает, а не пишет словами
   const [templates, setTemplates] = useState([])
   const [tplGroup, setTplGroup] = useState('')
+  // Какой нижний лист открыт: '' | 'tpl'
+  const [sheet, setSheet] = useState('')
   const [tplMsg, setTplMsg] = useState('')
   const [cities, setCities] = useState([])
   const [query, setQuery] = useState('')
@@ -1060,20 +1063,21 @@ function CriteriaPage() {
           </div>
         ) : null}
 
+        {templates.length ? (
+          <button type="button" className="ghost-btn" onClick={() => setSheet('tpl')}>
+            Шаблоны · {templates.length}
+          </button>
+        ) : null}
         {error ? <div className="status-line error">{error}</div> : null}
         <Button variant="primary" wide disabled={busy} onClick={add}>
           {busy ? 'Добавляем…' : 'Найти лоты'}
         </Button>
       </div>
 
-      {/* Готовые шаблоны: одно нажатие вместо набора слов. Категория и
-          требования уже правильные, поэтому сборщик ищет в нужном разделе,
-          а отбор не врёт (для телефонов сразу проверка АКБ). */}
-      {templates.length ? (
-        <div className="list-stack mt-14">
-
-          <div className="section-head"><strong>Готовые шаблоны</strong><span>{templates.length}</span></div>
-          <div className="chat-replies">
+      {/* Шаблоны живут в нижнем листе: в форме они занимали пол-экрана
+          чипов и мешали дойти до кнопки. */}
+      <Sheet open={sheet === 'tpl'} title="Готовые шаблоны" onClose={() => setSheet('')}>
+        <div className="chat-replies">
             <button type="button"
               className={tplGroup === '' ? 'chat-chip is-active' : 'chat-chip'}
               onClick={() => setTplGroup('')}>все</button>
@@ -1096,9 +1100,8 @@ function CriteriaPage() {
                 </button>
               ))}
           </div>
-          {tplMsg ? <div className="chat-note">{tplMsg}</div> : null}
-        </div>
-      ) : null}
+        {tplMsg ? <div className="chat-note">{tplMsg}</div> : null}
+      </Sheet>
 
       {/* Список критериев — общий компонент: та же разметка, что в ИИ-поиске,
           иначе один критерий выглядел на двух вкладках по-разному. */}
@@ -3491,6 +3494,23 @@ function TariffsPage() {
               : trialLeft > 0
                 ? `${trialLeft} дн. · потом ${freeMax} критерий и чат через ${freeDelay} мин`
                 : `${freeMax} критерий · чат через ${freeDelay} мин`}
+          </div>
+        </div>
+
+        {/* Сравнение «Бесплатно / Плюс»: три строки, без рамок и без
+            горизонтального скролла на 360 px. Числа — из данных. */}
+        <div className="tariff-compare-line">
+          <div className="tcl-head">
+            <span /><span>Бесплатно</span><span>Плюс</span>
+          </div>
+          <div className="tcl-row">
+            <span>Критерии</span><span>{freeMax}</span><span>{plusMax}</span>
+          </div>
+          <div className="tcl-row">
+            <span>Чат</span><span>через {freeDelay} мин</span><span>сразу</span>
+          </div>
+          <div className="tcl-row">
+            <span>Отбор по описанию</span><span>—</span><span>есть</span>
           </div>
         </div>
 
