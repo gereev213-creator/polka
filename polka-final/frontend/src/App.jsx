@@ -830,6 +830,15 @@ function CriteriaPage() {
     }
   }
 
+  const toggleCriterion = async (id, active) => {
+    try {
+      await api.setCriterionActive(id, active)
+      setItems((prev) => prev.map((c) => (c.id === id ? { ...c, active: active ? 1 : 0 } : c)))
+    } catch (e) {
+      // Список оставляем как был: пауза не критична, повторить можно
+    }
+  }
+
   const remove = async (id) => {
     try {
       await api.removeCriterion(id)
@@ -1125,7 +1134,7 @@ function CriteriaPage() {
         </label>
       </div>
 
-      <CriteriaList items={items} loading={loading} onRemove={remove} />
+      <CriteriaList items={items} loading={loading} onRemove={remove} onToggle={toggleCriterion} />
     </Screen>
   )
 }

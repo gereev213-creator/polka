@@ -42,7 +42,7 @@ function reqChips(c) {
  * не понимал, что список общий. Теперь разметка живёт здесь и обе вкладки
  * показывают одно и то же.
  */
-export function CriteriaList({ items = [], loading = false, onRemove, title = 'Мои критерии' }) {
+export function CriteriaList({ items = [], loading = false, onRemove, onToggle, title = 'Мои критерии' }) {
   return (
     <>
       <div className="section-head">
@@ -58,7 +58,24 @@ export function CriteriaList({ items = [], loading = false, onRemove, title = '�
         {items.map((c) => (
           <Card key={c.id} pad className="hunt-crit">
             <div className="hunt-row">
-              <strong>{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
+              {/* Шапка: название и переключатель. Пауза не удаляет критерий,
+                  а перестаёт искать — раньше единственным действием было
+                  «удалить». */}
+              <div className="crit-head">
+                <strong className="crit-title">{c.query}{c.city ? ` · ${c.city}` : ''}</strong>
+                <button type="button"
+                  className={c.active === 0 || c.active === false ? 'crit-switch' : 'crit-switch is-on'}
+                  aria-label={c.active === 0 || c.active === false ? 'Включить' : 'Поставить на паузу'}
+                  onClick={() => onToggle && onToggle(c.id, !(c.active === 0 || c.active === false))}>
+                  <span className="crit-switch-dot" />
+                </button>
+              </div>
+              <div className="crit-status">
+                <span className={c.active === 0 || c.active === false ? 'crit-dot' : 'crit-dot is-on'} />
+                {c.active === 0 || c.active === false
+                  ? 'На паузе'
+                  : 'Активен · проверка каждые 15 минут'}
+              </div>
               <span className="hunt-crit-status">
                 {c.ready
                   ? `обычная цена ${money(c.median_price)} ₽ · ${c.sample_size} шт`
@@ -86,10 +103,13 @@ export function CriteriaList({ items = [], loading = false, onRemove, title = '�
                   сыплет слишком многим. Без неё человек не понимает причину. */}
               {c.hint ? <div className="chat-note">{c.hint}</div> : null}
             </div>
-            <button type="button" className="chat-crit-x" aria-label="Убрать критерий"
-              onClick={() => onRemove && onRemove(c.id)}>
-              <Icon name="trash" />
-            </button>
+            <div className="crit-foot">
+              <span className="crit-foot-note">
+                {c.max_hours ? `свежесть ${c.max_hours} ч` : 'любая свежесть'}
+              </span>
+              <button type="button" className="crit-remove"
+                onClick={() => onRemove && onRemove(c.id)}>Удалить</button>
+            </div>
           </Card>
         ))}
       </div>

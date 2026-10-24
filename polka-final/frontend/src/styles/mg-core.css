@@ -3911,3 +3911,14 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* Карточка критерия: содержимое в колонку. Card — flex-строка, из-за этого
+   подвал с «Удалить» уезжал вправо от названия. */
+.app-shell .hunt-crit, .hunt-crit {
+  display: block;
+  padding: 16px;
+  border-radius: 22px;
+}
+.app-shell .hunt-crit .hunt-row, .hunt-crit .hunt-row {
+  display: block;
+}
