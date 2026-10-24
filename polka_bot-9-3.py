@@ -23678,6 +23678,7 @@ async def api_hunt_template_use(request: aiohttp_web.Request) -> aiohttp_web.Res
                                         'Замените существующий или откройте «Плюс».'},
                              status=402)
     if not crit_id:
+        logger.info(f"from-link: дубль критерия, url={url[:100]}")
         return _miniapp_json({'ok': False, 'error': 'duplicate',
                               'detail': 'Такой критерий уже есть'}, status=409)
     _plan_event(int(viewer_id), 'template_used', {'slug': slug})
@@ -25589,7 +25590,7 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
           'deal' if str(mode) == 'deal' else 'any',
           ','.join(_crit_exclude_words({'exclude_words': exclude}))[:200],
           1 if int(strict_model or 0) else 0))
-    if filter_blob:
+    if filter_blob or filter_url:
         try:
             cursor.execute("UPDATE hunt_criteria SET filter_blob=? WHERE id=?",
                            (str(filter_blob)[:2000], cursor.lastrowid))
@@ -25670,10 +25671,16 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     from urllib.parse import urlparse, parse_qs
     parsed = parse_avito_filter_url(url)
     if not parsed.get('ok'):
-        return _miniapp_json({'ok': False, 'error': parsed.get('error'),
-                              'detail': parsed.get('detail') or
-                              'Нужна ссылка с фильтрами: выставьте их на Авито и скопируйте адрес'},
-                             status=400)
+        # Ссылка без набора f= — это не повод отказывать: адрес всё равно
+        # рабочий, и сборщик откроет именно его. Набор фильтров подставит
+        # сама страница Авито. Отказ оставляем только для не-ссылки.
+        if parsed.get('error') == 'bad_url':
+            return _miniapp_json({'ok': False, 'error': 'bad_url',
+                                  'detail': 'Это не похоже на ссылку Авито'},
+                                 status=400)
+        logger.info(f"from-link без f=: {parsed.get('error')} — создаём по адресу")
+        parsed = {'ok': True, 'slug': '', 'filters': '', 'city': '',
+                  'has_price': False, 'title_from_path': ''}
 
     q = parse_qs(urlparse(url).query)
     query = str((q.get('q') or [''])[0]).strip()
@@ -25711,6 +25718,7 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
         return _miniapp_json({'ok': False, 'error': 'create_failed',
                               'detail': f'{type(e).__name__}: {e}'[:180]}, status=500)
     if crit_id == -1:
+        logger.info(f"from-link: отказ по лимиту критериев, url={url[:100]}")
         return _miniapp_json({'ok': False, 'error': 'limit',
                               'detail': 'Достигнут лимит критериев'}, status=400)
     if not crit_id:
