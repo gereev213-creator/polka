@@ -3231,3 +3231,60 @@
   padding: 10px;
   margin-top: 8px;
 }
+
+/* ── 46. Тарифы по снимку: бейдж, заголовок, воздух под доком ───────────── */
+
+/* Бейдж «Чаще берут» стоял с отрицательным отступом и обрезался скруглением
+   карточки. Теперь это чип внутри карточки, над названием плана. */
+.app-shell .plan-badge, .plan-badge {
+  position: static;
+  display: inline-flex;
+  align-self: flex-start;
+  margin: 0 0 8px;
+  height: 22px;
+  padding: 0 10px;
+}
+.app-shell .plan-card, .plan-card {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Заголовок шапки: 24/700 белым. Раньше «Тарифы» мельчал до 17 и серел. */
+.app-shell .top-bar-title, .top-bar-title,
+.app-shell .topbar-title, .topbar-title,
+.app-shell .chat-header-title, .chat-header-title {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.01em;
+}
+
+/* Процент в переключателе срока не должен слипаться с «дней» */
+.app-shell .tg2 button em, .tg2 button em {
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
+/* Подпись под CTA не должна уезжать под док */
+.app-shell .tariff-note, .tariff-note,
+.app-shell .pay-hint, .pay-hint {
+  padding-bottom: calc(var(--dock-space, 96px) + 8px);
+  line-height: 1.45;
+}
+.app-shell .screen, .screen {
+  padding-bottom: calc(var(--dock-space, 96px) + 8px);
+}
+
+/* Заголовок шапки — по фактическому классу .topbar-center */
+.app-shell .topbar-center, .topbar-center {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+  color: #fff;
+}
+/* Подпись под CTA: отступ снизу с запасом под док, иначе её режет капсула */
+.app-shell .screen .chat-note, .screen .chat-note {
+  padding-bottom: calc(var(--dock-space, 96px) + 16px);
+  line-height: 1.45;
+}
