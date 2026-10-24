@@ -24,6 +24,32 @@ function reqChips(req = {}) {
   return chips
 }
 
+// Компактное «12 минут назад / сегодня / 24 окт»: relTime из App.jsx
+// сюда не импортируется, а без него блок находок падал бы в рантайме.
+// Склонение числа находок: «1 находка / 2 находки / 5 находок».
+// Без него в интерфейсе было «2 находок».
+function findingsWord(n) {
+  const v = Math.abs(Number(n) || 0) % 100
+  const d = v % 10
+  if (v > 10 && v < 20) return 'находок'
+  if (d === 1) return 'находка'
+  if (d >= 2 && d <= 4) return 'находки'
+  return 'находок'
+}
+
+function relTime(item) {
+  const raw = item && (item.published_at || item.created_at || item.parsed_at)
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return ''
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000)
+  if (mins < 1) return 'только что'
+  if (mins < 60) return `${mins} мин назад`
+  if (mins < 24 * 60) return `${Math.floor(mins / 60)} ч назад`
+  if (mins < 48 * 60) return 'вчера'
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+}
+
 export default function HuntChat() {
   const navigate = useNavigate()
   const listRef = useRef(null)
@@ -33,6 +59,8 @@ export default function HuntChat() {
   const [link, setLink] = useState('')
   const [linkResult, setLinkResult] = useState('')
   const [linkLimit, setLinkLimit] = useState(false)
+  // Последние находки под ответом: по макету 02 их видно сразу
+  const [recent, setRecent] = useState([])
   const [busy, setBusy] = useState(false)
   const [sessionId, setSessionId] = useState('')
   const [ask, setAsk] = useState(null)
@@ -192,6 +220,13 @@ export default function HuntChat() {
 
   const chips = draft ? reqChips(draft.requirements_json) : []
   const showFinal = ready && draft && draft.query
+  useEffect(() => {
+    if (!showFinal) return
+    api.getFindings({ limit: 3 })
+      .then((d) => setRecent((d.items || []).slice(0, 3)))
+      .catch(() => setRecent([]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showFinal])
 
   return (
     <div className="chat-wrap">
@@ -297,6 +332,26 @@ export default function HuntChat() {
                 Показать находки
               </button>
             </div>
+            {recent.length ? (
+              <div className="recent-block">
+                <div className="recent-head">
+                  <span>{recent.length} {findingsWord(recent.length)} за неделю</span>
+                  <button type="button" className="recent-all" onClick={() => navigate('/')}>Все →</button>
+                </div>
+                {recent.map((it) => (
+                  <button key={it.id} type="button" className="recent-row"
+                    onClick={() => navigate(`/listing/${it.id}`)}>
+                    <span className="recent-body">
+                      <span className="recent-title">{it.title}</span>
+                      <span className="recent-meta">{[it.city, relTime(it)].filter(Boolean).join(' · ')}</span>
+                    </span>
+                    <span className="recent-price">
+                      {Number(it.price || 0).toLocaleString('ru-RU')} ₽
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>
