@@ -3288,3 +3288,22 @@
   padding-bottom: calc(var(--dock-space, 96px) + 16px);
   line-height: 1.45;
 }
+
+/* ── 47. Рельс чипов по снимку: обрезка у правого края ───────────────────── */
+/* Лента чипов выходила за экран и обрывалась срезом. Теперь она скроллится
+   внутри отступов контента, а у края — мягкое затухание. */
+.app-shell .chip-rail, .chip-rail {
+  margin-right: -16px;
+  padding-right: 32px;
+  -webkit-mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 28px), transparent 100%);
+}
+.app-shell .chip-rail-label, .chip-rail-label {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+  margin: 12px 0 8px;
+}
