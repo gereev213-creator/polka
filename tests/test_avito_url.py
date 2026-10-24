@@ -29,4 +29,18 @@ not_url = parse('просто текст')
 print('3) не ссылка:', not_url['error'])
 assert not_url['error'] == 'bad_url'
 
+# 4) Набор f=… переносится БЕЗ изменений: что Авито положил, то и уходит
+#    сборщику. Мы его не разбираем и не фильтруем — иначе потеряли бы
+#    состояние, память, продавца и всё прочее, что человек отметил.
+blob = 'ASgBAgECAUSSA8gQAUXGmgz6jQ0BRcaaDPqNDQ'
+same = parse(f'https://www.avito.ru/izhevsk/telefony?f={blob}')
+print('4) набор фильтров сохранён целиком:', same['filters'] == '&f=' + blob)
+assert same['filters'] == '&f=' + blob, same
+
+complex_url = ('https://www.avito.ru/izhevsk/telefony?f=' + blob +
+               '&q=iphone+13&pmin=20000&pmax=45000&s=104&user=1&d=1')
+big = parse(complex_url)
+print('5) сложная ссылка: категория', big['slug'], '· фильтры целы:', big['filters'] == '&f=' + blob)
+assert big['filters'] == '&f=' + blob, big
+
 print('\nразбор ссылок Авито: все проверки пройдены')

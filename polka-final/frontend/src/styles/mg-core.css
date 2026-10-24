@@ -3396,3 +3396,11 @@
 .app-shell .chat-start, .chat-start {
   padding-bottom: calc(var(--dock-space, 96px) + 24px);
 }
+
+/* Примеры и подсказки на старте поиска не должны уходить под док */
+.app-shell .chat-start, .chat-start {
+  padding-bottom: calc(var(--dock-space, 96px) + 64px);
+}
+.app-shell .chat-examples, .chat-examples {
+  padding-bottom: 8px;
+}
