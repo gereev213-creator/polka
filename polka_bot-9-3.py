@@ -21530,20 +21530,31 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('city_mismatch')
 
     title = str(ad.get('title') or '').lower()
+    # Где искать слова критерия. По умолчанию и в описании: важное часто
+    # написано не в заголовке («АКБ 100 %», «без сколов», «полный комплект»).
+    # Описание уже приходит и хранится — раньше оно использовалось только
+    # для состояния и АКБ, из-за чего критерий срабатывал как «только по
+    # названию».
+    try:
+        _match_desc = str(cfg_get('hunt.match_description') or '1') == '1'
+    except Exception:
+        _match_desc = True
+    _desc_text = str(ad.get('description') or '').lower() if _match_desc else ''
+    hay = (title + ' ' + _desc_text).strip() if _desc_text else title
     if not _condition_ok(crit.get('condition'), title):
         return no('condition_new_used')
     alts = _query_alt_numbers(crit.get('query'))
-    if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', title) for n in alts):
+    if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', hay) for n in alts):
         return no('title_words')
     for word in _query_words_required(crit.get('query')):
         # Числа (размер, память, год) сверяем отдельным словом: «43» не должно
         # находить «1430», а «13» — «2013».
         if str(word).isdigit():
-            if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', title):
+            if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', hay):
                 return no('title_words')
             continue
         variants = query_word_variants(word)
-        if variants and not any(v in title for v in variants):
+        if variants and not any(v in hay for v in variants):
             return no('title_words')
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
@@ -22572,6 +22583,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                        'Номер бизнес-счёта (MNT_ID) из кабинета PayAnyWay'),
     'pay.paw_secret': ('str', None, None, '',
                        'Секретный код для подписи (код проверки целостности)'),
+    'hunt.match_description': ('str', None, None, '1',
+                               '1 — искать слова критерия и в описании объявления, '
+                               '0 — только в заголовке'),
     'pay.paw_currency': ('str', None, None, 'RUB',
                          'Код валюты для PayAnyWay: RUB или 643 (если шлюз '
                          'пишет «нет доступных платёжных систем»)'),
