@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-16'
+const APP_BUILD = '2026-10-24-17'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -899,13 +899,6 @@ function CriteriaPage() {
           : (c.active === 0 || c.active === false)))}
         loading={loading} onRemove={remove} onToggle={toggleCriterion} />
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
-      <div className="chat-tabs is-second">
-        {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
-        <span className="chat-tabs-pill" aria-hidden="true" />
-        <button type="button" className="chat-tab"
-          onClick={() => { window.location.hash = '#/hunt' }}>Поиск словами</button>
-        <button type="button" className="chat-tab is-active">Вручную</button>
-      </div>
 
       <p className="sub-copy">
         </p>
