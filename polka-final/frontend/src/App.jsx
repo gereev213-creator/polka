@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-17'
+const APP_BUILD = '2026-10-24-18'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -905,227 +905,16 @@ function CriteriaPage() {
 
       {/* Фильтры ниже пояснения: сначала человек читает, потом настраивает.
           Плашки — общий Chip из дизайн-системы: один компонент на все фильтры. */}
-      <div className="field-label-row">Категория</div>
-      <div className="chip-row">
-        {['', 'Электроника', 'Одежда, обувь, аксессуары', 'Транспорт', 'Недвижимость', 'Другое'].map((cat) => (
-          <Chip key={cat || 'all'} active={huntCategory === cat}
-            onClick={() => setHuntCategory(cat)}>
-            {cat || 'любая'}
-          </Chip>
-        ))}
-      </div>
-
-      <div className="field-label-row">Состояние</div>
-      <div className="chip-row">
-        {[['', 'любое'], ['new', 'только новое'], ['used', 'только б/у']].map(([val, label]) => (
-          <Chip key={val || 'any'} active={huntCondition === val}
-            onClick={() => setHuntCondition(val)}>
-            {label}
-          </Chip>
-        ))}
-      </div>
-
-      <div className="field-label-row">Товар</div>
-      <div className="chip-row">
-        {[['', 'не важно'], ['original', 'только оригинал'], ['replica', 'можно реплику']].map(([val, label]) => (
-          <Chip key={val || 'any'} active={huntOriginal === val}
-            onClick={() => setHuntOriginal(val)}>
-            {label}
-          </Chip>
-        ))}
-      </div>
-
-      <p className="hint-note">
-        Подлинность не проверяется: убираем только те объявления, где продавец сам
-        написал «реплика», «копия», «1:1», «люкс». Если он молчит — объявление пройдёт,
-        даже если это копия. Смотрите фото и цену.
-      </p>
-
-      <div className="field-label-row">Продавец</div>
-      <div className="chip-row">
-        {[['', 'любой'], ['private', 'только частники']].map(([val, label]) => (
-          <Chip key={val || 'any'} active={huntSeller === val}
-            onClick={() => setHuntSeller(val)}>
-            {label}
-          </Chip>
-        ))}
-      </div>
-
-      <div className="field-label-row">Требования словами</div>
-      <Input
-        value={huntNotes}
-        onChange={(e) => setHuntNotes(e.target.value)}
-        placeholder="размер 43, чёрный, АКБ от 85%, не вскрывался"
-      />
-      <p className="hint-note">
-        Скрипт понимает: «оригинал», «не магазин», «хорошее состояние», «не вскрывался», «только новое»
-      </p>
-
-      {/* Жёлтое предупреждение — только когда это ДЕЙСТВИТЕЛЬНО проблема.
-          Сразу после запуска сборщик ещё не успел отметиться, и пугать
-          человека жёлтым баннером «всё сломано» неправильно. */}
-      {collector && !collector.alive
-        && (!collector.server_mode || (collector.minutes ?? 0) > 45) ? (
-        <div className="collector-warn">
-          <strong>
-            {collector.server_mode ? 'Собираем первые объявления' : 'Объявления пока не приходят'}
-          </strong>
-          <span>
-            {collector.minutes == null
-              ? (collector.server_mode
-                  ? 'Поиск уже идёт и займёт несколько минут. Как только появятся подходящие объявления — пришлю их в бот.'
-                  : 'Сборщик ещё ни разу не выходил на связь. Он работает на вашем компьютере — без него искать некому.')
-              : (collector.server_mode
-                  ? `Сбор идёт, но последний выход был ${Math.round(collector.minutes / 60)} ч назад. Похоже, Авито ограничил сбор — попробую позже сам.`
-                  : `Сборщик последний раз выходил ${Math.round(collector.minutes / 60)} ч назад. Проверьте, запущен ли он.`)}
-          </span>
+        {/* Ручной конструктор убран: критерии создаются из ссылки или
+            словами. Форма на двадцать полей дублировала фильтры Авито
+            хуже них — предлагать её значит давать заведомо слабый путь. */}
+        <button type="button" className="cta-primary crit-create"
+          onClick={() => navigate('/hunt')}>
+          Создать критерий
+        </button>
+        <div className="hunt-card-note">
+          Бесплатно — {limitCount} критерий · проверка каждые 15 минут
         </div>
-      ) : null}
-
-      <div className="form-stack">
-        <Input value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Что искать — например «iphone 13»" />
-          {/* Чипы подсказок (спека v2, V5): слова, которые чаще всего
-              помогают отбору. Нажатие дописывает их в требования. */}
-          <div className="hint-chips">
-            {['только оригинал', 'не вскрывался', 'АКБ от 80%', 'с рук', 'не магазин', 'без дефектов'].map((hintText) => (
-              <button key={hintText} type="button" className="hint-chip"
-                onClick={() => {
-                  if (huntNotes.includes(hintText)) return
-                  setHuntNotes(huntNotes ? `${huntNotes}, ${hintText}` : hintText)
-                }}>
-                {hintText}
-              </button>
-            ))}
-          </div>
-        {/* Город — на всю ширину строки: раньше он стоял в .grid-two и занимал
-            половину ширины без причины. */}
-        <Input value={city}
-          onChange={(e) => setCity(e.target.value)} placeholder="Город" list="hunt-cities" />
-        <datalist id="hunt-cities">
-          {cities.map((c) => <option key={c.value} value={c.label} />)}
-        </datalist>
-
-        {/* «Цена / Свежесть / Дополнительно» — один и тот же раскрывающийся
-            ListRow из дизайн-системы, а не три самодельные строки. Значения
-            свёрнутых фильтров видны в заголовке, состояние не теряется. */}
-        <div className="hunt-toggles">
-          <ListRow
-            className={`is-toggle ${openSec === 'price' ? 'is-open' : ''}`}
-            left={<Icon name="filter" />}
-            title={`Цена, ₽${maxPrice || minPrice
-              ? ` · ${minPrice ? 'от ' + Number(minPrice).toLocaleString('ru-RU') + ' ' : ''}${maxPrice ? 'до ' + Number(maxPrice).toLocaleString('ru-RU') + ' ₽' : ''}`
-              : ''}`}
-            right={<span className="toggle-mark">›</span>}
-            onClick={() => toggleSec('price')}
-            aria-expanded={openSec === 'price'}
-          />
-          {openSec === 'price' ? (
-            <div className="price-pair">
-              <Input type="number" inputMode="numeric" placeholder="от"
-                value={minPrice} onChange={(e) => setMinPrice(e.target.value)} />
-              <Input type="number" inputMode="numeric" placeholder="до"
-                value={maxPrice} onChange={(e) => setMaxPrice(e.target.value)} />
-            </div>
-          ) : null}
-
-          <ListRow
-            className={`is-toggle ${openSec === 'fresh' ? 'is-open' : ''}`}
-            left={<Icon name="clock" />}
-            title={`Свежесть${maxHours
-              ? ` · ${maxHours === 1 ? 'за час' : 'за ' + maxHours + ' ч'}`
-              : ' · любая'}`}
-            right={<span className="toggle-mark">›</span>}
-            onClick={() => toggleSec('fresh')}
-            aria-expanded={openSec === 'fresh'}
-          />
-          {openSec === 'fresh' ? (
-            <div className="chip-row">
-              {[[0, 'любая'], [1, 'за час'], [3, 'за 3 часа'], [24, 'за сутки']].map(([v, label]) => (
-                <Chip key={v} active={maxHours === v} onClick={() => setMaxHours(v)}>{label}</Chip>
-              ))}
-            </div>
-          ) : null}
-
-          <ListRow
-            className={`is-toggle ${openSec === 'more' ? 'is-open' : ''}`}
-            left={<Icon name="image" />}
-            title={`Дополнительно${withPhoto ? ' · с фото' : ''}`}
-            right={<span className="toggle-mark">›</span>}
-            onClick={() => toggleSec('more')}
-            aria-expanded={openSec === 'more'}
-          />
-          {openSec === 'more' ? (
-            <div className="chip-row">
-              <Chip active={withPhoto} onClick={() => setWithPhoto(!withPhoto)}>Только с фото</Chip>
-            </div>
-          ) : null}
-        </div>
-
-        
-        {/* Режим отбора — общий SegmentedControl (роль tablist) вместо
-            самодельных кнопок. Стоит в потоке формы и к доку не прижат. */}
-        <SegmentedControl
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: 'any', label: 'Любые подходящие' },
-            { value: 'deal', label: 'Только выгодные' },
-          ]}
-        />
-        {mode === 'any' ? (
-          <p className="sub-copy">
-            Пришлём сразу, как только появится подходящее — ждать статистики не нужно.
-            Когда наберётся достаточно объявлений, начнём отсеивать дорогое.
-          </p>
-        ) : (
-          <>
-            <div className="field-label-row">Присылать, если дешевле обычного на</div>
-            <div className="chip-row">
-              {[10, 15, 25].map((d) => (
-                <Chip key={d} active={minDiscount === d} onClick={() => setMinDiscount(d)}>−{d}%</Chip>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* Итоговая карточка (спека v2, V5): видно, что именно ищем и
-            какой запрос уйдёт, до нажатия кнопки. Показываем только когда
-            есть что искать. */}
-        {query.trim() ? (
-          <div className="summary-card">
-            <div className="summary-title">Что будем искать</div>
-            <div className="summary-line">«{query.trim()}»</div>
-            <div className="summary-meta">
-              {[
-                city.trim() || '',
-                Number(maxPrice) ? `до ${Number(maxPrice).toLocaleString('ru-RU')} ₽` : '',
-                Number(minPrice) ? `от ${Number(minPrice).toLocaleString('ru-RU')} ₽` : '',
-                withPhoto ? 'только с фото' : '',
-                huntSeller === 'private' ? 'только частные' : '',
-                mode === 'deal' ? `дешевле рынка на ${minDiscount}%` : '',
-              ].filter(Boolean).join(' · ') || 'без ограничений'}
-            </div>
-            {huntNotes.trim() ? (
-              <div className="summary-req">Требования: {huntNotes.trim()}</div>
-            ) : null}
-            {huntExclude.trim() ? (
-              <div className="summary-req">Не присылать: {huntExclude.trim()}</div>
-            ) : null}
-          </div>
-        ) : null}
-
-        {templates.length ? (
-          <button type="button" className="ghost-btn" onClick={() => setSheet('tpl')}>
-            Шаблоны · {templates.length}
-          </button>
-        ) : null}
-        {error ? <div className="status-line error">{error}</div> : null}
-        <Button variant="primary" wide disabled={busy} onClick={add}>
-          {busy ? 'Добавляем…' : 'Найти лоты'}
-        </Button>
-      </div>
 
       {/* Шаблоны живут в нижнем листе: в форме они занимали пол-экрана
           чипов и мешали дойти до кнопки. */}

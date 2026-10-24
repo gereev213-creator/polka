@@ -4158,3 +4158,13 @@
   font-weight: 700;
   color: #fff;
 }
+
+/* Кнопка создания критерия на экране «Критерии» (макет 03) */
+.app-shell .crit-create, .crit-create {
+  width: 100%;
+  height: 52px;
+  margin-top: 16px;
+  border-radius: 999px;
+  font-size: 17px;
+  font-weight: 700;
+}
