@@ -25588,6 +25588,7 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     except Exception:
         return _miniapp_err('bad_json', 400)
     url = str((body or {}).get('url') or '').strip()
+    logger.info(f"from-link: пришло {len(url)} символов, начало: {url[:80]}")
     if not url:
         return _miniapp_err('empty_url', 400)
 
@@ -25619,9 +25620,16 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
                               'query': query, 'city': city, 'category': category,
                               'filters': parsed.get('filters') or ''})
 
-    crit_id = await asyncio.to_thread(
-        _db_locked, add_criterion, int(viewer_id), query, category, city,
-        0, 0, 0, 0, 0, 'any', '', None, '', 0, str(parsed.get('filters') or ''))
+    try:
+        crit_id = await asyncio.to_thread(
+            _db_locked, add_criterion, int(viewer_id), query, category, city,
+            0, 0, 0, 0, 0, 'any', '', None, '', 0, str(parsed.get('filters') or ''))
+    except Exception as e:
+        # Наружу — точная причина: иначе человек видит «не удалось разобрать»,
+        # хотя ссылка разобралась, а упало создание критерия.
+        logger.warning(f"from-link create: {type(e).__name__}: {e} url={url[:120]}")
+        return _miniapp_json({'ok': False, 'error': 'create_failed',
+                              'detail': f'{type(e).__name__}: {e}'[:180]}, status=500)
     if crit_id == -1:
         return _miniapp_json({'ok': False, 'error': 'limit',
                               'detail': 'Достигнут лимит критериев'}, status=400)

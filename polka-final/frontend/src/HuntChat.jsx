@@ -177,7 +177,9 @@ export default function HuntChat() {
       setLink('')
       load()
     } catch (e) {
-      setLinkResult((e && e.detail) || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
+      const why = [e && e.detail, e && e.error, e && e.status ? `код ${e.status}` : '']
+        .filter(Boolean).join(' · ')
+      setLinkResult(why || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
     }
   }
 
