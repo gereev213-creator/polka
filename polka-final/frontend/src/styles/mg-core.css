@@ -3307,3 +3307,49 @@
   color: rgba(255, 255, 255, .45);
   margin: 12px 0 8px;
 }
+
+/* ── 48. Плитка категории: подпись не рисуется ──────────────────────────── */
+/* Подпись имела размер и белый цвет, но не отрисовывалась: её съедал
+   -webkit-line-clamp вместе с overflow на flex-элементе. Убираем clamp и
+   абсолютную иллюстрацию — плитка собрана обычным флексом. */
+.app-shell .cat-tile, .cat-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+}
+.app-shell .cat-tile-label, .cat-tile-label {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 17px;
+  font-weight: 600;
+  color: #fff;
+}
+.app-shell .cat-tile-art, .cat-tile-art {
+  position: static;
+  right: auto;
+  bottom: auto;
+  width: 56px;
+  height: 56px;
+  margin-left: auto;
+  opacity: .9;
+}
+
+/* Кнопки шага: панель не должна обрезать текст кнопки */
+.app-shell .step-actions, .step-actions {
+  min-height: 56px;
+  align-items: center;
+  overflow: visible;
+}
+.app-shell .step-actions .primary-btn, .step-actions .primary-btn,
+.app-shell .step-actions .cta-button, .step-actions .cta-button {
+  height: 52px;
+  min-width: 0;
+  white-space: nowrap;
+}
