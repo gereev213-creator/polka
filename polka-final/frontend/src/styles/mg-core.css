@@ -3528,3 +3528,56 @@
   margin-top: 8px;
 }
 .app-shell .error-boundary-actions > *, .error-boundary-actions > * { flex: 1; }
+
+/* ── 52. Вкладки ленты: один сегмент вместо двух отдельных пилюль ────────── */
+/* Было: две пилюли с фоном и торчащая справа плашка контейнера — читалось
+   как третья пустая вкладка. Стало: одна плита, две равные половины. */
+.app-shell .feed-switch, .feed-switch {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  height: 52px;
+  margin: 4px 0 16px;
+  border-radius: 999px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  width: 100%;
+}
+.app-shell .feed-switch button, .feed-switch button {
+  flex: 1;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: rgba(255, 255, 255, .60);
+  font-size: 15px;
+  font-weight: 600;
+  transition: none;
+  transform: none;
+}
+.app-shell .feed-switch button.is-active, .feed-switch button.is-active {
+  background: linear-gradient(180deg, #3a3a3e 0%, #2c2c30 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .20);
+  color: #fff;
+}
+
+/* Половины вкладок ленты — строго равные: flex:1 учитывал ширину текста,
+   и «Находки» выходили шире «Барахолки» (197 против 149). */
+.app-shell .feed-switch button, .feed-switch button {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Селектор с цепочкой экрана: перебивает правило компонента по специфичности,
+   без !important. Половины вкладок должны быть равными. */
+.app-shell .feed-screen .feed-switch > button,
+.app-shell .feed-screen .feed-switch > button.is-active {
+  flex: 1 1 0;
+  width: 50%;
+  min-width: 0;
+  max-width: none;
+  padding: 0 8px;
+  margin: 0;
+}
