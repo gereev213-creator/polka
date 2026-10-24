@@ -190,7 +190,8 @@ export default function HuntChat() {
   }
 
   const submitLink = async () => {
-    const url = link.trim()
+    // Пробелы и переводы строк при вставке с телефона ломали ссылку
+    const url = link.replace(/\s+/g, '')
     if (!url) return
     setLinkResult('')
     try {

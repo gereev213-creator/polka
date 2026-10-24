@@ -25664,6 +25664,16 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     except Exception:
         return _miniapp_err('bad_json', 400)
     url = str((body or {}).get('url') or '').strip()
+    # Человек копирует адрес из телефона, и при вставке теряется начало:
+    # приходит «m.avito.ru/all/avito…» без схемы, и разбор отказывает.
+    # Несколько попыток подряд падали именно из-за этого.
+    url = url.replace('\n', '').replace('\r', '').replace(' ', '')
+    if url and not url.lower().startswith('http'):
+        if 'avito.ru' in url.lower():
+            url = 'https://' + url.lstrip('/')
+        else:
+            return _miniapp_json({'ok': False, 'error': 'bad_url',
+                                  'detail': 'Это не похоже на ссылку Авито'}, status=400)
     logger.info(f"from-link: пришло {len(url)} символов, начало: {url[:80]}")
     if not url:
         return _miniapp_err('empty_url', 400)
