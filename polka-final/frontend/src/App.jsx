@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-6'
+const APP_BUILD = '2026-10-24-7'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1824,31 +1824,51 @@ function SearchPage() {
         </div>
       ) : null}
 
-      {filtersOpen ? (
-        <div className="filters-panel">
-          <div className="form-stack">
-            <div className="grid-two">
-              <input className="text-input glass-card" value={priceMin} inputMode="numeric" onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Цена от" />
-              <input className="text-input glass-card" value={priceMax} inputMode="numeric" onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ''))} placeholder="Цена до" />
-            </div>
-            <div className="grid-two">
-              <select className="text-input glass-card" value={condition} onChange={(e) => setCondition(e.target.value)}>
-                <option value="">Любое состояние</option>
-                <option value="new">Новое</option>
-                <option value="used">Б/у</option>
-              </select>
-              <select className="text-input glass-card" value={delivery} onChange={(e) => setDelivery(e.target.value)}>
-                <option value="">Доставка: любая</option>
-                <option value="yes">С доставкой</option>
-              </select>
-            </div>
-            <select className="text-input glass-card" value={sort} onChange={(e) => setSort(e.target.value)}>
-              {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
+      {/* Фильтры — в нижнем листе: в панели они были сырыми select и
+          отодвигали результаты вниз. Набор условий не изменился. */}
+      <Sheet open={filtersOpen} title="Фильтры" onClose={() => setFiltersOpen(false)}
+        footer={(
+          <div className="sheet-actions">
+            <Button variant="ghost" onClick={resetFilters}>Сбросить</Button>
+            <Button variant="primary" onClick={() => setFiltersOpen(false)}>Показать</Button>
           </div>
+        )}>
+        <div className="field-label-row">Цена</div>
+        <div className="grid-two mt-8">
+          <input className="text-input" value={priceMin} inputMode="numeric"
+            onChange={(e) => setPriceMin(e.target.value.replace(/[^0-9]/g, ''))} placeholder="от" />
+          <input className="text-input" value={priceMax} inputMode="numeric"
+            onChange={(e) => setPriceMax(e.target.value.replace(/[^0-9]/g, ''))} placeholder="до" />
         </div>
-      ) : null}
-      <div className="section-head"><strong>{loading ? 'Ищем…' : 'Результаты'}</strong><span>{results.length}</span></div>
+
+        <div className="field-label-row">Состояние</div>
+        <SegmentedControl
+          options={[{ value: '', label: 'Любое' }, { value: 'new', label: 'Новое' }, { value: 'used', label: 'Б/у' }]}
+          value={condition} onChange={setCondition} />
+
+        <div className="field-label-row">Доставка</div>
+        <button type="button" className={delivery === 'yes' ? 'option-row is-active' : 'option-row'}
+          onClick={() => setDelivery(delivery === 'yes' ? '' : 'yes')}>
+          <span>Только с доставкой</span><span className="option-dot" />
+        </button>
+
+        <div className="field-label-row">Сортировка</div>
+        {SORT_OPTIONS.map((o) => (
+          <button key={o.value} type="button"
+            className={sort === o.value ? 'option-row is-active' : 'option-row'}
+            onClick={() => setSort(o.value)}>
+            <span>{o.label}</span><span className="option-dot" />
+          </button>
+        ))}
+      </Sheet>
+      <div className="result-bar">
+        <span className="result-count">
+          {loading ? 'Ищем…' : `Найдено ${results.length}`}
+        </span>
+        <button type="button" className="sort-chip" onClick={() => setFiltersOpen(true)}>
+          {SORT_OPTIONS.find((o) => o.value === sort)?.label || 'Сначала новые'}
+        </button>
+      </div>
       {error ? <ErrorBlock text={error} /> : null}
       {!loading && !error && results.length === 0 ? (
         <EmptyState text="Ничего не найдено. Попробуйте изменить запрос." icon={<Icon name="search" />} />

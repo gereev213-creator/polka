@@ -3016,3 +3016,57 @@
 .app-shell .tcl-row span:not(:first-child), .tcl-row span:not(:first-child) {
   text-align: right;
 }
+
+/* ── 42. Действия в листе и встроенные селекты ───────────────────────────── */
+.app-shell .sheet-actions, .sheet-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.app-shell .sheet-actions > * , .sheet-actions > * { flex: 1; }
+
+/* Нативные select приводим к виду пилюль: дефолтный браузерный вид на
+   тёмной теме выглядит светлой заплаткой. */
+.app-shell select.text-input, select.text-input,
+.app-shell select, .app-shell .filters-panel select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 36px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,.5)' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  color: #fff;
+  font-size: 16px;
+}
+.app-shell select option, select option {
+  background: #141414;
+  color: #fff;
+}
+
+/* ── 43. Панель результатов поиска ───────────────────────────────────────── */
+.app-shell .result-bar, .result-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 4px 0 12px;
+}
+.app-shell .result-count, .result-count {
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .sort-chip, .sort-chip {
+  height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .75);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
