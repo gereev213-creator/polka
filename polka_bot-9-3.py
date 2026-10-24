@@ -29378,6 +29378,61 @@ async def _prune_loop() -> None:
         await asyncio.sleep(900)
 
 
+async def api_admin_import_users(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/import-users — добавить пользователей из старой базы.
+
+    Не заменяет данные, а дополняет: существующие записи не трогаем, новых
+    добавляем. Нужно при переезде, когда в старой базе есть люди, а в новой
+    только те, кто зашёл после запуска.
+    """
+    if not await _admin_read_ok(request):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    users = (body or {}).get('users') or []
+    if not isinstance(users, list) or not users:
+        return _miniapp_err('bad_users', 400)
+
+    def _import() -> dict:
+        cur = db.conn.cursor()
+        added = skipped = 0
+        for u in users[:5000]:
+            try:
+                uid = int(u.get('user_id') or 0)
+            except (TypeError, ValueError):
+                continue
+            if uid <= 0:
+                continue
+            cur.execute("SELECT 1 FROM users WHERE user_id=?", (uid,))
+            if cur.fetchone():
+                skipped += 1
+                continue
+            cur.execute(
+                "INSERT INTO users (user_id, username, first_name, registration_date,"
+                " tariff, tariff_end_date, subscribed, last_activity, anon_id, platform)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (uid, str(u.get('username') or ''), str(u.get('first_name') or ''),
+                 str(u.get('registration_date') or ''),
+                 str(u.get('tariff') or 'free'), str(u.get('tariff_end_date') or ''),
+                 int(u.get('subscribed') or 0), str(u.get('last_activity') or ''),
+                 str(u.get('anon_id') or ''), str(u.get('platform') or '')))
+            added += 1
+        db.conn.commit()
+        total = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        return {'added': added, 'skipped': skipped, 'total': total}
+
+    try:
+        res = await asyncio.to_thread(_db_locked, _import)
+    except Exception as e:
+        logger.warning(f"import users: {e}")
+        return _miniapp_json({'ok': False, 'error': 'failed', 'detail': str(e)[:200]},
+                             status=500)
+    logger.info(f"импорт пользователей: {res}")
+    return _miniapp_json({'ok': True, **res})
+
+
 async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/admin/maintenance — чистка разросшихся таблиц.
 
@@ -31825,6 +31880,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_post('/api/admin/sql', api_admin_sql)
     app.router.add_post('/api/admin/maintenance', api_admin_maintenance)
+    app.router.add_post('/api/admin/import-users', api_admin_import_users)
     app.router.add_get('/api/views_diag', api_views_diag)
     app.router.add_get('/chat', api_serve_html)
     app.router.add_get('/api/check_promo', api_check_promo)
