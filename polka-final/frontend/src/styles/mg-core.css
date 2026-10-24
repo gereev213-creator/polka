@@ -1079,10 +1079,12 @@
    подсказки делаем мелкой приглушённой строкой. */
 .app-shell .sub-copy, .sub-copy { display: none; }
 
-/* Заголовок страницы в этих режимах дублирует вкладку и крупный приветствие */
+/* Заголовки экранов видны всегда: экран без названия читается как сбой.
+   Раньше здесь стоял display:none, и /hunt с /hunt/manual начинались с
+   безымянных вкладок. */
 .app-shell .hunt-screen > .page-title, .hunt-screen > .page-title,
 .app-shell .chat-wrap .chat-header-title, .chat-wrap .chat-header-title {
-  display: none;
+  display: block;
 }
 
 /* Подписи полей — мелкие, капсом, с воздухом сверху */
@@ -2644,3 +2646,250 @@
 .app-shell .plan-card, .plan-card { margin-bottom: 0; }
 .app-shell .week-row, .week-row { margin-bottom: 0; }
 .app-shell .tariff-pay, .tariff-pay { position: static; margin-top: 16px; }
+
+/* ── 37. Каркас: единые заголовки, вкладки, отступы под док ────────────────
+   Слой вводит систему, а не косметику: одинаковые размеры заголовков,
+   один вид вкладок на всех экранах, гарантированный воздух над доком. */
+
+/* Заголовок экрана: 24/30, без серых полос и рамок вокруг шапки */
+.app-shell .page-title, .page-title {
+  font-size: 24px;
+  line-height: 30px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--text-primary, #fff);
+  margin: 4px 0 16px;
+}
+
+/* Метка секции: 12 uppercase, приглушённая */
+.app-shell .section-label, .section-label,
+.app-shell .field-label-row, .field-label-row {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+}
+
+/* Вкладки: один механизм. Раньше на /hunt это были огромные кнопки во всю
+   ширину, на /hunt/manual — голый текст. Приводим к сегменту 44. */
+.app-shell .chat-tabs, .chat-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  height: 44px;
+  margin: 12px 0 16px;
+  border-radius: 999px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .chat-tabs-pill, .chat-tabs-pill {
+  display: none;
+}
+.app-shell .chat-tabs .chat-tab, .chat-tabs .chat-tab {
+  flex: 1;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, .60);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.app-shell .chat-tabs .chat-tab.is-active, .chat-tabs .chat-tab.is-active {
+  background: linear-gradient(180deg, #26262a 0%, #1a1a1c 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  color: #fff;
+}
+
+/* Описание лота — обычным шрифтом. copy-block нужен для кодов и адресов,
+   а не для текста объявления. */
+.app-shell .copy-block, .copy-block {
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, .72);
+}
+.app-shell .copy-block p, .copy-block p {
+  margin: 0 0 10px;
+  font: inherit;
+}
+
+/* Избранное и «мои объявления»: строка 96, фото 72, цена не первой строкой */
+.app-shell .favorite-row, .favorite-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 96px;
+  padding: 12px 0;
+  border-radius: 0;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.app-shell .favorite-row .result-thumb, .favorite-row .result-thumb {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.app-shell .favorite-row .result-title, .favorite-row .result-title {
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+  color: #fff;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-shell .result-price, .result-price {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Список диалогов: строка 76, без раздувания */
+/* Строка списка диалогов: минимальная высота 76 и разделитель вместо
+   отдельной карточки на каждую. Пузыри переписки тоже .chat-row, поэтому
+   стилизуем только строки с glass-card. */
+.app-shell .chat-row.glass-card, .chat-row.glass-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+/* Поле ввода в переписке: не уезжает под системную полосу */
+.app-shell .chat-input-wrap, .chat-input-wrap {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, #050505 40%);
+}
+.app-shell .chat-list, .chat-list {
+  padding-bottom: calc(var(--dock-space, 96px) + 12px);
+}
+
+/* Рельсы чипов: не обрезаются по буквам, справа мягкое затухание */
+.app-shell .chip-rail, .chip-rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 0 24px 0 0;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.app-shell .chip-rail::-webkit-scrollbar, .chip-rail::-webkit-scrollbar { display: none; }
+
+/* Шапки без серых плашек и рамок на всех экранах */
+/* Футер выше дока, без наложения на контент */
+.app-shell .app-footer, .app-footer {
+  padding-bottom: calc(var(--dock-space, 96px) + 16px);
+}
+
+/* ── 38. Тарифы: убрать кислоту, привести к палитре ─────────────────────── */
+
+/* Бейдж «Выгодно» / «Чаще берут» — синий tint, не кислотный */
+.app-shell .plan-badge, .plan-badge {
+  background: rgba(10, 132, 255, .18);
+  color: #6fb6ff;
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, .35);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+/* Галочки преимуществ — белые приглушённые, а не зелёные */
+.app-shell .plan-ft i, .plan-ft i {
+  color: rgba(255, 255, 255, .55);
+}
+
+/* Процент скидки на сроке — графит с синим текстом, не зелёный */
+.app-shell .tg2 button em, .tg2 button em {
+  color: #6fb6ff;
+  font-weight: 600;
+}
+
+/* Текстовая ссылка калькулятора вместо неактивной строки с бейджем */
+.app-shell .calc-link, .calc-link {
+  display: block;
+  width: 100%;
+  margin: 10px 0 0;
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, .45);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.app-shell .calc-row, .calc-row {
+  margin-top: 10px;
+  padding: 8px 0;
+  background: transparent;
+  color: rgba(255, 255, 255, .45);
+  font-size: 13px;
+}
+
+/* Юридический блок: обычный текст, ссылки акцентные, но не дефолтно-синие */
+.app-shell .pay-legal a, .pay-legal a,
+.app-shell .legal-links a, .legal-links a {
+  color: #6fb6ff;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+/* Статус оплаты: спокойные цвета состояний вместо кислотного фона */
+.app-shell .pay-state, .pay-state {
+  border-radius: 20px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+/* ── 39. Профиль: шапка без сырых значений ──────────────────────────────── */
+.app-shell .profile-top, .profile-top {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0 20px;
+}
+.app-shell .profile-avatar-img, .profile-avatar-img,
+.app-shell .profile-avatar-fallback, .profile-avatar-fallback {
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  font-size: 24px;
+  font-weight: 700;
+}
+.app-shell .profile-id, .profile-id {
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .profile-sub, .profile-sub {
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .45);
+}

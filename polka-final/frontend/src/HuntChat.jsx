@@ -179,9 +179,11 @@ export default function HuntChat() {
           <div className="chat-start">
             <div className="chat-hello">Найду дешёвые лоты по твоим условиям</div>
             <div className="chat-hello-sub">Напиши словами — подберу фильтры сам</div>
+            {/* Тап по примеру сразу отправляет его: раньше он только
+                подставлял текст в поле, и человек искал, что нажать. */}
             <div className="chat-examples">
               {EXAMPLES.map((ex) => (
-                <button key={ex} type="button" className="chat-example" onClick={() => setText(ex)}>{ex}</button>
+                <button key={ex} type="button" className="chat-example" onClick={() => tap(ex)}>{ex}</button>
               ))}
             </div>
           </div>
@@ -195,7 +197,8 @@ export default function HuntChat() {
 
         {ask && !showFinal ? (
           <div className="chat-replies">
-            {ask.text ? <div className="chat-bubble">{ask.text}</div> : null}
+            {/* Текст вопроса приходит в пузыре выше; повторять его здесь
+                нельзя — на экране было две одинаковые фразы подряд. */}
             {(ask.options || []).map((opt) => (
               <button key={opt} type="button" className="chat-chip" onClick={() => tap(opt)}>{opt}</button>
             ))}

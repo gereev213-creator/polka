@@ -57,7 +57,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-4'
+const APP_BUILD = '2026-10-24-5'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -3229,10 +3229,18 @@ function ProfilePage() {
         ) : (
           <div className="profile-avatar-fallback">{(tgUser?.first_name || profile?.name || 'П')[0]?.toUpperCase()}</div>
         )}
-        <strong className="profile-id">{profile?.id || tgUser?.username || 'Профиль'}</strong>
+        {/* Имя, а не анонимный id: раньше под аватаром висело число вроде «1»,
+            а ниже — «Гость · online». */}
+        <strong className="profile-id">
+          {(profile?.name || tgUser?.first_name || 'Пользователь').trim()}
+        </strong>
+        <div className="profile-sub">
+          {tgUser?.username ? `@${tgUser.username}` : ''}
+          {tgUser?.username && profile?.since ? ' · ' : ''}
+          {profile?.since ? `с ${profile.since}` : ''}
+        </div>
         {profile?.verified ? <div className="badge mt-8">Проверен</div> : null}
         {!profile ? <div className="product-city mt-8">Откройте приложение через Telegram</div> : null}
-        <div className="telegram-note">{tgUser?.first_name || 'Гость'} · {backendMode === 'online' ? 'online' : backendMode}</div>
       </div>
       {/* Статистика продавца переехала сюда с главной: в профиле она уместнее,
           и здесь больше нет дублирующей строки с теми же цифрами. */}
@@ -3508,7 +3516,7 @@ function TariffsPage() {
                 <span className="plan-badge">Чаще берут</span>
                 <div className="plan-top">
                   <b>Плюс</b>
-                  <span>{chosen.amount} ₽<small> / {chosen.days} дн</small></span>
+                  <span>{chosen.amount} ₽<small> за {chosen.days} дней</small></span>
                 </div>
                 <div className="plan-ft"><i>✓</i>{plusMax} критериев</div>
                 <div className="plan-ft"><i>✓</i>В чат сразу, без задержки</div>
@@ -3535,10 +3543,14 @@ function TariffsPage() {
 
         {/* По макету строка есть всегда; калькулятора пока нет, поэтому
             она неактивная с пометкой «скоро». */}
-        <div className="calc-row" aria-disabled="true">
-          <span>Подобрать свой тариф</span>
-          <span className="calc-soon">скоро</span>
-        </div>
+        {calcOn ? (
+          <div className="calc-row">
+            <span>Подобрать свой тариф</span>
+          </div>
+        ) : (
+          <button type="button" className="calc-link"
+            onClick={() => navigate('/tariffs')}>Подобрать свой тариф</button>
+        )}
 
         {/* 5. Оплата */}
         {chosen ? (
@@ -4170,7 +4182,9 @@ function AppFooter() {
       {/* Внизу копирайт и сразу ссылки на документы — без промежуточной
           надписи «Документы»: лишний клик на ровном месте. */}
       <div className="app-footer-copy">Полка © {year} — все права защищены
-            <span className="build-mark">сборка {APP_BUILD}</span></div>
+            {/* Техническая метка нужна только при отладке: ?debug=1 */}
+            {String(window.location.search).includes('debug=1')
+              ? <span className="build-mark">сборка {APP_BUILD}</span> : null}</div>
       <div className="app-footer-links">
           <a href={(docs && docs.privacy_url) || 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'} target="_blank" rel="noreferrer">
             Политика конфиденциальности
