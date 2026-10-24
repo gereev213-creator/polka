@@ -29368,7 +29368,17 @@ async def _prune_loop() -> None:
     while True:
         try:
             def _prune() -> int:
-                cur = db.conn.cursor()
+                # Своё соединение: общее нельзя использовать из двух потоков
+                # одновременно — именно из-за этого приём находок падал с
+                # «bad parameter or other API misuse», пока шла чистка.
+                conn = sqlite3.connect(db.db_path, timeout=10, check_same_thread=False)
+                try:
+                    conn.execute("PRAGMA busy_timeout=10000")
+                    return _prune_with(conn)
+                finally:
+                    conn.close()
+            def _prune_with(conn) -> int:
+                cur = conn.cursor()
                 total = 0
                 # Сначала — то, что не подошло: такие строки лента не
                 # показывает никогда. Проверяем по каждому совпадению
@@ -29380,7 +29390,7 @@ async def _prune_loop() -> None:
                         f"  SELECT id FROM hunt_matches WHERE NOT ({HUNT_VISIBLE_SQL})"
                         f"  LIMIT 2000)")
                     n = cur.rowcount or 0
-                    db.conn.commit()
+                    conn.commit()
                     total += n
                     if n < 2000:
                         break
@@ -29396,7 +29406,7 @@ async def _prune_loop() -> None:
                         "    FROM hunt_matches"
                         "  ) WHERE rn > 400 LIMIT 2000)")
                     n = cur.rowcount or 0
-                    db.conn.commit()
+                    conn.commit()
                     total += n
                     if n < 2000:
                         break
@@ -29525,7 +29535,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, **res})
 
     def _clean() -> dict:
-        cur = db.conn.cursor()
+        # Своё соединение: ручная чистка тоже идёт в потоке и не должна
+        # делить общее соединение с приёмом находок.
+        conn = sqlite3.connect(db.db_path, timeout=15, check_same_thread=False)
+        try:
+            conn.execute("PRAGMA busy_timeout=15000")
+            return _clean_with(conn)
+        finally:
+            conn.close()
+
+    def _clean_with(conn) -> dict:
+        cur = conn.cursor()
         total_before = cur.execute("SELECT COUNT(*) FROM hunt_matches").fetchone()[0]
 
         # 1. Совпадения без объявления — показать их невозможно.
@@ -29536,7 +29556,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                         "LEFT JOIN ads a ON a.id = hm.ad_id "
                         "WHERE a.id IS NULL LIMIT 2000)")
             n = cur.rowcount or 0
-            db.conn.commit()
+            conn.commit()
             orphans += n
             if n < 2000:
                 break
@@ -29548,7 +29568,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                         "SELECT id FROM hunt_matches WHERE created_at < "
                         "datetime('now', ?) LIMIT 2000)", (f'-{days} days',))
             n = cur.rowcount or 0
-            db.conn.commit()
+            conn.commit()
             old += n
             if n < 2000:
                 break
@@ -29560,7 +29580,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                         "SELECT hm.id FROM hunt_matches hm WHERE NOT EXISTS ("
                         "SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id) LIMIT 2000)")
             n = cur.rowcount or 0
-            db.conn.commit()
+            conn.commit()
             dead += n
             if n < 2000:
                 break
@@ -29573,7 +29593,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 f"  SELECT id FROM hunt_matches WHERE NOT ({HUNT_VISIBLE_SQL})"
                 f"  LIMIT 2000)")
             n = cur.rowcount or 0
-            db.conn.commit()
+            conn.commit()
             unfit += n
             if n < 2000:
                 break
@@ -29592,14 +29612,14 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 "    FROM hunt_matches"
                 "  ) WHERE rn > ? LIMIT 2000)", (keep,))
             n = cur.rowcount or 0
-            db.conn.commit()
+            conn.commit()
             trimmed += n
             if n < 2000:
                 break
 
         total_after = cur.execute("SELECT COUNT(*) FROM hunt_matches").fetchone()[0]
         try:
-            db.conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         except Exception:
             pass
         return {'before': total_before, 'after': total_after,
