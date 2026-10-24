@@ -379,6 +379,8 @@ export const api = {
   }),
   pawStatus: (uuid) => request(`/api/pay/paw/status?uuid=${encodeURIComponent(uuid)}`),
   promoCheck: (code) => request(`/api/pay/promo-check?code=${encodeURIComponent(code)}`),
+  // Критерий из ссылки Авито: фильтры берём у площадки, не выдумываем
+  huntFromLink: (url) => request('/api/hunt/from-link', { method: 'POST', body: JSON.stringify({ url }) }),
   getReferral: () => request('/api/referral'),
   // Документы: политика конфиденциальности и условия пользования
   getLegal: () => request('/api/legal'),

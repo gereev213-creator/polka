@@ -29,6 +29,9 @@ export default function HuntChat() {
   const listRef = useRef(null)
   const [messages, setMessages] = useState([])
   const [text, setText] = useState('')
+  // Ссылка с Авито — главный способ задать критерий.
+  const [link, setLink] = useState('')
+  const [linkResult, setLinkResult] = useState('')
   const [busy, setBusy] = useState(false)
   const [sessionId, setSessionId] = useState('')
   const [ask, setAsk] = useState(null)
@@ -157,6 +160,27 @@ export default function HuntChat() {
     setNotes([]); setSessionId(''); setLimitMsg('')
   }
 
+  const submitLink = async () => {
+    const url = link.trim()
+    if (!url) return
+    setLinkResult('')
+    try {
+      const r = await api.huntFromLink(url)
+      if (r.existing) {
+        setLinkResult('Такой критерий уже есть — он работает.')
+      } else {
+        const parts = [`Критерий создан: ${r.query}`]
+        if (r.city) parts.push(`город ${r.city}`)
+        parts.push(r.filters ? 'фильтры Авито применены' : 'без фильтров Авито')
+        setLinkResult(parts.join(' · '))
+      }
+      setLink('')
+      load()
+    } catch (e) {
+      setLinkResult((e && e.detail) || 'Не удалось разобрать ссылку. Нужна ссылка с фильтрами Авито.')
+    }
+  }
+
   const chips = draft ? reqChips(draft.requirements_json) : []
   const showFinal = ready && draft && draft.query
 
@@ -168,17 +192,38 @@ export default function HuntChat() {
         </button>
         <div className="page-title chat-header-title">Поиск лотов</div>
       </div>
-      <div className="chat-tabs">
-        <span className="chat-tabs-pill" aria-hidden="true" />
-        <button type="button" className="chat-tab is-active">Поиск словами</button>
-        <button type="button" className="chat-tab" onClick={() => navigate('/hunt/manual')}>Вручную</button>
-      </div>
+      {/* Вкладки убраны: главный вход — ссылка с Авито. Ручная настройка
+          осталась отдельной текстовой ссылкой внизу экрана. */}
 
       <div className="chat-list" ref={listRef}>
         {messages.length === 0 && !showFinal ? (
           <div className="chat-start">
-            <div className="chat-hello">Найду дешёвые лоты по твоим условиям</div>
-            <div className="chat-hello-sub">Напиши словами — подберу фильтры сам</div>
+            {/* Главный путь — ссылка с Авито: фильтры ставит человек на самой
+                площадке, мы не угадываем параметры. */}
+            <div className="chat-hello">Настройте фильтры на Авито</div>
+            <div className="chat-hello-sub">
+              Откройте Авито, выставьте фильтры как вам нужно и вставьте ссылку сюда.
+              Всё, что вы отметили, бот будет забирать как есть.
+            </div>
+            <div className="link-form">
+              <input className="text-input" placeholder="https://avito.ru/..." value={link}
+                onChange={(e) => setLink(e.target.value)} inputMode="url" />
+              <button type="button" className="primary-btn" disabled={busy || !link.trim()}
+                onClick={submitLink}>{busy ? 'Проверяю…' : 'Проверить ссылку'}</button>
+            </div>
+            {linkResult ? <div className="link-result">{linkResult}</div> : null}
+            <div className="chat-hello-sub mt-14">Как это сделать</div>
+            <div className="chat-hello-sub">
+              1. Откройте Авито и выставьте фильтры<br />
+              2. Скопируйте адрес из строки браузера<br />
+              3. Вставьте его в поле выше
+            </div>
+            <div className="chat-hello-sub mt-14">
+              Или опишите словами — подберу фильтры сам.
+            </div>
+            <button type="button" className="calc-link" onClick={() => navigate('/hunt/manual')}>
+              Точная настройка вручную →
+            </button>
             {/* Тап по примеру сразу отправляет его: раньше он только
                 подставлял текст в поле, и человек искал, что нажать. */}
             <div className="chat-examples">

@@ -23312,6 +23312,15 @@ CATEGORY_BY_WORD = {
 }
 
 
+# Названия категорий Авито по слагу — нужны, когда в ссылке нет текстового
+# запроса, а критерий создать надо.
+HUNT_SLUG_TITLES = {
+    'elektronika': 'Электроника', 'telefony': 'Телефоны', 'noutbuki': 'Ноутбуки',
+    'odezhda_obuv_aksessuary': 'Одежда, обувь, аксессуары', 'avtomobili': 'Авто',
+    'zapchasti_i_aksessuary': 'Запчасти', 'nedvizhimost': 'Недвижимость',
+    'dom_i_dacha': 'Для дома и дачи', 'uslugi': 'Услуги', 'rabota': 'Работа',
+}
+
 AVITO_CATEGORY_SLUGS = (
     'telefony', 'noutbuki', 'planshety_i_elektronnye_knigi', 'igry_pristavki_i_programmy',
     'audio_i_video', 'bytovaya_tehnika', 'tovary_dlya_kompyutera', 'odezhda_obuv_aksessuary',
@@ -25439,12 +25448,28 @@ def normalize_category(value: str) -> str:
     return CATEGORY_NAMES.get(text.lower(), text)
 
 
+def ensure_filter_blob_column() -> None:
+    """Колонка под фильтры Авито из ссылки пользователя.
+
+    Набор f=… непрозрачен и принадлежит площадке: мы его не разбираем, а
+    храним как есть и передаём сборщику. Тогда забор идёт ровно по тем
+    фильтрам, которые человек выставил на Авито своими глазами.
+    """
+    try:
+        db.conn.execute("ALTER TABLE hunt_criteria ADD COLUMN filter_blob TEXT DEFAULT ''")
+        db.conn.commit()
+        logger.info("hunt_criteria: добавлена колонка filter_blob")
+    except Exception:
+        pass
+
+
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
                   mode: str = 'any', requirements: str = '',
                   requirements_json: Optional[Dict] = None,
-                  exclude: str = '', strict_model: int = 0) -> Optional[int]:
+                  exclude: str = '', strict_model: int = 0,
+                  filter_blob: str = '') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -25489,6 +25514,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
           'deal' if str(mode) == 'deal' else 'any',
           ','.join(_crit_exclude_words({'exclude_words': exclude}))[:200],
           1 if int(strict_model or 0) else 0))
+    if filter_blob:
+        try:
+            cursor.execute("UPDATE hunt_criteria SET filter_blob=? WHERE id=?",
+                           (str(filter_blob)[:2000], cursor.lastrowid))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"filter_blob save: {_e}")
     db.conn.commit()
     crit_id = cursor.lastrowid
     # K4: медиана ТОЛЬКО этого критерия — один запрос вместо прохода по всем.
@@ -25534,6 +25566,67 @@ def remove_criterion(user_id: int, crit_id: int) -> bool:
     return cursor.rowcount > 0
 
 
+async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/from-link — критерий из ссылки Авито.
+
+    Человек выставляет фильтры на самом Авито и присылает адрес. Мы не
+    угадываем параметры: забираем готовый набор f=… и передаём его сборщику
+    как есть. Это точно то, что человек видел на экране площадки.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    url = str((body or {}).get('url') or '').strip()
+    if not url:
+        return _miniapp_err('empty_url', 400)
+
+    from urllib.parse import urlparse, parse_qs
+    parsed = parse_avito_filter_url(url)
+    if not parsed.get('ok'):
+        return _miniapp_json({'ok': False, 'error': parsed.get('error'),
+                              'detail': parsed.get('detail') or
+                              'Нужна ссылка с фильтрами: выставьте их на Авито и скопируйте адрес'},
+                             status=400)
+
+    q = parse_qs(urlparse(url).query)
+    query = str((q.get('q') or [''])[0]).strip()
+    if not query:
+        # Без текстового запроса берём название категории — иначе критерий
+        # не создать, а ссылка при этом рабочая.
+        slug = str(parsed.get('slug') or '')
+        query = HUNT_SLUG_TITLES.get(slug, '') or 'товар'
+    city = str(parsed.get('city') or '').replace('-', ' ').title()
+    category = normalize_category(query)
+
+    # Уже есть такой же критерий — не плодим дубль.
+    cursor = db.conn.cursor()
+    cursor.execute("SELECT id FROM hunt_criteria WHERE user_id=? AND active=1 "
+                   "AND filter_blob=?", (int(viewer_id), str(parsed.get('filters') or '')))
+    row = cursor.fetchone()
+    if row:
+        return _miniapp_json({'ok': True, 'id': int(row['id']), 'existing': True,
+                              'query': query, 'city': city, 'category': category,
+                              'filters': parsed.get('filters') or ''})
+
+    crit_id = await asyncio.to_thread(
+        _db_locked, add_criterion, int(viewer_id), query, category, city,
+        0, 0, 0, 0, 0, 'any', '', None, '', 0, str(parsed.get('filters') or ''))
+    if crit_id == -1:
+        return _miniapp_json({'ok': False, 'error': 'limit',
+                              'detail': 'Достигнут лимит критериев'}, status=400)
+    if not crit_id:
+        return _miniapp_json({'ok': False, 'error': 'duplicate',
+                              'detail': 'Такой критерий уже есть'}, status=400)
+    return _miniapp_json({'ok': True, 'id': int(crit_id), 'query': query,
+                          'city': city, 'category': category,
+                          'filters': parsed.get('filters') or '',
+                          'has_price': bool(parsed.get('has_price'))})
+
+
 async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET/POST/DELETE /api/hunt — критерии ловли для текущего пользователя."""
     viewer_id = _miniapp_viewer(request)
@@ -25549,11 +25642,12 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         cursor = db.conn.cursor()
         # Отдаём сборщику цену и свежесть: без них он не может попросить
         # Авито отфильтровать выдачу, и качает всё подряд.
-        cursor.execute("SELECT DISTINCT query, category, city, "
+        cursor.execute("SELECT query, category, city, """
                        "COALESCE(min_price,0) AS min_price, "
                        "COALESCE(max_price,0) AS max_price, "
                        "COALESCE(max_hours,0) AS max_hours, "
-                       "COALESCE(requirements_json,'') AS requirements_json "
+                       "COALESCE(requirements_json,'') AS requirements_json, "
+                       "COALESCE(filter_blob,'') AS filter_blob "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
         # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
@@ -25566,7 +25660,10 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 _req = json.loads(row.get('requirements_json') or '{}')
             except Exception:
                 _req = {}
-            row['user'] = '1' if _req.get('private_only') else '' 
+            row['user'] = '1' if _req.get('private_only') else ''
+            # Фильтры из ссылки человека отдаём сборщику под именем, которое
+            # он уже понимает: он подставит их в адрес Авито как есть.
+            row['filters'] = str(row.get('filter_blob') or '')
         # Наборы фильтров Авито по категориям (частные, состояние, АКБ, слова
         # в описании) отдаём вместе с критерием: так их применяет сам Авито,
         # а сборщику не нужно ни файлов, ни переменных окружения.
@@ -31939,6 +32036,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_post('/api/admin/sql', api_admin_sql)
+    app.router.add_post('/api/hunt/from-link', api_hunt_from_link)
     app.router.add_post('/api/admin/maintenance', api_admin_maintenance)
     app.router.add_post('/api/admin/import-users', api_admin_import_users)
     app.router.add_get('/api/views_diag', api_views_diag)
@@ -32547,6 +32645,7 @@ def main():
         ensure_fingerprint_backfill()
         ensure_news()
         ensure_payments()
+        ensure_filter_blob_column()
         # Миграция чатов: колонки buyer_last_read/seller_last_read. Раньше
         # init_chat_tables вызывался только по пути «открыть диалог», а список
         # чатов с непрочитанными обращался к колонкам до миграции — в логе

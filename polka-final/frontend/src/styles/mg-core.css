@@ -3353,3 +3353,46 @@
   min-width: 0;
   white-space: nowrap;
 }
+
+/* ── 49. Поиск: форма ссылки с Авито ────────────────────────────────────── */
+.app-shell .link-form, .link-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  margin: 16px 0 8px;
+}
+.app-shell .link-form .text-input, .link-form .text-input {
+  width: 100%;
+  height: 52px;
+  font-size: 16px;
+}
+.app-shell .link-result, .link-result {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  font-size: 13px;
+  line-height: 18px;
+  color: rgba(255, 255, 255, .75);
+}
+
+/* Тексты на старте поиска не должны обрезаться многоточием */
+.app-shell .chat-hello-sub, .chat-hello-sub {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  white-space: normal;
+  line-height: 1.5;
+}
+/* Кнопка «Проверить ссылку» в неактивном виде остаётся читаемой */
+.app-shell .link-form .primary-btn:disabled, .link-form .primary-btn:disabled {
+  opacity: .55;
+  color: #fff;
+}
+/* Примеры и ссылки не уезжают под док */
+.app-shell .chat-start, .chat-start {
+  padding-bottom: calc(var(--dock-space, 96px) + 24px);
+}
