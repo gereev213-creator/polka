@@ -57,7 +57,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-24-1'
+const APP_BUILD = '2026-10-24-2'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1151,16 +1151,29 @@ function FindingsView() {
     try { localStorage.setItem('polka:paywall_ts', String(Date.now())) } catch { /* приватный режим */ }
   }
 
-  const load = async () => {
-    setLoading(true)
+  const load = async (quiet = false) => {
+    const key = String(minDiscount)
+    const cached = findingsCache.data && findingsCache.key === key
+      && Date.now() - findingsCache.at < 120000
+    if (cached) {
+      // Старые данные показываем мгновенно, обновление идёт фоном.
+      setItems(findingsCache.data.items || [])
+      setNeedCriteria(Boolean(findingsCache.data.need_criteria))
+      setLoading(false)
+    } else if (!quiet) {
+      setLoading(true)
+    }
     setError('')
     try {
       const data = await api.getFindings({ minDiscount, limit: 40 })
+      findingsCache = { at: Date.now(), key, data }
       setItems(data.items || [])
       setNeedCriteria(Boolean(data.need_criteria))
     } catch {
-      setError('Не удалось загрузить находки.')
-      setItems([])
+      if (!cached) {
+        setError('Не удалось загрузить находки.')
+        setItems([])
+      }
     } finally {
       setLoading(false)
     }
@@ -1170,6 +1183,13 @@ function FindingsView() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minDiscount])
+
+  // Вернулись из другого раздела — сразу перечитываем в фоне, без экрана
+  // «Ищем…», потому что список уже есть.
+  useEffect(() => {
+    if (items.length) load(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <>
@@ -1386,6 +1406,11 @@ function LastNews({ items = [] }) {
     </Link>
   )
 }
+
+// Кэш ленты находок. Без него каждый переход между разделами заново
+// показывал «Ищем выгодные предложения…» и ждал секунды. Теперь список
+// появляется сразу из памяти, а свежий приезжает следом.
+let findingsCache = { at: 0, key: '', data: null }
 
 function FeedPage() {
   const { favoriteIds, toggleFavorite } = useApp()
