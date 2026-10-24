@@ -93,7 +93,9 @@ class FakeDb:
         pass
 
 
-ns = {'os': os, 're': re, 'json': json, 'hashlib': hashlib, 'sqlite3': sqlite3,
+import threading
+ns = {'DB_WRITE_LOCK': threading.RLock(),
+      'os': os, 're': re, 'json': json, 'hashlib': hashlib, 'sqlite3': sqlite3,
       'NamedTuple': NamedTuple, 'Dict': Dict, 'List': List, 'Optional': Optional,
       'Tuple': tuple, 'Any': object, 'datetime': datetime, 'timedelta': timedelta,
       'ZoneInfo': ZoneInfo, 'logger': FakeLog(), 'db': FakeDb(conn), '_time': __import__('time'),

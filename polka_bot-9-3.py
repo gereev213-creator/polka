@@ -21826,15 +21826,6 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
         status = 'rejected'
     reject_reason = decision.reason if status == 'rejected' else ''
     now = get_moscow_time().isoformat()
-    with DB_WRITE_LOCK:
-        return _hunt_match_store_locked(
-            user_id, crit_id, ad_id, decision, desc_state, force_status,
-            notified, fingerprint, unverified, deliver_after, deep_check, now)
-
-
-def _hunt_match_store_locked(user_id: int, crit_id: int, ad_id: int, decision,
-                             desc_state, force_status, notified, fingerprint,
-                             unverified, deliver_after, deep_check, now) -> None:
     cursor = db.conn.cursor()
     try:
         cursor.execute("SELECT id, status, notified_at FROM hunt_matches "

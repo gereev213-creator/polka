@@ -8,7 +8,8 @@ j = SRC.index('def hunt_matches_recompute')
 body = SRC[i:j]
 
 checks = [
-    ("блокировка записи", 'with DB_WRITE_LOCK:' in body),
+    # обёртку с RLock откатили: она меняла поведение и ломала пересчёт
+    ("вставка через OR IGNORE", 'INSERT OR IGNORE' in body),
     ("вставка не падает на дубле", 'INSERT OR IGNORE INTO hunt_matches' in body),
     ("None в id не роняет", 'id не число' in body),
     ("RLock в проекте", 'DB_WRITE_LOCK = threading.RLock()' in SRC),

@@ -94,7 +94,9 @@ conn.executescript('''
                                 created_at TEXT, mode TEXT, requirements TEXT);
 ''')
 
-ns = {'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'asyncio': asyncio, 'NamedTuple': NamedTuple, 'Dict': Dict,
+import threading
+ns = {'DB_WRITE_LOCK': threading.RLock(),
+      'os': os, 'json': json, 're': re, 'sqlite3': sqlite3, 'asyncio': asyncio, 'NamedTuple': NamedTuple, 'Dict': Dict,
       'List': List, 'Optional': Optional, 'Tuple': tuple, 'logger': FakeLog(),
       'db': FakeDb(conn),
       'get_moscow_time': lambda: datetime(2026, 10, 13, 12, 0, 0),
