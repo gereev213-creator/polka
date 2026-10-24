@@ -870,6 +870,34 @@ function CriteriaPage() {
             if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }}>+</button>
       </div>
+
+      <div className="crit-seg">
+        <button type="button" className={critTab === 'active' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
+          onClick={() => setCritTab('active')}>
+          Активные {items.filter((c) => !(c.active === 0 || c.active === false)).length}
+        </button>
+        <button type="button" className={critTab === 'archive' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
+          onClick={() => setCritTab('archive')}>
+          Архив {items.filter((c) => c.active === 0 || c.active === false).length}
+        </button>
+      </div>
+
+      {critTab === 'active' && activeCount === limitCount ? (
+        <div className="crit-promo">
+          <div className="crit-promo-badge">П</div>
+          <div className="crit-promo-body">
+            <div className="crit-promo-title">{activeCount} критерий из {limitCount}</div>
+            <div className="crit-promo-sub">В «Плюсе» — 10 критериев и находки без задержки</div>
+          </div>
+          <button type="button" className="crit-promo-btn" onClick={() => navigate('/tariffs')}>Плюс</button>
+        </div>
+      ) : null}
+
+      <CriteriaList
+        items={items.filter((c) => (critTab === 'active'
+          ? !(c.active === 0 || c.active === false)
+          : (c.active === 0 || c.active === false)))}
+        loading={loading} onRemove={remove} onToggle={toggleCriterion} />
       {/* Те же вкладки, что в чате: переключение между способами не теряется */}
       <div className="chat-tabs is-second">
         {/* Такая же плашка, но активна правая вкладка — въезжает слева */}
@@ -1152,33 +1180,6 @@ function CriteriaPage() {
         </label>
       </div>
 
-      <div className="crit-seg">
-        <button type="button" className={critTab === 'active' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
-          onClick={() => setCritTab('active')}>
-          Активные {items.filter((c) => !(c.active === 0 || c.active === false)).length}
-        </button>
-        <button type="button" className={critTab === 'archive' ? 'crit-seg-btn is-on' : 'crit-seg-btn'}
-          onClick={() => setCritTab('archive')}>
-          Архив {items.filter((c) => c.active === 0 || c.active === false).length}
-        </button>
-      </div>
-
-      {critTab === 'active' && activeCount === limitCount ? (
-        <div className="crit-promo">
-          <div className="crit-promo-badge">П</div>
-          <div className="crit-promo-body">
-            <div className="crit-promo-title">{activeCount} критерий из {limitCount}</div>
-            <div className="crit-promo-sub">В «Плюсе» — 10 критериев и находки без задержки</div>
-          </div>
-          <button type="button" className="crit-promo-btn" onClick={() => navigate('/tariffs')}>Плюс</button>
-        </div>
-      ) : null}
-
-      <CriteriaList
-        items={items.filter((c) => (critTab === 'active'
-          ? !(c.active === 0 || c.active === false)
-          : (c.active === 0 || c.active === false)))}
-        loading={loading} onRemove={remove} onToggle={toggleCriterion} />
     </Screen>
   )
 }
