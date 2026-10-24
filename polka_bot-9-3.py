@@ -29397,6 +29397,13 @@ async def api_admin_import_users(request: aiohttp_web.Request) -> aiohttp_web.Re
 
     def _import() -> dict:
         cur = db.conn.cursor()
+        # Берём только те колонки, которые реально есть в этой базе: схемы
+        # старых и новых установок отличаются (например, в старой нет
+        # anon_id), и жёсткий список падал бы целиком.
+        have = {r[0] for r in cur.execute("SELECT name FROM pragma_table_info('users')")}
+        wanted = ['user_id', 'username', 'first_name', 'registration_date', 'tariff',
+                  'tariff_end_date', 'subscribed', 'last_activity', 'anon_id', 'platform']
+        cols = [c for c in wanted if c in have]
         added = skipped = 0
         for u in users[:5000]:
             try:
@@ -29409,19 +29416,21 @@ async def api_admin_import_users(request: aiohttp_web.Request) -> aiohttp_web.Re
             if cur.fetchone():
                 skipped += 1
                 continue
-            cur.execute(
-                "INSERT INTO users (user_id, username, first_name, registration_date,"
-                " tariff, tariff_end_date, subscribed, last_activity, anon_id, platform)"
-                " VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (uid, str(u.get('username') or ''), str(u.get('first_name') or ''),
-                 str(u.get('registration_date') or ''),
-                 str(u.get('tariff') or 'free'), str(u.get('tariff_end_date') or ''),
-                 int(u.get('subscribed') or 0), str(u.get('last_activity') or ''),
-                 str(u.get('anon_id') or ''), str(u.get('platform') or '')))
+            vals = []
+            for c in cols:
+                if c == 'subscribed':
+                    vals.append(int(u.get(c) or 0))
+                elif c == 'tariff':
+                    vals.append(str(u.get(c) or 'free'))
+                else:
+                    vals.append(str(u.get(c) or ''))
+            placeholders = ','.join('?' * len(cols))
+            cur.execute(f"INSERT INTO users ({','.join(cols)}) VALUES ({placeholders})", vals)
             added += 1
         db.conn.commit()
         total = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        return {'added': added, 'skipped': skipped, 'total': total}
+        return {'added': added, 'skipped': skipped, 'total': total,
+                'columns': cols}
 
     try:
         res = await asyncio.to_thread(_db_locked, _import)
