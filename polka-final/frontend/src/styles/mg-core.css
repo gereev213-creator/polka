@@ -4168,3 +4168,78 @@
   font-size: 17px;
   font-weight: 700;
 }
+
+/* ── 56. Новые экраны = эталон «Находок» ──────────────────────────────────
+   Замер эталона: карточка — радиус 28, фон #141414, тень inset .10 + тёмная.
+   У новых экранов было 22–24 и градиент вместо фона — отсюда «дикий» вид.
+   Выравниваем всё к одному материалу. */
+.app-shell .hunt-card, .hunt-card,
+.app-shell .crit-card, .crit-card,
+.app-shell .hunt-crit, .hunt-crit,
+.app-shell .crit-promo, .crit-promo,
+.app-shell .link-result, .link-result,
+.app-shell .recent-block, .recent-block {
+  border-radius: 28px;
+  background: #141414;
+  background-image: none;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 5px 30px rgba(0, 0, 0, .45);
+}
+/* Внутри карточки не должно быть второй «карточки» с другим материалом */
+.app-shell .crit-promo, .crit-promo {
+  border-radius: 20px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+}
+
+/* Чипы — как пилюли ленты: фон #141414, радиус 999, приглушённый текст */
+.app-shell .hunt-chip, .hunt-chip,
+.app-shell .crit-chip, .crit-chip {
+  height: 36px;
+  border-radius: 999px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .80);
+  font-size: 13px;
+}
+.app-shell .hunt-chip.is-main, .hunt-chip.is-main {
+  background: #141414;
+  color: #6fb6ff;
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, .30), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+/* Поля ввода — та же поверхность, что у строк профиля */
+.app-shell .hunt-field, .hunt-field {
+  border-radius: 16px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+/* Переключатели срока и критериев — один вид с вкладками ленты */
+.app-shell .tg2, .tg2,
+.app-shell .crit-seg, .crit-seg {
+  border-radius: 999px;
+  background: #141414;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+/* Карточка слов и шагов — без собственного акцентного фона */
+.app-shell .hunt-words-card, .hunt-words-card {
+  border-radius: 28px;
+  background: #141414;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .10),
+    0 5px 30px rgba(0, 0, 0, .45);
+}
+.app-shell .hunt-words-icon, .hunt-words-icon {
+  background: rgba(10, 132, 255, .16);
+  color: #6fb6ff;
+}
+
+/* Нижняя карточка не должна уезжать под док на новых экранах */
+.app-shell .screen .hunt-words-card, .screen .hunt-words-card {
+  margin-bottom: calc(var(--dock-space, 96px) + 16px);
+}
+.app-shell .screen .crit-create, .screen .crit-create {
+  margin-bottom: 8px;
+}
