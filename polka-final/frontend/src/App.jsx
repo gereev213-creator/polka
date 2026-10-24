@@ -742,7 +742,7 @@ function CriteriaPage() {
         Создать критерий
       </button>
       <div className="hunt-card-note">
-        Бесплатно — {limitCount} критерий · проверка каждые 15 минут
+        Бесплатно — {limitCount} критерий · проверка раз в час
       </div>
     </Screen>
   )
@@ -832,7 +832,7 @@ function FindingsView() {
         needCriteria ? (
           <EmptyBlock text="Добавьте критерий — здесь появятся находки по нему." />
         ) : (
-          <EmptyBlock text="Пока пусто. Новые находки приходят каждые 15 минут." />
+          <EmptyBlock text="Пока пусто. Новые находки приходят в течение часа." />
         )
       ) : null}
       {plan ? (

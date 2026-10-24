@@ -74,7 +74,7 @@ export function CriteriaList({ items = [], loading = false, onRemove, onToggle, 
                 <span className={c.active === 0 || c.active === false ? 'crit-dot' : 'crit-dot is-on'} />
                 {c.active === 0 || c.active === false
                   ? 'На паузе'
-                  : 'Активен · проверка каждые 15 минут'}
+                  : 'Активен · проверка раз в час'}
               </div>
               <span className="hunt-crit-status">
                 {c.ready

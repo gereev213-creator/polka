@@ -20509,7 +20509,18 @@ async def _collector_inline_loop():
                 base_targets = collector.default_targets()
             except Exception:
                 base_targets = []
-            cfg['targets'] = crit_targets + base_targets[:2]
+            # Авито блокирует за серию запросов: 19 критериев подряд — это
+            # гарантированный 439. Идём по кругу по 3 цели за проход, чтобы
+            # каждый критерий получал свой шанс, но не за один заход.
+            try:
+                _pass_no = int(_setting_get('collector.pass_no') or 0) + 1
+            except Exception:
+                _pass_no = 1
+            _setting_set('collector.pass_no', str(_pass_no))
+            _limit = 3
+            _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
+                crit_targets[:_pass_no % max(1, len(crit_targets))]
+            cfg['targets'] = _rotated[:_limit] + base_targets[:1]
             logger.info(f"Сбор: целей по критериям {len(crit_targets)}, "
                         f"общих {len(cfg['targets']) - len(crit_targets)}")
             # Отметка «сбор идёт». Снимается в finally ниже. Останется
