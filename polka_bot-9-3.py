@@ -23472,6 +23472,7 @@ def avito_blob_facts(blob: str) -> Dict:
     import re as _re
     text = str(blob or '')
     price_to = price_from = battery_from = 0
+    facts_all: List[Dict] = []
     for m in _re.finditer(r'eyJ[A-Za-z0-9_-]{8,}', text):
         raw = m.group(0)
         try:
@@ -23489,13 +23490,33 @@ def avito_blob_facts(blob: str) -> Dict:
             if not isinstance(data, dict):
                 continue
             frm, to = data.get('from'), data.get('to')
+            if frm is not None or to is not None:
+                facts_all.append({'from': frm, 'to': to})
             if to and int(to) > 1000 and not price_to:
                 price_to = int(to)
             elif frm and 0 < int(frm) < 100 and not battery_from and not price_from:
                 battery_from = int(frm)
             elif frm and int(frm) > 0 and not price_from:
                 price_from = int(frm)
-    return {'price_to': price_to, 'price_from': price_from, 'battery_from': battery_from}
+    # Подписи для карточки: собираем ВСЕ числовые условия набора, а не только
+    # цену и АКБ. Раньше в карточке было видно два числа из пяти, и человек
+    # не понимал, что именно он задал на Авито.
+    labels: List[str] = []
+    for f in facts_all:
+        frm, to = f.get('from'), f.get('to')
+        try:
+            if isinstance(to, (int, float)) and to and to >= 1000:
+                labels.append('до ' + f'{int(to):,}'.replace(',', ' ') + ' ₽')
+            elif isinstance(frm, (int, float)) and frm and frm >= 1000:
+                labels.append('от ' + f'{int(frm):,}'.replace(',', ' ') + ' ₽')
+            elif isinstance(frm, (int, float)) and frm and 0 < frm <= 100:
+                labels.append(f'АКБ от {int(frm)} %')
+            elif isinstance(to, (int, float)) and to and 0 < to <= 100:
+                labels.append(f'до {int(to)}')
+        except Exception:
+            continue
+    return {'price_to': price_to, 'price_from': price_from,
+            'battery_from': battery_from, 'labels': labels}
 
 def is_accessory_query(query: str) -> bool:
     """Аксессуар ли это: по таким запросам фильтры товара не применяем."""
@@ -25572,7 +25593,7 @@ def ensure_filter_blob_column() -> None:
     /api/hunt отвечал 500 «no such column: filter_url». Теперь каждая
     колонка добавляется отдельно и только если её нет.
     """
-    for column in ('filter_blob', 'filter_url'):
+    for column in ('filter_blob', 'filter_url', 'filter_labels'):
         try:
             have = {r[0] for r in db.conn.execute(
                 "SELECT name FROM pragma_table_info('hunt_criteria')")}
@@ -25592,7 +25613,8 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   mode: str = 'any', requirements: str = '',
                   requirements_json: Optional[Dict] = None,
                   exclude: str = '', strict_model: int = 0,
-                  filter_blob: str = '', filter_url: str = '') -> Optional[int]:
+                  filter_blob: str = '', filter_url: str = '',
+                  filter_labels: str = '') -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -25644,6 +25666,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             db.conn.commit()
         except Exception as _e:
             logger.warning(f"filter_blob save: {_e}")
+    if filter_labels:
+        try:
+            cursor.execute("UPDATE hunt_criteria SET filter_labels=? WHERE id=?",
+                           (str(filter_labels)[:1000], cursor.lastrowid))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"filter_labels save: {_e}")
     if filter_url:
         try:
             cursor.execute("UPDATE hunt_criteria SET filter_url=? WHERE id=?",
@@ -25771,7 +25800,8 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
             _db_locked, add_criterion, int(viewer_id), query, category, city,
             int(facts.get('price_to') or 0), 0,
             int(facts.get('price_from') or 0), 0, 0, 'any', '', None, '', 0,
-            str(parsed.get('filters') or ''), url)
+            str(parsed.get('filters') or ''), url,
+            json.dumps(facts.get('labels') or [], ensure_ascii=False))
     except Exception as e:
         # Наружу — точная причина: иначе человек видит «не удалось разобрать»,
         # хотя ссылка разобралась, а упало создание критерия.

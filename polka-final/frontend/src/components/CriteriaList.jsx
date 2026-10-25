@@ -86,9 +86,18 @@ export function CriteriaList({ items = [], loading = false, onRemove, onToggle, 
               <div className="hunt-crit-chips">
                 {/* У критерия из ссылки отбор делает Авито: писать «любые
                     подходящие» неправда — условия есть, они в фильтрах. */}
-                {String(c.filter_url || '').startsWith('http')
-                  ? <Badge>фильтры Авито</Badge>
-                  : <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>}
+                {(() => {
+                  // Все условия, которые удалось прочитать из ссылки
+                  let labels = []
+                  try { labels = JSON.parse(c.filter_labels || '[]') } catch (e) { labels = [] }
+                  if (!Array.isArray(labels)) labels = []
+                  const isLink = String(c.filter_url || '').startsWith('http')
+                  if (isLink && labels.length) {
+                    return labels.map((x, i) => <Badge key={i}>{x}</Badge>)
+                  }
+                  if (isLink) return <Badge>фильтры Авито</Badge>
+                  return <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>
+                })()}
                 {c.min_price ? <Badge>от {money(c.min_price)} ₽</Badge> : null}
                 {c.max_price ? <Badge>до {money(c.max_price)} ₽</Badge> : null}
                 {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
