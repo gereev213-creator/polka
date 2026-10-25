@@ -29720,52 +29720,41 @@ async def _prune_loop() -> None:
                 # Своё соединение: общее нельзя использовать из двух потоков
                 # одновременно — именно из-за этого приём находок падал с
                 # «bad parameter or other API misuse», пока шла чистка.
-                conn = sqlite3.connect(db.db_path, timeout=10, check_same_thread=False)
+                import sqlite3 as _sq
+                conn = _sq.connect(db.db_path, timeout=10, check_same_thread=False)
                 try:
                     conn.execute("PRAGMA busy_timeout=10000")
                     return _prune_with(conn)
                 finally:
                     conn.close()
+
             def _prune_with(conn) -> int:
                 cur = conn.cursor()
                 total = 0
-                # Сначала — то, что не подошло: такие строки лента не
-                # показывает никогда. Проверяем по каждому совпадению
-                # отдельно, потому что одно и то же объявление может
-                # подойти одному человеку и не подойти другому.
-                while True:
-                    cur.execute(
-                        f"DELETE FROM hunt_matches WHERE id IN ("
-                        f"  SELECT id FROM hunt_matches WHERE NOT ({HUNT_VISIBLE_SQL})"
-                        f"  LIMIT 2000)")
-                    n = cur.rowcount or 0
-                    conn.commit()
-                    total += n
-                    if n < 2000:
-                        break
-                # Затем прореживание. PARTITION BY user_id, crit_id — у двух
-                # людей с одинаковым критерием это разные наборы, и удаление
-                # у одного не задевает другого.
-                while True:
+                # Мелкие пачки с паузами: одна огромная чистка (было 127 тыс.
+                # строк) держала блокировку записи минутами и роняла приём
+                # находок с «database is locked».
+                for _ in range(20):
                     cur.execute(
                         "DELETE FROM hunt_matches WHERE id IN ("
                         "  SELECT id FROM ("
                         "    SELECT id, ROW_NUMBER() OVER ("
                         "      PARTITION BY user_id, crit_id ORDER BY id DESC) AS rn"
                         "    FROM hunt_matches"
-                        "  ) WHERE rn > 400 LIMIT 2000)")
+                        "  ) WHERE rn > 400 LIMIT 500)")
                     n = cur.rowcount or 0
                     conn.commit()
                     total += n
-                    if n < 2000:
+                    if n < 500:
                         break
+                    time.sleep(0.25)
                 return total
             removed = await asyncio.to_thread(_db_locked, _prune)
             if removed:
                 logger.info(f"prune hunt_matches: удалено {removed}")
         except Exception as e:
             logger.warning(f"prune loop: {e}")
-        await asyncio.sleep(900)
+        await asyncio.sleep(2700)
 
 
 async def api_admin_import_users(request: aiohttp_web.Request) -> aiohttp_web.Response:
