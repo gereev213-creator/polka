@@ -4372,3 +4372,59 @@
 @media (prefers-reduced-motion: reduce) {
   .app-shell .tabbar-pill, .tabbar-pill { transition: none; }
 }
+
+/* ── 60. Цена в карточке — факт, а не кнопка ──────────────────────────────
+   Была синяя кнопка во всю ширину карточки: в ленте появлялись две
+   «кнопки» — цена и действие, и непонятно, что нажимается. В референсе
+   цена — компактная капсула с числом. Синий остаётся только для действий. */
+.app-shell .product-body .product-price, .product-body .product-price,
+.app-shell .product-price, .product-price {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .product-price:active, .product-price:active { filter: brightness(1.1); }
+
+/* Лот: галерея не должна занимать весь экран — под ней прятались название
+   и цена, и объявление открывалось «слепым». */
+.app-shell .detail-hero, .detail-hero {
+  min-height: 0;
+  max-height: 46vh;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+/* Цена в карточке «Рекомендуем» — тоже капсула, а не кнопка */
+.app-shell .recommend-price, .recommend-price {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+/* Рекомендация: пустая область под фото не должна занимать пол-карточки */
+.app-shell .recommend-card .recommend-figure, .recommend-card .recommend-figure {
+  max-height: 132px;
+  overflow: hidden;
+}
