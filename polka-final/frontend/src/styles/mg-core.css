@@ -308,16 +308,20 @@
 .app-shell .tabbar-group, .tabbar-group {
   display: flex;
   align-items: center;
+  justify-content: space-around;
   flex: 1;
-  gap: 2px;
+  gap: 0;
 
 }
 
 .app-shell .tabbar-item, .tabbar-item {
   flex: 1;
   min-width: 0;
-  /* 65×40 — отношение 1.63: горизонтальная таблетка в доке 58 */
-  height: 40px;
+  /* Как в референсе: активная вкладка — КРУГ вокруг иконки, а не широкая
+     плашка. Поэтому ширина и высота равны, радиус 50%. */
+  height: 44px;
+  flex: 0 0 44px;
+  width: 44px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -4315,7 +4319,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  border-radius: 999px;
+  border-radius: 50%;
   transition: background-color .18s ease, transform .18s ease;
 }
 .app-shell .tabbar-item.is-active, .tabbar-item.is-active {
