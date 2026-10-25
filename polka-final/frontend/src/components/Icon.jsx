@@ -1,4 +1,31 @@
 
+
+// Заливные иконки: в референсе навигация сплошная, а не обводкой.
+// Здесь только те, что читаются замкнутым контуром: дом, маркет, профиль,
+// закладка и плюс. Линейные (стрелки, лупа, ссылка) остаются обводкой —
+// заливка из них сделала бы кляксу.
+const solidPaths = {
+  search: [<path key="1" d="M10.5 3a7.5 7.5 0 0 1 5.9 12.1l4.3 4.3a1.3 1.3 0 0 1-1.8 1.8l-4.3-4.3A7.5 7.5 0 1 1 10.5 3Zm0 2.2a5.3 5.3 0 1 0 0 10.6 5.3 5.3 0 0 0 0-10.6Z" />],
+  heart: [<path key="1" d="M12 21s-8.5-5.1-8.5-11A4.6 4.6 0 0 1 12 6.4 4.6 4.6 0 0 1 20.5 10c0 5.9-8.5 11-8.5 11Z" />],
+  star: [<path key="1" d="m12 3 2.7 5.9 6.3.7-4.7 4.3 1.3 6.3L12 17.9 6.4 20.2l1.3-6.3L3 9.6l6.3-.7L12 3Z" />],
+  clock: [<path key="1" d="M12 2.5a9.5 9.5 0 1 0 0 19 9.5 9.5 0 0 0 0-19Zm1.2 4.6v5l3.6 2.1-1.1 1.9-4.7-2.7V7.1h2.2Z" />],
+  check: [<path key="1" d="M9.6 17.4 4.2 12l1.7-1.7 3.7 3.7 8-8 1.7 1.7-9.7 9.7Z" />],
+  close: [<path key="1" d="m6.4 4.6 5.6 5.6 5.6-5.6 1.8 1.8L13.8 12l5.6 5.6-1.8 1.8L12 13.8l-5.6 5.6-1.8-1.8L10.2 12 4.6 6.4l1.8-1.8Z" />],
+  fire: [<path key="1" d="M12.6 2.2c.4 3.2-1.6 4.4-3 6.1-1.3 1.6-2.2 3-2.2 5a4.6 4.6 0 0 0 9.2 0c0-1.2-.4-2.2-1-3.2-.3 1-.9 1.7-1.7 2-.1-3.3-.8-6.9-1.3-9.9Z" />],
+  bag: [<path key="1" d="M7.2 7V6a4.8 4.8 0 0 1 9.6 0v1h2.4c.5 0 .9.4.9.9l1 12.1a1 1 0 0 1-1 1.1H3.9a1 1 0 0 1-1-1.1l1-12.1c0-.5.4-.9.9-.9h2.4Zm2 0h5.6V6a2.8 2.8 0 0 0-5.6 0v1Z" />],
+  home: [<path key="1" d="M12 2.6 2.6 10.2c-.4.3-.6.8-.6 1.3V21a1 1 0 0 0 1 1h6v-6.6h6V22h6a1 1 0 0 0 1-1v-9.5c0-.5-.2-1-.6-1.3L12 2.6Z" />],
+
+  user: [
+    <path key="1" d="M12 2.8a4.3 4.3 0 1 0 0 8.6 4.3 4.3 0 0 0 0-8.6Z" />,
+    <path key="2" d="M12 13.2c-4.1 0-7.2 2.3-8.1 5.7-.2.6.3 1.1 1 1.1h14.2c.7 0 1.2-.5 1-1.1-.9-3.4-4-5.7-8.1-5.7Z" />,
+  ],
+  bookmark: [<path key="1" d="M6 3h12a1 1 0 0 1 1 1v17.2c0 .8-.9 1.3-1.6.8L12 18l-5.4 4c-.7.5-1.6 0-1.6-.8V4a1 1 0 0 1 1-1Z" />],
+  plus: [<path key="1" d="M11 4h2v7h7v2h-7v7h-2v-7H4v-2h7V4Z" />],
+}
+
+// «маркет» в навигации — та же сумка, что bag
+solidPaths.market = solidPaths.bag
+
 const iconPaths = {
   // Стрелка «открыть на сайте»: ведёт на исходное объявление Авито.
   // Была строкой, а не узлом: React вставлял текст внутрь <svg>, и иконка
@@ -49,8 +76,12 @@ const iconPaths = {
 
 export function Icon({ name, className = '' }) {
   return (
-    <svg className={`icon-svg ${className}`.trim()} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      {iconPaths[name]}
+    <svg className={`icon-svg ${className}`.trim()} viewBox="0 0 24 24"
+      fill={solidPaths[name] ? 'currentColor' : 'none'}
+      stroke={solidPaths[name] ? 'none' : 'currentColor'}
+      strokeWidth={solidPaths[name] ? '0' : '1.8'}
+      strokeLinecap="round" strokeLinejoin="round">
+      {solidPaths[name] ? solidPaths[name] : iconPaths[name]}
     </svg>
   )
 }
