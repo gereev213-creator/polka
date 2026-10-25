@@ -5045,3 +5045,30 @@
   height: 48px;
   margin: 0 auto;
 }
+
+/* ── 73. Док по варианту A (MemGift) ──────────────────────────────────────
+   Плашка — четверть капсулы и 80 % её высоты, светлая, без обводки.
+   Кнопка «+» стоит рядом, а не наезжает на капсулу. */
+.app-shell .tabbar, .tabbar { height: 62px; padding: 0 6px; }
+.app-shell .tabbar-group, .tabbar-group {
+  padding: 0 2px;
+  gap: 0;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 1 1 0;
+  max-width: none;
+  width: auto;
+  height: 50px;            /* 80 % от 62 */
+  margin: 0 2px;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+}
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: rgba(255, 255, 255, .10);
+  box-shadow: none;
+}
+.app-shell .tabbar-item .icon-svg, .tabbar-item .icon-svg {
+  width: 24px;
+  height: 24px;
+}
