@@ -289,11 +289,10 @@
 }
 
 .app-shell .tabbar, .tabbar {
-  /* Узкая капсула: не растягиваемся на всю ширину, а держим четыре иконки */
-  flex: 0 0 auto;
-  width: 248px;
-  margin: 0 auto;
-  height: 64px;
+  /* Ширина как была — на всю доступную; уменьшаем ВЫСОТУ, чтобы плашка
+     внутри была таблеткой, а не кругом. */
+  flex: 1 1 auto;
+  height: 58px;
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -311,18 +310,14 @@
   align-items: center;
   flex: 1;
   gap: 2px;
-  /* Док не растягивается на всю ширину: узкая капсула, как в референсе.
-     От этого и внутренняя плашка становится аккуратнее — она занимает
-     четверть капсулы, а не четверть экрана. */
-  max-width: 232px;
-  margin: 0 auto;
+
 }
 
 .app-shell .tabbar-item, .tabbar-item {
   flex: 1;
   min-width: 0;
-  /* Овал, а не круг: 56×44 даёт отношение 1.27 — таблетка внутри дока 64 */
-  height: 44px;
+  /* 65×40 — отношение 1.63: горизонтальная таблетка в доке 58 */
+  height: 40px;
   padding: 0;
   display: inline-flex;
   align-items: center;
