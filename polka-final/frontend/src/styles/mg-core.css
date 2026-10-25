@@ -5875,3 +5875,94 @@
   color: rgba(255, 255, 255, .45);
   margin-bottom: 14px;
 }
+
+/* ── 84. Карточка товара по макету Superdesign ─────────────────────────── */
+/* Цена — синяя пилюля 44, радиус 999, 28/700 */
+.app-shell .detail-price-block, .detail-price-block { margin: 14px 0 12px; }
+.app-shell .detail-price, .detail-price {
+  display: inline-flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 18px;
+  border-radius: 999px;
+  background: #1E7BFF;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+/* Название 24/700, две строки */
+.app-shell .detail-head .listing-title, .detail-head .listing-title,
+.app-shell .listing-title, .listing-title {
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+/* Метки: тёмные пилюли 34 с иконкой */
+.app-shell .listing-tags, .listing-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.app-shell .listing-tags .tag, .listing-tags .tag,
+.app-shell .detail-head .tag, .detail-head .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .75);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+}
+/* Описание */
+.app-shell .detail-desc, .detail-desc,
+.app-shell .listing-desc, .listing-desc {
+  font-size: 15px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, .70);
+  margin-top: 14px;
+}
+/* Служебное удаление — серое, по центру, мелкое */
+.app-shell .danger-text-btn, .danger-text-btn {
+  display: block;
+  margin: 18px auto 0;
+  background: transparent;
+  color: rgba(255, 255, 255, .35);
+  font-size: 13px;
+  font-weight: 500;
+  height: auto;
+  padding: 8px 12px;
+  text-align: center;
+}
+/* Панель действий: кнопка-пилюля + два круга, как в макете */
+.app-shell .detail-bar, .detail-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 20px;
+  background: #141414;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .06);
+}
+.app-shell .detail-bar .cta-primary, .detail-bar .cta-primary {
+  flex: 1;
+  height: 44px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.app-shell .detail-bar .cta-round, .detail-bar .cta-round {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+}
