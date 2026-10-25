@@ -4547,3 +4547,32 @@
   fill: #5aa9ff;
   color: #5aa9ff;
 }
+
+/* ── 65. Мелочи на экране лота ─────────────────────────────────────────── */
+/* «ЦЕНА» над числом не нужна: число и так читается как цена */
+.app-shell .detail-price-label, .detail-price-label {
+  display: none;
+}
+/* Пустой кадр без фото не должен занимать пол-экрана */
+.app-shell .detail-hero:not(:has(img)) .media-placeholder,
+.detail-slide .media-placeholder:not(:has(img)) {
+  max-height: 240px;
+}
+.app-shell .detail-hero, .detail-hero {
+  max-height: 46vh;
+}
+/* «Удалить лот из находок» — служебное действие, тише основного */
+.app-shell .detail-bar + .link-danger, .link-danger,
+.app-shell .detail-remove, .detail-remove {
+  font-size: 13px;
+  opacity: .55;
+}
+
+/* Кадр лота: без фото — не выше 34vh, с фото — 46vh. Плашка заполняет
+   кадр целиком, иначе видно шов между ней и фоном. */
+.app-shell .detail-hero, .detail-hero { max-height: 34vh; }
+.app-shell .detail-slide, .detail-slide { height: 34vh; }
+.app-shell .detail-slide .media-placeholder, .detail-slide .media-placeholder {
+  height: 100%;
+  min-height: 0;
+}
