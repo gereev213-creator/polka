@@ -313,8 +313,9 @@
 .app-shell .tabbar-item, .tabbar-item {
   flex: 1;
   min-width: 0;
-  /* Почти вплотную к краям дока, как в референсе: 60 из 68 */
-  height: 60px;
+  /* Овал, а не круг: при ширине 65 высота 60 давала почти окружность.
+     48 — плашка читается как горизонтальная таблетка внутри дока (68). */
+  height: 48px;
   padding: 0;
   display: inline-flex;
   align-items: center;
