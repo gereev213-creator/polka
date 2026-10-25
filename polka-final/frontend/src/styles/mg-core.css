@@ -4914,3 +4914,13 @@
       rgba(120, 175, 255, .25) 66%,
       rgba(150, 200, 255, .85) 100%) border-box;
 }
+
+/* У панели действий не должно быть тяжёлой тени: она ложилась на кнопки
+   под панелью и перекрывала их тёмной пеленой. */
+.app-shell .detail-bar, .detail-bar {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .07);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: #141414;
+  margin: 16px 0 8px;
+}
