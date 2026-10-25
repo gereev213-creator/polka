@@ -4815,3 +4815,12 @@
   font-weight: 700;
   letter-spacing: -0.01em;
 }
+
+/* Плашка активной вкладки — без обводки и светлой полосы сверху:
+   остаётся только ровная заливка, как в референсе. */
+.app-shell .tabbar-pill, .tabbar-pill,
+.app-shell .tabbar-pill.is-ready, .tabbar-pill.is-ready {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
