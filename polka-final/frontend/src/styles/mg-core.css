@@ -4793,3 +4793,25 @@
   color: #dbe9ff;
   box-shadow: none;
 }
+
+/* ── 69. Цена — как кнопка цены в референсе ──────────────────────────────
+   Не тёмная подложка и не узкая плашка, а яркая синяя пилюля с белым
+   числом, скруглением 999 и светлой полосой сверху. */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  margin-top: 10px;
+  padding: 0 14px;
+  border: 1px solid rgba(140, 190, 255, .45);
+  border-radius: 999px;
+  background: #1e7bff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
