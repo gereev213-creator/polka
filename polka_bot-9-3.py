@@ -3447,6 +3447,18 @@ class Database:
         if row:
             ad_dict = dict(row)
             ad_dict['photos'] = json.loads(ad_dict['photos']) if ad_dict['photos'] else []
+            # Контакт продавца: чатов в приложении больше нет, договариваются
+            # в Telegram по нику. Берём его из users одним запросом.
+            try:
+                cur2 = self.conn.cursor()
+                cur2.execute("SELECT username, first_name FROM users WHERE user_id=?",
+                             (ad_dict.get('user_id'),))
+                u = cur2.fetchone()
+                if u:
+                    ad_dict['seller_username'] = u['username'] or ''
+                    ad_dict['seller_name'] = u['first_name'] or ''
+            except Exception:
+                pass
             return ad_dict
         return None
     

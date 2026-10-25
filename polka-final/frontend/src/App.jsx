@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-19'
+const APP_BUILD = '2026-10-25-20'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -2043,12 +2043,25 @@ function ListingPage() {
                   <Icon name="send" />
                   Открыть
                 </button>
-              ) : (
-                <button className="cta-primary" type="button" onClick={handleStartChat}>
-                  <Icon name="chat" />
-                  {chatLoading ? 'Открываем…' : 'Написать'}
-                </button>
-              )}
+              ) : item.seller_username ? (
+                  // Чатов в приложении нет: пишем продавцу прямо в Telegram
+                  // по нику из его профиля.
+                  <button className="cta-primary" type="button"
+                    onClick={() => {
+                      const url = `https://t.me/${String(item.seller_username).replace('@', '')}`
+                      const tg = window.Telegram?.WebApp
+                      if (tg?.openLink) tg.openLink(url)
+                      else window.open(url, '_blank', 'noopener')
+                    }}>
+                    <Icon name="send" />
+                    Написать в Telegram
+                  </button>
+                ) : (
+                  <button className="cta-primary" type="button" onClick={handleStartChat}>
+                    <Icon name="chat" />
+                    {chatLoading ? 'Открываем…' : 'Написать'}
+                  </button>
+                )}
               <button
                 className={`cta-round ${favoriteIds.includes(listingId) ? 'is-on' : ''}`}
                 type="button"
