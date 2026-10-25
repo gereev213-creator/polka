@@ -4869,3 +4869,19 @@
   box-shadow: none;
   border: 0;
 }
+
+/* Цена: обводка не по всему контуру, а светлым на верхнем левом и нижнем
+   правом углу — как в референсе. Делается двумя слоями фона: заливка по
+   padding-box и градиентная рамка по border-box. */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  border: 1px solid transparent;
+  box-shadow: none;
+  background:
+    linear-gradient(#1e7bff, #1e7bff) padding-box,
+    linear-gradient(140deg,
+      rgba(255, 255, 255, .60) 0%,
+      rgba(255, 255, 255, .08) 32%,
+      rgba(255, 255, 255, .08) 68%,
+      rgba(255, 255, 255, .50) 100%) border-box;
+}
