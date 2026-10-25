@@ -42,17 +42,21 @@ export function BottomNav() {
     setPill({ x: r.left - g.left, w: r.width, ready: true })
   }
 
+  // Следим и за search: «Маркет» меняет не путь, а параметр ?tab=board,
+  // поэтому плашка оставалась на «Главной», пока вкладка уже открыта.
   useLayoutEffect(() => {
     measure()
+    const t2 = setTimeout(measure, 60)
+    return () => clearTimeout(t2)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname, location.search, location.key])
 
   useEffect(() => {
     const onResize = () => measure()
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   return (
     <div className="tabbar-wrap">
