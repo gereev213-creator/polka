@@ -4981,3 +4981,20 @@
 .app-shell .cta-button:active, .cta-button:active {
   background: #1A6FE6;
 }
+
+/* ── 71. Док без дрожи ────────────────────────────────────────────────────
+   space-around распределял вкладки по остатку ширины: при любой смене
+   экрана (скролл, появление док) доли пересчитывались, и плашка ездила
+   туда-сюда. Фиксированные ширина и зазор делают позиции постоянными. */
+.app-shell .tabbar-group, .tabbar-group {
+  justify-content: center;
+  gap: 8px;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 0 0 68px;
+  width: 68px;
+}
+.app-shell .tabbar-pill, .tabbar-pill {
+  transition: transform .26s cubic-bezier(.32, .72, 0, 1);
+  will-change: transform;
+}
