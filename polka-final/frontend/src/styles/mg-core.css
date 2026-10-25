@@ -4784,3 +4784,12 @@
 }
 /* Крупная цена на лоте остаётся текстом, но чистого синего */
 .app-shell .detail-price, .detail-price { color: #cfe3ff; }
+
+/* Цена и главное действие не должны быть одного веса: кнопка «Открыть» —
+   единственная сплошная синяя, цена — тише, но того же оттенка. */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  background: rgba(42, 102, 255, .16);
+  color: #dbe9ff;
+  box-shadow: none;
+}
