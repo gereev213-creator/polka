@@ -4454,3 +4454,30 @@
 @media (prefers-reduced-motion: reduce) {
   .app-shell .sk-box, .sk-box, .app-shell .sk-line, .sk-line { animation: none; }
 }
+
+/* ── 62. Подложка под фото по категории ───────────────────────────────────
+   Цвет берётся из --cat-hue, который ставит карточка. Насыщенность низкая:
+   подложка должна поддерживать фото, а не спорить с ним. Категории без
+   цвета получают нейтральный фон. */
+.app-shell .product-card .product-figure, .product-card .product-figure {
+  background:
+    radial-gradient(120% 90% at 50% 0%,
+      hsl(var(--cat-hue, 0) 42% 26% / .55) 0%,
+      hsl(var(--cat-hue, 0) 30% 12% / .25) 55%,
+      rgba(20, 20, 20, 0) 100%),
+    #141414;
+}
+.app-shell .product-card:has(.product-figure) .product-figure[style],
+.product-card .product-figure { transition: background-color .2s ease; }
+
+/* Тот же оттенок — на самую плашку фото: она перекрывала фон карточки,
+   поэтому цвет не был виден. */
+.app-shell .product-figure .media-placeholder,
+.app-shell .product-figure .media-placeholder img,
+.product-figure .media-placeholder {
+  background-color: hsl(var(--cat-hue, 0) 30% 14%);
+  background-image: radial-gradient(120% 90% at 50% 0%,
+    hsl(var(--cat-hue, 0) 45% 28% / .75) 0%,
+    hsl(var(--cat-hue, 0) 30% 13% / .35) 60%,
+    rgba(20, 20, 20, .1) 100%);
+}

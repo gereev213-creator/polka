@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-18'
+const APP_BUILD = '2026-10-25-19'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -342,6 +342,31 @@ function relTime(item) {
   return `${Math.round(h / 24)} дн назад`
 }
 
+
+/* Оттенок подложки по категории: в референсе каждый лот лежит на своём
+   цвете, и лента читается витриной. У нас подложка под фото, а не вся
+   карточка — с реальными фотографиями полный цвет выглядел бы пятном. */
+const CAT_HUE = {
+  'Электроника': 214,
+  'Одежда': 282,
+  'Обувь': 282,
+  'Дом': 152,
+  'Транспорт': 34,
+  'Недвижимость': 196,
+  'Хобби': 320,
+  'Детям': 46,
+  'Животные': 96,
+  'Работа': 250,
+  'Услуги': 250,
+}
+function catHue(item) {
+  const c = String(item?.category || '')
+  for (const key of Object.keys(CAT_HUE)) {
+    if (c.toLowerCase().includes(key.toLowerCase())) return CAT_HUE[key]
+  }
+  return 0
+}
+
 function ProductCard({ item, favorite = false, onToggleFavorite }) {
   // Карточка в духе Memgift: фото живёт в своей внутренней плашке, бейдж
   // источника лежит на фото, ниже название, внизу — синяя пилюля цены.
@@ -382,6 +407,7 @@ function ProductCard({ item, favorite = false, onToggleFavorite }) {
 
   return (
     <a className="product-card" role="link" tabIndex={0}
+      style={{ '--cat-hue': catHue(item) }}
       href={`#/listing/${item.id}`}
       onClick={(e) => { e.preventDefault(); openCard() }}
       onPointerUp={openCardByPointer}
