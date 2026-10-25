@@ -4824,3 +4824,14 @@
   outline: 0;
   box-shadow: none;
 }
+
+/* Цена — ровная синяя пилюля без обводки и светлой полосы: рамка из
+   прошлой правки читалась как контур и портила вид. */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: #1e7bff;
+  color: #fff;
+}
