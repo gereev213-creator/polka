@@ -289,10 +289,11 @@
 }
 
 .app-shell .tabbar, .tabbar {
-  /* Ширина как была — на всю доступную; уменьшаем ВЫСОТУ, чтобы плашка
-     внутри была таблеткой, а не кругом. */
+  /* Капсула: 64 в высоту и шире — в референсе активная плашка занимает
+     примерно четверть её длины и вытянута по горизонтали. */
   flex: 1 1 auto;
-  height: 58px;
+  max-width: calc(100% - 74px);
+  height: 64px;
   display: flex;
   align-items: center;
   padding: 0 8px;
@@ -317,11 +318,11 @@
 .app-shell .tabbar-item, .tabbar-item {
   flex: 1;
   min-width: 0;
-  /* Как в референсе: активная вкладка — КРУГ вокруг иконки, а не широкая
-     плашка. Поэтому ширина и высота равны, радиус 50%. */
-  height: 44px;
-  flex: 0 0 44px;
-  width: 44px;
+  /* Как в референсе: широкая таблетка 78×50 внутри капсулы 64 — отношение
+     около 1.6. Не круг: круглый вариант уже пробовали, он не подходит. */
+  height: 48px;
+  flex: 0 0 68px;
+  width: 68px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -4319,7 +4320,7 @@
   position: relative;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: 999px;
   transition: background-color .18s ease, transform .18s ease;
 }
 .app-shell .tabbar-item.is-active, .tabbar-item.is-active {
