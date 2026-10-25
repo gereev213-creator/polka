@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-6'
+const APP_BUILD = '2026-10-26-7'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -3364,16 +3364,21 @@ function TariffsPage() {
             карточка «Плюса» с составом, недельный вход отдельной строкой. */}
         {cardPlans.length ? (
           <>
-            {longPlans.length ? (
+            {cardPlans.length ? (
               <div className="tg2">
-                {longPlans.map((pl) => (
-                  <button key={pl.product} type="button"
-                    className={term === pl.product ? 'on' : ''}
-                    onClick={() => setTerm(pl.product)} disabled={busy}>
-                    {pl.days} дней
-                    {pl.days >= 90 ? <em> −20 %</em> : null}
-                  </button>
-                ))}
+                {cardPlans.map((pl) => {
+                  const days = Number(pl.days) || 0
+                  const label = days <= 7 ? 'Неделя'
+                    : days >= 90 ? `${days} дней` : `${days} дней`
+                  return (
+                    <button key={pl.product} type="button"
+                      className={term === pl.product ? 'on' : ''}
+                      onClick={() => setTerm(pl.product)} disabled={busy}>
+                      {label}
+                      {days >= 90 ? <em> −20 %</em> : null}
+                    </button>
+                  )
+                })}
               </div>
             ) : null}
 
@@ -3382,7 +3387,14 @@ function TariffsPage() {
                 <span className="plan-badge">Чаще берут</span>
                 <div className="plan-top">
                   <b>Плюс</b>
-                  <span>{chosen.amount} ₽<small> за {chosen.days} дней</small></span>
+                  <span>
+                    {chosen.amount} ₽
+                    <small>
+                      {Number(chosen.days) > 0
+                        ? ` · ${Math.round(Number(chosen.amount) / Number(chosen.days))} ₽ в день`
+                        : ` за ${chosen.days} дней`}
+                    </small>
+                  </span>
                 </div>
                 <div className="plan-ft"><i>✓</i>{plusMax} критериев</div>
                 <div className="plan-ft"><i>✓</i>В чат сразу, без задержки</div>
