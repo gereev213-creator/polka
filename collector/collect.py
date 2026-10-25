@@ -1290,7 +1290,9 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
                 _slug0 = _path[0] if _path else ''
                 _sub_word = CATEGORY_SUBSTITUTE_WORD.get(_slug0)
                 if _sub_word:
-                    local['words'] = list(local.get('words') or []) + [_sub_word]
+                    # только слово раздела: код модели (do50) в заголовках
+                    # не встречается, и требование обоих слов давало 0 из 50
+                    local['words'] = [_sub_word]
             except Exception:
                 pass
             cat_page = category_url_from(direct_url)
