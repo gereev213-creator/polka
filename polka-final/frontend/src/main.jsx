@@ -26,6 +26,16 @@ import './styles/pages/create.css'
 import './styles/memgift-final.css'
 import './styles/mg-core.css'
 
+// Приложение открывается с главной. Telegram запоминает адрес мини-приложения
+// вместе с хешем, поэтому после перезапуска человек оказывался на том же
+// экране (лот, критерии) и должен был вручную жать «домик».
+if (typeof window !== 'undefined' && !window.sessionStorage.getItem('dsh_start_reset')) {
+  window.sessionStorage.setItem('dsh_start_reset', '1')
+  if (window.location.hash && window.location.hash !== '#/') {
+    window.location.hash = '#/'
+  }
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

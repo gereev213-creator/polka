@@ -4861,3 +4861,11 @@
   padding: 8px;
   border-radius: 20px;
 }
+
+/* Внутренняя группа дока не должна иметь своей плашки: из-за неё при
+   открытии казалось, что подсвечен весь док целиком, а не одна вкладка. */
+.app-shell .tabbar-group, .tabbar-group {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+}
