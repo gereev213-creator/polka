@@ -5303,3 +5303,57 @@
   margin-left: auto;
   background: rgba(255, 255, 255, .12);
 }
+
+/* ── 78. Поиск лотов: поле видно, кнопка яркая ─────────────────────────── */
+.app-shell .hunt-field, .hunt-field {
+  background: #0f0f0f;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .10);
+  margin-top: 10px;
+}
+.app-shell .hunt-field input, .hunt-field input {
+  height: 52px;
+  padding: 0 14px;
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 15px;
+}
+.app-shell .hunt-field input::placeholder, .hunt-field input::placeholder {
+  color: rgba(255, 255, 255, .38);
+}
+.app-shell .hunt-field:focus-within, .hunt-field:focus-within {
+  box-shadow: inset 0 0 0 1.5px rgba(30, 123, 255, .8);
+}
+
+/* Кнопка «Найти лоты»: выключенное состояние тоже читается синим */
+.app-shell .hunt-cta, .hunt-cta {
+  height: 50px;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.app-shell .hunt-cta:disabled, .hunt-cta:disabled,
+.app-shell .hunt-cta[disabled], .hunt-cta[disabled] {
+  background: rgba(30, 123, 255, .45);
+  color: rgba(255, 255, 255, .85);
+  opacity: 1;
+}
+
+/* Кнопка поиска: включённая — сплошной #1E7BFF, выключенная — тоже синяя,
+   но приглушённая, без «стеклянного» вида. */
+.app-shell .hunt-cta:not(:disabled), .hunt-cta:not(:disabled) {
+  background: #1E7BFF;
+  color: #fff;
+  box-shadow: none;
+}
+.app-shell .hunt-cta:disabled, .hunt-cta:disabled {
+  background: #1A4FA8;
+  color: rgba(255, 255, 255, .75);
+  box-shadow: none;
+}
+/* Подпись под кнопкой — в одну строку */
+.app-shell .hunt-eta, .hunt-eta {
+  font-size: 12px;
+  line-height: 1.35;
+}

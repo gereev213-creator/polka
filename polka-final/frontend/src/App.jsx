@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-4'
+const APP_BUILD = '2026-10-26-5'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1611,8 +1611,8 @@ function HuntLinkPage() {
       <div className="section-label">Ссылка с Авито</div>
       <div className="hunt-h1">Вставьте ссылку с Авито</div>
       <div className="hunt-sub">
-        Выставьте фильтры на площадке и скопируйте адрес из строки браузера.
-        Город, цена и категория перенесутся сами.
+        Выставьте фильтры на Авито и скопируйте адрес — остальное перенесётся само.
+
       </div>
 
       <div className="hunt-card">
