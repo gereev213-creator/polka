@@ -313,7 +313,8 @@
 .app-shell .tabbar-item, .tabbar-item {
   flex: 1;
   min-width: 0;
-  height: 52px;
+  /* Почти вплотную к краям дока, как в референсе: 60 из 68 */
+  height: 60px;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -4311,8 +4312,6 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 62px;
-  height: 44px;
   border-radius: 999px;
   transition: background-color .18s ease, transform .18s ease;
 }
