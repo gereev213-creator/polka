@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-12'
+const APP_BUILD = '2026-10-25-13'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1060,6 +1060,18 @@ function FeedPage() {
     (typeof window !== 'undefined' && (window.location.hash || '').includes('tab=board'))
       ? 'ads' : 'deals'
   )
+  // Переключение вкладки приходит не только при открытии экрана: нажатие
+  // «Маркет» в доке меняет hash у уже открытой главной. Слушаем изменение
+  // и переставляем вкладку.
+  // Реагируем на адрес через роутер, а не через window: NavLink меняет
+  // location, и эффект по search срабатывает гарантированно.
+  const feedLocation = useLocation()
+  useEffect(() => {
+    const s = feedLocation.search || ''
+    const h = typeof window !== 'undefined' ? (window.location.hash || '') : ''
+    if (s.includes('tab=board') || h.includes('tab=board')) setFeedTab('ads')
+    else if (s.includes('tab=findings') || h.includes('tab=findings')) setFeedTab('deals')
+  }, [feedLocation.search, feedLocation.key])
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
   const [showTop, setShowTop] = useState(false)

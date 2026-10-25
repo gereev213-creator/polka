@@ -15,19 +15,26 @@ export function BottomNav() {
   const itemRefs = useRef([])
   const [pill, setPill] = useState({ x: 0, w: 0, ready: false })
 
+  // «Маркет» ведёт на вкладку «Барахолка» главной, а не в поиск.
   const tabs = [
-    ['/', 'home'],
-    ['/search', 'market'],
+    ['/?tab=findings', 'home'],
+    ['/?tab=board', 'market'],
     ['/favorites', 'bookmark'],
     ['/profile', 'user'],
   ]
+  const board = (location.search || '').includes('tab=board') ||
+    (typeof window !== 'undefined' && (window.location.hash || '').includes('tab=board'))
+  const isTabActive = (to) => {
+    const path = location.pathname
+    if (to === '/?tab=findings') return path === '/' && !board
+    if (to === '/?tab=board') return path === '/' && board
+    return path.startsWith(to)
+  }
 
   const measure = () => {
     const group = groupRef.current
     if (!group) return
-    const activeIndex = Math.max(0, tabs.findIndex(([to]) => (
-      to === '/' ? location.pathname === '/' : location.pathname.startsWith(to)
-    )))
+    const activeIndex = Math.max(0, tabs.findIndex(([to]) => isTabActive(to)))
     const el = itemRefs.current[activeIndex]
     if (!el) return
     const g = group.getBoundingClientRect()
@@ -59,7 +66,7 @@ export function BottomNav() {
           {tabs.map(([to, icon], i) => (
             <NavLink key={to} to={to} end={to === '/'}
               ref={(el) => { itemRefs.current[i] = el }}
-              className={({ isActive }) => (isActive ? 'tabbar-item is-active' : 'tabbar-item')}
+              className={isTabActive(to) ? 'tabbar-item is-active' : 'tabbar-item'}
               aria-label={icon}>
               <Icon name={icon} />
             </NavLink>
