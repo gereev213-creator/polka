@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-14'
+const APP_BUILD = '2026-10-25-15'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1053,25 +1053,18 @@ function FeedPage() {
   const [activeCategory, setActiveCategory] = useState('Все')
   // Объявления или аукционы. Раньше аукционы жили отдельной вкладкой в доке,
   // но с шестью пунктами док переставал помещаться — перенесли сюда.
-  // Вкладку можно открыть ссылкой: из меню бота приходят
-  // /#/?tab=board и /#/?tab=findings. Читаем hash напрямую, чтобы
-  // не тянуть новый импорт роутера.
-  const [feedTab, setFeedTab] = useState(
-    (typeof window !== 'undefined' && (window.location.hash || '').includes('tab=board'))
-      ? 'ads' : 'deals'
-  )
-  // Переключение вкладки приходит не только при открытии экрана: нажатие
-  // «Маркет» в доке меняет hash у уже открытой главной. Слушаем изменение
-  // и переставляем вкладку.
-  // Реагируем на адрес через роутер, а не через window: NavLink меняет
-  // location, и эффект по search срабатывает гарантированно.
+  // Вкладка ленты — ПРОИЗВОДНАЯ от адреса, а не отдельное состояние.
+  // Раньше было useState + эффект, и они рассинхронивались: нажатие
+  // «Маркет» меняло адрес, но иногда не меняло состояние, и вкладка
+  // переключалась через раз.
   const feedLocation = useLocation()
-  useEffect(() => {
-    const s = feedLocation.search || ''
-    const h = typeof window !== 'undefined' ? (window.location.hash || '') : ''
-    if (s.includes('tab=board') || h.includes('tab=board')) setFeedTab('ads')
-    else if (s.includes('tab=findings') || h.includes('tab=findings')) setFeedTab('deals')
-  }, [feedLocation.search, feedLocation.key])
+  const feedNavigate = useNavigate()
+  const boardTab = (feedLocation.search || '').includes('tab=board') ||
+    (typeof window !== 'undefined' && (window.location.hash || '').includes('tab=board'))
+  const feedTab = boardTab ? 'ads' : 'deals'
+  const setFeedTab = (next) => {
+    feedNavigate(next === 'ads' ? '/?tab=board' : '/?tab=findings', { replace: true })
+  }
   const [items, setItems] = useState([])
   const [showDock, setShowDock] = useState(true)
   const [showTop, setShowTop] = useState(false)
