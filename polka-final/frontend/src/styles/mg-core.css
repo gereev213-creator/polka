@@ -5688,3 +5688,90 @@
   font-size: 15px;
   line-height: 1.2;
 }
+
+/* ── 82. Шаги 2–5 формы по макету (вариант B) ───────────────────────────── */
+/* Подпись поля — капсом, 12, приглушённая */
+.app-shell .ad-form .field-label-row, .ad-form .field-label-row {
+  margin: 20px 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .45px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+}
+/* Само поле: 48, радиус 14, тёмное, с рамкой */
+.app-shell .ad-form .text-input, .ad-form .text-input,
+.app-shell .ad-form textarea, .ad-form textarea {
+  width: 100%;
+  height: 48px;
+  padding: 0 14px;
+  border-radius: 14px;
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 15px;
+}
+.app-shell .ad-form textarea, .ad-form textarea {
+  height: auto;
+  min-height: 120px;
+  padding: 12px 14px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.app-shell .ad-form .text-input::placeholder, .ad-form .text-input::placeholder,
+.app-shell .ad-form textarea::placeholder, .ad-form textarea::placeholder {
+  color: rgba(255, 255, 255, .35);
+}
+.app-shell .ad-form .text-input:focus, .ad-form .text-input:focus,
+.app-shell .ad-form textarea:focus, .ad-form textarea:focus {
+  outline: 0;
+  border-color: #1E7BFF;
+}
+/* Подсказка под полем */
+.app-shell .ad-form .hint-note, .ad-form .hint-note,
+.app-shell .ad-form .plan-desc, .ad-form .plan-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, .40);
+}
+/* Плитка добавления фото — пунктирная, с иконкой камеры */
+.app-shell .ad-form .photo-add, .ad-form .photo-add,
+.app-shell .ad-form .photo-tile-add, .ad-form .photo-tile-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 108px;
+  height: 108px;
+  border-radius: 14px;
+  border: 1.5px dashed rgba(255, 255, 255, .18);
+  background: transparent;
+  color: rgba(255, 255, 255, .55);
+  font-size: 12px;
+}
+
+/* Плитка категории должна ловить нажатие: декор внутри не перекрывает клик,
+   а сама плитка поднята над сеткой. */
+.app-shell .category-grid, .category-grid { position: relative; }
+.app-shell .cat-tile, .cat-tile {
+  position: relative;
+  z-index: 1;
+  cursor: pointer;
+}
+.app-shell .cat-tile > *, .cat-tile > * { pointer-events: none; }
+.app-shell .cat-tile::after, .cat-tile::after { content: none; }
+
+/* Сетка категорий не должна перехватывать клики: её слой декоративный */
+.app-shell .category-grid, .category-grid {
+  pointer-events: none;
+}
+.app-shell .category-grid > *, .category-grid > * {
+  pointer-events: auto;
+}
+.app-shell .category-grid::before, .category-grid::before,
+.app-shell .category-grid::after, .category-grid::after {
+  content: none;
+  display: none;
+}
