@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-25'
+const APP_BUILD = '2026-10-25-26'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1235,15 +1235,9 @@ function FeedPage() {
   return (
     <div className="screen padded feed-screen">
       <TopBar left={<Logo />} />
-      <SegmentedControl
-        className="feed-switch"
-        value={feedTab}
-        onChange={setFeedTab}
-        options={[
-          { value: 'deals', label: 'Находки' },
-          { value: 'ads', label: 'Барахолка' },
-        ]}
-      />
+      {/* Переключатель убран: разделы живут в доке — «Главная» открывает
+          находки, «Маркет» — барахолку. Заголовок раздела заменил таблетку. */}
+      <div className="page-title feed-title">{feedTab === 'ads' ? 'Барахолка' : 'Находки'}</div>
       {feedTab === 'deals' ? (
         <>
           {/* Баннер-кнопка в раздел поиска лотов: картинка владельца,

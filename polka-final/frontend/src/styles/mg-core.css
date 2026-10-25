@@ -4576,3 +4576,13 @@
   height: 100%;
   min-height: 0;
 }
+
+/* Заголовок раздела вместо переключателя: он крупнее и не отнимает
+   полосу под таблетку, которая дублировала док. */
+.app-shell .feed-title, .feed-title {
+  margin: 2px 0 12px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
