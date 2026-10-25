@@ -29899,6 +29899,19 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'pause_others':
+        # Для проверки одного критерия: оставляем активным только указанный,
+        # остальные ставим на паузу, чтобы сборщик не тратил на них запросы.
+        keep = int((body or {}).get('keep') or 0)
+        if not keep:
+            return _miniapp_json({'ok': False, 'error': 'keep_required'}, status=400)
+        cur = db.conn.cursor()
+        cur.execute("UPDATE hunt_criteria SET active=0 WHERE id<>?", (keep,))
+        off = cur.rowcount
+        cur.execute("UPDATE hunt_criteria SET active=1 WHERE id=?", (keep,))
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'paused': off, 'kept': keep})
+
     if action == 'vacuum':
         def _vacuum() -> dict:
             cur = db.conn.cursor()
