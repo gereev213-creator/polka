@@ -29905,6 +29905,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'recompute':
+        # Пересчитать совпадения по уже скачанным объявлениям: после правки
+        # правил старые записи остаются отклонёнными, а заново они не
+        # пересчитываются, потому что объявления уже в базе (дубли).
+        crit = int((body or {}).get('crit') or 0)
+        try:
+            n = await asyncio.to_thread(_db_locked, hunt_matches_recompute, None, crit or None)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
+        return _miniapp_json({'ok': True, 'recomputed': n})
+
     if action == 'pause_others':
         # Для проверки одного критерия: оставляем активным только указанный,
         # остальные ставим на паузу, чтобы сборщик не тратил на них запросы.
