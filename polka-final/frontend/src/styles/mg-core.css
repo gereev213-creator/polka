@@ -4924,3 +4924,60 @@
   background: #141414;
   margin: 16px 0 8px;
 }
+
+/* ── 70. Один синий на всё приложение ─────────────────────────────────────
+   Сейчас в интерфейсе жили три разных синих: #0A84FF (--accent),
+   #2A66FF (кнопки) и #1E7BFF (цена). Из-за этого кнопка в панели лота
+   выглядела тёмной и «не нашей». Оставляем один токен и одно значение. */
+:root {
+  --accent: #1E7BFF;
+  --accent-strong: #1A6FE6;
+  --accent-soft: rgba(30, 123, 255, .16);
+}
+
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn,
+.app-shell .detail-bar .cta-primary, .detail-bar .cta-primary,
+.app-shell .btn-primary, .btn-primary {
+  background: #1E7BFF;
+  border: 0;
+  color: #fff;
+  box-shadow: none;
+}
+.app-shell .cta-primary:active, .cta-primary:active,
+.app-shell .detail-bar .cta-primary:active, .detail-bar .cta-primary:active {
+  background: #1A6FE6;
+}
+
+/* Ссылки и акцентные иконки — тот же синий, но светлее */
+.app-shell .link-accent, .link-accent,
+.app-shell .crit-open, .crit-open {
+  color: #6FB6FF;
+}
+
+/* Чипы-условия: мягкая подложка того же оттенка */
+.app-shell .hunt-chip.is-main, .hunt-chip.is-main,
+.app-shell .crit-chip.is-main, .crit-chip.is-main {
+  background: rgba(30, 123, 255, .16);
+  color: #9DC4FF;
+  box-shadow: inset 0 0 0 1px rgba(30, 123, 255, .35);
+}
+
+/* Кнопки на тарифах и в создании объявления жили на градиенте
+   #3890FF→#1470F5 из memgift-final.css и выбивались из общего синего. */
+.app-shell .primary-btn, .primary-btn,
+.app-shell .cta-button, .cta-button {
+  background: #1E7BFF;
+  background-image: none;
+  border: 0;
+  border-radius: 14px;
+  min-height: 44px;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 700;
+  box-shadow: none;
+}
+.app-shell .primary-btn:active, .primary-btn:active,
+.app-shell .cta-button:active, .cta-button:active {
+  background: #1A6FE6;
+}
