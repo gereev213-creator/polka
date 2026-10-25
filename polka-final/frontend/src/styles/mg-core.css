@@ -4677,3 +4677,71 @@
 }
 /* Запас снизу, чтобы панель не наезжала на последний текст */
 .app-shell .listing-page, .listing-page { padding-bottom: 24px; }
+
+/* ── 67. Карточка ленты: фото в край, цена без обводки ────────────────────
+   Было: фото с отступом внутри карточки (двойная рамка), цена в капсуле
+   с голубой обводкой — снова читалась как кнопка, сердце на полупрозрачном
+   бежевом круге выглядело грязным. */
+.app-shell .product-card, .product-card {
+  background: #141414;
+  border-radius: 20px;
+  overflow: hidden;            /* фото режется по скруглению карточки */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .product-card .product-figure, .product-card .product-figure {
+  margin: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.app-shell .product-card .product-figure .media-placeholder,
+.product-card .product-figure .media-placeholder {
+  border-radius: 0;
+}
+.app-shell .product-body, .product-body {
+  padding: 10px 12px 12px;
+}
+.app-shell .product-card .product-price, .product-card .product-price {
+  margin-top: 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .07);
+  box-shadow: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  height: 34px;
+}
+/* Сердце: плотный тёмный круг, белая иконка — читается на любом фото */
+.app-shell .product-figure .save-btn, .product-figure .save-btn {
+  background: rgba(10, 10, 10, .72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12);
+  color: #fff;
+}
+.app-shell .save-btn.is-on, .save-btn.is-on {
+  background: rgba(31, 107, 255, .85);
+  color: #fff;
+}
+
+/* Название лота — белое: серое читалось как «недоступно» */
+.app-shell .product-name, .product-name {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-shell .product-meta, .product-meta {
+  color: rgba(255, 255, 255, .45);
+  font-size: 12px;
+  margin-top: 4px;
+}
+/* Цена в «Рекомендуем» — без голубой обводки */
+.app-shell .recommend-price, .recommend-price {
+  border: 0;
+  box-shadow: none;
+}
