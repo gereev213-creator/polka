@@ -4835,3 +4835,18 @@
   background: #1e7bff;
   color: #fff;
 }
+
+/* Цена: тонкая светлая окантовка по контуру, как в референсе — не яркая
+   рамка и не полоса сверху, а мягкий 1 px свет по краю. */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .22);
+}
+
+/* Текст цены — чистый белый: наследовался голубой #CFE3FF и выглядел серым */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  color: #ffffff;
+  font-weight: 700;
+}
