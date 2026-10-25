@@ -5019,3 +5019,16 @@
   background: rgba(255, 255, 255, .14);
   box-shadow: none;
 }
+
+/* Подсветка стояла вплотную к левому краю капсулы и казалась сдвинутой:
+   у группы не было внутреннего отступа, а вкладки растягивались до краёв. */
+.app-shell .tabbar-group, .tabbar-group {
+  padding: 0 6px;
+  gap: 4px;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 1 1 0;
+  max-width: 64px;
+  height: 44px;
+  margin: 0 auto;
+}
