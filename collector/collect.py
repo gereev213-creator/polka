@@ -22,6 +22,7 @@
     python3 collect.py --loop --every 900  # повторять каждые 15 минут
 """
 import argparse
+import base64
 import glob
 import json
 import os
@@ -1105,6 +1106,90 @@ def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
     return url.rstrip('?&')
 
 
+def category_url_from(url: str) -> str:
+    """Обычный раздел Авито из ссылки с фильтрами.
+
+    …/all/noutbuki/noutbuki/apple/do50-ASgB… → https://www.avito.ru/all/noutbuki
+    Такую страницу Авито отдаёт без блокировки, в отличие от глубокой ссылки.
+    """
+    try:
+        path = urllib.parse.urlparse(url).path
+    except Exception:
+        return ''
+    parts = [p for p in path.split('/') if p]
+    slug = ''
+    for part in parts:
+        base = part.split('-')[0]
+        if base in list(CATEGORY_BY_WORD.values()):
+            slug = base
+            break
+        for known in CATEGORY_BY_WORD.values():
+            if base.startswith(known[:5]):
+                slug = known
+                break
+        if slug:
+            break
+    if not slug:
+        return ''
+    return f"https://www.avito.ru/all/{slug}?s=104"
+
+
+def local_filters_from_url(url: str) -> dict:
+    """Что забрать из ссылки для локальной фильтрации: цену и модель."""
+    out = {'price_to': 0, 'price_from': 0, 'words': []}
+    try:
+        q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
+    except Exception:
+        q = {}
+    blob = (q.get('f') or [''])[0]
+    for m in re.finditer(r'eyJ[A-Za-z0-9_-]{8,}', blob or ''):
+        raw = m.group(0)
+        try:
+            pad = raw + '=' * (-len(raw) % 4)
+            dec = base64.urlsafe_b64decode(
+                pad.replace('-', '+').replace('_', '/')).decode('utf-8', 'ignore')
+        except Exception:
+            continue
+        for chunk in re.findall(r'\{[^{}]*\}', dec):
+            try:
+                data = json.loads(chunk)
+            except Exception:
+                continue
+            frm, to = data.get('from'), data.get('to')
+            if isinstance(to, int) and to >= 1000 and not out['price_to']:
+                out['price_to'] = to
+            elif isinstance(frm, int) and frm >= 1000 and not out['price_from']:
+                out['price_from'] = frm
+    # модель из пути: …/apple/do50-ASgB… → «do50»
+    try:
+        path = urllib.parse.urlparse(url).path
+        for part in reversed([p for p in path.split('/') if p]):
+            base = part.split('-')[0].replace('_', ' ').strip().lower()
+            if base and base not in list(CATEGORY_BY_WORD.values()) and not base.isdigit():
+                out['words'] = [w for w in base.split() if len(w) > 1]
+                break
+    except Exception:
+        pass
+    return out
+
+
+def matches_local(ad: dict, flt: dict) -> bool:
+    """Проходит ли объявление фильтры, снятые со ссылки."""
+    if not flt:
+        return True
+    price = int(ad.get('price') or 0)
+    if flt.get('price_to') and price and price > flt['price_to']:
+        return False
+    if flt.get('price_from') and price and price < flt['price_from']:
+        return False
+    words = flt.get('words') or []
+    if words:
+        title = str(ad.get('title') or '').lower()
+        if not all(w in title for w in words):
+            return False
+    return True
+
+
 def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 
@@ -1176,13 +1261,24 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # запрос, и приходили не те объявления, что человек видел на Авито.
         direct_url = str(crit.get('filter_url') or '')
         if direct_url.startswith('http'):
-            # Первую страницу берём как есть; дальше Авито принимает &p=N.
-            if direct_url in seen:
+            # Авито блокирует ссылки с подкатегорией и моделью в пути (429/439
+            # первым же запросом). Поэтому открываем ОБЫЧНЫЙ раздел — его сайт
+            # отдаёт — а фильтры из ссылки применяем сами: цена и модель.
+            local = local_filters_from_url(direct_url)
+            cat_page = category_url_from(direct_url)
+            if not cat_page:
                 continue
-            seen.add(direct_url)
-            targets.append({'url': direct_url,
+            if cat_page in seen:
+                # тот же раздел уже в списке — добавим только фильтры
+                for x in targets:
+                    if x.get('url') == cat_page:
+                        x.setdefault('local', []).append(local)
+                continue
+            seen.add(cat_page)
+            targets.append({'url': cat_page,
                             'category': crit.get('category') or slug or '',
-                            'query': query, 'page': 1, 'direct': True})
+                            'query': query, 'page': 1, 'direct': True,
+                            'local': [local]})
             built += 1
             continue
         # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара
@@ -1646,6 +1742,15 @@ def run_once(cfg: dict) -> int:
                 # свежее, о чём и сообщаем серверу
                 if item.get('hours_ago') is None and first_page_dated:
                     item['age_estimated'] = True
+            # Фильтры из ссылки: цена и модель. Авито отдаёт обычный раздел,
+            # поэтому отбираем сами — иначе в ленту попадёт вся категория.
+            locals_here = target.get('local') or []
+            if locals_here:
+                before = len(items)
+                items = [it for it in items
+                         if any(matches_local(it, f) for f in locals_here)]
+                if before != len(items):
+                    print(f"  после фильтров ссылки: {len(items)} из {before}")
             print(f"  найдено карточек: {len(items)}")
             if not items:
                 if '?' in url and 'q=' in url:
