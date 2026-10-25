@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-18'
+const APP_BUILD = '2026-10-26-19'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -2203,7 +2203,8 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
   const totalSteps = 5
   const canNext =
     form.step === 1 ? !!form.category :
-    form.step === 2 ? form.photos.length > 0 :
+    form.step === 2 ? true :   // фото не обязательны: без него объявление публикуется
+
     form.step === 3 ? form.title.trim().length >= 3 && form.description.trim() :
     form.step === 4 ? Boolean(form.price && form.city.trim()) :
     true
@@ -2216,7 +2217,7 @@ function AdForm({ initial, onSubmit, submitLabel, saving }) {
   // Почему «Далее» неактивна: причина текстом, а не только погашенной кнопкой.
   const stepProblem =
     form.step === 1 ? (form.category ? '' : 'Выберите категорию товара') :
-    form.step === 2 ? (form.photos.length ? '' : 'Добавьте хотя бы одно фото') :
+    form.step === 2 ? (form.photos.length ? '' : 'Без фото тоже можно — но с ним продаётся быстрее') :
     form.step === 3 ? (
       form.title.trim().length < 3 ? 'Название — не короче трёх символов'
         : (!form.description.trim() ? 'Добавьте описание: состояние, особенности, комплектация' : '')
