@@ -5563,3 +5563,128 @@
   color: rgba(255, 255, 255, .40);
   text-decoration: line-through;
 }
+
+/* ── 81. Создание объявления по макету Superdesign (вариант A) ─────────── */
+/* Шаг: «1 из 5» справа, полоса прогресса под ним, без длинного заголовка */
+.app-shell .step-indicator, .step-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 16px;
+}
+.app-shell .step-indicator > span, .step-indicator > span {
+  order: 2;
+  align-self: flex-end;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .step-bar, .step-bar {
+  order: 1;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+  overflow: hidden;
+}
+.app-shell .step-bar > span, .step-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: #1E7BFF;
+  transition: width .25s ease;
+}
+
+/* Заголовок шага — крупно, как «Выберите категорию» в макете */
+.app-shell .ad-form .field-label-row, .ad-form .field-label-row {
+  margin: 18px 0 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: none;
+  color: #fff;
+}
+.app-shell .ad-form .field-label-row:first-of-type, .ad-form .field-label-row:first-of-type {
+  margin-top: 0;
+}
+
+/* Категории — карточки 2 колонки с иконкой сверху, как в макете */
+.app-shell .category-grid, .category-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.app-shell .cat-tile, .cat-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  aspect-ratio: auto;
+  height: 120px;
+  padding: 0;
+  border-radius: 18px;
+  background: #141414;
+  border: 1.5px solid rgba(255, 255, 255, .06);
+  box-shadow: none;
+}
+.app-shell .cat-tile.is-selected, .cat-tile.is-selected {
+  border-color: #1E7BFF;
+  background: rgba(30, 123, 255, .07);
+}
+.app-shell .cat-tile-art, .cat-tile-art {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  opacity: .9;
+}
+.app-shell .cat-tile-label, .cat-tile-label {
+  position: static;
+  z-index: 2;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Кнопки шага: «Далее» сплошная, «Назад» тихая, обе 46 */
+.app-shell .step-actions, .step-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+.app-shell .step-actions .primary-btn, .step-actions .primary-btn {
+  flex: 1;
+  height: 46px;
+  border-radius: 14px;
+  background: #1E7BFF;
+  font-size: 16px;
+  font-weight: 700;
+}
+.app-shell .step-actions .ghost-btn, .step-actions .ghost-btn {
+  flex: 0 0 96px;
+  height: 46px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .07);
+}
+
+/* Плитка категории: иконка сверху, подпись под ней по центру —
+   сейчас арт стоит справа внизу и текст «плывёт» */
+.app-shell .cat-tile, .cat-tile {
+  position: relative;
+  justify-content: center;
+  padding: 14px 10px;
+  gap: 8px;
+}
+.app-shell .cat-tile-art, .cat-tile-art {
+  position: static;
+  order: 1;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+}
+.app-shell .cat-tile-label, .cat-tile-label {
+  position: static;
+  order: 2;
+  text-align: center;
+  font-size: 15px;
+  line-height: 1.2;
+}
