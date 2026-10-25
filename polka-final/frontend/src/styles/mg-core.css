@@ -4745,3 +4745,42 @@
   border: 0;
   box-shadow: none;
 }
+
+/* ── 68. Кнопки как в референсе: плоский насыщенный синий ─────────────────
+   У MemGift кнопки и цена — ровный яркий синий без градиента, без свечения
+   и без обводки. У нас были градиент + светящаяся рамка, из-за этого
+   интерфейс выглядел «веб-два-ноль», а не как референс. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn {
+  background: #2a66ff;
+  border: 0;
+  color: #fff;
+  box-shadow: none;
+  border-radius: 14px;
+  height: 46px;
+  font-size: 15px;
+  font-weight: 700;
+}
+.app-shell .cta-primary:active, .cta-primary:active { background: #245be6; filter: none; }
+
+/* Цена в карточке — такая же плоская синяя плашка, как кнопка покупки
+   в референсе */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 36px;
+  margin-top: 10px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: #2a66ff;
+  box-shadow: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+/* Крупная цена на лоте остаётся текстом, но чистого синего */
+.app-shell .detail-price, .detail-price { color: #cfe3ff; }
