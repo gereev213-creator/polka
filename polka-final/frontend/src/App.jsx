@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-7'
+const APP_BUILD = '2026-10-26-8'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -3196,6 +3196,9 @@ function TariffsPage() {
 
   const chosen = cardPlans.find((p) => p.product === term) || null
   // По макету: сроки 30 и 90 отдельным переключателем, неделя — строкой ниже.
+  // Сравнение «Бесплатно / Плюс» свёрнуто: на экране покупки оно
+  // вторично и занимало полэкрана до выбора срока.
+  const [showCompare, setShowCompare] = useState(false)
   const longPlans = cardPlans.filter((p) => Number(p.days) >= 30)
   const weekPlan = cardPlans.find((p) => Number(p.days) === 7) || null
   const isPlus = plan?.plan === 'plus'
@@ -3345,6 +3348,13 @@ function TariffsPage() {
 
         {/* Сравнение «Бесплатно / Плюс»: три строки, без рамок и без
             горизонтального скролла на 360 px. Числа — из данных. */}
+        <button type="button" className="compare-toggle"
+          onClick={() => setShowCompare((v) => !v)}>
+          {showCompare ? 'Скрыть сравнение' : 'Что входит в Плюс'}
+          <span className={showCompare ? 'compare-toggle-arrow is-open' : 'compare-toggle-arrow'}>›</span>
+        </button>
+
+        {showCompare ? (
         <div className="tariff-compare-line">
           <div className="tcl-head">
             <span /><span>Бесплатно</span><span>Плюс</span>
@@ -3359,6 +3369,7 @@ function TariffsPage() {
             <span>Отбор по описанию</span><span>—</span><span>есть</span>
           </div>
         </div>
+        ) : null}
 
         {/* 3. Срок и план — по макету 35_: переключатель «30 / 90 дней −20%»,
             карточка «Плюса» с составом, недельный вход отдельной строкой. */}

@@ -5454,3 +5454,30 @@
   font-style: normal;
   font-size: 11px;
 }
+
+/* Переключатель сравнения: тихая ссылка-строка, не кнопка */
+.app-shell .compare-toggle, .compare-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  margin: 4px 0 6px;
+  padding: 0 2px;
+  background: transparent;
+  border: 0;
+  color: #6FB6FF;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+}
+.app-shell .compare-toggle-arrow, .compare-toggle-arrow {
+  margin-left: auto;
+  font-size: 18px;
+  color: rgba(255, 255, 255, .45);
+  transform: rotate(90deg);
+  transition: transform .15s ease;
+}
+.app-shell .compare-toggle-arrow.is-open, .compare-toggle-arrow.is-open {
+  transform: rotate(-90deg);
+}
