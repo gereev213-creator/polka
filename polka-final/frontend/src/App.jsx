@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-27'
+const APP_BUILD = '2026-10-25-28'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1245,7 +1245,6 @@ function FeedPage() {
           <Link to="/hunt" className="hunt-banner" aria-label="Поиск лотов">
             <img src="/banner-hunt.png" alt="Поиск лотов" />
           </Link>
-          <div className="page-title feed-title">Находки</div>
           <FindingsView />
         </>
       )
@@ -1259,7 +1258,7 @@ function FeedPage() {
           Сюда выставляют товары, которые нашли дешевле рынка. Купили дёшево —
           продайте здесь дороже. Находки с Авито живут в соседнем разделе.
         </span>
-        <Link to="/create" className="cta-primary">Выставить товар</Link>
+        <Link to="/create" className="board-action">+ Выставить товар</Link>
       </div>
       <FeedBanner />
       {/* Категории убраны: сетка плиток занимала пол-экрана. Вместо неё

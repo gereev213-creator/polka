@@ -4586,3 +4586,22 @@
   letter-spacing: -0.02em;
   color: #fff;
 }
+
+/* «Выставить товар» — действие второго плана: человек пришёл смотреть,
+   а не выставлять. Раньше это была самая крупная и яркая кнопка экрана. */
+.app-shell .board-action, .board-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 16px;
+  margin-top: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .10);
+  color: #9dc4ff;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.app-shell .board-action:active, .board-action:active { filter: brightness(1.1); }
