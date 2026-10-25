@@ -4311,8 +4311,8 @@
   position: relative;
   display: grid;
   place-items: center;
-  width: 46px;
-  height: 42px;
+  width: 62px;
+  height: 44px;
   border-radius: 999px;
   transition: background-color .18s ease, transform .18s ease;
 }
