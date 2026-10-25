@@ -13,8 +13,6 @@ export function BottomNav() {
   const location = useLocation()
   const groupRef = useRef(null)
   const itemRefs = useRef([])
-  const [pill, setPill] = useState({ x: 0, w: 0, ready: false })
-
   // «Маркет» ведёт на вкладку «Барахолка» главной, а не в поиск.
   const tabs = [
     ['/?tab=findings', 'home'],
@@ -31,32 +29,39 @@ export function BottomNav() {
     return path.startsWith(to)
   }
 
-  const measure = () => {
+  const [pill, setPill] = useState({ x: 0, w: 0, ready: false })
+  const lastIndex = useRef(-1)
+
+  const activeIndex = Math.max(0, tabs.findIndex(([to]) => isTabActive(to)))
+
+  const measure = (animate) => {
     const group = groupRef.current
-    if (!group) return
-    const activeIndex = Math.max(0, tabs.findIndex(([to]) => isTabActive(to)))
     const el = itemRefs.current[activeIndex]
-    if (!el) return
+    if (!group || !el) return
     const g = group.getBoundingClientRect()
     const r = el.getBoundingClientRect()
-    setPill({ x: r.left - g.left, w: r.width, ready: true })
+    const next = { x: Math.round(r.left - g.left), w: Math.round(r.width), ready: true }
+    setPill((prev) => (prev.x === next.x && prev.w === next.w && prev.ready
+      ? prev                      // ничего не изменилось — не трогаем состояние
+      : next))
   }
 
-  // Следим и за search: «Маркет» меняет не путь, а параметр ?tab=board,
-  // поэтому плашка оставалась на «Главной», пока вкладка уже открыта.
+  // Пересчёт только при смене вкладки: раньше замер шёл ещё и по таймеру,
+  // и плашка дважды дёргалась к одной и той же точке — отсюда дрожь.
   useLayoutEffect(() => {
-    measure()
-    const t2 = setTimeout(measure, 60)
-    return () => clearTimeout(t2)
+    if (lastIndex.current === activeIndex) return
+    lastIndex.current = activeIndex
+    measure(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search, location.key])
+  }, [activeIndex])
 
   useEffect(() => {
-    const onResize = () => measure()
+    // Поворот экрана/изменение ширины: переставляем без анимации
+    const onResize = () => measure(false)
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, location.search])
+  }, [activeIndex])
 
   return (
     <div className="tabbar-wrap">
