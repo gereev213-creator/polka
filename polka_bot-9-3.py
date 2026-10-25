@@ -21566,6 +21566,19 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 deep_check: bool = True) -> Decision:
     """Подходит ли объявление под критерий. Без SQL и без сети.
 
+    # Критерий создан из ссылки: все фильтры (категория, модель, цена, состояние)
+    # уже применил Авито, когда отдал страницу. Наши проверки категории и
+    # заголовка только резали результат — из 10 965 находок по ссылке прошло 0.
+    if str(crit.get('filter_url') or '').startswith('http'):
+        price = int(ad.get('price') or 0)
+        max_p = int(crit.get('max_price') or 0)
+        if max_p and price and price > max_p:
+            return no('price_too_high')
+        if int(crit.get('with_photo') or 0):
+            if str(ad.get('photos') or '') in ('', '[]', 'null'):
+                return no('no_photo')
+        return Decision(True, 'direct_link', 'по фильтрам Авито')
+
     require_description=True — окончательное решение: если критерий опирается
     на описание, а описания нет, объявление НЕ считается подходящим (статус
     «нужна проверка по описанию»). С False — предварительное: подходит, но
