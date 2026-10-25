@@ -5032,3 +5032,16 @@
   height: 44px;
   margin: 0 auto;
 }
+
+/* Плашка активной вкладки — по пропорциям референса: широкая и почти в
+   высоту капсулы. Было 64×44, из-за этого читалась как маленький кружок. */
+.app-shell .tabbar-group, .tabbar-group {
+  padding: 0 8px;
+  gap: 2px;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 1 1 0;
+  max-width: 88px;
+  height: 48px;
+  margin: 0 auto;
+}
