@@ -5105,3 +5105,146 @@
   width: 54px;
   height: 54px;
 }
+
+/* ── 75. Разделы: строки-пункты как в MemGift ─────────────────────────────
+   Профиль, тарифы, избранное и создание объявления выглядели «как попало»:
+   пункты без границ, без стрелок, непонятно, что нажимается. Правим
+   материал и понятность: одна карточка-список, строки 56 px, стрелка справа,
+   заметный отклик на нажатие, подписи секций капсом. */
+.app-shell .list-group, .list-group,
+.app-shell .settings-card, .settings-card {
+  background: #141414;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+
+.app-shell .menu-left, .menu-left { color: #fff; font-size: 15px; font-weight: 500; }
+.app-shell .menu-arrow, .menu-arrow {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .07);
+  color: rgba(255, 255, 255, .65);
+  font-size: 15px;
+}
+
+/* Любой кликабельный пункт: строка 56, разделитель, отклик */
+.app-shell .list-row, .list-row,
+.app-shell .setting-row, .setting-row,
+.app-shell .tcl-row, .tcl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 0 14px;
+  color: #fff;
+  text-decoration: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  transition: background-color .12s ease;
+}
+.app-shell .list-row + .list-row, .list-row + .list-row,
+.app-shell .setting-row + .setting-row, .setting-row + .setting-row {
+  border-top: 1px solid rgba(255, 255, 255, .06);
+}
+.app-shell .list-row:active, .list-row:active,
+.app-shell .setting-row:active, .setting-row:active,
+.app-shell .tcl-row:active, .tcl-row:active {
+  background: rgba(255, 255, 255, .06);
+}
+
+/* Подпись секции — капсом, как в референсе */
+.app-shell .row-title, .row-title,
+.app-shell .section-label, .section-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .45px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+  padding: 18px 14px 8px;
+}
+
+/* Кнопки-действия в этих разделах: одна сплошная синяя, остальные тихие */
+.app-shell .ghost-btn, .ghost-btn,
+.app-shell .tool-btn, .tool-btn {
+  height: 44px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .07);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  border: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .ghost-btn:active, .ghost-btn:active,
+.app-shell .tool-btn:active, .tool-btn:active { background: rgba(255, 255, 255, .12); }
+
+/* Поля ввода: видны как поля, а не как текст */
+.app-shell .text-input, .text-input,
+.app-shell .field-wrap input, .field-wrap input {
+  height: 48px;
+  border-radius: 14px;
+  background: #141414;
+  border: 0;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .08);
+  color: #fff;
+  font-size: 15px;
+  padding: 0 14px;
+}
+.app-shell .text-input::placeholder, .text-input::placeholder,
+.app-shell .field-wrap input::placeholder { color: rgba(255, 255, 255, .35); }
+.app-shell .text-input:focus, .text-input:focus,
+.app-shell .field-wrap input:focus {
+  outline: 0;
+  box-shadow: inset 0 0 0 1.5px rgba(30, 123, 255, .75);
+}
+
+/* ── 76. Сравнение тарифов: таблица, а не текст в строку ──────────────────
+   Было: «Критерии 1 10» и «Чат через 15 мин сразу» шли подряд и читались
+   как случайный набор слов. Теперь три колонки и заголовок-шапка. */
+.app-shell .tariff-compare, .tariff-compare,
+.app-shell .tariff-compare-line, .tariff-compare-line {
+  background: #141414;
+  border-radius: 20px;
+  padding: 4px 6px 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .tcl-head, .tcl-head,
+.app-shell .tcl-row, .tcl-row {
+  display: grid;
+  grid-template-columns: 1.5fr .9fr .9fr;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 10px;
+  font-size: 14px;
+}
+.app-shell .tcl-head, .tcl-head {
+  min-height: 40px;
+  color: rgba(255, 255, 255, .45);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+.app-shell .tcl-head > span:nth-child(2), .tcl-head > span:nth-child(2) { text-align: right; }
+.app-shell .tcl-head > span:nth-child(3), .tcl-head > span:nth-child(3) { text-align: right; }
+.app-shell .tcl-row, .tcl-row { color: #fff; }
+.app-shell .tcl-row > span:first-child, .tcl-row > span:first-child {
+  color: rgba(255, 255, 255, .75);
+  font-weight: 500;
+}
+.app-shell .tcl-row > span:nth-child(2), .tcl-row > span:nth-child(2),
+.app-shell .tcl-row > span:nth-child(3), .tcl-row > span:nth-child(3) {
+  text-align: right;
+  font-weight: 600;
+}
+.app-shell .tcl-row + .tcl-row, .tcl-row + .tcl-row {
+  border-top: 1px solid rgba(255, 255, 255, .05);
+}
