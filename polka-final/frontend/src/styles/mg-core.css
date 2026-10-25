@@ -4998,3 +4998,24 @@
   transition: transform .26s cubic-bezier(.32, .72, 0, 1);
   will-change: transform;
 }
+
+/* ── 72. Подсветка вкладки без движения ───────────────────────────────────
+   Переезжающая плашка дёргалась: её позиция зависела от замера, а замер —
+   от момента рендера. Статичный фон у активной вкладки не двигается вовсе. */
+.app-shell .tabbar-pill, .tabbar-pill { display: none; }
+
+.app-shell .tabbar-group, .tabbar-group {
+  justify-content: space-around;
+  gap: 0;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  flex: 1 1 0;
+  width: auto;
+  height: 44px;
+  border-radius: 999px;
+  transition: background-color .12s ease;
+}
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: rgba(255, 255, 255, .14);
+  box-shadow: none;
+}
