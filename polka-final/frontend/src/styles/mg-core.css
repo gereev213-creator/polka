@@ -5966,3 +5966,74 @@
   background: rgba(255, 255, 255, .08);
   color: #fff;
 }
+
+/* ── 85. Лот: счётчик кадра пилюлей, галерея 52%, «Показать полностью» ──── */
+.app-shell .detail-counter, .detail-counter {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  height: 28px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: rgba(10, 10, 10, .60);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+}
+/* Галерея: чуть ниже половины экрана, низ со скруглением */
+.app-shell .detail-hero, .detail-hero,
+.app-shell .detail-slide, .detail-slide {
+  height: 52vh;
+  max-height: 52vh;
+}
+.app-shell .detail-hero, .detail-hero {
+  border-radius: 0 0 28px 28px;
+  overflow: hidden;
+}
+/* «Показать полностью» — акцентная ссылка под описанием */
+.app-shell .desc-toggle, .desc-toggle,
+.app-shell .detail-desc-toggle, .detail-desc-toggle {
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #6FB6FF;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Блок описания: не «карточка в карточке», а спокойный текст */
+.app-shell .copy-block, .copy-block {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 16px;
+}
+.app-shell .copy-block strong, .copy-block strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .45px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, .45);
+}
+.app-shell .listing-desc.is-clamped, .listing-desc.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.app-shell .listing-desc-toggle, .listing-desc-toggle {
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: #6FB6FF;
+  font-size: 14px;
+  font-weight: 600;
+}
