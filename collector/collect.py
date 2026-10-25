@@ -1110,7 +1110,10 @@ def category_url_from(url: str) -> str:
     """Обычный раздел Авито из ссылки с фильтрами.
 
     …/all/noutbuki/noutbuki/apple/do50-ASgB… → https://www.avito.ru/all/noutbuki
-    Такую страницу Авито отдаёт без блокировки, в отличие от глубокой ссылки.
+
+    Берём сегмент СРАЗУ после «all» — это всегда раздел площадки. Раньше
+    искали первое совпадение по списку категорий, и для ноутбуков находилось
+    «telefony» из соседнего сегмента: сборщик ходил не в тот раздел.
     """
     try:
         path = urllib.parse.urlparse(url).path
@@ -1118,17 +1121,17 @@ def category_url_from(url: str) -> str:
         return ''
     parts = [p for p in path.split('/') if p]
     slug = ''
-    for part in parts:
-        base = part.split('-')[0]
-        if base in list(CATEGORY_BY_WORD.values()):
-            slug = base
-            break
-        for known in CATEGORY_BY_WORD.values():
-            if base.startswith(known[:5]):
-                slug = known
+    if 'all' in parts:
+        idx = parts.index('all')
+        if idx + 1 < len(parts):
+            slug = parts[idx + 1].split('-')[0]
+    if not slug:
+        # запасной путь: первый сегмент, который знаем как категорию
+        for part in parts:
+            base = part.split('-')[0]
+            if base in list(CATEGORY_BY_WORD.values()):
+                slug = base
                 break
-        if slug:
-            break
     if not slug:
         return ''
     return f"https://www.avito.ru/all/{slug}?s=104"
