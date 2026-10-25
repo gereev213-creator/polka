@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-8'
+const APP_BUILD = '2026-10-26-9'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -3376,55 +3376,41 @@ function TariffsPage() {
         {cardPlans.length ? (
           <>
             {cardPlans.length ? (
-              <div className="tg2">
+              /* Карточки сроков как в макете Superdesign: 2 колонки, высота
+                 140, у популярного — рамка акцентом и бейдж сверху, цена
+                 20/700, под ней цена за день, у 90 дней — старая цена
+                 зачёркнутой и плашка −20%. */
+              <div className="term-grid">
                 {cardPlans.map((pl) => {
                   const days = Number(pl.days) || 0
-                  const label = days <= 7 ? 'Неделя'
-                    : days >= 90 ? `${days} дней` : `${days} дней`
+                  const amount = Number(pl.amount) || 0
+                  const perDay = days ? Math.round(amount / days) : 0
+                  const old = days >= 90 ? Math.round(amount / 0.8 / 10) * 10 : 0
+                  const label = days <= 7 ? 'Неделя' : `${days} дней`
+                  const on = term === pl.product
                   return (
                     <button key={pl.product} type="button"
-                      className={term === pl.product ? 'on' : ''}
+                      className={on ? 'term-card is-on' : 'term-card'}
                       onClick={() => setTerm(pl.product)} disabled={busy}>
-                      {label}
-                      {days >= 90 ? <em> −20 %</em> : null}
+                      {on ? <span className="term-badge">Выбрано</span> : null}
+                      <span className="term-head">
+                        <span className="term-days">{label}</span>
+                        {days >= 90 ? <span className="term-discount">−20%</span> : null}
+                      </span>
+                      <span className="term-price">
+                        <span className="term-amount">{amount} ₽</span>
+                        {old ? <span className="term-old">{old} ₽</span>
+                          : <span className="term-perday">{perDay} ₽ / день</span>}
+                      </span>
                     </button>
                   )
                 })}
               </div>
             ) : null}
 
-            {chosen ? (
-              <div className="plan-card">
-                <span className="plan-badge">Чаще берут</span>
-                <div className="plan-top">
-                  <b>Плюс</b>
-                  <span>
-                    {chosen.amount} ₽
-                    <small>
-                      {Number(chosen.days) > 0
-                        ? ` · ${Math.round(Number(chosen.amount) / Number(chosen.days))} ₽ в день`
-                        : ` за ${chosen.days} дней`}
-                    </small>
-                  </span>
-                </div>
-                <div className="plan-ft"><i>✓</i>{plusMax} критериев</div>
-                <div className="plan-ft"><i>✓</i>В чат сразу, без задержки</div>
-                <div className="plan-ft"><i>✓</i>Отбор по описанию, снижение цены</div>
-              </div>
-            ) : null}
+            {/* Карточки сроков уже показывают цену и состав — старая
+                карточка плана и недельная строка дублировали их. */}
 
-            {weekPlan ? (
-              <div className="week-row">
-                <div className="week-info">
-                  <b>Неделя Плюса</b>
-                  <span>Попробовать без обязательств</span>
-                </div>
-                <button type="button" className="week-btn"
-                  onClick={() => setTerm(weekPlan.product)} disabled={busy}>
-                  {weekPlan.amount} ₽
-                </button>
-              </div>
-            ) : null}
           </>
         ) : (
           <EmptyState text="Оплата картой пока не настроена" icon={<Icon name="card" />} />

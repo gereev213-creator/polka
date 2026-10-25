@@ -5481,3 +5481,85 @@
 .app-shell .compare-toggle-arrow.is-open, .compare-toggle-arrow.is-open {
   transform: rotate(-90deg);
 }
+
+/* ── 80. Карточки сроков как в макете Superdesign ────────────────────────
+   2 колонки, высота 140, радиус 20, цена 20/700, у выбранной — рамка
+   акцентом и бейдж сверху. Это не сегменты: в макете именно карточки. */
+.app-shell .term-grid, .term-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 12px 0 8px;
+}
+.app-shell .term-card, .term-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 140px;
+  padding: 16px;
+  border-radius: 20px;
+  background: #141414;
+  border: 1.5px solid rgba(255, 255, 255, .06);
+  box-shadow: none;
+  text-align: left;
+  color: #fff;
+}
+.app-shell .term-card.is-on, .term-card.is-on {
+  border-color: #1E7BFF;
+  background: rgba(30, 123, 255, .06);
+}
+.app-shell .term-badge, .term-badge {
+  position: absolute;
+  top: -11px;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 22px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: #1E7BFF;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+}
+.app-shell .term-head, .term-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+.app-shell .term-days, .term-days {
+  font-size: 14px;
+  color: rgba(255, 255, 255, .60);
+}
+.app-shell .term-discount, .term-discount {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(52, 199, 123, .12);
+  color: #34C77B;
+  font-size: 10px;
+  font-weight: 700;
+}
+.app-shell .term-price, .term-price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.app-shell .term-amount, .term-amount {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+.app-shell .term-perday, .term-perday {
+  font-size: 12px;
+  color: #6FB6FF;
+}
+.app-shell .term-old, .term-old {
+  font-size: 12px;
+  color: rgba(255, 255, 255, .40);
+  text-decoration: line-through;
+}
