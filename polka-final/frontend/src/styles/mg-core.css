@@ -4334,3 +4334,41 @@
 .app-shell .tabbar-item:active, .tabbar-item:active {
   background: rgba(255, 255, 255, .08);
 }
+
+/* ── 59. Подвижная плашка в доке ──────────────────────────────────────────
+   Одна подсветка на весь док переезжает к активной иконке. Отдельные фоны
+   у вкладок отключены: иначе видно и переезд, и мигание на месте. */
+.app-shell .tabbar-group, .tabbar-group {
+  position: relative;
+}
+.app-shell .tabbar-pill, .tabbar-pill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 48px;
+  margin-top: -24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .16);
+  pointer-events: none;
+  opacity: 0;
+  transition: transform .28s cubic-bezier(.32, .72, 0, 1), width .28s cubic-bezier(.32, .72, 0, 1);
+  z-index: 0;
+}
+.app-shell .tabbar-pill.is-ready, .tabbar-pill.is-ready {
+  opacity: 1;
+  transition: transform .28s cubic-bezier(.32, .72, 0, 1),
+              width .28s cubic-bezier(.32, .72, 0, 1), opacity .15s ease;
+}
+.app-shell .tabbar-item, .tabbar-item {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+.app-shell .tabbar-item.is-active, .tabbar-item.is-active {
+  background: transparent;
+  box-shadow: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell .tabbar-pill, .tabbar-pill { transition: none; }
+}
