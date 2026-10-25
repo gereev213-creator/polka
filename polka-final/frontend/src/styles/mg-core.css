@@ -5248,3 +5248,58 @@
 .app-shell .tcl-row + .tcl-row, .tcl-row + .tcl-row {
   border-top: 1px solid rgba(255, 255, 255, .05);
 }
+
+/* ── 77. Поиск лотов по макету ─────────────────────────────────────────── */
+.app-shell .hunt-eta, .hunt-eta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, .55);
+  text-align: center;
+}
+.app-shell .hunt-eta-dot, .hunt-eta-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #5AA9FF;
+  box-shadow: 0 0 8px rgba(90, 169, 255, .8);
+}
+/* Шаги в одну строку */
+.app-shell .hunt-steps-row, .hunt-steps-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 18px 0 6px;
+  padding: 0 2px;
+}
+.app-shell .hunt-step-mini, .hunt-step-mini {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+.app-shell .hunt-step-dot, .hunt-step-dot {
+  display: grid;
+  place-items: center;
+  width: 22px; height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .08);
+  color: rgba(255, 255, 255, .70);
+  font-size: 11px;
+  font-weight: 700;
+}
+.app-shell .hunt-step-mini-text, .hunt-step-mini-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, .50);
+  line-height: 1.2;
+}
+.app-shell .hunt-step-sep, .hunt-step-sep {
+  flex: 0 0 10px;
+  height: 1px;
+  margin-left: auto;
+  background: rgba(255, 255, 255, .12);
+}

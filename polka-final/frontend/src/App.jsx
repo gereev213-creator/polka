@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-3'
+const APP_BUILD = '2026-10-26-4'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1645,7 +1645,10 @@ function HuntLinkPage() {
         <button type="button" className="cta-primary hunt-cta" disabled={busy || !url.trim()} onClick={send}>
           {busy ? 'Проверяю…' : 'Найти лоты'}
         </button>
-        <div className="hunt-card-note">Сохранить как критерий и получать новые</div>
+        <div className="hunt-eta">
+          <span className="hunt-eta-dot" />
+          Находки придут в течение часа · критерий сохранится сам
+        </div>
         {note ? <div className="hunt-note">{note}</div> : null}
         {chips.length ? (
           <div className="hunt-card-note">
@@ -1665,16 +1668,18 @@ function HuntLinkPage() {
         ) : null}
       </div>
 
-      <div className="hunt-card">
-        <div className="hunt-from-label">Как это работает</div>
+      {/* Инструкция в одну строку: три шага подряд, а не простыня на треть
+          экрана. Развёрнуто её никто не читает, а место она занимала. */}
+      <div className="hunt-steps-row">
         {[
-          ['01', 'Откройте Авито и выставьте фильтры'],
-          ['02', 'Скопируйте адрес из строки браузера'],
-          ['03', 'Вставьте сюда — условия уже перенесены'],
-        ].map(([n, text]) => (
-          <div key={n} className="hunt-step">
-            <span className="hunt-step-n">{n}</span>
-            <span className="hunt-step-text">{text}</span>
+          ['1', 'фильтры на Авито'],
+          ['2', 'скопируйте адрес'],
+          ['3', 'вставьте сюда'],
+        ].map(([n, text], i) => (
+          <div key={n} className="hunt-step-mini">
+            <span className="hunt-step-dot">{n}</span>
+            <span className="hunt-step-mini-text">{text}</span>
+            {i < 2 ? <span className="hunt-step-sep" /> : null}
           </div>
         ))}
       </div>
