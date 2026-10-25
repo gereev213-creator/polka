@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-16'
+const APP_BUILD = '2026-10-25-17'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -2974,7 +2974,7 @@ function FavoritesPage() {
     <Screen>
       {/* Иконка-закладка из шапки убрана: она дублировала заголовок
           «Избранное» и ничего не делала. */}
-      <TopBar left={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="favorites-page">
         <div className="page-title">Избранное</div>
         {loading ? <LoadingBlock /> : null}
@@ -3031,7 +3031,7 @@ function ProfilePage() {
     <Screen>
       {/* Логотип переехал в шапку: в .profile-top он стоял слева, а аватар
           по центру — два разных выравнивания на одном экране. */}
-      <TopBar left={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="profile-top">
         {avatarUrl ? (
           <img className="profile-avatar-img" src={avatarUrl} alt="Аватар" referrerPolicy="no-referrer" />
@@ -3633,7 +3633,7 @@ function AdminPage() {
   if (allowed === false) {
     return (
       <Screen>
-        <TopBar left={<Logo />} />
+        <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
         <EmptyState text="Раздел только для администраторов" icon={<Icon name="shield" />} />
       </Screen>
     )
@@ -3672,7 +3672,7 @@ function AdminPage() {
 
   return (
     <Screen>
-      <TopBar left={<Logo />} />
+      <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <h2 className="section-title">Админ</h2>
 
       <div className="admin-tabs">
