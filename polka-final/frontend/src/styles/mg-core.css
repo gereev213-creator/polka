@@ -4647,3 +4647,33 @@
 .app-shell .tabbar-pill, .tabbar-pill {
   max-width: 100%;
 }
+
+/* ── 66. Панель действий лота — компактная, а не полоса во всю ширину ─────
+   Она липкая снизу и высотой 119 px перекрывала содержимое карточки:
+   на коротких лотах накрывала описание и фото. Делаем плавающую панель
+   по ширине контента с отступом от дока. */
+.app-shell .detail-bar, .detail-bar {
+  position: sticky;
+  bottom: 8px;
+  height: auto;
+  min-height: 0;
+  margin: 12px 0 0;
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 20px;
+  background: rgba(20, 20, 20, .92);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .08);
+}
+.app-shell .detail-bar .cta-primary, .detail-bar .cta-primary {
+  height: 44px;
+  border-radius: 14px;
+}
+.app-shell .detail-bar .cta-round, .detail-bar .cta-round {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+}
+/* Запас снизу, чтобы панель не наезжала на последний текст */
+.app-shell .listing-page, .listing-page { padding-bottom: 24px; }
