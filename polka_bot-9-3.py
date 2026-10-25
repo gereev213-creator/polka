@@ -23414,7 +23414,18 @@ def parse_avito_filter_url(url: str) -> Dict:
             base = part.split('-')[0]
             if not base or base in AVITO_CATEGORY_SLUGS or base.isdigit():
                 continue
-            title_from_path = base.replace('_', ' ').strip()
+            # Берём модель и слово перед ней: «apple do50» понятнее, чем «do50».
+            prev = ''
+            idx = parts.index(part)
+            for cand in reversed(parts[:idx]):
+                if cand.lower() in ('all', 'rossiya') or cand in AVITO_CATEGORY_SLUGS:
+                    continue
+                if cand.split('-')[0] in AVITO_CATEGORY_SLUGS:
+                    continue
+                prev = cand.replace('_', ' ').strip()
+                break
+            title_from_path = (f'{prev} {base}'.strip() if prev and prev != base
+                               else base.replace('_', ' ').strip())
             break
         for part in parts[1:]:
             candidate = part.strip().lower()
@@ -25753,9 +25764,13 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
                               'filters': parsed.get('filters') or ''})
 
     try:
+        facts = avito_blob_facts(parsed.get('filters') or '')
+        # Цену из ссылки кладём в сам критерий: иначе в карточке не видно
+        # «до 35 000 ₽», а сборщик не знает границу.
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), query, category, city,
-            0, 0, 0, 0, 0, 'any', '', None, '', 0,
+            int(facts.get('price_to') or 0), 0,
+            int(facts.get('price_from') or 0), 0, 0, 'any', '', None, '', 0,
             str(parsed.get('filters') or ''), url)
     except Exception as e:
         # Наружу — точная причина: иначе человек видит «не удалось разобрать»,

@@ -84,7 +84,11 @@ export function CriteriaList({ items = [], loading = false, onRemove, onToggle, 
               {/* Параметры критерия — чипами: длинная серая строка в 2–3
                   строки не читалась, а так видно цену, свежесть и режим. */}
               <div className="hunt-crit-chips">
-                <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>
+                {/* У критерия из ссылки отбор делает Авито: писать «любые
+                    подходящие» неправда — условия есть, они в фильтрах. */}
+                {String(c.filter_url || '').startsWith('http')
+                  ? <Badge>фильтры Авито</Badge>
+                  : <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>}
                 {c.min_price ? <Badge>от {money(c.min_price)} ₽</Badge> : null}
                 {c.max_price ? <Badge>до {money(c.max_price)} ₽</Badge> : null}
                 {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
