@@ -6180,3 +6180,69 @@
   overflow: hidden;
   -webkit-line-clamp: unset;
 }
+
+/* ── 87. Мои объявления по макету Superdesign ──────────────────────────── */
+/* Фильтры — пилюли, как в макете: активная синяя, остальные тёмные */
+.app-shell .tab-row, .tab-row {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.app-shell .tab-row::-webkit-scrollbar, .tab-row::-webkit-scrollbar { display: none; }
+.app-shell .tab-row > button, .tab-row > button,
+.app-shell .tab-row > .tab, .tab-row > .tab {
+  flex: 0 0 auto;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .70);
+  font-size: 13px;
+  font-weight: 600;
+  border: 0;
+}
+.app-shell .tab-row > button.is-active, .tab-row > button.is-active,
+.app-shell .tab-row > .tab.is-active, .tab-row > .tab.is-active {
+  background: #1E7BFF;
+  color: #fff;
+}
+
+/* Карточка «моего» объявления: та же строка, что в избранном, плюс статус */
+.app-shell .myad-card .myad-body, .myad-card .myad-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.app-shell .myad-price, .myad-price {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(30, 123, 255, .16);
+  color: #cfe3ff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.app-shell .myad-card .row-title, .myad-card .row-title {
+  font-size: 15px;
+  font-weight: 600;
+  max-height: 2.6em;
+  overflow: hidden;
+}
+.app-shell .myad-card .tool-row, .myad-card .tool-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.app-shell .myad-card .tool-btn, .myad-card .tool-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
