@@ -4637,3 +4637,13 @@
   background: rgba(255, 255, 255, .09);
   color: rgba(255, 255, 255, .8);
 }
+
+/* Плашка живёт строго внутри дока: не вылезает за его границы и не
+   перекрывает контент, даже если замер пришёл из схлопнутой капсулы. */
+.app-shell .tabbar-group, .tabbar-group {
+  overflow: hidden;
+  isolation: isolate;
+}
+.app-shell .tabbar-pill, .tabbar-pill {
+  max-width: 100%;
+}

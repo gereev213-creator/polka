@@ -40,7 +40,11 @@ export function BottomNav() {
     if (!group || !el) return
     const g = group.getBoundingClientRect()
     const r = el.getBoundingClientRect()
-    const next = { x: Math.round(r.left - g.left), w: Math.round(r.width), ready: true }
+    // Док может быть скрыт/схлопнут (нулевые размеры) — тогда замер даёт
+    // мусор, и плашка уезжает за пределы дока, перекрывая экран.
+    if (g.width < 10 || r.width < 10) return
+    const x = Math.max(0, Math.min(Math.round(r.left - g.left), Math.round(g.width - r.width)))
+    const next = { x, w: Math.round(r.width), ready: true }
     setPill((prev) => (prev.x === next.x && prev.w === next.w && prev.ready
       ? prev                      // ничего не изменилось — не трогаем состояние
       : next))
