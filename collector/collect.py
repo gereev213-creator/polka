@@ -1106,6 +1106,18 @@ def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
     return url.rstrip('?&')
 
 
+# Разделы, которые Авито придерживает: вместо них берём соседний и
+# добавляем слово для локального отбора.
+CATEGORY_SUBSTITUTE = {
+    'noutbuki': 'tovary_dlya_kompyutera',
+    'nastolnye_kompyutery': 'tovary_dlya_kompyutera',
+}
+CATEGORY_SUBSTITUTE_WORD = {
+    'noutbuki': 'ноутбук',
+    'nastolnye_kompyutery': 'компьютер',
+}
+
+
 def category_url_from(url: str) -> str:
     """Обычный раздел Авито из ссылки с фильтрами.
 
@@ -1134,6 +1146,10 @@ def category_url_from(url: str) -> str:
                 break
     if not slug:
         return ''
+    # Некоторые разделы Авито отдаёт только с блокировкой (проверено:
+    # /all/noutbuki стабильно 439, а /all/tovary_dlya_kompyutera — 200).
+    # Для них берём соседний раздел и фильтруем по слову.
+    slug = CATEGORY_SUBSTITUTE.get(slug, slug)
     return f"https://www.avito.ru/all/{slug}?s=104"
 
 
@@ -1268,6 +1284,15 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             # первым же запросом). Поэтому открываем ОБЫЧНЫЙ раздел — его сайт
             # отдаёт — а фильтры из ссылки применяем сами: цена и модель.
             local = local_filters_from_url(direct_url)
+            # если раздел заменён, требуем слово замены в заголовке
+            try:
+                _path = re.findall(r'/all/([a-z_]+)', direct_url)
+                _slug0 = _path[0] if _path else ''
+                _sub_word = CATEGORY_SUBSTITUTE_WORD.get(_slug0)
+                if _sub_word:
+                    local['words'] = list(local.get('words') or []) + [_sub_word]
+            except Exception:
+                pass
             cat_page = category_url_from(direct_url)
             if not cat_page:
                 continue
