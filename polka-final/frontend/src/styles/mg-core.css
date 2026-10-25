@@ -4263,3 +4263,42 @@
 .app-shell .crit-create, .crit-create {
   margin-bottom: calc(var(--dock-space, 96px) + 12px);
 }
+
+/* ── 57. Кнопки тоньше, как в референсе ───────────────────────────────────
+   Было: высота 52–56, радиус 999, шрифт 17/700 — кнопка выглядела как
+   плашка во всю ширину. В MemGift кнопка скромнее: 44 px, радиус 14,
+   текст 15/600. Она перестаёт спорить с содержимым экрана. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .btn, .btn,
+.app-shell .ghost-btn, .ghost-btn,
+.app-shell .crit-create, .crit-create {
+  height: 44px;
+  min-height: 44px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 600;
+  padding: 0 18px;
+}
+
+/* Главная кнопка экрана — чуть заметнее остальных, но того же размера */
+.app-shell .cta-primary, .cta-primary {
+  height: 46px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Чипы-условия: 34 px вместо 44 — они не должны читаться как кнопки */
+.app-shell .hunt-chip, .hunt-chip,
+.app-shell .crit-chip, .crit-chip {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 12px;
+}
+
+/* Сегменты и вкладки — 44, как строки в референсе */
+.app-shell .crit-seg, .crit-seg,
+.app-shell .crit-seg-btn, .crit-seg-btn {
+  height: 44px;
+  font-size: 14px;
+}

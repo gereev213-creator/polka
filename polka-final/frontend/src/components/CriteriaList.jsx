@@ -91,6 +91,7 @@ export function CriteriaList({ items = [], loading = false, onRemove, onToggle, 
                   let labels = []
                   try { labels = JSON.parse(c.filter_labels || '[]') } catch (e) { labels = [] }
                   if (!Array.isArray(labels)) labels = []
+                  labels = [...new Set(labels)]
                   const isLink = String(c.filter_url || '').startsWith('http')
                   if (isLink && labels.length) {
                     return labels.map((x, i) => <Badge key={i}>{x}</Badge>)
@@ -98,8 +99,14 @@ export function CriteriaList({ items = [], loading = false, onRemove, onToggle, 
                   if (isLink) return <Badge>фильтры Авито</Badge>
                   return <Badge>{c.mode === 'deal' ? 'только выгоднее рынка' : 'любые подходящие'}</Badge>
                 })()}
-                {c.min_price ? <Badge>от {money(c.min_price)} ₽</Badge> : null}
-                {c.max_price ? <Badge>до {money(c.max_price)} ₽</Badge> : null}
+                {/* У критерия из ссылки цена уже пришла чипом из filter_labels:
+                    второй такой же бейдж — просто дубль. */}
+                {String(c.filter_url || '').startsWith('http') ? null : (
+                  <>
+                    {c.min_price ? <Badge>от {money(c.min_price)} ₽</Badge> : null}
+                    {c.max_price ? <Badge>до {money(c.max_price)} ₽</Badge> : null}
+                  </>
+                )}
                 {c.max_hours ? <Badge>за {c.max_hours} ч</Badge> : null}
                 {c.with_photo ? <Badge>с фото</Badge> : null}
                 {c.strict_model ? <Badge>строго эта модель</Badge> : null}
