@@ -1689,8 +1689,11 @@ def run_once(cfg: dict) -> int:
         print(f"Цели не заданы — берём встроенный список: {len(targets)} категорий по всей России")
     from_crit = targets_from_criteria(server, token, cfg)
     if from_crit:
-        known = {t.get('url') for t in targets}
-        targets += [t for t in from_crit if t['url'] not in known]
+        # Есть критерии пользователей — идём ТОЛЬКО по ним. Общие разделы
+        # приносили в базу случайные товары (аудио, планшеты), и они попадали
+        # в ленту как находки по чужому критерию.
+        targets = list(from_crit)
+        print(f"Цели: только критерии ({len(targets)}), общие разделы отключены")
 
     # Ограничение и ротация: за проход обходим не больше MAX_TARGETS целей,
     # в первую очередь те, что дают находки. Полный список не теряется —
