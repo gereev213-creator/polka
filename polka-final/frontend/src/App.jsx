@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-11'
+const APP_BUILD = '2026-10-26-12'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1617,14 +1617,16 @@ function HuntLinkPage() {
 
       <div className="hunt-card">
         <div className="hunt-card-head">
-          <span>Ссылка на поиск</span>
-          <button type="button" className="hunt-paste" onClick={paste}>
-            <Icon name="link" /> Вставить
-          </button>
+          <span>Вставьте ссылку на поиск</span>
         </div>
+        <div className="hunt-card-sub">Город, цена и категория определятся сами</div>
         <div className="hunt-field">
           <input value={url} onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://avito.ru/..." inputMode="url" />
+            placeholder="https://www.avito.ru/..." inputMode="url" />
+          {/* «Вставить» живёт внутри поля справа — как в макете */}
+          <button type="button" className="hunt-paste" onClick={paste}>
+            Вставить
+          </button>
           {url ? (
             <button type="button" className="hunt-field-x" aria-label="Очистить"
               onClick={() => setUrl('')}>×</button>
