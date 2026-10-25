@@ -4850,3 +4850,14 @@
   color: #ffffff;
   font-weight: 700;
 }
+
+/* Панель действий — в обычном потоке, ПОСЛЕ содержимого.
+   sticky с bottom цеплялся к верху, когда контента мало: панель оказывалась
+   над карточкой и перекрывала её. Статичное положение предсказуемо. */
+.app-shell .detail-bar, .detail-bar {
+  position: static;
+  bottom: auto;
+  margin: 16px 0 0;
+  padding: 8px;
+  border-radius: 20px;
+}
