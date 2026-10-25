@@ -4885,3 +4885,32 @@
       rgba(255, 255, 255, .08) 68%,
       rgba(255, 255, 255, .50) 100%) border-box;
 }
+
+/* Фото в карточке — со скруглением сверху, как в референсе. Я сам убрал
+   его, когда делал фото «в край», и получил прямоугольник в круглой карточке. */
+.app-shell .product-card .product-figure, .product-card .product-figure {
+  border-radius: 20px 20px 0 0;
+  overflow: hidden;
+}
+.app-shell .product-card .product-figure .media-placeholder,
+.product-card .product-figure .media-placeholder {
+  border-radius: 20px 20px 0 0;
+}
+.app-shell .product-card .product-figure img,
+.product-card .product-figure img {
+  border-radius: 20px 20px 0 0;
+}
+
+/* Окантовка цены — ГОЛУБАЯ, а не белая: белый по синему даёт серый,
+   это и было видно как «серая рамка». */
+.app-shell .product-card .product-price, .product-card .product-price,
+.app-shell .recommend-price, .recommend-price {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#1e7bff, #1e7bff) padding-box,
+    linear-gradient(140deg,
+      rgba(150, 200, 255, .95) 0%,
+      rgba(120, 175, 255, .25) 34%,
+      rgba(120, 175, 255, .25) 66%,
+      rgba(150, 200, 255, .85) 100%) border-box;
+}
