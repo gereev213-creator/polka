@@ -4507,3 +4507,43 @@
     max-width: 480px;
   }
 }
+
+/* ── 64. Кнопки в цвет баннеров ───────────────────────────────────────────
+   Баннеры у нас синие с градиентом, а главная кнопка была плоской заливкой
+   и выбивалась. Теперь тот же градиент плюс светящаяся обводка. */
+.app-shell .cta-primary, .cta-primary,
+.app-shell .primary-btn, .primary-btn {
+  background:
+    linear-gradient(180deg, #4c9bff 0%, #1f6bff 55%, #0a58e0 100%);
+  border: 1px solid rgba(140, 190, 255, .55);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .35),
+    0 8px 24px rgba(31, 107, 255, .35);
+}
+.app-shell .cta-primary:active, .cta-primary:active,
+.app-shell .primary-btn:active, .primary-btn:active {
+  filter: brightness(.96);
+  transform: translateY(0.5px);
+}
+
+/* Цена в карточке — по центру: так строка читается как одна плашка */
+.app-shell .product-body .product-price, .product-body .product-price {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-top: 10px;
+}
+
+/* Сердце в избранном — голубое, а не красное: красный у нас цвет удаления */
+.app-shell .save-btn.is-on, .save-btn.is-on,
+.app-shell .cta-round.is-on, .cta-round.is-on {
+  color: #5aa9ff;
+  background: rgba(31, 107, 255, .18);
+  box-shadow: inset 0 0 0 1px rgba(90, 169, 255, .45), inset 0 1px 0 rgba(255, 255, 255, .12);
+}
+.app-shell .save-btn.is-on svg, .save-btn.is-on svg,
+.app-shell .cta-round.is-on svg, .cta-round.is-on svg {
+  fill: #5aa9ff;
+  color: #5aa9ff;
+}

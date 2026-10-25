@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-25-23'
+const APP_BUILD = '2026-10-25-24'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1883,6 +1883,8 @@ function ListingPage() {
           ) : null}
         </div>
 
+
+          <div className="listing-title">{item.title}</div>
         {priceValue ? (
           <div className="detail-price-block">
             <span className="detail-price-label">{priceLabel}</span>
@@ -1891,7 +1893,6 @@ function ListingPage() {
         ) : null}
 
         <div className="detail-head">
-          <div className="listing-title">{item.title}</div>
           {/* Теги лота (спека v2): тип продавца, проверка описания, АКБ */}
           <div className="listing-tags">
             {item.seller_type === 'company' || Number(item.is_shop)
