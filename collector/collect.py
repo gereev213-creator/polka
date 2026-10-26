@@ -1240,10 +1240,11 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     user = str(crit.get('user') or '')
     if user not in ('', '1', '2'):
         user = ''
-    query = ' '.join(str(crit.get('search_q') or '').split())[:100]
+    # q в адрес НЕ ставим: Авито блокирует поисковые адреса (429/439), а
+    # чистые разделы отдаёт. Слова из ссылки применяем сами, локально.
     template = (f"https://www.avito.ru/{path}"
-                "?cd=1&localPriority=0&q={query}&user={user}{filters}&s=104&pmin={pmin}&pmax={pmax}")
-    return search_url(template, '', query, pmin, pmax, filters=filters, user=user)
+                "?cd=1&localPriority=0&user={user}{filters}&s=104&pmin={pmin}&pmax={pmax}")
+    return search_url(template, '', '', pmin, pmax, filters=filters, user=user)
 
 
 def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
@@ -1321,10 +1322,14 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             if link_url in seen:
                 continue
             seen.add(link_url)
+            _q_words = [w for w in str(crit.get('search_q') or '').lower().split() if len(w) > 2]
             targets.append({'url': link_url,
                             'category': crit.get('category') or '',
                             'query': query, 'page': 1, 'direct': True,
-                            'link': True})
+                            'link': True,
+                            'local': [{'price_to': int(crit.get('max_price') or 0),
+                                       'price_from': int(crit.get('min_price') or 0),
+                                       'words': _q_words[:2]}]})
             built += 1
             continue
         # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара
