@@ -21337,13 +21337,25 @@ def _criterion_where(crit: Dict, active_only: bool = True):
             return no('accessory_category')
 
     _required = list(_query_words_required(crit.get('query')))
+    # Сравниваем без апострофов и с учётом основы: «Levi's» = «levis»,
+    # «джинсы» = «джинс». Без этого точный критерий давал ноль находок:
+    # продавцы пишут «Джинсы Levi's», а мы искали «levis».
+    def _norm(text: str) -> str:
+        return re.sub(r"[’'`\u2019]", '', str(text or '').lower())
+
+    _hay_n = _norm(hay)
     _missing = []
     for w in _required:
-        if w.isdigit():
-            if not re.search(r'(?<![0-9])' + re.escape(w) + r'(?![0-9a-zA-Z])', hay):
+        _wn = _norm(w)
+        if _wn.isdigit():
+            if not re.search(r'(?<![0-9])' + re.escape(_wn) + r'(?![0-9])', _hay_n):
                 _missing.append(w)
-        elif w.lower() not in hay:
-            _missing.append(w)
+            continue
+        # основа: отрезаем русское окончание, чтобы «джинсы» нашлись в «джинсовые»
+        _stem = _wn[:-1] if len(_wn) > 4 and _wn[-1] in 'ыаиыеуюя' else _wn
+        if _stem and _stem in _hay_n:
+            continue
+        _missing.append(w)
     if _missing:
         _title = str(ad.get('title') or '').lower()
         _found_in_title = [w for w in _required if w.lower() in _title]
