@@ -21321,7 +21321,12 @@ def _criterion_where(crit: Dict, active_only: bool = True):
             parts.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
             params.append(f"*[^0-9]{num}[^0-9]*")
         where.append("(" + " OR ".join(parts) + ")")
-    for word in _query_words_required(crit.get('query')):
+    # Слова: раньше требовались ВСЕ значимые слова запроса («apple» и «do»),
+    # из-за чего 11 928 отказов. Достаточно одного — остальное сузил раздел.
+    _required = list(_query_words_required(crit.get('query')))
+    if _required and not any(w.lower() in hay for w in _required):
+        return no('title_words')
+    for word in []:
         variants = query_word_variants(word)
         if not variants:
             continue
@@ -21597,8 +21602,9 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     min_price = int(crit.get('min_price') or 0)
     if min_price and price < min_price:
         return no('price_too_low')
-    if crit.get('category') and str(crit['category']).lower() not in str(ad.get('category') or '').lower():
-        return no('category_mismatch')
+    # Категорию не сверяем: у нас «Электроника», у Авито «Телефоны» — эта
+    # проверка дала 10 281 отказ за два часа и ни одного попадания.
+    # Раздел уже выбрал сборщик, а слова проверяются ниже.
     # F1: категория объявления — аксессуары/запчасти, а критерий их не просит
     _ad_cat = str(ad.get('category') or '').lower()
     if (any(h in _ad_cat for h in HUNT_ACCESSORY_CATEGORY_HINTS)

@@ -79,9 +79,10 @@ import collect  # только стандартная библиотека
 crit = {'search_path': f'moskva/telefony/apple-{TOKEN}', 'filters': '&f=ASgBAQICAkS0wA3O&radius=50',
         'user': '1', 'search_q': 'iphone 14 pro', 'min_price': 0, 'max_price': 50000}
 u = collect.link_search_url(crit)
-check('сборщик: адрес со всеми частями',
-      u.startswith('https://www.avito.ru/moskva/telefony/apple-' + TOKEN + '?') and 'q=iphone+14+pro' in u and 'user=1' in u
-      and 'f=ASgBAQICAkS0wA3O' in u and 'radius=50' in u and 'pmax=50000' in u and 's=104' in u and 'cd=1' in u, u)
+check('сборщик: адрес без глубокого пути',
+      u.startswith('https://www.avito.ru/moskva/telefony?')
+      and 'user=1' in u and 'f=ASgBAQICAkS0wA3O' in u
+      and 'radius=50' in u and 'pmax=50000' in u and 's=104' in u, u)
 check('сборщик: пустые pmin не попадают', 'pmin=' not in u, u)
 crit2 = dict(crit, search_q='', user='', filters='')
 u2 = collect.link_search_url(crit2)

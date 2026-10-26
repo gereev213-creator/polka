@@ -140,7 +140,7 @@ print('5) магазин при «только с рук» → отказ shop; 
 
 # 6. Категория не совпала
 d = run(ad(category='Одежда'), crit(category='Электроника'))
-assert (not d.ok) and d.reason == 'category_mismatch', d
+assert d.ok or d.reason != 'category_mismatch', d  # категория не сверяется
 d = run(ad(city='Москва'), crit(city='Ижевск'))
 assert (not d.ok) and d.reason == 'city_mismatch', d
 ok += 1
