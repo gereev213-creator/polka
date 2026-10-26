@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-20'
+const APP_BUILD = '2026-10-26-21'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1614,11 +1614,20 @@ function HuntLinkPage() {
         </button>}
       />
 
-      <div className="section-label">Ссылка с Авито</div>
-      <div className="hunt-h1">Вставьте ссылку с Авито</div>
+      {/* Слова — основной путь: человеку не нужно бегать на Авито и копировать
+          адрес. Ссылка осталась ниже как точный режим. */}
+      <div className="hunt-h1">Что ищем?</div>
+      <div className="hunt-sub">
+        Напишите словами: «джинсы levis до 3000, только частные» — подберём фильтры сами.
+      </div>
+      <button type="button" className="cta-primary w-full mt-14"
+        onClick={() => navigate('/hunt/manual')}>
+        Создать критерий
+      </button>
+
+      <div className="section-label mt-20">Или ссылкой с Авито</div>
       <div className="hunt-sub">
         Выставьте фильтры на Авито и скопируйте адрес — остальное перенесётся само.
-
       </div>
 
       <div className="hunt-card">
