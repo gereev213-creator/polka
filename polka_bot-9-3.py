@@ -21747,7 +21747,12 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 return no('title_words')
             continue
         variants = query_word_variants(word)
-        if variants and not any(v in hay for v in variants):
+        # Сравниваем без апострофов: в объявлениях пишут «Levi's», «Levi’s»,
+        # «LEVIS», а в критерии — «Levis». Без нормализации точный критерий
+        # давал ноль находок, хотя нужные лоты лежали в базе.
+        _hay_ap = re.sub(r"[’'`\u2019]", '', hay)
+        if variants and not any(
+                v in hay or re.sub(r"[’'`\u2019]", '', v) in _hay_ap for v in variants):
             return no('title_words')
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
