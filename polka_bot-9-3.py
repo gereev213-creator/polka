@@ -30254,6 +30254,27 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'llm_probe':
+        # Живая проверка модели: отправляем одну фразу и возвращаем ответ.
+        try:
+            raw = await _llm_completion(
+                messages=[{'role': 'user', 'content': 'Ответь одним словом: работает?'}],
+                max_tokens=8, temperature=0)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]})
+        return _miniapp_json({'ok': bool(str(raw).strip()), 'answer': str(raw)[:120],
+                              'url': LLM_URL, 'model': LLM_MODEL,
+                              'key_set': bool(LLM_API_KEY or GROQ_API_KEY)})
+
+    if action == 'llm':
+        # Включить проверку объявлений моделью.
+        val = '1' if int((body or {}).get('on') or 0) else '0'
+        try:
+            _setting_set('hunt.llm', val)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
+        return _miniapp_json({'ok': True, 'hunt.llm': val})
+
     if action == 'require_desc':
         # Управление требованием описания: 1 — ждать (точно, но медленно),
         # 0 — решать по заголовку с пометкой «не проверено» (быстро).
