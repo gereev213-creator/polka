@@ -21662,6 +21662,81 @@ def _item_type_of(text: str) -> str:
     return ''
 
 
+# ── Проверка объявления моделью ─────────────────────────────────────────────
+# Правила по словам не понимают смысл: «Шапки Levis» проходят по бренду,
+# «Джинсовые Levi's» отсекаются по слову. Модель решает это по заголовку,
+# описания не требует. Кэш в базе, чтобы за одно объявление не платить дважды.
+_LLM_MATCH_PROMPT = (
+    "Ты отбираешь объявления для покупателя. Ответь ОДНИМ словом: да или нет.\n"
+    "Критерий покупателя: {query}\n"
+    "Объявление: {title}\n"
+    "Цена: {price} ₽\n"
+    "Подходит ли объявление под критерий? Учитывай тип товара: джинсы — это не шапка, "
+    "не худи и не сумка. Бренд должен совпадать. Ответь только «да» или «нет»."
+)
+
+
+def _llm_match_cached(title: str, query: str, price: int) -> str:
+    """Ответ модели из кэша или пустая строка."""
+    key = _hashlib.sha1(f'{query}|{title}|{price}'.encode()).hexdigest()
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT verdict FROM llm_cache WHERE k=?", (key,))
+        row = cur.fetchone()
+        return str(row['verdict']) if row else ''
+    except Exception:
+        return ''
+
+
+def _llm_match_store(title: str, query: str, price: int, verdict: str) -> None:
+    key = _hashlib.sha1(f'{query}|{title}|{price}'.encode()).hexdigest()
+    try:
+        db.conn.execute(
+            "INSERT OR REPLACE INTO llm_cache (k, verdict, created_at) VALUES (?,?,?)",
+            (key, verdict, datetime.now(timezone.utc).isoformat()))
+        db.conn.commit()
+    except Exception:
+        pass
+
+
+async def llm_matches_ad(ad: Dict, crit: Dict) -> Optional[bool]:
+    """True/False — подходит ли объявление; None — проверить не удалось."""
+    query = str(crit.get('query') or '').strip()
+    title = str(ad.get('title') or '').strip()
+    if not query or not title:
+        return None
+    price = int(ad.get('price') or 0)
+    cached = _llm_match_cached(title, query, price)
+    if cached in ('1', '0'):
+        return cached == '1'
+    try:
+        prompt = _LLM_MATCH_PROMPT.format(query=query[:120], title=title[:160], price=price)
+        raw = await _llm_completion(
+            messages=[{'role': 'user', 'content': prompt}],
+            max_tokens=6, temperature=0,
+        )
+    except Exception as e:
+        logger.warning(f"llm_match: {e}")
+        return None
+    low = str(raw or '').strip().lower()
+    verdict = '1' if low.startswith('да') or low.startswith('yes') else ('0' if low.startswith('нет') or low.startswith('no') else '')
+    if not verdict:
+        return None
+    _llm_match_store(title, query, price, verdict)
+    return verdict == '1'
+
+
+def _llm_match_sync(ad: Dict, crit: Dict) -> Optional[bool]:
+    """Синхронная обёртка для мест, где нет await."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            return None
+        return loop.run_until_complete(llm_matches_ad(ad, crit))
+    except Exception:
+        return None
+
+
 def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 hidden: bool = False, already_sent: bool = False,
                 deep_check: bool = True) -> Decision:
@@ -21914,6 +21989,18 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('stale')
     if ago is None and not HUNT_ALLOW_UNDATED:
         return no('stale')
+
+    # Модель как последний фильтр: правила по словам уже отработали, но
+    # «Шапки Levis» по бренду проходили. Включается настройкой hunt.llm=1.
+    try:
+        if str(_setting_get('hunt.llm', '0')).strip() in ('1', 'true', 'yes', 'on'):
+            _verdict = _llm_match_sync(ad, crit)
+            if _verdict is False:
+                return no('llm_rejected')
+    except Exception:
+        # В тестах функция вызывается без логгера и настроек — это не повод
+        # падать: без модели решение выносится по правилам, как раньше.
+        pass
 
     needs_description = _hunt_needs_description(crit)
     if needs_description and not description.strip():
@@ -25717,6 +25804,16 @@ def normalize_category(value: str) -> str:
     if not text:
         return ''
     return CATEGORY_NAMES.get(text.lower(), text)
+
+
+def ensure_llm_cache() -> None:
+    """Кэш ответов модели: одно объявление проверяем один раз."""
+    try:
+        db.conn.execute("CREATE TABLE IF NOT EXISTS llm_cache ("
+                        "k TEXT PRIMARY KEY, verdict TEXT, created_at TEXT)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"llm_cache: {e}")
 
 
 def ensure_filter_blob_column() -> None:
