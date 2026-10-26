@@ -21677,10 +21677,14 @@ def _item_type_of(text: str) -> str:
 _LLM_MATCH_PROMPT = (
     "Ты отбираешь объявления для покупателя. Ответь ОДНИМ словом: да или нет.\n"
     "Критерий покупателя: {query}\n"
+    "{requirements}"
     "Объявление: {title}\n"
     "Цена: {price} ₽\n"
-    "Подходит ли объявление под критерий? Учитывай тип товара: джинсы — это не шапка, "
-    "не худи и не сумка. Бренд должен совпадать. Ответь только «да» или «нет»."
+    "{details}"
+    "Правила: тип товара должен совпадать (джинсы — это не шапка, не худи, не сумка); "
+    "бренд должен совпадать; если в критерии указан частник — магазины не подходят; "
+    "если указано состояние — оно должно подходить.\n"
+    "Ответь только «да» или «нет»."
 )
 
 
@@ -21717,8 +21721,21 @@ async def llm_matches_ad(ad: Dict, crit: Dict) -> Optional[bool]:
     cached = _llm_match_cached(title, query, price)
     if cached in ('1', '0'):
         return cached == '1'
+    # Всё, что знаем об объявлении: состояние, город, размер, продавец.
+    # Описания Авито не отдаёт, но эти поля есть всегда.
+    _details = []
+    for _label, _field in (('Состояние', 'condition'), ('Город', 'city'),
+                           ('Размер', 'size'), ('Продавец', 'seller_type'),
+                           ('Имя продавца', 'seller_name')):
+        _v = str(ad.get(_field) or '').strip()
+        if _v and _v.lower() not in ('none', 'null'):
+            _details.append(f'{_label}: {_v[:40]}')
+    _req = str(crit.get('requirements') or '').strip()
     try:
-        prompt = _LLM_MATCH_PROMPT.format(query=query[:120], title=title[:160], price=price)
+        prompt = _LLM_MATCH_PROMPT.format(
+            query=query[:120], title=title[:160], price=price,
+            requirements=(f'Требования покупателя: {_req[:160]}\n' if _req else ''),
+            details=('\n'.join(_details) + '\n' if _details else ''))
         raw = await _llm_completion(
             messages=[{'role': 'user', 'content': prompt}],
             max_tokens=6, temperature=0,
