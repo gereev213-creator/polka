@@ -21324,8 +21324,26 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     # Требуем ВСЕ значимые слова запроса, но ищем их и в описании: «джинсы
     # levis» не должно превращаться в «шапка levis». Описание сборщик
     # докачивает отдельно (need-details), поэтому проверка ждёт его.
+    # Аксессуары: «чехол на oneplus», «зарядка», «стекло» не должны проходить
+    # по критерию «iPhone 15 Pro». Ищем слово аксессуара в заголовке, если
+    # сам критерий про аксессуар не спрашивает.
+    _acc = ('чехол', 'чехл', 'зарядк', 'зарядное', 'кабель', 'стекло', 'плёнк',
+            'пленк', 'адаптер', 'бампер', 'наклейк', 'ремешок', 'переходник',
+            'держатель', 'картридж', 'пломб')
+    _crit_txt = str(crit.get('query') or '').lower()
+    if not any(a in _crit_txt for a in _acc):
+        _title_l = str(ad.get('title') or '').lower()
+        if any(a in _title_l for a in _acc):
+            return no('accessory_category')
+
     _required = list(_query_words_required(crit.get('query')))
-    _missing = [w for w in _required if w.lower() not in hay]
+    _missing = []
+    for w in _required:
+        if w.isdigit():
+            if not re.search(r'(?<![0-9])' + re.escape(w) + r'(?![0-9a-zA-Z])', hay):
+                _missing.append(w)
+        elif w.lower() not in hay:
+            _missing.append(w)
     if _missing:
         _title = str(ad.get('title') or '').lower()
         _found_in_title = [w for w in _required if w.lower() in _title]
