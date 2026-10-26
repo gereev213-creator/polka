@@ -1327,6 +1327,14 @@ async def _llm_completion(
     temperature: float = 0.7,
     system: str = "",
 ) -> str:
+    # Модель можно переопределить настройкой hunt.llm_model — тогда для смены
+    # не нужно трогать переменные окружения и пересобирать приложение.
+    try:
+        _override = str(_setting_get('hunt.llm_model', '') or '').strip()
+    except Exception:
+        _override = ''
+    if _override:
+        globals()['LLM_MODEL'] = _override
     providers = []
     if LLM_API_KEY:
         providers.append((LLM_URL, LLM_API_KEY, LLM_MODEL, "openmodel" if LLM_API_KEY.startswith("om-") else "openai"))
@@ -30256,6 +30264,9 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
     if action == 'llm_probe':
         # Живая проверка модели: отправляем одну фразу и возвращаем ответ.
+        _probe_model = str((body or {}).get('model') or '').strip()
+        if _probe_model:
+            globals()['LLM_MODEL'] = _probe_model
         try:
             raw = await _llm_completion(
                 messages=[{'role': 'user', 'content': 'Ответь одним словом: работает?'}],
@@ -30269,6 +30280,12 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     if action == 'llm':
         # Включить проверку объявлений моделью.
         val = '1' if int((body or {}).get('on') or 0) else '0'
+        _m = str((body or {}).get('model') or '').strip()
+        if _m:
+            try:
+                _setting_set('hunt.llm_model', _m)
+            except Exception:
+                pass
         try:
             _setting_set('hunt.llm', val)
         except Exception as e:
