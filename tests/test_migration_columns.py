@@ -17,7 +17,8 @@ checks.append(("нет общего try на две колонки", 'filter_blo
 c = sqlite3.connect('/tmp/mig_test2.db')
 c.execute('CREATE TABLE IF NOT EXISTS hunt_criteria (id INTEGER PRIMARY KEY, query TEXT)')
 c.commit()
-ns = {'db': type('D', (), {'conn': c})(),
+ns = {'re': re,
+      'db': type('D', (), {'conn': c})(),
       'logger': type('L', (), {'info': staticmethod(lambda *a: None),
                                'warning': staticmethod(lambda *a: None)})()}
 exec(body, ns)
