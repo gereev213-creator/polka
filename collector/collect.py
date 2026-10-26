@@ -90,6 +90,11 @@ class Blocked(Exception):
 # (проверено: сервер Amvera получает 429 «проблема с IP» на первом запросе),
 # а резидентный или мобильный прокси выглядит как обычный домашний абонент.
 # Формат: http://логин:пароль@хост:порт
+# Внешний скрапер (ScrapingBee): обходит гео-блокировки Авито без прокси.
+# Бесплатный тариф — 1000 кредитов, один запрос = 1-25 кредитов в зависимости
+# от рендера. Включается переменной SCRAPINGBEE_KEY.
+SCRAPINGBEE_KEY = os.environ.get('SCRAPINGBEE_KEY', '')
+SCRAPINGBEE_URL = 'https://app.scrapingbee.com/api/v1/'
 PROXY = os.environ.get('POLKA_PROXY', '')
 _OPENER = None
 
@@ -254,8 +259,24 @@ def default_targets() -> list:
              "city": "Россия", "category": cat} for cat, slug in cats]
 
 
+def _fetch_via_scraper(url: str, timeout: int = 60) -> str:
+    """Запрос через ScrapingBee: их IP и их браузер, наша только ссылка."""
+    from urllib.parse import urlencode
+    q = urlencode({'api_key': SCRAPINGBEE_KEY, 'url': url, 'country_code': 'ru',
+                   'render_js': 'false', 'premium_proxy': 'true'})
+    req = urllib.request.Request(SCRAPINGBEE_URL + '?' + q,
+                                 headers={'User-Agent': USER_AGENT})
+    with _opener().open(req, timeout=timeout) as resp:
+        return resp.read().decode('utf-8', 'ignore')
+
+
 def fetch(url: str, timeout: int = 25) -> str:
     """Один вежливый запрос. Никаких заголовков, имитирующих «свой» сайт."""
+    if SCRAPINGBEE_KEY and 'avito.ru' in url:
+        try:
+            return _fetch_via_scraper(url, timeout=max(timeout, 60))
+        except Exception as exc:
+            print(f"  ⚠ скрапер не ответил: {str(exc)[:90]} — пробую напрямую")
     req = urllib.request.Request(url, headers={
         'User-Agent': USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml',
