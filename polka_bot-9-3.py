@@ -30143,7 +30143,22 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         # правил старые записи остаются отклонёнными, а заново они не
         # пересчитываются, потому что объявления уже в базе (дубли).
         crit = int((body or {}).get('crit') or 0)
+        # Обычный пересчёт берёт только последние 300 объявлений, поэтому
+        # старые лоты (джинсы Levis, собранные утром) в него не попадают и
+        # висят без решения. all=1 прогоняет ВСЮ базу порциями.
         try:
+            if int((body or {}).get('all') or 0):
+                total = 0
+                offset = 0
+                for _ in range(40):
+                    step = await asyncio.to_thread(
+                        _db_locked, hunt_matches_recompute, None, crit or None,
+                        300, False, offset, 0)
+                    total += int(step or 0)
+                    if not step:
+                        break
+                    offset += 300
+                return _miniapp_json({'ok': True, 'recomputed': total, 'mode': 'all'})
             n = await asyncio.to_thread(_db_locked, hunt_matches_recompute, None, crit or None)
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
