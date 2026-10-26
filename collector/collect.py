@@ -1926,10 +1926,10 @@ def details_only_loop(server: str, token: str, limit: int = 0,
     """
     total = 0
     while True:
-        try:
-            # Не больше 8 карточек за проход: 30 подряд гарантированно дают 439.
+        # Не больше 8 карточек за проход: 30 подряд гарантированно дают 439.
         _limit = limit or 8
-        items = fetch_need_details(server, token, _limit)
+        try:
+            items = fetch_need_details(server, token, _limit)
         except Exception as exc:
             print(f"  ✖ очередь не получена: {str(exc)[:120]}")
             items = []
