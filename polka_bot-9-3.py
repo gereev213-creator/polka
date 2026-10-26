@@ -21336,6 +21336,13 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         if any(a in _title_l for a in _acc):
             return no('accessory_category')
 
+    # Чужой тип товара: критерий «джинсы levis» не должен пропускать
+    # «шапка levis». Работает по заголовку — описание не нужно.
+    _want_type = _item_type_of(crit.get('query'))
+    _got_type = _item_type_of(ad.get('title'))
+    if _want_type and _got_type and _want_type != _got_type:
+        return no('wrong_item_type')
+
     _required = list(_query_words_required(crit.get('query')))
     # Сравниваем без апострофов и с учётом основы: «Levi's» = «levis»,
     # «джинсы» = «джинс». Без этого точный критерий давал ноль находок:
@@ -21606,6 +21613,37 @@ def _hunt_needs_description(crit: Dict) -> bool:
     if rj.get('not_opened'):
         return True
     return False
+
+
+# Типы товаров для отсева «чужого»: критерий «джинсы levis» не должен
+# пропускать «шапка levis». Работает по заголовку, описания не нужны.
+ITEM_TYPE_WORDS = {
+    'джинс': ('джинс', 'denim'),
+    'шапк': ('шапк', 'кепк', 'бейсболк', 'beanie'),
+    'худи': ('худи', 'hoodie', 'толстовк'),
+    'свитер': ('свитер', 'джемпер', 'кардиган', 'кофт'),
+    'рубашк': ('рубашк', 'shirt'),
+    'футболк': ('футболк', 'майк', 't-shirt'),
+    'куртк': ('куртк', 'пуховик', 'пальто', 'плащ', 'бомбер'),
+    'сумк': ('сумк', 'рюкзак', 'bag'),
+    'платье': ('платье', 'юбк', 'сарафан'),
+    'кроссовк': ('кроссовк', 'ботинк', 'кед', 'туфл', 'сапог', 'sneaker'),
+    'телефон': ('телефон', 'iphone', 'смартфон', 'айфон'),
+    'ноутбук': ('ноутбук', 'macbook', 'laptop', 'ультрабук'),
+    'наушник': ('наушник', 'airpods', 'гарнитур'),
+    'чехол': ('чехол', 'чехл', 'бампер', 'накладк'),
+    'зарядк': ('зарядк', 'зарядное', 'адаптер', 'кабель', 'блок питания'),
+    'стекло': ('стекло', 'плёнк', 'пленк', 'защитное'),
+}
+
+
+def _item_type_of(text: str) -> str:
+    """Какой тип товара назван в тексте (ключ из ITEM_TYPE_WORDS или '')."""
+    low = str(text or '').lower()
+    for key, words in ITEM_TYPE_WORDS.items():
+        if any(w in low for w in words):
+            return key
+    return ''
 
 
 def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
