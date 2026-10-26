@@ -21796,7 +21796,12 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         _vars = [str(v).lower() for v in _vars] + [_subject]
         if len(_subject) >= 6:
             _vars.append(_subject[:5])
-        if not any(v and v in _low_title for v in _vars):
+        # Апострофы и лишние знаки: «Levi's» = «levis». Без этого слово-товар
+        # не находилось, и нужные джинсы отклонялись по title_words.
+        _title_ap = re.sub(r"[’'`\u2019]", '', _low_title)
+        if not any(v and (v in _low_title
+                          or re.sub(r"[’'`\u2019]", '', v) in _title_ap)
+                   for v in _vars):
             return no('title_words')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
     if junk:
