@@ -30131,6 +30131,30 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'explain':
+        # Почему объявление отклонено/принято по конкретному критерию.
+        # Возвращает решение и причину — без догадок по логам.
+        try:
+            crit_id = int((body or {}).get('crit') or 0)
+            ad_id = int((body or {}).get('ad') or 0)
+        except Exception:
+            crit_id = ad_id = 0
+        cur = db.conn.cursor()
+        cur.execute("SELECT * FROM hunt_criteria WHERE id=?", (crit_id,))
+        crit = cur.fetchone()
+        cur.execute("SELECT * FROM ads WHERE id=?", (ad_id,))
+        ad = cur.fetchone()
+        if not crit or not ad:
+            return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+        try:
+            d = evaluate_ad(dict(ad), dict(crit))
+            out = {'ok': True, 'decision': d.ok, 'reason': d.reason, 'label': d.label}
+        except Exception as e:
+            out = {'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]}
+        out['title'] = dict(ad).get('title')
+        out['query'] = dict(crit).get('query')
+        return _miniapp_json(out)
+
     if action == 'purge_matches':
         # Удалить находки по критерию (например мусор, ушедший по ошибке).
         try:
