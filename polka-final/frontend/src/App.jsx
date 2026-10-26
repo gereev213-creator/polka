@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-19'
+const APP_BUILD = '2026-10-26-20'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1570,7 +1570,13 @@ function HuntLinkPage() {
     if (!link) return
     setBusy(true); setNote(''); setChips([]); setLimit(false)
     try {
-      const r = await api.huntFromLink(link)
+      // Сначала новый маршрут (ссылка целиком), при отказе — старый
+      let r
+      try {
+        r = await api.huntFromSearchLink(link)
+      } catch (e1) {
+        r = await api.huntFromLink(link)
+      }
       const list = []
       if (r.query) list.push({ label: r.query, kind: 'main' })
       if (r.city) list.push({ label: r.city })

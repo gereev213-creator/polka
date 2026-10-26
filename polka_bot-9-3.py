@@ -25978,6 +25978,30 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             return _miniapp_err('save_failed', 500)
         return _miniapp_json({'ok': True, 'id': crit_id, 'active': bool(active)})
 
+    if method == 'POST' and str((body or {}).get('search_link') or '').strip():
+        # Создание критерия из ссылки Авито одним запросом: разбираем ссылку,
+        # сохраняем путь и фильтры, по ним сборщик ищет ровно эту выдачу.
+        link = parse_avito_search_link((body or {}).get('search_link'))
+        if not link.get('ok'):
+            return _miniapp_json({'ok': False, 'error': 'bad_link',
+                                  'detail': link.get('error') or 'Ссылка не подошла'},
+                                 status=400)
+        q = str(link.get('q') or '').strip()[:100]
+        crit_id = await asyncio.to_thread(
+            _db_locked, add_criterion, int(viewer_id), q,
+            str((body or {}).get('category') or ''), str((body or {}).get('city') or ''),
+            int(link.get('max_price') or 0), 0, int(link.get('min_price') or 0), 0, 0,
+            'private' if str(link.get('user') or '') == '1' else 'any', '', None, '', 0,
+            '', '', '', link)
+        if crit_id == -1:
+            return _miniapp_json({'ok': False, 'error': 'limit'}, status=402)
+        if not crit_id:
+            return _miniapp_json({'ok': False, 'error': 'duplicate'}, status=409)
+        return _miniapp_json({'ok': True, 'id': crit_id, 'query': q,
+                              'path': link.get('path'), 'q': q,
+                              'max_price': link.get('max_price'),
+                              'min_price': link.get('min_price')})
+
     # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
     # страницы — он авторизуется токеном, а не initData
     if method == 'GET' and request.query.get('for_collector'):
@@ -25994,7 +26018,12 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                        "COALESCE(max_hours,0) AS max_hours, "
                        "COALESCE(requirements_json,'') AS requirements_json, "
                        "COALESCE(filter_blob,'') AS filter_blob, "
-                       "COALESCE(filter_url,'') AS filter_url "
+                       "COALESCE(filter_url,'') AS filter_url, "
+                       "COALESCE(from_link,0) AS from_link, "
+                       "COALESCE(search_path,'') AS search_path, "
+                       "COALESCE(search_q,'') AS search_q, "
+                       "COALESCE(search_filters,'') AS search_filters, "
+                       "COALESCE(search_user,'') AS search_user "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
         # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
@@ -32488,6 +32517,22 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/ingest/need-details', api_ingest_need_details)
     app.router.add_post('/api/ingest/status', api_ingest_status)
     app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
+    async def api_hunt_parse_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
+        """POST /api/hunt/parse-link — что поняли из ссылки, ничего не сохраняя."""
+        viewer_id = _miniapp_viewer(request)
+        if not viewer_id:
+            return _miniapp_err('unauthorized', 401)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        link = parse_avito_search_link((body or {}).get('url'))
+        if not link.get('ok'):
+            return _miniapp_json({'ok': False, 'error': 'bad_link',
+                                  'detail': link.get('error') or 'Ссылка не подошла'})
+        return _miniapp_json(link)
+
+    app.router.add_route('POST', '/api/hunt/parse-link', api_hunt_parse_link)
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)

@@ -197,6 +197,10 @@ export const api = {
   getFilters: () => request('/api/filters'),
   getBanners: () => request('/api/banners'),
   getFeedBanners: () => request('/api/feed-banners'),
+  // Критерий из ссылки Авито: сервер сохраняет путь и фильтры, сборщик
+  // потом ищет ровно эту выдачу.
+  huntFromSearchLink: (url) => request('/api/hunt', { method: 'POST', body: JSON.stringify({ search_link: url }) }),
+  parseLink: (url) => request('/api/hunt/parse-link', { method: 'POST', body: JSON.stringify({ url }) }),
   getListing: (id) => request(`/api/ads/${id}`),
 
   // Создание: сначала фото (multipart) → путь, затем объявление
