@@ -30059,6 +30059,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'clear_old_links':
+        # У критериев, созданных старым маршрутом from-link, остался filter_url,
+        # а по нему правило «доверяй ссылке» принимает ВСЁ подряд: в ленту
+        # попали джинсы по критерию «apple do». Сносим старые ссылки — теперь
+        # путь хранится в search_path.
+        cur = db.conn.cursor()
+        cur.execute("UPDATE hunt_criteria SET filter_url='', filter_labels='' WHERE COALESCE(search_path,'')=''")
+        n = cur.rowcount
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'cleared': n})
+
     if action == 'resume':
         # Включить критерии обратно (для теста сбора). limit — сколько первых.
         try:
