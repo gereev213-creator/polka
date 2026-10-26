@@ -684,6 +684,18 @@ def items_from_microdata(html: str) -> list:
         # Раньше требовалось ещё и url, и цену — на текущей вёрстке Авито
         # из-за этого отбрасывались ВСЕ карточки (проверено 24.10: 0 из 30).
         # Заголовок есть всегда, остальное добираем по возможности.
+        # Продавец: в карточке явно помечено «Частное лицо» либо ссылка на
+        # магазин. Без этого в промпт модели не уходило «частник/магазин»,
+        # и требование «только частные» проверить было нечем.
+        seller_type = ''
+        seller_name = ''
+        if re.search(r'Частное лицо|Авито Доставка[^<]{0,20}частн', chunk, re.I):
+            seller_type = 'private'
+        elif re.search(r'data-marker="seller-link/link"|/brands/|магазин', chunk, re.I):
+            seller_type = 'shop'
+        _sm = re.search(r'data-marker="seller-link/link"[^>]*>([^<]{2,60})<', chunk)
+        if _sm:
+            seller_name = unescape(_sm.group(1)).strip()[:60]
         if title:
             out.append({
                 'title': title[:200],
@@ -693,6 +705,8 @@ def items_from_microdata(html: str) -> list:
                 'external_id': ext,
                 'city': city,
                 'hours_ago': ago,
+                'seller_type': seller_type,
+                'seller_name': seller_name,
             })
     return out
 

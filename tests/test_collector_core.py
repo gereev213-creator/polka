@@ -102,6 +102,21 @@ check('разделы: MacBook → компьютеры (ноутбуки под
 check('разделы: нет цели «весь сайт»',
       not any(x.rstrip('/').endswith('/all') or '/all?' in x for x in urls), urls)
 
+
+# ── продавец в карточке ─────────────────────────────────────────────────────
+_card_private = ('<div data-marker="item"><img itemProp="image" alt="Джинсы Levis 501">'
+                 '<div class="priceLabelGrid">1 900 ₽</div><div>Частное лицо</div></div>')
+_priv = collect.items_from_microdata(_card_private)
+check('продавец: частное лицо распознано',
+      bool(_priv) and _priv[0].get('seller_type') == 'private', _priv)
+
+_card_shop = ('<div data-marker="item"><img itemProp="image" alt="Джинсы Levis 501">'
+              '<div class="priceLabelGrid">1 900 ₽</div>'
+              '<a data-marker="seller-link/link" href="/brands/levis">Levis</a></div>')
+_shop = collect.items_from_microdata(_card_shop)
+check('продавец: магазин распознан',
+      bool(_shop) and _shop[0].get('seller_type') == 'shop', _shop)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
