@@ -985,6 +985,37 @@ CITY_SLUG = {
 # сбор — качались все телефоны подряд, а нужное отсеивалось уже на сервере.
 # Если подходящий айфон лежал на пятой странице, его просто не находили.
 # Теперь запрос переводится в категорию + цену, и фильтрует САМ Авито.
+# Русские слова товаров → раздел Авито. Нужно, когда в критерии нет
+# категории: без этого сборщик идёт по всему Авито (/all) и тащит шапки
+# вместо джинсов.
+# Бренды → раздел: критерий часто называют одним брендом («Levis»),
+# и без этого он ищется по всему Авито.
+BRAND_CATEGORY = {
+    'levis': 'odezhda_obuv_aksessuary', 'levi': 'odezhda_obuv_aksessuary',
+    'nike': 'odezhda_obuv_aksessuary', 'adidas': 'odezhda_obuv_aksessuary',
+    'zara': 'odezhda_obuv_aksessuary', 'uniqlo': 'odezhda_obuv_aksessuary',
+    'lacoste': 'odezhda_obuv_aksessuary', 'stone': 'odezhda_obuv_aksessuary',
+    'supreme': 'odezhda_obuv_aksessuary', 'carhartt': 'odezhda_obuv_aksessuary',
+    'apple': 'telefony', 'samsung': 'telefony', 'xiaomi': 'telefony',
+    'iphone': 'telefony', 'macbook': 'noutbuki', 'sony': 'audio_i_video',
+}
+
+
+RU_CATEGORY_WORDS = {
+    'джинсы': 'odezhda_obuv_aksessuary', 'джинсов': 'odezhda_obuv_aksessuary',
+    'худи': 'odezhda_obuv_aksessuary', 'шапка': 'odezhda_obuv_aksessuary',
+    'куртка': 'odezhda_obuv_aksessuary', 'пуховик': 'odezhda_obuv_aksessuary',
+    'кофта': 'odezhda_obuv_aksessuary', 'футболка': 'odezhda_obuv_aksessuary',
+    'кроссовки': 'odezhda_obuv_aksessuary', 'ботинки': 'odezhda_obuv_aksessuary',
+    'сумка': 'odezhda_obuv_aksessuary', 'ремень': 'odezhda_obuv_aksessuary',
+    'телефон': 'telefony', 'айфон': 'telefony', 'iphone': 'telefony',
+    'ноутбук': 'noutbuki', 'макбук': 'noutbuki', 'macbook': 'noutbuki',
+    'наушники': 'audio_i_video', 'колонка': 'audio_i_video',
+    'приставка': 'audio_i_video', 'планшет': 'planshety_i_elektronnye_knigi',
+    'монитор': 'tovary_dlya_kompyutera', 'клавиатура': 'tovary_dlya_kompyutera',
+}
+
+
 CATEGORY_BY_WORD = {
     # телефоны
     'айфон': 'telefony', 'iphone': 'telefony', 'самсунг': 'telefony',
@@ -1286,6 +1317,18 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             if word in CATEGORY_BY_WORD:
                 slug = CATEGORY_BY_WORD[word]
                 break
+        if not slug:
+            # Слова нет в справочнике Авито — пробуем русский словарь товаров.
+            # Без этого «джинсы levis» шло по всему Авито и приносило шапки.
+            for word in words:
+                if word in RU_CATEGORY_WORDS:
+                    slug = RU_CATEGORY_WORDS[word]
+                    break
+            if not slug:
+                for word in words:
+                    if word in BRAND_CATEGORY:
+                        slug = BRAND_CATEGORY[word]
+                        break
         try:
             pmin = int(crit.get('min_price') or 0)
         except Exception:
