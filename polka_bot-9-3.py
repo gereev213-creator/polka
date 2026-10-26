@@ -21327,8 +21327,15 @@ def _criterion_where(crit: Dict, active_only: bool = True):
     _required = list(_query_words_required(crit.get('query')))
     _missing = [w for w in _required if w.lower() not in hay]
     if _missing:
-        if str(crit.get('query') or '').strip() and not str(ad.get('description') or '').strip():
-            # описания ещё нет — пусть сервер попросит его и пересчитает
+        _title = str(ad.get('title') or '').lower()
+        _found_in_title = [w for w in _required if w.lower() in _title]
+        # Ждём описание ТОЛЬКО если часть слов уже нашлась в заголовке:
+        # значит товар тот, а бренд или модель могут быть в описании.
+        # Если в заголовке нет ни одного слова — это другой товар, ждать
+        # нечего: описания часто недоступны (Авито отдаёт 439), и такие
+        # записи висели бы в ожидании вечно.
+        if (_found_in_title and not str(ad.get('description') or '').strip()
+                and str(crit.get('query') or '').strip()):
             return Decision(False, 'desc_needed', 'нужно описание')
         return no('title_words')
     for word in []:
