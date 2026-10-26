@@ -1168,6 +1168,9 @@ def category_url_from(url: str) -> str:
         idx = parts.index('all')
         if idx + 1 < len(parts):
             slug = parts[idx + 1].split('-')[0]
+    elif len(parts) >= 2:
+        # Ссылка с регионом: moskva/telefony/apple/... → «moskva/telefony»
+        slug = f"{parts[0]}/{parts[1].split('-')[0]}"
     if not slug:
         # запасной путь: первый сегмент, который знаем как категорию
         for part in parts:
@@ -1180,6 +1183,9 @@ def category_url_from(url: str) -> str:
     # Некоторые разделы Авито отдаёт только с блокировкой (проверено:
     # /all/noutbuki стабильно 439, а /all/tovary_dlya_kompyutera — 200).
     # Для них берём соседний раздел и фильтруем по слову.
+    # Регион уже в пути (moskva/telefony) — не добавляем /all
+    if '/' in slug:
+        return f"https://www.avito.ru/{slug}?s=104"
     slug = CATEGORY_SUBSTITUTE.get(slug, slug)
     return f"https://www.avito.ru/all/{slug}?s=104"
 
