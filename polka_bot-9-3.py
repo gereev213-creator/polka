@@ -25611,7 +25611,8 @@ def ensure_filter_blob_column() -> None:
     /api/hunt отвечал 500 «no such column: filter_url». Теперь каждая
     колонка добавляется отдельно и только если её нет.
     """
-    for column in ('filter_blob', 'filter_url', 'filter_labels'):
+    for column in ('filter_blob', 'filter_url', 'filter_labels',
+                   'from_link', 'search_path', 'search_q', 'search_filters', 'search_user'):
         try:
             have = {r[0] for r in db.conn.execute(
                 "SELECT name FROM pragma_table_info('hunt_criteria')")}
@@ -25625,6 +25626,100 @@ def ensure_filter_blob_column() -> None:
             logger.warning(f"hunt_criteria {column}: {e}")
 
 
+
+
+# ── Импорт ссылки поиска Авито ─────────────────────────────────────────────
+# Человек выставляет фильтры на Авито и вставляет ссылку; мы разбираем её в поля
+# критерия и храним ПУТЬ и ФИЛЬТРЫ, чтобы сборщик искал ровно так же. Сервер по
+# ссылке сам никуда не ходит: из неё берутся только проверенные части.
+AVITO_LINK_HOSTS = ('avito.ru', 'www.avito.ru', 'm.avito.ru')
+AVITO_LINK_BAD_FIRST = {'profile', 'items', 'brands', 'user', 'favorites', 'account', 'js',
+                        'web', 'safety', 'help', 'support', 'orders', 'messenger', 'delivery',
+                        'static', 'rating', 'reviews', 'shops', 'business', 'pro'}
+AVITO_LINK_PARAM_RE = re.compile(
+    r'^(?:d|radius|searchRadius|geoCoords|district|metro|footWalkingMetro|withImagesOnly|'
+    r'owner\[\]|params\[\d+\](?:\[\])?)$')
+AVITO_LINK_VALUE_RE = re.compile(r'^[\w.,:\- ]{1,100}$')
+AVITO_LINK_SKIP = {'f', 'q', 'pmin', 'pmax', 'user', 's', 'p', 'cd', 'localPriority'}
+
+
+def parse_avito_search_link(url: Any) -> Dict[str, Any]:
+    """Разбирает ссылку поиска Авито. Без сети и без побочных эффектов.
+
+    Возвращает {'ok': True, 'path', 'q', 'min_price', 'max_price', 'user',
+    'filters', 'with_photo', 'region'} или {'ok': False, 'error': '…'}.
+    Принимаются только https/http-ссылки на avito.ru с путём результатов поиска.
+    """
+    from urllib.parse import urlsplit, parse_qs, urlencode
+
+    def bad(msg: str) -> Dict[str, Any]:
+        return {'ok': False, 'error': msg}
+
+    raw = str(url or '').strip()
+    if not raw:
+        return bad('Вставьте ссылку поиска с Авито')
+    if len(raw) > 2000:
+        return bad('Ссылка слишком длинная')
+    if re.match(r'^(?:www\.|m\.)?avito\.ru/', raw, re.I):
+        raw = 'https://' + raw
+    try:
+        parts = urlsplit(raw)
+        port = parts.port
+    except Exception:
+        return bad('Не удалось разобрать ссылку')
+    if parts.scheme.lower() not in ('http', 'https'):
+        return bad('Нужна ссылка вида https://www.avito.ru/…')
+    host = (parts.hostname or '').lower()
+    if host not in AVITO_LINK_HOSTS:
+        return bad('Нужна ссылка с avito.ru: откройте поиск в браузере и скопируйте адрес из строки')
+    if port not in (None, 80, 443) or parts.username or parts.password:
+        return bad('Ссылка выглядит подозрительно')
+    path = parts.path.strip('/')
+    if not path or not re.fullmatch(r'[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){0,5}', path):
+        return bad('Это не ссылка результатов поиска Авито')
+    segs = path.split('/')
+    if segs[0].lower() in AVITO_LINK_BAD_FIRST:
+        return bad('Это не ссылка результатов поиска Авито')
+    if re.search(r'_\d{6,}$', segs[-1]):
+        return bad('Это ссылка на одно объявление, нужна ссылка результатов поиска')
+    qs = parse_qs(parts.query, keep_blank_values=False)
+
+    def first(key: str) -> str:
+        vals = qs.get(key)
+        return str(vals[0]) if vals else ''
+
+    def num(key: str) -> int:
+        digits = re.sub(r'\D', '', first(key))
+        return int(digits) if digits and len(digits) <= 9 else 0
+
+    query = ' '.join(first('q').split())[:100]
+    pmin, pmax = num('pmin'), num('pmax')
+    if pmin and pmax and pmin > pmax:
+        pmin, pmax = pmax, pmin
+    user = first('user')
+    user = user if user in ('1', '2') else ''
+    pairs = []
+    fblob = first('f')
+    if fblob and re.fullmatch(r'[A-Za-z0-9_\-]{4,800}', fblob):
+        pairs.append(('f', fblob))
+    with_photo = 0
+    for key, vals in qs.items():
+        if key in AVITO_LINK_SKIP or not AVITO_LINK_PARAM_RE.match(key):
+            continue
+        for val in vals[:6]:
+            val = str(val)
+            if AVITO_LINK_VALUE_RE.match(val):
+                pairs.append((key, val))
+        if key == 'withImagesOnly' and first(key) in ('1', 'true'):
+            with_photo = 1
+    filters = ('&' + urlencode(pairs, safe='[],:')) if pairs else ''
+    if len(filters) > 1500:
+        return bad('В ссылке слишком много фильтров')
+    return {'ok': True, 'error': '', 'path': path, 'q': query, 'min_price': pmin,
+            'max_price': pmax, 'user': user, 'filters': filters,
+            'with_photo': with_photo, 'region': segs[0] if len(segs) > 1 else ''}
+
+
 def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   max_price: int = 0, min_discount: int = 15,
                   min_price: int = 0, max_hours: int = 0, with_photo: int = 0,
@@ -25632,7 +25727,8 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
                   requirements_json: Optional[Dict] = None,
                   exclude: str = '', strict_model: int = 0,
                   filter_blob: str = '', filter_url: str = '',
-                  filter_labels: str = '') -> Optional[int]:
+                  filter_labels: str = '',
+                  link: Optional[Dict] = None) -> Optional[int]:
     """Добавляет критерий. Пустой запрос или дубль — не создаём."""
     query = ' '.join(str(query or '').split())[:100]
     if len(query) < 2:
@@ -25684,6 +25780,17 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             db.conn.commit()
         except Exception as _e:
             logger.warning(f"filter_blob save: {_e}")
+    if link and link.get('ok'):
+        try:
+            cursor.execute(
+                "UPDATE hunt_criteria SET from_link=1, search_path=?, search_q=?, "
+                "search_filters=?, search_user=? WHERE id=?",
+                (str(link.get('path') or '')[:500], str(link.get('q') or '')[:200],
+                 str(link.get('filters') or '')[:2000], str(link.get('user') or '')[:8],
+                 cursor.lastrowid))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"link save: {_e}")
     if filter_labels:
         try:
             cursor.execute("UPDATE hunt_criteria SET filter_labels=? WHERE id=?",

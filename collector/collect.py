@@ -1099,7 +1099,7 @@ def search_url(template: str, slug: str, query: str, pmin: int, pmax: int,
         url = url.replace(key, value)
     # Категории нет → путь /all/, превращаем в /all
     url = url.replace('/all/?', '/all?').replace('/all/&', '/all&')
-    url = re.sub(r'[?&](pmin|pmax|user)=(?=&|$)', '', url)
+    url = re.sub(r'[?&](pmin|pmax|user|q)=(?=&|$)', '', url)
     url = url.replace('?&', '?').replace('&&', '&')
     if url.endswith('/all/'):
         url = url[:-1]
@@ -1209,6 +1209,37 @@ def matches_local(ad: dict, flt: dict) -> bool:
     return True
 
 
+# Критерий из ссылки Авито: путь, фильтры и продавец берём как есть (после проверки),
+# q только из самой ссылки: название критерия не должно сужать выдачу.
+LINK_PATH_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){0,5}$')
+LINK_FILTERS_RE = re.compile(r'^(?:&[A-Za-z0-9_\[\]]+=[A-Za-z0-9_%.,:+\-]*)*$')
+
+def link_search_url(crit: dict, cfg: dict = None) -> str:
+    """Ссылка поиска для критерия, созданного из ссылки Авито. Пусто, если данные
+    не проходят проверку (тогда цель не создаётся: лучше пропустить, чем искать не то)."""
+    path = str(crit.get('search_path') or '').strip().strip('/')
+    if not LINK_PATH_RE.match(path):
+        return ''
+    filters = str(crit.get('filters') or '')
+    if len(filters) > 1500 or not LINK_FILTERS_RE.match(filters):
+        return ''
+    try:
+        pmin = int(crit.get('min_price') or 0)
+    except Exception:
+        pmin = 0
+    try:
+        pmax = int(crit.get('max_price') or 0)
+    except Exception:
+        pmax = 0
+    user = str(crit.get('user') or '')
+    if user not in ('', '1', '2'):
+        user = ''
+    query = ' '.join(str(crit.get('search_q') or '').split())[:100]
+    template = (f"https://www.avito.ru/{path}"
+                "?cd=1&localPriority=0&q={query}&user={user}{filters}&s=104&pmin={pmin}&pmax={pmax}")
+    return search_url(template, '', query, pmin, pmax, filters=filters, user=user)
+
+
 def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 
@@ -1278,37 +1309,16 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # Если критерий создан из ссылки человека — открываем ИМЕННО ЕЁ.
         # Раньше адрес собирался заново из слов критерия: получался другой
         # запрос, и приходили не те объявления, что человек видел на Авито.
-        direct_url = str(crit.get('filter_url') or '')
-        if direct_url.startswith('http'):
-            # Авито блокирует ссылки с подкатегорией и моделью в пути (429/439
-            # первым же запросом). Поэтому открываем ОБЫЧНЫЙ раздел — его сайт
-            # отдаёт — а фильтры из ссылки применяем сами: цена и модель.
-            local = local_filters_from_url(direct_url)
-            # если раздел заменён, требуем слово замены в заголовке
-            try:
-                _path = re.findall(r'/all/([a-z_]+)', direct_url)
-                _slug0 = _path[0] if _path else ''
-                _sub_word = CATEGORY_SUBSTITUTE_WORD.get(_slug0)
-                if _sub_word:
-                    # только слово раздела: код модели (do50) в заголовках
-                    # не встречается, и требование обоих слов давало 0 из 50
-                    local['words'] = [_sub_word]
-            except Exception:
-                pass
-            cat_page = category_url_from(direct_url)
-            if not cat_page:
+        # Критерий из ссылки Авито: путь, q и фильтры берем из ссылки как есть.
+        link_url = link_search_url(crit)
+        if link_url:
+            if link_url in seen:
                 continue
-            if cat_page in seen:
-                # тот же раздел уже в списке — добавим только фильтры
-                for x in targets:
-                    if x.get('url') == cat_page:
-                        x.setdefault('local', []).append(local)
-                continue
-            seen.add(cat_page)
-            targets.append({'url': cat_page,
-                            'category': crit.get('category') or slug or '',
+            seen.add(link_url)
+            targets.append({'url': link_url,
+                            'category': crit.get('category') or '',
                             'query': query, 'page': 1, 'direct': True,
-                            'local': [local]})
+                            'link': True})
             built += 1
             continue
         # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара

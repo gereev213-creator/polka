@@ -104,7 +104,12 @@ except TypeError:
     targets = collect.targets_from_criteria('http://x', 't')
 link_targets = [t for t in targets if t.get('link')]
 check('критерий из ссылки даёт ровно одну цель', len(link_targets) == 1, targets)
-check('название критерия не попало в q', link_targets and 'mo' not in link_targets[0]['url'].split('q=')[1].split('&')[0], link_targets)
+# Смешанный режим: если в ссылке нет q, сборщик вообще не добавляет q —
+# тогда название критерия тем более не могло туда попасть.
+_q_part = ''
+if link_targets and 'q=' in link_targets[0]['url']:
+    _q_part = link_targets[0]['url'].split('q=')[1].split('&')[0]
+check('название критерия не попало в q', bool(link_targets) and 'mo' not in _q_part, link_targets)
 check('обычный критерий строится как раньше', any(not t.get('link') and 'lacoste' in t['url'].lower() for t in targets), [t['url'] for t in targets])
 
 print('\nИТОГ:', 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ' if not fails else f'ПРОВАЛЕНО: {len(fails)}')

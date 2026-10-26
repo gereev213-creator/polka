@@ -1,5 +1,5 @@
 """Миграция колонок: каждая добавляется отдельно, повторный запуск безопасен."""
-import os, sqlite3, sys
+import os, re, sqlite3, sys
 
 SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'polka_bot-9-3.py'),
            encoding='utf-8').read()
