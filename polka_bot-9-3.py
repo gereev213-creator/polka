@@ -21373,6 +21373,14 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         # записи висели бы в ожидании вечно.
         if (_found_in_title and not str(ad.get('description') or '').strip()
                 and str(crit.get('query') or '').strip()):
+            # В заголовке нет только латинских слов (бренд, модель) — они
+            # часто в описании. Тип товара уже совпал, поэтому отдаём с
+            # пометкой «по описанию не проверено», а не держим вечно:
+            # описания Авито сейчас не отдаёт.
+            _latin_missing = [w for w in _missing if all(c.isascii() for c in w)]
+            if _latin_missing and len(_latin_missing) == len(_missing):
+                return Decision(True, 'ok', 'по заголовку, бренд не проверен',
+                                unverified=True)
             return Decision(False, 'desc_needed', 'нужно описание')
         return no('title_words')
     for word in []:
