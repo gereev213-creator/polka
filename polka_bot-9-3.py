@@ -30041,6 +30041,26 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'resume':
+        # Включить критерии обратно (для теста сбора). limit — сколько первых.
+        try:
+            limit = int((body or {}).get('limit') or 0)
+        except Exception:
+            limit = 0
+        cur = db.conn.cursor()
+        if limit:
+            cur.execute("SELECT id FROM hunt_criteria ORDER BY id DESC LIMIT ?", (limit,))
+            ids = [r['id'] for r in cur.fetchall()]
+            if ids:
+                q = 'UPDATE hunt_criteria SET active=1 WHERE id IN (%s)' % ','.join('?' * len(ids))
+                cur.execute(q, ids)
+            on = cur.rowcount
+        else:
+            cur.execute("UPDATE hunt_criteria SET active=1")
+            on = cur.rowcount
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'active': on})
+
     if action == 'recompute':
         # Пересчитать совпадения по уже скачанным объявлениям: после правки
         # правил старые записи остаются отклонёнными, а заново они не
