@@ -30059,6 +30059,20 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'purge_matches':
+        # Удалить находки по критерию (например мусор, ушедший по ошибке).
+        try:
+            crit = int((body or {}).get('crit') or 0)
+        except Exception:
+            crit = 0
+        if not crit:
+            return _miniapp_json({'ok': False, 'error': 'crit_required'}, status=400)
+        cur = db.conn.cursor()
+        cur.execute("DELETE FROM hunt_matches WHERE crit_id=?", (crit,))
+        n = cur.rowcount
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'deleted': n, 'crit': crit})
+
     if action == 'clear_old_links':
         # У критериев, созданных старым маршрутом from-link, остался filter_url,
         # а по нему правило «доверяй ссылке» принимает ВСЁ подряд: в ленту
