@@ -7,8 +7,10 @@ SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'polka
 checks = [
     ("настройка hunt.match_description", "'hunt.match_description'" in SRC),
     ("описание участвует в поиске", "_desc_text" in SRC and "' '.join([title" in SRC),
+    # Проверка слов теперь сравнивает без апострофов (Levi's = levis),
+    # поэтому в исходнике два условия, а не одно.
     ("слова ищутся в объединённом тексте",
-     'not any(v in hay for v in variants)' in SRC),
+     'v in hay' in SRC and '_hay_ap' in SRC),
     ("числа ищутся там же",
      "re.escape(str(word)) + r'(?![0-9])', hay)" in SRC),
     ("без описания поиск идёт по заголовку",
