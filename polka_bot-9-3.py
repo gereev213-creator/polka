@@ -21608,6 +21608,14 @@ def _hunt_reason_label(reason: str) -> str:
 
 def _hunt_needs_description(crit: Dict) -> bool:
     """Зависит ли решение от описания — тогда его должен принести сборщик."""
+    # Переключатель hunt.require_desc: '1' (по умолчанию) — ждём описание,
+    # '0' — решаем по заголовку и помечаем «не проверено». Нужен, когда
+    # Авито не отдаёт страницы объявлений (439) и очередь описаний стоит.
+    try:
+        if str(_setting_get('hunt.require_desc', '1')).strip() in ('0', 'false', 'no', ''):
+            return False
+    except Exception:
+        pass
     if str(crit.get('requirements') or '').strip():
         return True
     if str(crit.get('condition') or '').strip():
@@ -30149,6 +30157,16 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'require_desc':
+        # Управление требованием описания: 1 — ждать (точно, но медленно),
+        # 0 — решать по заголовку с пометкой «не проверено» (быстро).
+        val = '1' if int((body or {}).get('on') or 0) else '0'
+        try:
+            _setting_set('hunt.require_desc', val)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
+        return _miniapp_json({'ok': True, 'hunt.require_desc': val})
+
     if action == 'explain':
         # Почему объявление отклонено/принято по конкретному критерию.
         # Возвращает решение и причину — без догадок по логам.
