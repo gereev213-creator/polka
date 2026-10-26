@@ -1927,15 +1927,20 @@ def details_only_loop(server: str, token: str, limit: int = 0,
     total = 0
     while True:
         try:
-            items = fetch_need_details(server, token, limit)
+            # Не больше 8 карточек за проход: 30 подряд гарантированно дают 439.
+        _limit = limit or 8
+        items = fetch_need_details(server, token, _limit)
         except Exception as exc:
             print(f"  ✖ очередь не получена: {str(exc)[:120]}")
             items = []
         print(f"  карточек к открытию: {len(items)}")
         if items:
             try:
+                # Пауза 20-40 с: на 5-11 с Авито отвечал 439 после третьей
+                # карточки. Описания — единственный способ проверить слова,
+                # которых нет в заголовке, поэтому лучше медленно, но да.
                 got = collect_details(server, token, 'avito', items,
-                                      pause=(5.0, 11.0))
+                                      pause=(20.0, 40.0))
                 total += int(got or 0)
                 print(f"  принесено описаний: {got} (всего за смену {total})")
             except Exception as exc:
