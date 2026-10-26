@@ -21321,10 +21321,15 @@ def _criterion_where(crit: Dict, active_only: bool = True):
             parts.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
             params.append(f"*[^0-9]{num}[^0-9]*")
         where.append("(" + " OR ".join(parts) + ")")
-    # Слова: раньше требовались ВСЕ значимые слова запроса («apple» и «do»),
-    # из-за чего 11 928 отказов. Достаточно одного — остальное сузил раздел.
+    # Требуем ВСЕ значимые слова запроса, но ищем их и в описании: «джинсы
+    # levis» не должно превращаться в «шапка levis». Описание сборщик
+    # докачивает отдельно (need-details), поэтому проверка ждёт его.
     _required = list(_query_words_required(crit.get('query')))
-    if _required and not any(w.lower() in hay for w in _required):
+    _missing = [w for w in _required if w.lower() not in hay]
+    if _missing:
+        if str(crit.get('query') or '').strip() and not str(ad.get('description') or '').strip():
+            # описания ещё нет — пусть сервер попросит его и пересчитает
+            return Decision(False, 'desc_needed', 'нужно описание')
         return no('title_words')
     for word in []:
         variants = query_word_variants(word)
