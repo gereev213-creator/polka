@@ -1220,6 +1220,12 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     path = str(crit.get('search_path') or '').strip().strip('/')
     if not LINK_PATH_RE.match(path):
         return ''
+    # Глубокие пути (регион/раздел/подраздел/модель) Авито отдаёт только
+    # браузеру и отвечает 439. Обрезаем до «регион/раздел»: там выдача шире,
+    # но доступна, а модель и цену отсеиваем сами.
+    segs = path.split('/')
+    if len(segs) > 2:
+        path = '/'.join(segs[:2])
     filters = str(crit.get('filters') or '')
     if len(filters) > 1500 or not LINK_FILTERS_RE.match(filters):
         return ''
