@@ -1350,6 +1350,9 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             # Точность обеспечивает сервер: он отсеивает по словам заголовка,
             # категории, городу и цене (этапы B и F).
             template_here = "https://www.avito.ru/all/{category}?s=104&pmin={pmin}&pmax={pmax}"
+        if slug:
+            # Раздел под блокировкой заменяем на соседний (noutbuki → компьютеры)
+            slug = CATEGORY_SUBSTITUTE.get(slug, slug)
         if not slug:
             # Категория не узнана: цель всё равно создаём (поиск по площадке),
             # но считаем такие критерии — по ним раздел не определён.

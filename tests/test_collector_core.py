@@ -95,8 +95,10 @@ check('разделы: джинсы → одежда',
       sum(1 for x in urls if 'odezhda_obuv_aksessuary' in x) >= 1, urls)
 check('разделы: iPhone → телефоны',
       any('/all/telefony' in x for x in urls), urls)
-check('разделы: MacBook → ноутбуки',
-      any('/all/noutbuki' in x for x in urls), urls)
+# Раздел «ноутбуки» Авито держит под 439, поэтому он заменяется на
+# «товары для компьютера» — это проверяется отдельно ниже.
+check('разделы: MacBook → компьютеры (ноутбуки под блокировкой)',
+      any('/all/tovary_dlya_kompyutera' in x for x in urls), urls)
 check('разделы: нет цели «весь сайт»',
       not any(x.rstrip('/').endswith('/all') or '/all?' in x for x in urls), urls)
 
