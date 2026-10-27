@@ -191,3 +191,64 @@
   document.addEventListener('DOMContentLoaded', wrapGo);
   setTimeout(wrapGo, 800);
 })();
+
+/* ── Тарифы и оплата ───────────────────────────────────────────────────── */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU');
+
+  let plans = [];
+
+  async function loadPlans() {
+    try {
+      const data = await window.PolkaAPI.api('/api/pay/plans');
+      plans = data.plans || data.items || [];
+      const payBtn = $('payBtn');
+      if (payBtn && plans.length) {
+        const main = plans.find((p) => p.product === 'plus_30') || plans[0];
+        if (main && main.amount) {
+          const price = $('priceNow');
+          if (price) price.innerHTML = fmt(main.amount) + ' <span>руб/мес</span>';
+        }
+        payBtn.onclick = () => buy(plans.find((p) => p.product === 'plus_30') || plans[0]);
+      }
+      if (data.plan && data.plan !== 'trial') {
+        const title = $('trialTitle');
+        if (title) title.textContent = 'Плюс активен';
+      }
+    } catch (e) { }
+  }
+
+  async function buy(plan) {
+    if (!plan) return;
+    try {
+      const res = await window.PolkaAPI.api('/api/pay/cispay/create', {
+        method: 'POST',
+        body: JSON.stringify({ product: plan.product }),
+      });
+      const url = res.pay_url || res.url || res.link;
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (url && TG && TG.openLink) TG.openLink(url);
+      else if (url) window.open(url, '_blank');
+      else if (TG && TG.showAlert) TG.showAlert('Не удалось создать счёт');
+    } catch (e) {
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (TG && TG.showAlert) TG.showAlert('Оплата временно недоступна');
+    }
+  }
+
+  const wrapGo = () => {
+    if (typeof window.go !== 'function' || window.go.__pay) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'tariffs') loadPlans();
+      return r;
+    };
+    wrapped.__pay = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrapGo);
+  setTimeout(wrapGo, 800);
+  window.PolkaBuy = buy;
+})();
