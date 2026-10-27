@@ -565,14 +565,36 @@
 
 /* ── Вход: показываем экран приветствия, если пользователь не авторизован ── */
 (function () {
+  let authorized = false;
+
   async function gate() {
     try {
       await window.PolkaAPI.api('/api/me');
+      authorized = true;
     } catch (e) {
-      // 401 — пользователь без Telegram-сессии: показываем вход
+      // Вход обязателен: без сессии дальше приветствия не пускаем
+      authorized = false;
       if (typeof window.go === 'function') window.go('welcome');
     }
   }
+
+  // Жёсткая проверка: любая попытка уйти с экрана входа без авторизации
+  // возвращает обратно на приветствие.
+  const wrapGoGate = () => {
+    if (typeof window.go !== 'function' || window.go.__gate) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      if (!authorized && !['welcome', 'telegram', 'email', 'code', 'done'].includes(name)) {
+        return orig.call(this, 'welcome');
+      }
+      return orig.apply(this, arguments);
+    };
+    wrapped.__gate = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrapGoGate);
+  setTimeout(wrapGoGate, 600);
+  window.PolkaGate = gate;
 
   // Вход через Telegram: внутри мини-приложения сессия уже есть — идём дальше
   const wireTg = () => {

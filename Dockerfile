@@ -9,7 +9,8 @@ COPY polka-final/frontend/ ./
 RUN npm run build
 # Новый дизайн: готовый прототип заказчика становится точкой входа,
 # адаптер связывает его с нашим API (лоты, поиск, избранное).
-RUN cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js
+# React-сборка остаётся для админки: сохраняем до подмены точки входа
+RUN cp dist/index.html dist/react.html && cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js
 
 FROM python:3.13-slim
 

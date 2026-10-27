@@ -33136,6 +33136,13 @@ async def api_miniapp_spa(request: aiohttp_web.Request) -> aiohttp_web.Response:
     safe = os.path.normpath('/' + tail).lstrip('/')
     if safe.startswith('..'):
         return aiohttp_web.Response(text="not found", status=404)
+    # Админка осталась в старой React-сборке: /admin открывает её
+    if safe.rstrip('/') == 'admin':
+        react = os.path.join(dist, 'react.html')
+        if os.path.isfile(react):
+            resp = aiohttp_web.FileResponse(react)
+            resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            return resp
     path = os.path.join(dist, safe)
     if safe and os.path.isfile(path):
         return aiohttp_web.FileResponse(path)
