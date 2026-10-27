@@ -162,12 +162,10 @@
     try {
       const data = await window.PolkaAPI.api('/api/me');
       const u = data.user || {};
-      const handle = document.querySelector('#s-profile .handle');
-      if (handle && u.name) {
-        const plus = $('pluspill');
-        handle.childNodes[0].nodeValue = '@' + String(u.name).replace(/\s+/g, '').toLowerCase() + ' ';
-        if (plus) plus.style.display = data.plan && data.plan !== 'trial' ? 'inline-flex' : 'none';
-      }
+      const ht = $('handleText');
+      if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
+      const plus = $('pluspill');
+      if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       const stats = document.querySelectorAll('#s-profile .stats b');
       if (stats.length >= 3 && data.stats) {
         if (data.stats.ads != null) stats[0].textContent = data.stats.ads;
