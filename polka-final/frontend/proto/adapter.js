@@ -193,13 +193,17 @@ function paintEmpty(count) {
     try {
       const data = await window.PolkaAPI.api('/api/me');
       const u = data.user || {};
+      const av = document.getElementById('avatarCircle');
+      if (av && u.photo_url) {
+        av.style.background = `url('${u.photo_url}') center/cover`;
+      }
       const ht = $('handleText');
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
       const adminRow = document.getElementById('adminRow');
-      if (adminRow) adminRow.style.display = data.is_admin ? 'flex' : 'none';
+      if (adminRow) adminRow.style.display = (u.is_admin || data.is_admin) ? 'flex' : 'none';
       const stats = document.querySelectorAll('#s-profile .stats b');
       if (stats.length >= 3 && data.stats) {
         if (data.stats.ads != null) stats[0].textContent = data.stats.ads;
@@ -443,8 +447,8 @@ function paintEmpty(count) {
   async function loadReferrals() {
     try {
       const data = await window.PolkaAPI.api('/api/referral');
-      const code = data.code || data.link || '';
-      const link = data.link || (code ? ('https://t.me/polka_bot?start=' + code) : '');
+      const link = data.link || '';
+      const invited = data.count || 0;
       if (link) {
         const b = document.querySelector('#s-referrals .linkin b');
         if (b) b.textContent = link.replace('https://', '');
@@ -457,7 +461,7 @@ function paintEmpty(count) {
         };
       }
       const earned = document.querySelector('#s-referrals .earned');
-      if (earned && data.earned != null) earned.textContent = 'Заработано: ' + fmt(data.earned);
+      if (earned) earned.textContent = 'Приглашено: ' + invited;
     } catch (e) { }
   }
 
