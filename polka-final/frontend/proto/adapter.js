@@ -316,7 +316,7 @@
       const on = h.classList.contains('on');
       h.classList.toggle('on', !on);
       try {
-        await window.PolkaAPI.api('/api/favorites/' + id, {
+        await window.PolkaAPI.api('/api/ads/' + id + '/favorite', {
           method: on ? 'DELETE' : 'POST',
         });
       } catch (err) { h.classList.toggle('on', on); }
@@ -348,7 +348,7 @@
     const box = $('myList');
     if (!box) return;
     try {
-      const data = await window.PolkaAPI.api('/api/my/ads');
+      const data = await window.PolkaAPI.api('/api/my-ads');
       const items = data.items || [];
       if (!items.length) {
         box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
@@ -416,12 +416,41 @@
     } catch (e) { }
   }
 
+
+  // Избранное: список из /api/favorites (а не фильтр по лотам)
+  async function loadFavs() {
+    const box = document.getElementById('favList');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/favorites');
+      const items = data.items || [];
+      const empty = document.getElementById('favEmpty');
+      if (!items.length) {
+        box.innerHTML = '';
+        if (empty) empty.style.display = 'block';
+        return;
+      }
+      if (empty) empty.style.display = 'none';
+      box.innerHTML = items.map((a) => {
+        const ph = a.photos ? String(a.photos).split(',')[0] : '';
+        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
+        const price = (a.price || 0).toLocaleString('ru-RU') + ' \u20BD';
+        return `<article class="card fav" data-open="${a.id}">
+          <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+          <span><h3>${(a.title || '').slice(0, 34)}</h3>
+          <span class="pricepill">${price}</span><br>
+          <span class="status">${a.city || ''}</span></span></article>`;
+      }).join('');
+    } catch (e) { }
+  }
+
   const wrap = () => {
     if (typeof window.go !== 'function' || window.go.__rest) return;
     const orig = window.go;
     const wrapped = function (name) {
       const r = orig.apply(this, arguments);
       if (name === 'myads') loadMyAds();
+      if (name === 'favorites') loadFavs();
       if (name === 'post') wirePost();
       if (name === 'referrals') loadReferrals();
       return r;
@@ -447,7 +476,7 @@
     if (!code) return;
     if (msg) { msg.textContent = 'Проверяем…'; msg.style.display = 'block'; }
     try {
-      const res = await window.PolkaAPI.api('/api/promo/check', {
+      const res = await window.PolkaAPI.api('/api/promo/redeem', {
         method: 'POST',
         body: JSON.stringify({ code }),
       });
