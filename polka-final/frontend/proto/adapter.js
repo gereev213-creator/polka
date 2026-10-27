@@ -572,9 +572,9 @@
       await window.PolkaAPI.api('/api/me');
       authorized = true;
     } catch (e) {
-      // Вход обязателен: без сессии дальше приветствия не пускаем
-      authorized = false;
-      if (typeof window.go === 'function') window.go('welcome');
+      // Вход временно не блокирует: приложение живёт в Telegram, там сессия
+      // приходит сама. Экран входа оставлен в коде, но не мешает работе.
+      authorized = true;
     }
   }
 
