@@ -938,6 +938,34 @@ def parse_item_seller(html: str) -> dict:
     return out
 
 
+# Характеристики объявления: на странице они лежат парами «название — значение»
+# в JSON и в разметке. Описание берём как запасной вариант, но отбор идёт по
+# характеристикам: состояние, размер, бренд, модель — то, что человек указал
+# в критерии.
+PARAM_LABELS = (
+    'состояние', 'размер', 'размер одежды', 'размер обуви', 'бренд', 'модель',
+    'цвет', 'материал', 'тип', 'пол', 'рост', 'объём памяти', 'аккумулятор',
+    'год выпуска', 'пробег', 'комплектация', 'оригинальность', 'страна',
+)
+
+
+def parse_item_params(html: str) -> dict:
+    """Достаёт характеристики объявления: {'Состояние': 'Хорошее', ...}."""
+    out = {}
+    text = str(html or '')
+    # 1) JSON-пары вида "name":"Состояние","value":"Хорошее"
+    for m in re.finditer(r'"name":"([^"]{2,40})"[^{}]{0,120}?"value":"([^"]{1,60})"', text):
+        k, v = m.group(1).strip(), m.group(2).strip()
+        if k.lower() in PARAM_LABELS and k not in out:
+            out[k] = v
+    # 2) Разметка: <li>Название: Значение</li> внутри блока параметров
+    for m in re.finditer(r'<li[^>]*>\s*([А-Яа-яЁё ]{3,30}):\s*([^<]{1,60})</li>', text):
+        k, v = m.group(1).strip(), m.group(2).strip()
+        if k.lower() in PARAM_LABELS and k not in out:
+            out[k] = v
+    return out
+
+
 def parse_item_page(html: str) -> dict:
     """Описание и продавец со страницы ОДНОГО объявления.
 
@@ -956,11 +984,17 @@ def parse_item_page(html: str) -> dict:
                 break
     desc = desc.strip()[:DESC_MAX_CHARS]
     seller = parse_item_seller(raw)
+    # Характеристики — главный источник для отбора: состояние, размер, бренд.
+    params = parse_item_params(raw)
+    low = {k.lower(): v for k, v in params.items()}
     return {
         'description': desc,
         'seller_type': seller['seller_type'],
         'seller_name': seller['seller_name'],
         'seller_ads': seller['seller_ads'],
+        'params': params,
+        'condition': low.get('состояние', ''),
+        'size': low.get('размер') or low.get('размер одежды') or low.get('размер обуви') or '',
     }
 
 

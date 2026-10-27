@@ -19515,6 +19515,12 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         prepared.append({
             'title': title, 'url': url, 'ext': ext, 'city': city, 'cat': cat,
             'price': price, 'photos': photos, 'ago': ago, 'seller_type': stype,
+            # Характеристики и описание: приходят со страницы объявления и
+            # нужны для отбора по состоянию, размеру и бренду.
+            'seller_name': str(raw.get('seller_name') or '')[:80],
+            'condition': str(raw.get('condition') or '')[:40],
+            'size': str(raw.get('size') or '')[:20],
+            'description': str(raw.get('description') or '')[:4000],
             'age_estimated': 1 if (ago is None and raw.get('age_estimated')) else 0,
             'fp': _ad_fingerprint(title, price, photos),
             'title_lower': title.lower(),
