@@ -332,7 +332,7 @@ html{ -webkit-text-size-adjust:100% }
 <section class="screen" id="s-telegram"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Telegram</span></div>
 <div class="scroll"><div class="card tghead"><span class="tglogo"><svg width="27" height="27"><use href="#i-plane"/></svg></span><b>Вход через Telegram</b><p>Подтверди вход в один тап — без пароля.</p></div>
 <div class="card tguser"><span class="ava" style="background-image:var(--jacket);width:46px;height:46px;border-radius:50%"></span><span class="who"><b>Аккаунт Telegram</b><span>@cuesoul</span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div></div>
-<div class="authActions"><button class="bigbtn withic" id="tgBtn" onclick="tgAuth()"><svg width="19" height="19"><use href="#i-plane"/></svg><span>Продолжить как @cuesoul</span></button><button class="skip" onclick="toast('Откроется Telegram…')">Другой аккаунт</button></div></section>
+<div class="authActions"><button class="bigbtn withic" id="tgBtn" onclick="tgAuth()"><svg width="19" height="19"><use href="#i-plane"/></svg><span>Продолжить как @cuesoul</span></button><button class="skip" onclick="window.open('https://t.me/polka_bot','_blank')">Другой аккаунт</button></div></section>
 <section class="screen" id="s-email"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Вход по почте</span></div>
 <div class="scroll"><form class="card form" id="emailForm" novalidate>
 <div class="field" style="margin-bottom:8px"><label>Электронная почта</label><input id="emailInput" type="email" placeholder="you@example.com" autocomplete="email"></div>
@@ -364,7 +364,7 @@ html{ -webkit-text-size-adjust:100% }
 
 <!-- market -->
 <section class="screen" id="s-market"><div class="ahead"><div class="logo"></div><span class="stag">Барахолка</span></div>
-<button class="channel" onclick="toast('Открываю канал @polkalot…')"><span class="in"><span class="sq"><svg width="22" height="22"><use href="#i-plane"/></svg></span><span><b>Подпишись на наш канал</b><span>@polkalot</span></span></span><span class="dots2">•••</span></button>
+<a class="channel" id="channelBanner" href="https://t.me/polkalot" target="_blank" rel="noopener"><span class="in"><span class="sq"><svg width="22" height="22"><use href="#i-plane"/></svg></span><span><b>Подпишись на наш канал</b><span>@polkalot</span></span></span><span class="dots2">•••</span></a>
 <div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
 <div class="scroll"><div class="grid" id="marketGrid"></div><div class="nores" id="nores">Ничего не нашлось</div></div></section>
 
@@ -408,7 +408,7 @@ html{ -webkit-text-size-adjust:100% }
 <div class="chips" style="margin-top:0"><span class="pill" id="pPrice">30 000₽</span><span class="pill" id="pTag">АКБ &gt; 80%</span><span class="pill" id="pMarket">−18% ниже рынка</span></div>
 <div class="mut" style="margin:10px 2px 0" id="pMeta">Москва · сегодня, 14:32</div>
 <div class="card desc"><b>Описание</b><p id="pDesc">Полный комплект, без ремонта и вскрытия. АКБ 87%, Face ID и True Tone работают.</p></div>
-<div class="actions"><button class="open" onclick="toast('Открываю объявление…')">Открыть</button><button class="fab" id="pFav"><svg width="21" height="21"><use href="#i-heart"/></svg></button><button class="fab" onclick="toast('Ссылка скопирована')"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M21 3 3.8 10.2c-.8.3-.8 1.3.1 1.6l4.9 1.7 1.9 5.8c.3.8 1.3 1 1.9.4l2.6-2.5 4.7 3.4c.7.5 1.7.1 1.9-.8L22.6 4c.1-.9-.7-1.5-1.6-1Z" stroke-linejoin="round"/></svg></button></div></section>
+<div class="actions"><button class="open" id="pOpen">Открыть</button><button class="fab" id="pFav"><svg width="21" height="21"><use href="#i-heart"/></svg></button><button class="fab" onclick="toast('Ссылка скопирована')"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M21 3 3.8 10.2c-.8.3-.8 1.3.1 1.6l4.9 1.7 1.9 5.8c.3.8 1.3 1 1.9.4l2.6-2.5 4.7 3.4c.7.5 1.7.1 1.9-.8L22.6 4c.1-.9-.7-1.5-1.6-1Z" stroke-linejoin="round"/></svg></button></div></section>
 
 <!-- profile -->
 <section class="screen" id="s-profile"><div class="ahead"><div class="logo"></div><span class="stag">Профиль</span></div><div class="scroll">

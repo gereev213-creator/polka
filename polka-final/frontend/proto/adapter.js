@@ -616,3 +616,35 @@
   document.addEventListener('DOMContentLoaded', () => { gate(); wireTg(); });
   setTimeout(() => { wireTg(); }, 900);
 })();
+
+/* ── Кнопка «Открыть» в карточке товара и баннер из базы ───────────────── */
+(function () {
+  // «Открыть» ведёт на настоящий Авито-адрес лота
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest && e.target.closest('#pOpen');
+    if (!btn) return;
+    const lot = (window.LOTS || []).find((l) => String(l.id) === String(window.currentLot));
+    const url = lot && lot.url;
+    const TG = window.Telegram && window.Telegram.WebApp;
+    if (url && TG && TG.openLink) TG.openLink(url);
+    else if (url) window.open(url, '_blank');
+    else if (TG && TG.showAlert) TG.showAlert('Ссылка на объявление недоступна');
+  }, true);
+
+  // Баннер барахолки из настроек: картинка, заголовок, подпись, ссылка
+  async function loadBanner() {
+    try {
+      // Картинки баннеров ведёт админка: /api/banners отдаёт ссылки по экранам
+      const data = await window.PolkaAPI.api('/api/banners');
+      const b = data.banners || {};
+      const home = document.querySelector('.searchBanner');
+      if (home && b.search) home.style.background = `url('${b.search}') center/cover`;
+      const el = document.getElementById('channelBanner');
+      if (el && b.welcome) el.style.background = `url('${b.welcome}') center/cover`;
+      const post = document.querySelector('#s-post .photoMain');
+      if (post && b.create_ad) post.style.backgroundImage = `url('${b.create_ad}')`;
+    } catch (e) { }
+  }
+  document.addEventListener('DOMContentLoaded', loadBanner);
+  setTimeout(loadBanner, 1200);
+})();
