@@ -31510,6 +31510,20 @@ def _miniapp_init_user(init_data: str) -> Optional[dict]:
         return None
 
 
+def _tg_photo_from_init(init_data: str) -> str:
+    """Аватар и username из Telegram initData: в базе их нет."""
+    try:
+        from urllib.parse import parse_qsl, unquote
+        import json as _json
+        for key, value in parse_qsl(str(init_data or ''), strict_parsing=False):
+            if key == 'user':
+                u = _json.loads(value)
+                return str(u.get('photo_url') or '')
+    except Exception:
+        pass
+    return ''
+
+
 def _miniapp_ensure_user(user_id: int, init_data: str = '') -> Optional[dict]:
     """Гарантирует строку пользователя в существующей таблице users."""
     user = db.get_user(user_id)
@@ -31672,7 +31686,8 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
             'verified': bool(verify and verify.get('status') == 'verified'),
         # Админка в приложении: показываем пункт только администратору
         'is_admin': viewer_id in ADMIN_USER_IDS,
-        'photo_url': (user.get('photo_url') or '') if user else '',
+        # Аватар берём из initData: в таблице users колонки photo_url нет
+        'photo_url': (_tg_photo_from_init(init_data) or '') if init_data else '',
             'rating': (rating or {}).get('avg') or None,
             'reviews_count': (rating or {}).get('count') or 0,
         },
