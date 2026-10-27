@@ -321,15 +321,8 @@ html{ -webkit-text-size-adjust:100% }
 <option value="home">Находки</option><option value="market">Барахолка</option><option value="favorites">Избранное</option><option value="searches">Поиск лотов</option><option value="newsearch">Новый поиск</option><option value="history">История</option><option value="product">Карточка товара</option><option value="profile">Профиль</option><option value="myads">Мои объявления</option><option value="post">Создание объявления</option><option value="tariffs">Тарифы</option><option value="referrals">Рефералы</option><option value="loading">Загрузка</option><option value="empty">Пусто</option>
 </select></header>
 <main><div id="wrap"><div id="stage">
-<section class="screen" id="s-welcome">
-<div class="welcomeCenter"><div class="logo"></div><h1>Добро пожаловать!</h1><p>Находи лучшие объявления по своим критериям.</p></div>
-<div class="authActions">
-<button class="bigbtn withic" onclick="go('telegram')"><svg width="19" height="19"><use href="#i-plane"/></svg>Войти через Telegram</button>
-<button class="mailbtn" onclick="go('email')"><svg width="19" height="19"><use href="#i-mail"/></svg>Войти по почте</button>
-<button class="skip" onclick="skipAuth()">Позже</button>
-<p class="legal">Продолжая, ты принимаешь <button onclick="toast('Откроется в браузере')">условия</button> и <button onclick="toast('Откроется в браузере')">политику конфиденциальности</button></p>
-</div></section>
-<section class="screen" id="s-telegram"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Telegram</span></div>
+<section class="screen" id="s-welcome"> <div class="welcomeCenter"><div class="logo"></div><h1>Добро пожаловать!</h1><p>Находи лучшие объявления по своим критериям.</p></div> <div class="authActions"> <button class="bigbtn withic" onclick="go('telegram')"><svg width="19" height="19"><use href="#i-plane"/></svg>Войти через Telegram</button> </div> <p class="legal">Продолжая, ты принимаешь <b onclick="PolkaLegal('terms')">условия</b> и <b onclick="PolkaLegal('privacy')">политику конфиденциальности</b></p></section>
+<section class="screen" id="s-telegram" data-bot="polkaudmbot"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Telegram</span></div>
 <div class="scroll"><div class="card tghead"><span class="tglogo"><svg width="27" height="27"><use href="#i-plane"/></svg></span><b>Вход через Telegram</b><p>Подтверди вход в один тап — без пароля.</p></div>
 <div class="card tguser"><span class="ava" style="background:var(--grad);width:46px;height:46px;border-radius:50%"></span><span class="who"><b>Аккаунт Telegram</b><span>@cuesoul</span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div></div>
 <div class="authActions"><button class="bigbtn withic" id="tgBtn" onclick="tgAuth()"><svg width="19" height="19"><use href="#i-plane"/></svg><span>Продолжить как @cuesoul</span></button><button class="skip" onclick="window.open('https://t.me/polka_bot','_blank')">Другой аккаунт</button></div></section>

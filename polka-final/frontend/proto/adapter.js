@@ -607,8 +607,9 @@
           if (typeof window.go === 'function') window.go('home', true);
         } catch (e) {
           const TG = window.Telegram && window.Telegram.WebApp;
-          if (TG && TG.openTelegramLink) TG.openTelegramLink('https://t.me/polka_bot');
-          else window.location.href = 'https://t.me/polka_bot';
+          const bot = 'https://t.me/polkaudmbot';
+          if (TG && TG.openTelegramLink) TG.openTelegramLink(bot);
+          else window.location.href = bot;
         }
       });
     }
