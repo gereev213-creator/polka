@@ -30421,6 +30421,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         out['query'] = dict(crit).get('query')
         return _miniapp_json(out)
 
+    if action == 'reset_criteria':
+        # Полный сброс критериев и связанных находок: пользователи начнут
+        # добавлять свои, а старые тестовые не должны мешать.
+        cur = db.conn.cursor()
+        cur.execute("DELETE FROM hunt_matches")
+        m = cur.rowcount
+        cur.execute("DELETE FROM hunt_criteria")
+        c = cur.rowcount
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'criteria': c, 'matches': m})
+
     if action == 'purge_matches':
         # Удалить находки по критерию (например мусор, ушедший по ошибке).
         try:
