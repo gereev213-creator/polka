@@ -298,8 +298,19 @@
       const q = ($('q') && $('q').value || '').trim();
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
       if (q.length < 2) return;
-      const ok = await window.PolkaAPI.createSearch({ query: q, max_price: Number(raw) || 0 });
-      if (ok) { form.reset(); }
+      // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
+      const chips = [...document.querySelectorAll('#searchForm .chip.on')]
+        .map((b) => (b.textContent || '').trim()).filter(Boolean);
+      const minus = [...document.querySelectorAll('#searchForm input')]
+        .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
+        .filter(Boolean).join(',');
+      const ok = await window.PolkaAPI.createSearch({
+        query: q,
+        max_price: Number(raw) || 0,
+        requirements: chips.join(', '),
+        exclude: minus,
+      });
+      if (ok) { form.reset(); document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on')); if (typeof go === 'function') go('searches'); }
     });
   }
 

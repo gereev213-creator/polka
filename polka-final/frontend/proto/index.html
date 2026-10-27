@@ -342,11 +342,11 @@ html{ -webkit-text-size-adjust:100% }
 <!-- new search -->
 <section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
 <div class="scroll"><form class="card form" id="searchForm">
-<div class="field"><label>Что ищем</label><input id="q" value="iPhone 15 PRO" required></div>
-<div class="field"><label>Цена до, ₽</label><input id="maxprice" value="35 000" inputmode="numeric"></div>
-<div class="field"><label>Критерии</label><div class="chips" style="margin-top:0"><button type="button" class="chip on" onclick="this.classList.toggle('on')">АКБ &gt; 80%</button><button type="button" class="chip on" onclick="this.classList.toggle('on')">без ремонта</button><button type="button" class="chip" onclick="this.classList.toggle('on')">полный комплект</button></div></div>
+<div class="field"><label>Что ищем</label><input id="q" placeholder="Например: джинсы levis" required></div>
+<div class="field"><label>Цена до, ₽</label><input id="maxprice" placeholder="Например: 5000" inputmode="numeric"></div>
+<div class="field"><label>Критерии</label><div class="chips" style="margin-top:0"><button type="button" class="chip" onclick="this.classList.toggle('on')">оригинал</button><button type="button" class="chip" onclick="this.classList.toggle('on')">без ремонта</button><button type="button" class="chip" onclick="this.classList.toggle('on')">полный комплект</button></div></div>
 <div class="field"><label>Минус-слова</label><input placeholder="запчасти, битый"></div>
-<div class="forecast">≈ 12 лотов в день по этим критериям</div>
+<div class="forecast">Находки придут в течение часа после запуска</div>
 </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
 
 <!-- history -->
