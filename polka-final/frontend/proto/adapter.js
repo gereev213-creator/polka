@@ -108,3 +108,86 @@
   document.addEventListener('DOMContentLoaded', wrap);
   setTimeout(wrap, 800);
 })();
+
+/* ── Мои поиски, история, профиль ──────────────────────────────────────── */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+  function critCard(c) {
+    const paused = !c.active;
+    return `<article class="card scard" data-crit="${c.id}">
+      <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
+      <button class="pause" data-toggle="${c.id}">
+        <svg width="15" height="15"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>
+      </button></div>
+      <div class="chips">
+        ${c.max_price ? `<span class="chip">до ${fmt(c.max_price)}</span>` : ''}
+        ${c.city ? `<span class="chip">${c.city}</span>` : ''}
+        <span class="chip">${paused ? 'на паузе' : 'активен'}</span>
+      </div>
+    </article>`;
+  }
+
+  async function loadSearches() {
+    try {
+      const data = await window.PolkaAPI.api('/api/hunt');
+      const items = data.items || [];
+      const box = $('searchList');
+      if (!box) return;
+      if (!items.length) {
+        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
+          'Пока нет поисков. Создайте первый — находки придут в течение часа.</div>';
+        return;
+      }
+      box.innerHTML = items.map(critCard).join('');
+      box.querySelectorAll('[data-toggle]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-toggle');
+          const crit = items.find((x) => String(x.id) === String(id));
+          try {
+            await window.PolkaAPI.api('/api/hunt?id=' + id, {
+              method: 'PATCH',
+              body: JSON.stringify({ active: crit && crit.active ? 0 : 1 }),
+            });
+            loadSearches();
+          } catch (err) { }
+        });
+      });
+    } catch (e) { }
+  }
+
+  async function loadProfile() {
+    try {
+      const data = await window.PolkaAPI.api('/api/me');
+      const u = data.user || {};
+      const handle = document.querySelector('#s-profile .handle');
+      if (handle && u.name) {
+        const plus = $('pluspill');
+        handle.childNodes[0].nodeValue = '@' + String(u.name).replace(/\s+/g, '').toLowerCase() + ' ';
+        if (plus) plus.style.display = data.plan && data.plan !== 'trial' ? 'inline-flex' : 'none';
+      }
+      const stats = document.querySelectorAll('#s-profile .stats b');
+      if (stats.length >= 3 && data.stats) {
+        if (data.stats.ads != null) stats[0].textContent = data.stats.ads;
+        if (data.stats.favorites != null) stats[2].textContent = data.stats.favorites;
+      }
+    } catch (e) { }
+  }
+
+  const wrapGo = () => {
+    if (typeof window.go !== 'function' || window.go.__wrapped) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'searches' || name === 'history') loadSearches();
+      if (name === 'profile') loadProfile();
+      return r;
+    };
+    wrapped.__wrapped = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrapGo);
+  setTimeout(wrapGo, 800);
+})();
