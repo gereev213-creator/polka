@@ -258,6 +258,18 @@ background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38
 .plus ul{margin-top:12px;gap:7px}
 .plus li{font-size:16px;font-weight:760}
 .off{color:#3373FA}
+
+/* ── Приложение, а не макет: убираем служебную рамку прототипа ─────────── */
+.bar{display:none!important}
+#stage{width:100%!important;height:100dvh!important;border-radius:0!important;
+       box-shadow:none!important;background:var(--bg)}
+main{display:block!important}
+html,body{margin:0!important;padding:0!important;height:100%!important}
+main{margin:0!important;padding:0!important}
+#wrap{position:fixed!important;inset:0!important;width:100%!important}
+#stage{left:0!important;top:0!important}
+.screen{padding:calc(10px + env(safe-area-inset-top)) 14px 14px!important}
+.hasnav .scroll{padding-bottom:96px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -470,7 +482,7 @@ async function copyLink(){try{await navigator.clipboard.writeText('https://t.me/
 async function shareLink(){const d={title:'ПОЛКА',text:'Ищу выгодные лоты в ПОЛКЕ — присоединяйся',url:'https://t.me/polkalotapp?startapp=ref89659599'};if(navigator.share){try{await navigator.share(d)}catch(e){}}else copyLink()}
 function openSheet(n){$('ov-'+n).classList.add('show')}function closeSheets(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'))}
 $('jump').addEventListener('change',e=>go(e.target.value,true));
-function fit(){const s=Math.max(.45,Math.min(1,(innerHeight-78)/800,(innerWidth-20)/400));$('stage').style.transform='scale('+s+')';$('wrap').style.width=400*s+'px';$('wrap').style.height=800*s+'px'}
+function fit(){/* приложение, а не макет: масштаб не нужен, экран на всю ширину */$('stage').style.transform='none';$('wrap').style.width='100%';$('wrap').style.height='100%'}
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
