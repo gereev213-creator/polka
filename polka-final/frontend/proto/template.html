@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ПОЛКА — полный проект</title>
+<style>
+/*__FONTS__*/
+:root{/*__ASSETS__*/--bg:#E7EFF6;--ink:#2C2C2C;--mut:#7A8CA3;--blue:#3373FA;--deep:#0F5FD6;--grad:linear-gradient(100deg,#4780FB,#6B98F5);--pale:#E3EDFD;--sh:0 4px 14px rgba(15,95,214,.10)}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{font-family:"SF Pro Expanded","SF Pro Display",-apple-system,BlinkMacSystemFont,Arial,sans-serif;font-stretch:132%;font-variation-settings:"wdth" 132;letter-spacing:0;line-height:1.193359375;background:linear-gradient(180deg,#DCE9F5,#EAF2F9);color:var(--ink);min-height:100vh}
+button,input,textarea,select{font-family:inherit}
+button{border:0;cursor:pointer;color:inherit;background:none}
+.bar{display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap;padding:13px 16px 5px}
+.brand{font-weight:870;font-size:13px}.brand span{color:var(--mut)}
+#jump{background:#fff;border:0;box-shadow:var(--sh);border-radius:999px;padding:9px 13px;font-size:11px;font-weight:760;color:#4A5A71;outline:0}
+main{display:flex;justify-content:center}
+#wrap{position:relative}
+#stage{position:relative;width:400px;height:800px;background:var(--bg);border-radius:38px;overflow:hidden;box-shadow:0 24px 60px rgba(31,72,140,.25);transform-origin:top center}
+.screen{position:absolute;inset:0;padding:54px 14px 14px;display:none;flex-direction:column;overflow:hidden}
+.screen.active{display:flex}
+.scroll{overflow-y:auto;flex:1;min-height:0;scrollbar-width:none;padding-bottom:18px}
+.scroll::-webkit-scrollbar{display:none}
+.hasnav .scroll{padding-bottom:92px}
+.ahead{display:flex;align-items:center;gap:9px;margin-bottom:13px;flex:none}
+.logo{width:108px;height:20px;background:var(--logo) left center/contain no-repeat}
+.stag,.ptag{height:24px;display:inline-flex;align-items:center;padding:0 10px;border-radius:999px;background:var(--grad);color:#fff;font-size:9.5px;font-weight:870;text-transform:uppercase;white-space:nowrap}
+.subhead{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex:none}
+.back{width:28px;height:28px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;box-shadow:var(--sh);flex:none}
+.card{background:#fff;border-radius:24px;box-shadow:var(--sh)}
+.pill{display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 16px;border-radius:999px;background:var(--grad);color:#fff;font-size:12px;font-weight:760;white-space:nowrap}
+.chip{display:inline-flex;align-items:center;height:28px;padding:0 11px;border-radius:999px;background:var(--pale);color:var(--blue);font-size:10.5px;font-weight:760;white-space:nowrap}
+.chip.on{background:var(--grad);color:#fff}
+.bigbtn{height:54px;width:100%;border-radius:999px;background:var(--grad);color:#fff;font-size:13px;font-weight:870;text-transform:uppercase;box-shadow:var(--sh)}
+.chev{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;flex:none;background:var(--grad);color:#fff}
+.mut{color:var(--mut);font-size:11px;font-weight:760}
+/* banners + lots */
+.searchBanner{height:142px;border-radius:28px;background:var(--banner) center/cover;box-shadow:var(--sh);width:100%;flex:none}
+.channel{height:142px;border-radius:28px;background:var(--grad);box-shadow:var(--sh);position:relative;overflow:hidden;color:#fff;width:100%;text-align:left;flex:none}
+.channel:before,.channel:after{content:"";position:absolute;width:120px;height:340px;background:rgba(255,255,255,.13);transform:rotate(38deg);top:-110px}
+.channel:before{left:55px}.channel:after{right:10px}
+.channel .in{position:relative;z-index:1;height:100%;display:flex;align-items:center;gap:18px;padding:0 22px}
+.channel .sq{width:52px;height:38px;border:4px solid rgba(255,255,255,.75);border-radius:9px;display:grid;place-items:center;flex:none}
+.channel b{font-size:19px;line-height:1.18;font-weight:870;text-transform:uppercase}
+.channel span{display:block;font-size:12px;margin-top:4px;font-weight:760}
+.channel .dots2{position:absolute;bottom:13px;left:0;right:0;text-align:center;font-size:8px;letter-spacing:3px;opacity:.85}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.lot{background:#fff;border-radius:24px;box-shadow:var(--sh);padding:8px;text-align:left;position:relative;width:100%}
+.lotimg{height:118px;border-radius:18px;background:var(--grad);background-size:cover;background-position:center;display:grid;place-items:center;color:#fff;font-size:10px;font-weight:870;text-transform:uppercase;position:relative;overflow:hidden}
+.heart{position:absolute;top:8px;right:8px;width:25px;height:25px;border-radius:50%;background:rgba(255,255,255,.92);color:var(--blue);display:grid;place-items:center;box-shadow:var(--sh);z-index:2}
+.heart svg{fill:none;stroke:currentColor;stroke-width:2}
+.heart.on svg{fill:currentColor}
+.lot h3{font-size:12px;line-height:1.25;font-weight:760;margin:10px 4px 9px;min-height:30px}
+.pricepill{height:30px;border-radius:999px;background:var(--grad);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:760}
+.tools{display:flex;gap:8px;margin-top:12px}
+.searchpill{flex:1;height:36px;border-radius:999px;background:var(--grad);color:#fff;display:flex;align-items:center;gap:7px;padding:0 13px;box-shadow:var(--sh)}
+.searchpill input{border:0;outline:0;background:none;color:#fff;font-size:11px;font-weight:760;width:100%;min-width:0}
+.searchpill input::placeholder{color:#fff;opacity:.9}
+.filterbtn{height:36px;padding:0 15px;border-radius:999px;background:var(--grad);color:#fff;font-size:11px;font-weight:760;display:inline-flex;gap:7px;align-items:center;box-shadow:var(--sh)}
+.nores{padding:70px 0;text-align:center;color:var(--mut);font-size:12px;font-weight:760;display:none}
+/* bottom fade (original Rectangle 19171: solid #E7EFF6 + progressive blur) */
+#fade{position:absolute;left:0;right:0;bottom:0;height:150px;z-index:15;pointer-events:none;display:none;
+background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38) 42%,rgba(231,239,246,.84) 68%,#E7EFF6 88%);
+-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+-webkit-mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.55) 38%,#000 72%);mask-image:linear-gradient(to bottom,transparent 0%,rgba(0,0,0,.55) 38%,#000 72%)}
+#fade.show{display:block}
+.bottomCta,.actions{position:relative;z-index:21}
+/* bottom nav */
+#nav{position:absolute;left:15px;right:15px;bottom:15px;display:none;gap:10px;z-index:20}
+#nav.show{display:flex}
+.navmain{flex:none;width:300px;height:60px;border-radius:999px;background:var(--grad);box-shadow:0 10px 24px rgba(15,95,214,.25);display:flex;padding:0;position:relative}
+.navmain button{flex:none;height:60px;border-radius:999px;color:#C2D5F8;display:grid;place-items:center;position:relative;z-index:1}
+.navmain button.on{background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35);color:#fff}
+.plusbtn{width:60px;height:60px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;box-shadow:0 10px 24px rgba(15,95,214,.25)}
+/* loading + empty */
+.skel{background:#fff;border-radius:24px;padding:8px;box-shadow:var(--sh)}
+.shine{border-radius:16px;background:linear-gradient(100deg,#E8EDF3 40%,#F6F9FC 50%,#E8EDF3 60%);background-size:200% 100%;animation:sh 1.2s infinite}
+@keyframes sh{to{background-position:-200% 0}}
+.emptyIcon{width:56px;height:56px;margin:180px auto 0;background:var(--searchicon) center/contain no-repeat;opacity:.95}
+.emptyTxt{text-align:center;margin-top:16px;font-size:12px;font-weight:760;color:var(--mut)}
+/* favorites / rows */
+.fav{display:flex;gap:12px;padding:8px;margin-bottom:12px;position:relative;align-items:center;text-align:left;width:100%}
+.fav .th{width:96px;height:88px;border-radius:19px;background:var(--grad);background-size:cover;background-position:center;display:grid;place-items:center;color:#fff;font-size:9px;font-weight:870;text-transform:uppercase;flex:none}
+.fav h3{font-size:12.5px;line-height:1.3;margin-bottom:10px;padding-right:30px}
+.fav .pricepill{width:145px}
+.trash{position:absolute;top:10px;right:10px;width:27px;height:27px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center}
+.status{display:inline-flex;margin-top:8px;background:var(--pale);color:var(--blue);font-size:9.5px;font-weight:870;text-transform:uppercase;padding:6px 9px;border-radius:999px}
+/* profile */
+.profileTop{text-align:center;margin-top:2px}
+.avatar{width:94px;height:94px;border-radius:50%;margin:0 auto;background:var(--jacket) center 18%/cover;box-shadow:var(--sh);position:relative}
+.avbadge{position:absolute;top:2px;right:0;width:25px;height:25px;border-radius:50%;background:var(--grad);color:#fff;display:none;place-items:center;border:2px solid var(--bg)}
+.handle{margin-top:10px;color:var(--blue);font-size:11px;font-weight:760;display:flex;justify-content:center;gap:7px;align-items:center}
+.pluspill{display:none;background:var(--grad);color:#fff;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:870}
+.stats{margin-top:14px;border-radius:22px;background:var(--grad);color:#fff;display:grid;grid-template-columns:1fr 1fr 1fr;padding:13px 8px;box-shadow:var(--sh);text-align:center}
+.stats div+div{border-left:1px solid rgba(255,255,255,.35)}
+.stats small{display:block;font-size:8.5px;font-weight:870;text-transform:uppercase;line-height:1.25}
+.stats b{display:block;margin-top:5px;font-size:13px}
+.menu{margin-top:14px;padding:8px 18px}
+.mrow{width:100%;height:55px;display:flex;align-items:center;gap:9px;border-bottom:1px solid #C9D9F2;text-align:left;color:var(--blue);font-size:10.5px;font-weight:870;text-transform:uppercase}
+.mrow:last-child{border-bottom:0}
+.mrow .grow{flex:1}
+.datebadge{display:none;background:var(--grad);color:#fff;padding:6px 9px;border-radius:999px;font-size:9px}
+/* searches/history/forms */
+.seg{display:flex;gap:8px;margin-bottom:14px}
+.seg button{height:36px;padding:0 16px;border-radius:999px;background:#fff;box-shadow:var(--sh);font-size:11px;font-weight:760;color:#4A5A71}
+.seg button.on{background:var(--grad);color:#fff}
+.scard{padding:16px;margin-bottom:12px;width:100%;text-align:left}
+.scard .top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.scard h3{font-size:14px}
+.pause{width:34px;height:34px;border-radius:50%;background:var(--pale);color:var(--blue);display:grid;place-items:center;flex:none}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:11px}
+.sfoot{display:flex;align-items:center;justify-content:space-between;margin-top:13px}
+.newpill{background:var(--grad);color:#fff;font-size:11px;font-weight:870;padding:8px 12px;border-radius:999px}
+.scard.off{opacity:.62}
+.group{padding:16px;margin-bottom:12px}
+.group .ghead{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.group h3{font-size:13.5px}
+.count{background:var(--pale);color:var(--blue);font-size:10px;font-weight:870;padding:6px 9px;border-radius:999px}
+.hrow{display:flex;align-items:center;gap:11px;width:100%;padding:9px 0;border-top:1px solid #E8EFF7;text-align:left}
+.hth{width:54px;height:54px;border-radius:16px;background:var(--grad);background-size:cover;background-position:center;display:grid;place-items:center;color:#fff;font-size:7.5px;font-weight:870;text-transform:uppercase;flex:none}
+.hrow .who{flex:1;min-width:0}.hrow b{font-size:11.5px;display:block;line-height:1.25}.hrow .hp{color:var(--blue);font-size:11px;font-weight:870}
+.hst{font-size:9px;font-weight:870;text-transform:uppercase;background:var(--pale);color:var(--blue);padding:6px 8px;border-radius:999px;white-space:nowrap}
+.hst.sold{background:#EEF1F5;color:#8A97A8}
+.repeat{margin-top:10px;height:34px;padding:0 14px;border-radius:999px;background:var(--grad);color:#fff;font-size:11px;font-weight:760}
+.form{padding:18px}
+.field{margin-bottom:15px}
+.field label{display:block;font-size:10px;font-weight:870;text-transform:uppercase;color:var(--blue);margin:0 0 8px 4px}
+.field input,.field textarea{width:100%;border:0;outline:0;background:#EEF4FB;border-radius:18px;padding:15px;font-size:13px;font-weight:650;color:var(--ink);resize:none}
+.field input::placeholder,.field textarea::placeholder{color:#9AABC2}
+.forecast{background:var(--pale);color:var(--blue);border-radius:18px;padding:13px 15px;font-size:11.5px;font-weight:870;text-align:center}
+.upload{height:138px;border-radius:22px;background:var(--grad);color:#fff;display:grid;place-items:center;font-size:12px;font-weight:870;text-transform:uppercase;width:100%;margin-bottom:14px;box-shadow:var(--sh)}
+.bottomCta{flex:none;padding-top:12px}
+.hasnav .bottomCta{margin-bottom:87px}
+/* create listing */
+.photos{display:grid;grid-template-columns:1.55fr 1fr;gap:10px;margin-bottom:14px}
+.photoMain{height:150px;border-radius:24px;background:var(--grad);color:#fff;position:relative;overflow:hidden;box-shadow:var(--sh);display:grid;place-items:center;font-size:12px;font-weight:760;text-transform:uppercase}
+.photoMain.has{background-size:cover;background-position:center}
+.photoMain span{position:relative;z-index:1}
+.photoMain.has span{position:absolute;left:10px;bottom:10px;background:rgba(255,255,255,.92);color:var(--blue);padding:7px 10px;border-radius:999px;font-size:10px}
+.photoSide{display:grid;gap:10px}
+.photoSmall{height:70px;border-radius:20px;background:#fff;box-shadow:var(--sh);color:var(--blue);display:grid;place-items:center;font-size:22px;font-weight:400}
+.switchrow{display:flex;align-items:center;justify-content:space-between;padding:2px 4px 0}
+.switchrow b{font-size:12px}
+.switch{width:48px;height:28px;border-radius:999px;background:#DCE8F8;position:relative;flex:none;transition:.2s}
+.switch:after{content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:var(--sh);transition:.2s}
+.switch.on{background:var(--grad)}
+.switch.on:after{left:23px}
+/* product */
+.photo{height:338px;border-radius:24px;background:var(--iphone) center/cover;position:relative;box-shadow:var(--sh);cursor:pointer;display:grid;place-items:center;color:#fff;font-weight:870;text-transform:uppercase}
+.counter{position:absolute;top:10px;right:10px;background:rgba(20,30,45,.45);color:#fff;font-size:10px;font-weight:760;padding:5px 9px;border-radius:999px}
+.dots{position:absolute;bottom:12px;left:0;right:0;display:flex;justify-content:center;gap:5px}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(255,255,255,.55)}.dots i.on{background:#fff;width:16px;border-radius:3px}
+.ptitle{font-size:17px;font-weight:760;margin:14px 2px 10px}
+.desc{margin-top:12px;min-height:112px;padding:16px}.desc b{font-size:14px}.desc p{margin-top:8px;font-size:12.5px;line-height:1.5;color:#4A5A71;font-weight:600}
+.actions{display:flex;gap:10px;flex:none;padding-top:12px}
+.open{flex:1;height:52px;border-radius:999px;background:var(--grad);color:#fff;font-size:13px;font-weight:870;text-transform:uppercase;box-shadow:var(--sh)}
+.fab{width:52px;height:52px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;box-shadow:var(--sh)}
+.fab svg{fill:none;stroke:#fff;stroke-width:2}.fab.liked svg{fill:#fff}
+/* tariffs */
+.trial{min-height:62px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
+.trial b{font-size:14px}.actv{background:var(--grad);color:#fff;font-size:10px;font-weight:870;padding:8px 13px;border-radius:999px;white-space:nowrap}
+.tbar{position:absolute;left:0;bottom:0;height:4px;width:73%;background:var(--grad)}
+.plus{margin-top:14px;height:202px;border-radius:26px;background:var(--grad);color:#fff;padding:18px;position:relative;box-shadow:var(--sh);z-index:2}
+.plus .top{display:flex;justify-content:space-between;align-items:center}.plus .name{font-size:15px;font-weight:760;text-transform:uppercase}
+.plus .chev{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
+.plus ul{list-style:none;margin-top:16px;display:grid;gap:9px}.plus li{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:760}
+.tick{width:17px;height:17px;border-radius:50%;background:rgba(255,255,255,.22);display:grid;place-items:center;flex:none}
+.payrow{position:absolute;left:18px;right:18px;bottom:16px;display:flex;justify-content:space-between;align-items:center}
+.pay{height:38px;padding:0 20px;border-radius:999px;border:1.5px solid rgba(255,255,255,.55);color:#fff;font-size:12px;font-weight:870;text-transform:uppercase;background:rgba(255,255,255,.08)}
+.price{font-size:15px;font-weight:760}.price s{opacity:.65;font-size:12px;margin-right:6px}.price span{font-size:11px}
+.benefits{margin-top:-16px;padding:30px 18px 14px;border-radius:26px;display:none;position:relative;z-index:1}
+.benefits .row{display:flex;align-items:center;gap:11px;padding:7px 0;font-size:13.5px;font-weight:760}
+.bic{width:28px;height:28px;border-radius:50%;background:var(--pale);color:var(--blue);display:grid;place-items:center;flex:none}
+.tarwrap.expanded .plus ul{visibility:hidden}.tarwrap.expanded .benefits{display:block}
+.acc{margin-top:14px;min-height:58px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left}
+.acc b{font-size:14px}
+.promoform{margin-top:10px;background:var(--grad);border-radius:24px;padding:10px;display:none;gap:8px;box-shadow:var(--sh)}
+.promoform.show{display:flex}
+.codebox{flex:1;height:44px;background:#fff;border-radius:18px;display:flex;align-items:center;padding:0 14px;gap:8px;min-width:0}
+.codebox input{border:0;outline:0;font:inherit;font-size:15px;font-weight:870;text-transform:uppercase;width:100%;min-width:0;background:none;color:var(--ink)}
+.off{font-size:11px;font-weight:760;color:var(--mut);white-space:nowrap}
+.okic{width:20px;height:20px;border-radius:50%;background:var(--grad);color:#fff;display:grid;place-items:center;flex:none;visibility:hidden}
+.apply{height:44px;padding:0 16px;border-radius:18px;background:#fff;font-size:12px;font-weight:760}
+.pmsg{margin:10px 4px 0;font-size:11px;font-weight:760;color:#E5484D;display:none}.pmsg.show{display:block}
+.shake{animation:shk .3s}@keyframes shk{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+/* referrals */
+.invite{padding:18px}.invite b{font-size:15px}.invite p{margin-top:7px;font-size:11.5px;line-height:1.45;font-weight:600;color:#4A5A71}
+.earned{margin-top:12px;display:inline-flex;background:var(--pale);color:var(--blue);font-size:11.5px;font-weight:870;padding:8px 13px;border-radius:999px}
+.linkcard{margin-top:14px;padding:12px}.linkin{height:52px;border-radius:18px;background:var(--grad);color:#fff;display:flex;align-items:center;gap:10px;padding:0 14px}
+.linkin small{display:block;font-size:9px;font-weight:760;opacity:.85}.linkin b{font-size:11px;white-space:nowrap}
+.linkbtns{display:flex;gap:8px;margin-top:10px}.linkbtns button{height:32px;padding:0 15px;border-radius:999px;background:var(--grad);color:#fff;font-size:11px;font-weight:760}
+.secttl{margin-top:14px;min-height:52px;padding:14px 18px;font-size:14px;font-weight:760}
+.reflist{margin-top:14px;padding:6px 16px}.ref{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #E8EFF7}.ref:last-child{border-bottom:0}
+.ava{width:38px;height:38px;border-radius:12px;background:var(--grad);flex:none;background-size:cover;background-position:center}
+.ref .who{flex:1}.ref .who b{font-size:12px;color:var(--blue);display:block}.ref .who span{font-size:10.5px;font-weight:760;color:var(--blue)}
+.amt{font-size:11.5px;font-weight:870;color:var(--blue);white-space:nowrap}.rtag{font-size:9.5px;font-weight:870;background:var(--pale);color:var(--blue);padding:6px 9px;border-radius:999px;white-space:nowrap}
+/* sheets/toast */
+.overlay{position:absolute;inset:0;background:rgba(25,42,68,.32);z-index:40;display:none;align-items:flex-end}
+.overlay.show{display:flex}
+.sheet{background:#fff;width:100%;border-radius:30px 30px 0 0;padding:14px 16px 24px;box-shadow:0 -12px 35px rgba(20,50,100,.2)}
+.grab{width:42px;height:5px;border-radius:99px;background:#D7E3F2;margin:0 auto 16px}
+.sheet h3{font-size:15px;margin-bottom:12px}
+.srow{width:100%;display:flex;align-items:center;gap:12px;padding:13px 4px;border-top:1px solid #E8EFF7;text-align:left;font-size:13px;font-weight:760}
+.srow:first-of-type{border-top:0}.srow .bic{width:36px;height:36px}.srow span{flex:1}
+#toast{position:absolute;left:50%;bottom:92px;transform:translateX(-50%) translateY(12px);background:#22304A;color:#fff;font-size:11.5px;font-weight:760;padding:11px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:.25s;white-space:nowrap;z-index:60}
+#toast.show{opacity:1;transform:translateX(-50%)}
+/* --- Original plaques from «Находки» 2550:21: exact fills, GLASS nodes, type --- */
+/* Section tag: #3373FA -> #5A8CF4, SF Pro Expanded Heavy 10 */
+.stag,.ptag{height:21px;padding:0 8px;background:linear-gradient(140deg,#3373FA,#5A8CF4);border:0;box-shadow:none;font-size:10px;font-weight:870}
+/* Blue price/nav plaques: #4780FB -> #6B98F5 + original gradient stroke and price shadows */
+.pricepill{font-size:10px;font-weight:760;border:0;box-shadow:0 2px 6px rgba(30,123,255,.28),0 1px 2px rgba(10,58,128,.12)}
+.navmain,.plusbtn{border:0;box-shadow:none}
+/* True Figma GLASS: white fill at 10% (Frame 347/367/368) — only these elements */
+.heart,#navglass,.pay,.plus .chev{background:rgba(255,255,255,.10);-webkit-backdrop-filter:blur(6px) saturate(160%);backdrop-filter:blur(6px) saturate(160%);border:0;box-shadow:inset 0 1px 1px rgba(255,255,255,.50),inset 0 -1px 1px rgba(255,255,255,.16),inset 1px 0 1px rgba(255,255,255,.20)}
+.heart{color:#fff}.heart.onpic{color:#3373FA}
+#navglass{position:absolute;top:4px;left:5px;width:65px;height:52px;border-radius:500px;transition:left .25s ease;z-index:0;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.12)}
+.navmain{background:linear-gradient(112deg,#4780FB,#6B98F5)}
+.plusbtn{background:linear-gradient(112deg,#4780FB,#6B98F5)}
+.navmain button.on{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;color:#fff}
+.navmain button svg{position:absolute;left:50%;top:50%}
+.navmain button[data-nav="home"] svg{transform:translate(-50%,-50%) translate(-1.47px,-.75px)}
+.navmain button[data-nav="market"] svg{transform:translate(-50%,-50%) translate(.5px,0)}
+.navmain button[data-nav="favorites"] svg{transform:translate(-50%,-50%) translate(0,-1px)}
+.navmain button[data-nav="profile"] svg{transform:translate(-50%,-50%) translate(-.5px,0)}
+/* Exact type from the original frames */
+.lotimg{color:#C2D5F8;font-size:10px;font-weight:760}
+.fav .th{color:#C2D5F8;font-size:10px;font-weight:760}
+.searchpill input,.filterbtn{font-size:10px;font-weight:760}
+.chip,.seg button,.newpill,.hst,.status,.count,.rtag,.earned,.repeat,.linkbtns button,.apply,.off{font-size:10px;font-weight:760}
+.hrow .hp{font-size:10px;font-weight:760}
+.actv{font-size:10px;font-weight:760}
+.trial b,.plus .name{font-size:16px;font-weight:760}
+.pay{width:145px;height:45px;padding:0;font-size:16px;font-weight:760}
+.plus .chev{width:30px;height:30px}
+.price{font-size:16px;font-weight:760}
+.benefits .row{font-size:16px;font-weight:760}
+.codebox input{font-size:20px;font-weight:760}
+.ptitle{font-size:16px;font-weight:760}
+.desc b{font-size:16px;font-weight:760}
+.pill{font-size:14px;font-weight:760}
+#pMarket{font-size:12px}
+.open,.bigbtn{font-size:16px;font-weight:760}
+.handle{font-size:10px;font-weight:870}
+.stats small{font-size:10px;font-weight:870}
+.stats b{font-size:12px;font-weight:870}
+.mrow{font-size:10px;font-weight:870}
+.invite p{font-size:10px;font-weight:760;color:#2C2C2C}
+.linkin small,.linkin b{font-size:10px;font-weight:760}
+.ref .who b,.ref .who span{font-size:10px;font-weight:870}
+.fav h3{font-size:12px;font-weight:760}
+.acc b{font-size:16px;font-weight:760}
+.invite b,.secttl{font-size:16px;font-weight:760}
+.amt{font-size:10px;font-weight:870}
+.pluspill,.datebadge{font-size:10px;font-weight:870}
+.field input,.field textarea{font-size:12px;font-weight:760}
+.desc p{font-size:12px;font-weight:760}
+.mut,.forecast,.pmsg{font-size:10px;font-weight:760}
+.photoMain{font-size:16px;font-weight:760}
+.scard h3,.group h3{font-size:16px;font-weight:760}
+.plus{height:214px}
+.plus ul{margin-top:12px;gap:7px}
+.plus li{font-size:16px;font-weight:760}
+.off{color:#3373FA}
+</style></head><body>
+<svg width="0" height="0" style="position:absolute"><defs>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-r" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-d" viewBox="0 0 24 24"><path d="M5.5 9.5 12 16l6.5-6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-u" viewBox="0 0 24 24"><path d="M5.5 14.5 12 8l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-home" viewBox="0 0 19.0667 18.4947"><path d="M9.53333 0L0.572 7.24533C0.190667 7.53133 0 8.008 0 8.48467L0 17.5413C4.23365e-16 17.7942 0.10044 18.0367 0.279225 18.2154C0.45801 18.3942 0.700494 18.4947 0.953333 18.4947L6.67333 18.4947L6.67333 12.2027L12.3933 12.2027L12.3933 18.4947L18.1133 18.4947C18.3662 18.4947 18.6087 18.3942 18.7874 18.2154C18.9662 18.0367 19.0667 17.7942 19.0667 17.5413L19.0667 8.48467C19.0667 8.008 18.876 7.53133 18.4947 7.24533L9.53333 0Z" fill="currentColor"/></symbol>
+<symbol id="i-store" viewBox="0 0 22 22"><g transform="translate(2.9333 4.0333)"><path d="M0 0L16.1333 0C16.5917 0 16.9583 0.366667 16.9583 0.825L16.9583 2.75C16.9583 3.47935 16.6686 4.17882 16.1529 4.69454C15.6372 5.21027 14.9377 5.5 14.2083 5.5C13.6054 5.50173 13.0187 5.30529 12.5384 4.94091C12.058 4.57653 11.7108 4.0644 11.55 3.48333C11.3504 4.00212 10.9984 4.44826 10.5402 4.76294C10.082 5.07761 9.53918 5.24605 8.98333 5.24605C8.42749 5.24605 7.88469 5.07761 7.4265 4.76294C6.9683 4.44826 6.61622 4.00212 6.41667 3.48333C6.2559 4.0644 5.90863 4.57653 5.42831 4.94091C4.94799 5.30529 4.36123 5.50173 3.75833 5.5C3.02899 5.5 2.32951 5.21027 1.81379 4.69454C1.29806 4.17882 1.00833 3.47935 1.00833 2.75L1.00833 0.825C1.00833 0.366667 1.375 0 1.83333 0L0 0Z" fill="currentColor"/></g><g transform="translate(4.2167 10.45)"><path d="M0 0.733333L0 7.24167C0 7.79167 0.366667 8.15833 0.916667 8.15833L4.21667 8.15833L4.21667 4.03333C4.21667 3.575 4.58333 3.20833 5.04167 3.20833L8.525 3.20833C8.98333 3.20833 9.35 3.575 9.35 4.03333L9.35 8.15833L12.65 8.15833C13.2 8.15833 13.5667 7.79167 13.5667 7.24167L13.5667 0.733333C12.6861 0.747595 11.8223 0.491659 11.0917 0C10.3667 0.508838 9.50242 0.781846 8.61667 0.781846C7.73091 0.781846 6.86668 0.508838 6.14167 0C5.41665 0.508838 4.55242 0.781846 3.66667 0.781846C2.78091 0.781846 1.91668 0.508838 1.19167 0C0.837058 0.307746 0.434528 0.555457 0 0.733333Z" fill="currentColor"/></g></symbol>
+<symbol id="i-book" viewBox="0 0 22 22"><g transform="translate(4.5833 2.75)"><path d="M0.916667 0L11.9167 0C12.1598 4.07082e-16 12.3929 0.0965771 12.5648 0.268485C12.7368 0.440394 12.8333 0.673552 12.8333 0.916667L12.8333 16.6833C12.8333 17.4167 12.0083 17.875 11.3667 17.4167L6.41667 13.75L1.46667 17.4167C0.825 17.875 0 17.4167 0 16.6833L0 0.916667C0 0.673552 0.0965773 0.440394 0.268486 0.268485C0.440394 0.0965771 0.673552 4.07082e-16 0.916667 0Z" fill="currentColor"/></g></symbol>
+<symbol id="i-user" viewBox="0 0 22 22"><g transform="translate(7.0583 2.5667)"><path d="M3.94167 0C2.89627 8.14164e-16 1.89369 0.415281 1.15449 1.15449C0.415282 1.89369 1.62833e-15 2.89627 0 3.94167C8.14164e-16 4.98706 0.415282 5.98964 1.15449 6.72885C1.89369 7.46805 2.89627 7.88333 3.94167 7.88333C4.98706 7.88333 5.98964 7.46805 6.72885 6.72885C7.46805 5.98964 7.88333 4.98706 7.88333 3.94167C7.88333 2.89627 7.46805 1.89369 6.72885 1.15449C5.98964 0.415281 4.98706 8.14164e-16 3.94167 0Z" fill="currentColor"/></g><g transform="translate(3.5343 12.1)"><path d="M7.46574 0C3.7074 0 0.865736 2.10833 0.0407361 5.225C-0.142597 5.775 0.315736 6.23333 0.957403 6.23333L13.9741 6.23333C14.6157 6.23333 15.0741 5.775 14.8907 5.225C14.0657 2.10833 11.2241 0 7.46574 0Z" fill="currentColor"/></g></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.5C6.4 16.7 3 13.6 3 9.9 3 7.2 5 5 7.6 5c1.7 0 3.4 1 4.4 2.6C13 6 14.7 5 16.4 5 19 5 21 7.2 21 9.9c0 3.7-3.4 6.8-9 10.6Z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m3 0-.8 14H6.8L6 7m4 4v6m4-6v6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="m15.5 15.5 4.5 4.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></symbol>
+<symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9m4 0h3M4 17h3m4 0h9" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="15" cy="7" r="2.2" fill="currentColor"/><circle cx="9" cy="17" r="2.2" fill="currentColor"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20V10M12 20V4M19 20v-8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></symbol>
+<symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2 4.5 13.5H11L9.5 22 19 10h-6.5L13 2Z" fill="currentColor"/></symbol>
+<symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4L12 3Z" fill="currentColor"/></symbol>
+<symbol id="i-plane" viewBox="0 0 24 24"><path d="M21 3 3.8 10.2c-.8.3-.8 1.3.1 1.6l4.9 1.7 1.9 5.8c.3.8 1.3 1 1.9.4l2.6-2.5 4.7 3.4c.7.5 1.7.1 1.9-.8L22.6 4c.1-.9-.7-1.5-1.6-1Z" fill="currentColor"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7Z" fill="currentColor"/></symbol>
+</defs></svg>
+
+<header class="bar"><div class="brand">ПОЛКА <span>· полный проект</span></div>
+<select id="jump" aria-label="Экран">
+<option value="home">Находки</option><option value="market">Барахолка</option><option value="favorites">Избранное</option><option value="searches">Поиск лотов</option><option value="newsearch">Новый поиск</option><option value="history">История</option><option value="product">Карточка товара</option><option value="profile">Профиль</option><option value="myads">Мои объявления</option><option value="post">Создание объявления</option><option value="tariffs">Тарифы</option><option value="referrals">Рефералы</option><option value="loading">Загрузка</option><option value="empty">Пусто</option>
+</select></header>
+<main><div id="wrap"><div id="stage">
+
+<!-- loading -->
+<section class="screen active" id="s-loading"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><div class="searchBanner"></div><div class="grid" style="flex:none">
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:65%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:55%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:60%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:50%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div></div></section>
+
+<!-- empty -->
+<section class="screen" id="s-empty"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')"></button><div class="emptyIcon"></div><div class="emptyTxt">Пока пусто</div></section>
+
+<!-- home / finds -->
+<section class="screen" id="s-home"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')" aria-label="Поиск лотов"></button><div class="scroll"><div class="grid" id="homeGrid"></div></div></section>
+
+<!-- market -->
+<section class="screen" id="s-market"><div class="ahead"><div class="logo"></div><span class="stag">Барахолка</span></div>
+<button class="channel" onclick="toast('Открываю канал @polkalot…')"><span class="in"><span class="sq"><svg width="22" height="22"><use href="#i-plane"/></svg></span><span><b>Подпишись на наш канал</b><span>@polkalot</span></span></span><span class="dots2">•••</span></button>
+<div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
+<div class="scroll"><div class="grid" id="marketGrid"></div><div class="nores" id="nores">Ничего не нашлось</div></div></section>
+
+<!-- favorites -->
+<section class="screen" id="s-favorites"><div class="ahead"><div class="logo"></div><span class="stag">Избранное</span></div><div class="scroll"><div id="favList"></div><div class="nores" id="favEmpty">В избранном пока пусто</div></div></section>
+
+<!-- searches -->
+<section class="screen" id="s-searches"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Поиск лотов</span></div>
+<div class="seg"><button class="on">Мои поиски</button><button onclick="go('history')">История</button></div>
+<div class="scroll"><div id="searchList">
+<article class="card scard" onclick="go('history')"><div class="top"><h3>iPhone 15 PRO</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">до 35 000 ₽</span><span class="chip">АКБ &gt; 80%</span><span class="chip">без ремонта</span></div><div class="sfoot"><span class="newpill">+12 новых</span><span class="mut">5 мин назад</span></div></article>
+<article class="card scard" onclick="go('history')"><div class="top"><h3>Куртка Alpha Industries</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">размер M</span><span class="chip">до 7 000 ₽</span></div><div class="sfoot"><span class="newpill">+3 новых</span><span class="mut">только что</span></div></article>
+<article class="card scard off" onclick="go('history')"><div class="top"><h3>Джинсы Levi’s</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-play"/></svg></button></div><div class="chips"><span class="chip">размер S</span><span class="chip">до 4 000 ₽</span></div><div class="sfoot"><span class="mut">на паузе</span><span class="mut">2 дня назад</span></div></article>
+</div></div><div class="bottomCta"><button class="bigbtn" onclick="go('newsearch')">Новый поиск</button></div></section>
+
+<!-- new search -->
+<section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
+<div class="scroll"><form class="card form" id="searchForm">
+<div class="field"><label>Что ищем</label><input id="q" value="iPhone 15 PRO" required></div>
+<div class="field"><label>Цена до, ₽</label><input id="maxprice" value="35 000" inputmode="numeric"></div>
+<div class="field"><label>Критерии</label><div class="chips" style="margin-top:0"><button type="button" class="chip on" onclick="this.classList.toggle('on')">АКБ &gt; 80%</button><button type="button" class="chip on" onclick="this.classList.toggle('on')">без ремонта</button><button type="button" class="chip" onclick="this.classList.toggle('on')">полный комплект</button></div></div>
+<div class="field"><label>Минус-слова</label><input placeholder="запчасти, битый"></div>
+<div class="forecast">≈ 12 лотов в день по этим критериям</div>
+</form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
+
+<!-- history -->
+<section class="screen" id="s-history"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">История</span></div>
+<div class="seg" id="hseg"><button class="on" data-h="all">Все</button><button data-h="active">Активные</button><button data-h="sold">Проданные</button></div>
+<div class="scroll">
+<div class="card group"><div class="ghead"><h3>iPhone 15 PRO · до 35 000 ₽</h3><span class="count">12</span></div>
+<button class="hrow" data-st="active" onclick="openLot(1)"><span class="hth">нет фото</span><span class="who"><b>IPhone 15 PRO</b><span class="hp">30 000 ₽</span></span><span class="hst">активен</span></button>
+<button class="hrow" data-st="sold" onclick="openLot(3)"><span class="hth" style="background-image:var(--iphone)"></span><span class="who"><b>IPhone 13, 128 Гб</b><span class="hp">11 000 ₽</span></span><span class="hst sold">продан</span></button>
+<button class="repeat" onclick="go('searches');toast('Поиск уже активен')">Повторить поиск</button></div>
+<div class="card group"><div class="ghead"><h3>Куртка Alpha · M</h3><span class="count">3</span></div>
+<button class="hrow" data-st="active" onclick="openLot(2)"><span class="hth" style="background-image:var(--jacket)"></span><span class="who"><b>Куртка Alpha Industries, M</b><span class="hp">5 000 ₽</span></span><span class="hst">активен</span></button>
+<button class="hrow" data-st="sold" onclick="openLot(2)"><span class="hth" style="background-image:var(--jacket)"></span><span class="who"><b>Куртка Alpha Industries, M</b><span class="hp">4 700 ₽</span></span><span class="hst sold">продан</span></button>
+<button class="repeat" onclick="go('searches');toast('Поиск уже активен')">Повторить поиск</button></div>
+</div></section>
+
+<!-- product -->
+<section class="screen" id="s-product"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Карточка товара</span></div>
+<div class="photo" id="photo"><span id="nophoto" style="display:none">Нет фото</span><span class="counter" id="counter">1 / 5</span><span class="dots" id="dots"><i class="on"></i><i></i><i></i><i></i><i></i></span></div>
+<div class="ptitle" id="pTitle">IPhone 15 PRO, 128</div>
+<div class="chips" style="margin-top:0"><span class="pill" id="pPrice">30 000₽</span><span class="pill" id="pTag">АКБ &gt; 80%</span><span class="pill" id="pMarket">−18% ниже рынка</span></div>
+<div class="mut" style="margin:10px 2px 0" id="pMeta">Москва · сегодня, 14:32</div>
+<div class="card desc"><b>Описание</b><p id="pDesc">Полный комплект, без ремонта и вскрытия. АКБ 87%, Face ID и True Tone работают.</p></div>
+<div class="actions"><button class="open" onclick="toast('Открываю объявление…')">Открыть</button><button class="fab" id="pFav"><svg width="21" height="21"><use href="#i-heart"/></svg></button><button class="fab" onclick="toast('Ссылка скопирована')"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M21 3 3.8 10.2c-.8.3-.8 1.3.1 1.6l4.9 1.7 1.9 5.8c.3.8 1.3 1 1.9.4l2.6-2.5 4.7 3.4c.7.5 1.7.1 1.9-.8L22.6 4c.1-.9-.7-1.5-1.6-1Z" stroke-linejoin="round"/></svg></button></div></section>
+
+<!-- profile -->
+<section class="screen" id="s-profile"><div class="ahead"><div class="logo"></div><span class="stag">Профиль</span></div><div class="scroll">
+<div class="profileTop"><div class="avatar"><span class="avbadge" id="avbadge"><svg width="13" height="13"><use href="#i-spark"/></svg></span></div><div class="handle">@cuesoul <span class="pluspill" id="pluspill">ПЛЮС</span></div></div>
+<div class="stats"><div><small>Объявления</small><b>12</b></div><div><small>Модерация</small><b>1</b></div><div><small>В избранном</small><b id="favCount">101</b></div></div>
+<div class="card menu">
+<button class="mrow" onclick="go('myads')"><span class="grow">Мои объявления</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('favorites')"><span class="grow">Избранное</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('tariffs')"><span>Тарифы</span><span class="datebadge" id="datebadge">до 01.01.2027</span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('post')"><span class="grow">Разместить объявление</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('referrals')"><span class="grow">Реферальная программа</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Условия использования</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+</div></div></section>
+
+<!-- my ads -->
+<section class="screen" id="s-myads"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Мои объявления</span></div><div class="scroll"><div id="myList">
+<article class="card fav"><span class="th" style="background-image:var(--jacket)"></span><span><h3>Куртка Alpha Industries, M</h3><span class="pricepill">5 000 ₽</span><br><span class="status">Активно</span></span></article>
+<article class="card fav"><span class="th">нет фото</span><span><h3>Джинсы мужские Levi’s, размер S</h3><span class="pricepill">3 000 ₽</span><br><span class="status">Модерация</span></span></article>
+</div></div><div class="bottomCta"><button class="bigbtn" onclick="go('post')">Создать объявление</button></div></section>
+
+<!-- create listing -->
+<section class="screen" id="s-post"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Создание объявления</span></div>
+<div class="scroll">
+<div class="photos"><button type="button" class="photoMain" id="photoMain" onclick="cyclePhoto()"><span id="photoLabel">+ Добавить фото</span></button><div class="photoSide"><button type="button" class="photoSmall" onclick="cyclePhoto()">+</button><button type="button" class="photoSmall" onclick="cyclePhoto()">+</button></div></div>
+<form class="card form" id="postForm">
+<div class="field"><label>Название</label><input id="adTitle" placeholder="Например, iPhone 13, 128 Гб" required></div>
+<div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="11 000" inputmode="numeric" required></div>
+<div class="field"><label>Категория</label><div class="chips" style="margin-top:0" data-choice="cat"><button type="button" class="chip on">Техника</button><button type="button" class="chip">Одежда</button><button type="button" class="chip">Другое</button></div></div>
+<div class="field"><label>Состояние</label><div class="chips" style="margin-top:0" data-choice="cond"><button type="button" class="chip on">Отличное</button><button type="button" class="chip">Хорошее</button><button type="button" class="chip">Есть нюансы</button></div></div>
+<div class="field"><label>Город</label><input id="adCity" value="Москва"></div>
+<div class="field"><label>Описание</label><textarea id="adDesc" rows="3" placeholder="Комплект, состояние, причина продажи"></textarea></div>
+<div class="switchrow"><b>Доставка</b><button type="button" class="switch on" id="delivery" aria-label="Доставка"></button></div>
+</form></div><div class="bottomCta"><button class="bigbtn" form="postForm">Опубликовать</button></div></section>
+
+<!-- tariffs -->
+<section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
+<div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно · 17:42</span><span class="tbar" id="tbar"></span></div>
+<div class="tarwrap" id="tarwrap"><div class="plus">
+<div class="top"><span class="name">Плюс</span><button class="chev" id="termsBtn"><svg width="15" height="15"><use href="#i-d"/></svg></button></div>
+<ul><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>10 критериев</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>Аналитика</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>ИИ фильтрация</li></ul>
+<div class="payrow"><button class="pay" id="payBtn" onclick="activatePlus()">Оплатить</button><span class="price" id="priceNow">149 <span>руб/мес</span></span></div></div>
+<div class="card benefits"><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span>10 критериев</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span>Проверка каждые 5 минут</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span>Аналитика</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-spark"/></svg></span>ИИ фильтрация</div></div></div>
+<button class="card acc" id="promoBtn"><b>Введи промокод</b><span class="chev"><svg width="15" height="15"><use href="#i-d"/></svg></span></button>
+<div class="promoform" id="promoform"><span class="codebox"><span class="okic" id="okic"><svg width="11" height="11"><use href="#i-check"/></svg></span><input id="code" value="POLKA"><span class="off" id="off"></span></span><button class="apply" onclick="applyPromo()">Применить</button></div>
+<p class="pmsg" id="pmsg">Промокод не найден</p>
+</div></section>
+
+<!-- referrals -->
+<section class="screen" id="s-referrals"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Рефералы</span></div><div class="scroll">
+<div class="card invite"><b>Пригласи друзей</b><p>Поделись ссылкой - получи 20% от пополнения реферала</p><span class="earned">Заработано: 1 240 ₽</span></div>
+<div class="card linkcard"><div class="linkin"><svg width="19" height="19" viewBox="0 0 24 24"><path d="M10.5 13.5a4 4 0 0 0 5.7 0l3-3a4 4 0 1 0-5.7-5.6l-1.6 1.6M13.5 10.5a4 4 0 0 0-5.7 0l-3 3a4 4 0 1 0 5.7 5.6l1.6-1.6" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg><span><small>Твоя ссылка</small><b>t.me/polkalotapp?startapp=...</b></span></div><div class="linkbtns"><button onclick="copyLink()">Копировать</button><button onclick="shareLink()">Поделиться</button></div></div>
+<div class="card secttl">Рефералы</div>
+<div class="card reflist">
+<div class="ref"><span class="ava" style="background-image:var(--jacket)"></span><span class="who"><b>Никита</b><span>id: 89659599</span></span><span class="amt">+298 ₽</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div>
+<div class="ref"><span class="ava"></span><span class="who"><b>Иван</b><span>id: 24848699</span></span><span class="rtag">пробный</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div>
+<div class="ref"><span class="ava"></span><span class="who"><b>Destroy</b><span>id: 66849699</span></span><span class="amt">+149 ₽</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div>
+<div class="ref"><span class="ava"></span><span class="who"><b>Mellstroy</b><span>id: 56893033</span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div>
+</div></div></section>
+
+<div id="fade"></div>
+<!-- nav -->
+<nav id="nav"><div class="navmain"><span id="navglass"></span>
+<button data-nav="home" style="width:76px" onclick="go('home',true)"><svg width="19" height="19"><use href="#i-home"/></svg></button>
+<button data-nav="market" style="width:75px" onclick="go('market',true)"><svg width="22" height="22"><use href="#i-store"/></svg></button>
+<button data-nav="favorites" style="width:74px" onclick="go('favorites',true)"><svg width="22" height="22"><use href="#i-book"/></svg></button>
+<button data-nav="profile" style="width:75px" onclick="go('profile',true)"><svg width="22" height="22"><use href="#i-user"/></svg></button>
+</div><button class="plusbtn" onclick="go('post')"><svg width="21" height="21" viewBox="0 0 21 21"><path d="M10.5 1.5v18M1.5 10.5h18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></button></nav>
+
+<!-- sheets -->
+<div class="overlay" id="ov-filters" onclick="if(event.target===this)closeSheets()"><div class="sheet"><div class="grab"></div><h3>Фильтры</h3>
+<div class="chips" style="margin:0 0 18px"><button class="chip" data-f="5000">до 5 000 ₽</button><button class="chip" data-f="15000">до 15 000 ₽</button><button class="chip" data-f="photo">только с фото</button></div>
+<button class="bigbtn" onclick="closeSheets();renderMarket()">Показать</button></div></div>
+
+<div id="toast"></div>
+</div></div></main>
+<script>
+let LOTS=[
+{id:1,title:'IPhone 15 PRO',full:'IPhone 15 PRO, 128',price:30000,img:'',fav:true,tag:'АКБ > 80%',market:'−18% ниже рынка',meta:'Москва · сегодня, 14:32',desc:'Полный комплект, без ремонта и вскрытия. АКБ 87%, Face ID и True Tone работают.'},
+{id:2,title:'Куртка Alpha Industries, M',full:'Куртка Alpha Industries, M',price:5000,img:'jacket',fav:true,tag:'размер M',market:'−12% ниже рынка',meta:'Москва · сегодня, 13:10',desc:'Оригинал, состояние отличное. Размер M, без дефектов.'},
+{id:3,title:'IPhone 13, 128 Гб',full:'IPhone 13, 128 Гб',price:11000,img:'iphone',fav:false,tag:'АКБ 84%',market:'−9% ниже рынка',meta:'Казань · сегодня, 12:44',desc:'Без ремонта, полный комплект. АКБ 84%, Face ID работает.'},
+{id:4,title:'Джинсы мужские Levi’s, размер S',full:'Джинсы мужские Levi’s, размер S',price:3000,img:'',fav:false,tag:'размер S',market:'',meta:'Санкт-Петербург · вчера',desc:'Размер S, состояние хорошее, без пятен и потёртостей.'}];
+const NAVSHOW={loading:'home',empty:'home',home:'home',market:'market',favorites:'favorites',profile:'profile',searches:'home',history:'home',myads:'profile'};
+let cur='loading',stack=[],currentLot=1,photoN=1,subscribed=false;
+const $=id=>document.getElementById(id), fmt=n=>n.toLocaleString('ru-RU')+' ₽';
+function go(id,replace=false){if(id===cur)return;if(!replace&&cur!=='loading')stack.push(cur);show(id)}
+function show(id){cur=id;document.querySelectorAll('.screen').forEach(s=>{const on=s.id==='s-'+id;s.classList.toggle('active',on);s.classList.toggle('hasnav',!!NAVSHOW[id])});const nav=$('nav');nav.classList.toggle('show',id!=='loading'&&!!NAVSHOW[id]);$('fade').classList.toggle('show',['home','market','favorites','profile','searches','history','myads','newsearch','post'].includes(id));document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===NAVSHOW[id]));const GL={home:5,market:81,favorites:155,profile:229};if(NAVSHOW[id])$('navglass').style.left=GL[NAVSHOW[id]]+'px';$('jump').value=id;const sc=document.querySelector('#s-'+id+' .scroll');if(sc)sc.scrollTop=0}
+function back(){show(stack.pop()||'home')}
+let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1800)}
+function heartBtn(l){return `<button class="heart ${l.fav?'on':''} ${l.img?'onpic':''}" data-fav="${l.id}" aria-label="В избранное"><svg width="14" height="14"><use href="#i-heart"/></svg></button>`}
+function lotCard(l){const bg=l.img?`style="background-image:var(--${l.img})"`:"";return `<article class="lot" data-open="${l.id}"><div class="lotimg" ${bg}>${l.img?'':'Нет фото'}${heartBtn(l)}</div><h3>${l.title}</h3><div class="pricepill">${fmt(l.price)}</div></article>`}
+function renderGrids(){$('homeGrid').innerHTML=LOTS.map(lotCard).join('');renderMarket()}
+function renderMarket(){const q=($('mq').value||'').toLowerCase();let max=Infinity,photo=false;document.querySelectorAll('[data-f].on').forEach(c=>{if(c.dataset.f==='photo')photo=true;else max=Math.min(max,+c.dataset.f)});const list=LOTS.filter(l=>l.title.toLowerCase().includes(q)&&l.price<=max&&(!photo||l.img));$('marketGrid').innerHTML=list.map(lotCard).join('');$('nores').style.display=list.length?'none':'block'}
+function renderFavs(){const list=LOTS.filter(l=>l.fav);$('favList').innerHTML=list.map(l=>`<article class="card fav" data-open="${l.id}"><span class="th" ${l.img?`style="background-image:var(--${l.img})"`:''}>${l.img?'':'нет фото'}</span><span><h3>${l.title}</h3><span class="pricepill">${fmt(l.price)}</span></span><button class="trash" data-fav="${l.id}"><svg width="14" height="14"><use href="#i-trash"/></svg></button></article>`).join('');$('favEmpty').style.display=list.length?'none':'block';$('favCount').textContent=99+list.length}
+function toggleFav(id){const l=LOTS.find(x=>x.id===id);l.fav=!l.fav;renderGrids();renderFavs();syncProductFav();toast(l.fav?'Добавлено в избранное':'Убрано из избранного')}
+document.addEventListener('click',e=>{const f=e.target.closest('[data-fav]');if(f){e.stopPropagation();toggleFav(+f.dataset.fav);return}const o=e.target.closest('[data-open]');if(o)openLot(+o.dataset.open)});
+function openLot(id){const l=LOTS.find(x=>x.id===id)||LOTS[0];currentLot=id;photoN=1;$('pTitle').textContent=l.full;$('pPrice').textContent=fmt(l.price);$('pTag').textContent=l.tag;$('pMarket').style.display=l.market?'inline-flex':'none';$('pMarket').textContent=l.market;$('pMeta').textContent=l.meta;$('pDesc').textContent=l.desc;const ph=$('photo');ph.style.backgroundImage=l.img?`var(--${l.img})`:'';ph.style.background=l.img?'':'';$('nophoto').style.display=l.img?'none':'block';$('counter').style.display=l.img?'block':'none';$('dots').style.display=l.img?'flex':'none';syncDots();syncProductFav();go('product')}
+function syncProductFav(){const l=LOTS.find(x=>x.id===currentLot);if(l)$('pFav').classList.toggle('liked',l.fav)}
+function syncDots(){$('counter').textContent=photoN+' / 5';document.querySelectorAll('#dots i').forEach((d,i)=>d.classList.toggle('on',i===photoN-1))}
+$('photo').addEventListener('click',()=>{photoN=photoN%5+1;syncDots()});
+$('pFav').addEventListener('click',()=>toggleFav(currentLot));
+$('mq').addEventListener('input',renderMarket);
+document.querySelectorAll('[data-f]').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('on')));
+function togglePause(e,btn){e.stopPropagation();const card=btn.closest('.scard');card.classList.toggle('off');const off=card.classList.contains('off');btn.innerHTML=`<svg width="15" height="15"><use href="#i-${off?'play':'pause'}"/></svg>`;toast(off?'Поиск на паузе':'Поиск запущен')}
+$('searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('q').value.trim()||'Новый поиск',p=$('maxprice').value.trim();$('searchList').insertAdjacentHTML('afterbegin',`<article class="card scard" onclick="go('history')"><div class="top"><h3>${q}</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">до ${p} ₽</span></div><div class="sfoot"><span class="mut">мониторинг запущен</span><span class="mut">только что</span></div></article>`);go('searches',true);toast('Поиск запущен')});
+document.querySelectorAll('#hseg button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#hseg button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.hrow').forEach(r=>r.style.display=(b.dataset.h==='all'||r.dataset.st===b.dataset.h)?'flex':'none');document.querySelectorAll('.group').forEach(g=>g.style.display=[...g.querySelectorAll('.hrow')].some(r=>r.style.display!=='none')?'block':'none')}));
+let adPhoto='';
+function cyclePhoto(){const order=['','iphone','jacket'];adPhoto=order[(order.indexOf(adPhoto)+1)%order.length];const m=$('photoMain');m.classList.toggle('has',!!adPhoto);m.style.backgroundImage=adPhoto?`var(--${adPhoto})`:'';$('photoLabel').textContent=adPhoto?'Главное фото':'+ Добавить фото';toast(adPhoto?'Фото добавлено':'Фото убрано')}
+document.querySelectorAll('[data-choice]').forEach(g=>g.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>g.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c)))));
+function chosen(name){const el=document.querySelector(`[data-choice="${name}"] .chip.on`);return el?el.textContent.trim():''}
+$('delivery').addEventListener('click',e=>e.currentTarget.classList.toggle('on'));
+$('postForm').addEventListener('submit',e=>{e.preventDefault();const t=$('adTitle').value.trim(),n=parseInt(($('adPrice').value||'').replace(/\D/g,''),10);if(!t||!n){toast('Укажи название и цену');return}const city=$('adCity').value.trim()||'Москва',desc=$('adDesc').value.trim()||'Состояние хорошее.',id=Math.max(...LOTS.map(x=>x.id))+1;LOTS.unshift({id,title:t,full:t,price:n,img:adPhoto,fav:false,tag:chosen('cond')||chosen('cat'),market:'',meta:city+' · только что',desc});renderGrids();renderFavs();$('myList').insertAdjacentHTML('afterbegin',`<article class="card fav" data-open="${id}"><span class="th" ${adPhoto?`style="background-image:var(--${adPhoto})"`:''}>${adPhoto?'':'нет фото'}</span><span><h3>${t}</h3><span class="pricepill">${fmt(n)}</span><br><span class="status">Модерация</span></span></article>`);go('myads',true);toast('Отправлено на модерацию')});
+$('termsBtn').addEventListener('click',()=>{const w=$('tarwrap');w.classList.toggle('expanded');$('termsBtn').innerHTML=`<svg width="15" height="15"><use href="#i-${w.classList.contains('expanded')?'u':'d'}"/></svg>`});
+$('promoBtn').addEventListener('click',()=>{const f=$('promoform');f.classList.toggle('show');$('promoBtn').querySelector('.chev').innerHTML=`<svg width="15" height="15"><use href="#i-${f.classList.contains('show')?'u':'d'}"/></svg>`});
+function applyPromo(){const ok=$('code').value.trim().toUpperCase()==='POLKA';$('okic').style.visibility=ok?'visible':'hidden';$('off').textContent=ok?'-50%':'';$('pmsg').classList.toggle('show',!ok);$('priceNow').innerHTML=ok?'<s>149</s>74,9 <span>руб/мес</span>':'149 <span>руб/мес</span>';if(!ok){const f=$('promoform');f.classList.remove('shake');void f.offsetWidth;f.classList.add('shake')}else toast('Промокод применён')}
+function activatePlus(){if(subscribed){toast('ПЛЮС уже активен');return}subscribed=true;$('payBtn').textContent='Активно';$('trialTitle').textContent='ПЛЮС до 01.01.2027';$('trialBadge').textContent='Активно';$('tbar').style.width='100%';$('pluspill').style.display='inline-flex';$('datebadge').style.display='inline-flex';$('avbadge').style.display='grid';toast('ПЛЮС активирован')}
+async function copyLink(){try{await navigator.clipboard.writeText('https://t.me/polkalotapp?startapp=ref89659599')}catch(e){}toast('Ссылка скопирована')}
+async function shareLink(){const d={title:'ПОЛКА',text:'Ищу выгодные лоты в ПОЛКЕ — присоединяйся',url:'https://t.me/polkalotapp?startapp=ref89659599'};if(navigator.share){try{await navigator.share(d)}catch(e){}}else copyLink()}
+function openSheet(n){$('ov-'+n).classList.add('show')}function closeSheets(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'))}
+$('jump').addEventListener('change',e=>go(e.target.value,true));
+function fit(){const s=Math.max(.45,Math.min(1,(innerHeight-78)/800,(innerWidth-20)/400));$('stage').style.transform='scale('+s+')';$('wrap').style.width=400*s+'px';$('wrap').style.height=800*s+'px'}
+addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
+
+window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
+</script></body></html>

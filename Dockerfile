@@ -7,6 +7,9 @@ COPY polka-final/frontend/package.json polka-final/frontend/package-lock.json* .
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY polka-final/frontend/ ./
 RUN npm run build
+# Новый дизайн: готовый прототип заказчика становится точкой входа,
+# адаптер связывает его с нашим API (лоты, поиск, избранное).
+RUN cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js
 
 FROM python:3.13-slim
 
