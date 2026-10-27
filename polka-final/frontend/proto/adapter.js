@@ -675,13 +675,15 @@
     if (!active) return;
     const navBox = nav.getBoundingClientRect();
     const box = active.getBoundingClientRect();
-    // Плашка — пилюля 65×52 (как в макете), по центру иконки
-    const w = 65, h = 52;
+    // Пилюля по размеру самого меню: высота = капсула минус 8, ширина чуть
+    // больше иконки. Так она всегда внутри и не вылезает за края.
+    const h = Math.max(40, navBox.height - 8);
+    const w = Math.round(h * 1.28);
     const centerX = (box.left - navBox.left) + box.width / 2;
     glass.style.width = w + 'px';
     glass.style.height = h + 'px';
-    glass.style.left = (centerX - w / 2) + 'px';
-    glass.style.top = Math.max(0, (navBox.height - h) / 2) + 'px';
+    glass.style.left = Math.round(centerX - w / 2) + 'px';
+    glass.style.top = Math.round((navBox.height - h) / 2) + 'px';
     glass.style.borderRadius = '500px';
   }
 
