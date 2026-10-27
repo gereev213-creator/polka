@@ -26,7 +26,7 @@ checks = [
     # поэтому проверяем его по App.jsx, а не по HuntChat
     # Форму ссылки убрали с экрана: основной путь — слова. Код разбора ссылки
     # и клиентский вызов сохранены, поэтому проверяем их, а не разметку формы.
-    ("разбор ссылки жив", 'huntFromLink' in JSX and 'huntFromSearchLink' in JSX),
+    ("разбор ссылки жив", 'huntFromLink' in APP and 'huntFromSearchLink' in APP),
     ("вкладки убраны", 'chat-tabs' not in JSX),
     ("клиент зовёт эндпоинт", 'huntFromLink' in API),
 ]
