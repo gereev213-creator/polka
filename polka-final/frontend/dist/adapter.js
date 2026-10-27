@@ -202,7 +202,9 @@ function paintEmpty(count) {
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
-      const isAdm = !!(u.is_admin || data.is_admin);
+      // Показываем админские пункты всегда: сервер сам откажет не-админу (403),
+      // зато админ точно их увидит, даже если флаг не пришёл.
+      const isAdm = true;
       ['adminRow', 'modRow'].forEach((id) => {
         const row = document.getElementById(id);
         if (row) row.style.display = isAdm ? 'flex' : 'none';
