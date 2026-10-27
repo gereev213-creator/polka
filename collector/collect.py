@@ -749,11 +749,14 @@ def items_from_microdata(html: str) -> list:
         # Продавец: в карточке явно помечено «Частное лицо» либо ссылка на
         # магазин. Без этого в промпт модели не уходило «частник/магазин»,
         # и требование «только частные» проверить было нечем.
+        # Проверено на живой выдаче 27.10: продавца в карточке списка НЕТ —
+        # ни «Частное лицо», ни ссылки на магазин. Поэтому пусто, а не
+        # выдуманное значение: ложный «shop» хуже, чем неизвестно.
         seller_type = ''
         seller_name = ''
         if re.search(r'Частное лицо|Авито Доставка[^<]{0,20}частн', chunk, re.I):
             seller_type = 'private'
-        elif re.search(r'data-marker="seller-link/link"|/brands/|магазин', chunk, re.I):
+        elif re.search(r'data-marker="seller-link/link"[^>]*href="[^"]*/brands/', chunk, re.I):
             seller_type = 'shop'
         _sm = re.search(r'data-marker="seller-link/link"[^>]*>([^<]{2,60})<', chunk)
         if _sm:

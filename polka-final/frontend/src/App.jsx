@@ -780,9 +780,10 @@ function CriteriaPage() {
       </div>
           <div className="crit-checks">
           <span className="crit-checks-title">Проверяем</span>
-          <span>тип товара</span><span>бренд</span><span>цена</span><span>частник или магазин</span>
+          <span>тип товара</span><span>бренд</span><span>цена</span>
           <span className="crit-checks-title mt-6">Когда есть описание</span>
-          <span className="muted">состояние</span><span className="muted">размер</span><span className="muted">оригинальность</span>
+          <span className="muted">состояние</span><span className="muted">размер</span>
+          <span className="muted">оригинальность</span><span className="muted">частник или магазин</span>
         </div>
 </Screen>
   )
