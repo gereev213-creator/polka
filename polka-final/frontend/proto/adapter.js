@@ -202,8 +202,11 @@ function paintEmpty(count) {
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
-      const adminRow = document.getElementById('adminRow');
-      if (adminRow) adminRow.style.display = (u.is_admin || data.is_admin) ? 'flex' : 'none';
+      const isAdm = !!(u.is_admin || data.is_admin);
+      ['adminRow', 'modRow'].forEach((id) => {
+        const row = document.getElementById(id);
+        if (row) row.style.display = isAdm ? 'flex' : 'none';
+      });
       const stats = document.querySelectorAll('#s-profile .stats b');
       if (stats.length >= 3 && data.stats) {
         if (data.stats.ads != null) stats[0].textContent = data.stats.ads;
@@ -797,4 +800,71 @@ function paintEmpty(count) {
 
   // при публикации отдаём ссылки на фото
   window.PolkaPhotos = () => state.urls.slice();
+})();
+
+/* ── Модерация объявлений в приложении (только админ) ──────────────────── */
+(function () {
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+  function card(a) {
+    const ph = a.photos ? String(a.photos).split(',')[0] : '';
+    const bg = ph ? `style="background-image:url('${ph}')"` : '';
+    return `<article class="card fav" style="display:block">
+      <div style="display:flex;gap:12px">
+        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+        <span style="flex:1">
+          <h3>${(a.title || '').slice(0, 40)}</h3>
+          <span class="pricepill">${fmt(a.price)}</span><br>
+          <span class="status">${a.city || ''} ${a.category ? '· ' + a.category : ''}</span>
+        </span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="bigbtn" style="height:44px;font-size:12px" data-ok="${a.id}">Одобрить</button>
+        <button class="mailbtn" style="height:44px;font-size:12px" data-no="${a.id}">Отклонить</button>
+      </div>
+    </article>`;
+  }
+
+  async function loadModeration() {
+    const box = document.getElementById('modList');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/moderation');
+      const items = data.items || [];
+      const badge = document.getElementById('modCount');
+      if (badge) badge.textContent = items.length ? '(' + items.length + ')' : '';
+      box.innerHTML = items.length
+        ? items.map(card).join('')
+        : '<div class="card" style="padding:22px;text-align:center">На модерации пусто</div>';
+      box.querySelectorAll('[data-ok]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-ok'), 'approve')));
+      box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-no'), 'reject')));
+    } catch (e) {
+      box.innerHTML = '<div class="card" style="padding:22px;text-align:center">Нет доступа</div>';
+    }
+  }
+
+  async function act(id, action) {
+    try {
+      await window.PolkaAPI.api('/api/moderation/' + id, {
+        method: 'POST',
+        body: JSON.stringify({ action }),
+      });
+      loadModeration();
+    } catch (e) { }
+  }
+
+  const wrap = () => {
+    if (typeof window.go !== 'function' || window.go.__mod) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'moderation') loadModeration();
+      return r;
+    };
+    wrapped.__mod = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 800);
+  window.PolkaModeration = loadModeration;
 })();
