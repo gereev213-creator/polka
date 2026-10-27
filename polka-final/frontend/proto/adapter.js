@@ -252,3 +252,91 @@
   setTimeout(wrapGo, 800);
   window.PolkaBuy = buy;
 })();
+
+/* ── История, новый поиск, избранное ───────────────────────────────────── */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+  // История: находки, сгруппированные по критериям
+  async function loadHistory() {
+    const box = document.querySelector('#s-history .scroll');
+    if (!box) return;
+    try {
+      const [crits, finds] = await Promise.all([
+        window.PolkaAPI.api('/api/hunt'),
+        window.PolkaAPI.api('/api/findings?limit=60'),
+      ]);
+      const items = finds.items || [];
+      if (!items.length) {
+        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
+          'Пока нет находок. Как только появятся — будут здесь.</div>';
+        return;
+      }
+      const rows = items.map((a) => {
+        const ph = a.photos ? String(a.photos).split(',')[0] : '';
+        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
+        return `<button class="hrow" data-open="${a.id}">
+          <span class="hth" ${bg}>${ph ? '' : 'нет фото'}</span>
+          <span class="who"><b>${(a.title || '').slice(0, 34)}</b>
+          <span class="hp">${fmt(a.price)}</span></span>
+          <span class="chev"><svg width="12" height="12"><use href="#i-d"/></svg></span>
+        </button>`;
+      }).join('');
+      const c = (crits.items || [])[0];
+      box.innerHTML = `<div class="card group">
+        <div class="ghead"><h3>${c ? (c.query || 'находки') : 'находки'}</h3>
+        <span class="count">${items.length}</span></div>${rows}</div>`;
+    } catch (e) { }
+  }
+
+  // Новый поиск: отправка формы
+  function wireForm() {
+    const form = $('searchForm');
+    if (!form || form.__wired) return;
+    form.__wired = true;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const q = ($('q') && $('q').value || '').trim();
+      const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
+      if (q.length < 2) return;
+      const ok = await window.PolkaAPI.createSearch({ query: q, max_price: Number(raw) || 0 });
+      if (ok) { form.reset(); }
+    });
+  }
+
+  // Избранное: сердце на карточке лота
+  function wireHearts() {
+    document.addEventListener('click', async (e) => {
+      const h = e.target.closest && e.target.closest('.heart');
+      if (!h) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const article = h.closest('[data-open]');
+      const id = article && article.getAttribute('data-open');
+      if (!id) return;
+      const on = h.classList.contains('on');
+      h.classList.toggle('on', !on);
+      try {
+        await window.PolkaAPI.api('/api/favorites/' + id, {
+          method: on ? 'DELETE' : 'POST',
+        });
+      } catch (err) { h.classList.toggle('on', on); }
+    }, true);
+  }
+
+  const wrapGo2 = () => {
+    if (typeof window.go !== 'function' || window.go.__hist) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'history') loadHistory();
+      if (name === 'newsearch') wireForm();
+      return r;
+    };
+    wrapped.__hist = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', () => { wrapGo2(); wireHearts(); });
+  setTimeout(() => { wrapGo2(); wireHearts(); }, 800);
+})();
