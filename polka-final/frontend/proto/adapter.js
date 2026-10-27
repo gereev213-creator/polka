@@ -258,7 +258,7 @@
 
   // История: находки, сгруппированные по критериям
   async function loadHistory() {
-    const box = document.querySelector('#s-history .scroll');
+    const box = document.getElementById('histList') || document.querySelector('#s-history .scroll');
     if (!box) return;
     try {
       const [crits, finds] = await Promise.all([

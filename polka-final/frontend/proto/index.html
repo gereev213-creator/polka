@@ -85,7 +85,7 @@ background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38
 .status{display:inline-flex;margin-top:8px;background:var(--pale);color:var(--blue);font-size:9.5px;font-weight:870;text-transform:uppercase;padding:6px 9px;border-radius:999px}
 /* profile */
 .profileTop{text-align:center;margin-top:2px}
-.avatar{width:94px;height:94px;border-radius:50%;margin:0 auto;background:var(--jacket) center 18%/cover;box-shadow:var(--sh);position:relative;background-image:none!important;background:var(--grad)!important}
+.avatar{width:94px;height:94px;border-radius:50%;margin:0 auto;background:var(--grad);box-shadow:var(--sh)}
 .avbadge{position:absolute;top:2px;right:0;width:25px;height:25px;border-radius:50%;background:var(--grad);color:#fff;display:none;place-items:center;border:2px solid var(--bg)}
 .handle{margin-top:10px;color:var(--blue);font-size:11px;font-weight:760;display:flex;justify-content:center;gap:7px;align-items:center}
 .pluspill{display:none;background:var(--grad);color:#fff;border-radius:999px;padding:4px 8px;font-size:9px;font-weight:870}
@@ -332,7 +332,7 @@ html{ -webkit-text-size-adjust:100% }
 </div></section>
 <section class="screen" id="s-telegram"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Telegram</span></div>
 <div class="scroll"><div class="card tghead"><span class="tglogo"><svg width="27" height="27"><use href="#i-plane"/></svg></span><b>Вход через Telegram</b><p>Подтверди вход в один тап — без пароля.</p></div>
-<div class="card tguser"><span class="ava" style="background-image:var(--jacket);width:46px;height:46px;border-radius:50%"></span><span class="who"><b>Аккаунт Telegram</b><span>@cuesoul</span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div></div>
+<div class="card tguser"><span class="ava" style="background:var(--grad);width:46px;height:46px;border-radius:50%"></span><span class="who"><b>Аккаунт Telegram</b><span>@cuesoul</span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></div></div>
 <div class="authActions"><button class="bigbtn withic" id="tgBtn" onclick="tgAuth()"><svg width="19" height="19"><use href="#i-plane"/></svg><span>Продолжить как @cuesoul</span></button><button class="skip" onclick="window.open('https://t.me/polka_bot','_blank')">Другой аккаунт</button></div></section>
 <section class="screen" id="s-email"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Вход по почте</span></div>
 <div class="scroll"><form class="card form" id="emailForm" novalidate>
@@ -396,11 +396,7 @@ html{ -webkit-text-size-adjust:100% }
 <div class="seg" id="hseg"><button class="on" data-h="all">Все</button><button data-h="active">Активные</button><button data-h="sold">Проданные</button></div>
 <div class="scroll">
 <div class="scroll-inner" id="histList"></div>
-<div class="card group"><div class="ghead"><h3>Куртка Alpha · M</h3><span class="count">3</span></div>
-<button class="hrow" data-st="active" onclick="openLot(2)"><span class="hth" style="background-image:var(--jacket)"></span><span class="who"><b>Куртка Alpha Industries, M</b><span class="hp">5 000 ₽</span></span><span class="hst">активен</span></button>
-<button class="hrow" data-st="sold" onclick="openLot(2)"><span class="hth" style="background-image:var(--jacket)"></span><span class="who"><b>Куртка Alpha Industries, M</b><span class="hp">4 700 ₽</span></span><span class="hst sold">продан</span></button>
-<button class="repeat" onclick="go('searches');toast('Поиск уже активен')">Повторить поиск</button></div>
-</div></section>
+<div id="histList"></div></section>
 
 <!-- product -->
 <section class="screen" id="s-product"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Карточка товара</span></div>
