@@ -21752,12 +21752,14 @@ async def llm_matches_ad(ad: Dict, crit: Dict) -> Optional[bool]:
 
 
 def _llm_match_sync(ad: Dict, crit: Dict) -> Optional[bool]:
-    """Синхронная обёртка для мест, где нет await."""
+    """Синхронная обёртка. Оценка вызывается внутри работающего цикла событий,
+    поэтому запускаем модель в отдельном потоке со своим циклом: раньше здесь
+    стояла проверка is_running() и модель НИКОГДА не вызывалась в бою."""
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            return None
-        return loop.run_until_complete(llm_matches_ad(ad, crit))
+        import concurrent.futures as _cf
+        with _cf.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(asyncio.run, llm_matches_ad(ad, crit))
+            return fut.result(timeout=25)
     except Exception:
         return None
 
