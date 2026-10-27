@@ -270,6 +270,30 @@ def _fetch_via_scraper(url: str, timeout: int = 60) -> str:
         return resp.read().decode('utf-8', 'ignore')
 
 
+# Профиль браузера, в котором один раз пройдена проверка Авито. Когда задан,
+# страницы берём настоящим Chromium с этим профилем: только так Авито пускает
+# (headless он блокирует, прямые запросы — тоже).
+AVITO_PROFILE = os.environ.get('AVITO_PROFILE', '')
+AVITO_PARSER_DIR = os.environ.get(
+    'AVITO_PARSER_DIR',
+    '/Users/nikitagereev/Documents/deepseek-harness/default-workspace/avito-parser 2')
+
+_avito_fetcher = None
+
+
+def _fetch_via_profile(url: str, timeout: int = 120) -> str:
+    """Страница через Chromium с сохранённым профилем (проверка уже пройдена)."""
+    global _avito_fetcher
+    if AVITO_PARSER_DIR not in sys.path:
+        sys.path.insert(0, AVITO_PARSER_DIR)
+    from avitoparser.fetch import FetchConfig, PlaywrightFetcher
+    if _avito_fetcher is None:
+        _avito_fetcher = PlaywrightFetcher(FetchConfig(
+            headless=False, user_data_dir=AVITO_PROFILE, timeout=timeout, delay=0))
+    res = _avito_fetcher.get(url)
+    return getattr(res, 'text', '') or ''
+
+
 def _fetch_direct_body(url: str, timeout: int = 25) -> str:
     """Прямой запрос: перебор отпечатков, без внешних сервисов."""
     req = urllib.request.Request(url, headers={
@@ -355,6 +379,11 @@ def fetch(url: str, timeout: int = 25) -> str:
     Кредиты ScrapingBee тратятся лишь на те страницы, которые прямой запрос
     не отдал, поэтому их хватает надолго.
     """
+    if AVITO_PROFILE and 'avito.ru' in url:
+        try:
+            return _fetch_via_profile(url, timeout=max(timeout, 120))
+        except Exception as exc:
+            print(f"  ⚠ профиль не сработал: {str(exc)[:80]}")
     if SCRAPINGBEE_KEY and 'avito.ru' in url:
         try:
             return _fetch_direct_body(url, timeout)
