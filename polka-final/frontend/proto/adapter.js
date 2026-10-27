@@ -432,7 +432,10 @@ function paintEmpty(count) {
       try {
         await window.PolkaAPI.api('/api/ads', {
           method: 'POST',
-          body: JSON.stringify({ title, price, category: cat.trim(), condition: cond.trim(), city }),
+          body: JSON.stringify({
+            title, price, category: cat.trim(), condition: cond.trim(), city,
+            photos: (window.PolkaPhotos ? window.PolkaPhotos() : []).join(','),
+          }),
         });
         const TG = window.Telegram && window.Telegram.WebApp;
         if (TG && TG.showAlert) TG.showAlert('Объявление опубликовано');
@@ -744,4 +747,52 @@ function paintEmpty(count) {
   setTimeout(wrap, 500);
   setTimeout(positionGlass, 1200);
   window.addEventListener('resize', positionGlass);
+})();
+
+/* ── Фото лота: выбираем файлы и грузим на сервер ─────────────────────── */
+(function () {
+  const state = { files: [], urls: [] };
+
+  function paint() {
+    const main = document.getElementById('photoMain');
+    const label = document.getElementById('photoLabel');
+    const first = state.urls[0];
+    if (main && first) {
+      main.style.background = `url('${first}') center/cover`;
+    }
+    if (label) {
+      label.textContent = state.urls.length
+        ? state.urls.length + ' фото'
+        : '+ Добавить фото';
+      label.style.opacity = state.urls.length ? '0' : '1';
+    }
+  }
+
+  async function upload(files) {
+    const fd = new FormData();
+    [...files].slice(0, 5).forEach((f) => fd.append('photos', f));
+    const headers = {};
+    const init = window.PolkaAPI.initData();
+    if (init) headers['X-Telegram-Init-Data'] = init;
+    const res = await fetch('/api/ads/photos', { method: 'POST', body: fd, headers });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return res.json();
+  }
+
+  document.addEventListener('change', async (e) => {
+    const inp = e.target.closest && e.target.closest('#photoInput');
+    if (!inp || !inp.files || !inp.files.length) return;
+    state.files = [...inp.files].slice(0, 5);
+    try {
+      const data = await upload(state.files);
+      state.urls = data.urls || [];
+      paint();
+    } catch (err) {
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (TG && TG.showAlert) TG.showAlert('Не удалось загрузить фото');
+    }
+  }, true);
+
+  // при публикации отдаём ссылки на фото
+  window.PolkaPhotos = () => state.urls.slice();
 })();

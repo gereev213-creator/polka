@@ -298,6 +298,12 @@ html{ -webkit-text-size-adjust:100% }
 /* Профиль: длинные пункты меню не должны наезжать */
 .mrow{height:auto!important;min-height:52px!important;padding:12px 0!important;align-items:center!important}
 .mrow .grow{font-size:13px!important;line-height:1.25!important;white-space:normal!important;text-align:left}
+
+/* Фото в создании лота: label ведёт себя как прежняя кнопка */
+#photoMain{display:grid!important;place-items:center!important;position:relative!important;
+           overflow:hidden!important;cursor:pointer}
+#photoMain #photoLabel{position:relative;z-index:1}
+.photoSmall{display:grid!important;place-items:center!important;cursor:pointer}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -421,7 +427,7 @@ html{ -webkit-text-size-adjust:100% }
 <!-- create listing -->
 <section class="screen" id="s-post"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Создание объявления</span></div>
 <div class="scroll">
-<div class="photos"><button type="button" class="photoMain" id="photoMain" onclick="cyclePhoto()"><span id="photoLabel">+ Добавить фото</span></button><div class="photoSide"><button type="button" class="photoSmall" onclick="cyclePhoto()">+</button><button type="button" class="photoSmall" onclick="cyclePhoto()">+</button></div></div>
+<div class="photos"><label class="photoMain" id="photoMain" for="photoInput"><span id="photoLabel">+ Добавить фото</span><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></label><div class="photoSide"><label class="photoSmall" for="photoInput">+</label><label class="photoSmall" for="photoInput">+</label></div></div>
 <form class="card form" id="postForm">
 <div class="field"><label>Название</label><input id="adTitle" placeholder="Например, iPhone 13, 128 Гб" required></div>
 <div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="11 000" inputmode="numeric" required></div>
