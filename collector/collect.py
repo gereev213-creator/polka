@@ -270,14 +270,8 @@ def _fetch_via_scraper(url: str, timeout: int = 60) -> str:
         return resp.read().decode('utf-8', 'ignore')
 
 
-def fetch(url: str, timeout: int = 25) -> str:
-    """Один вежливый запрос. Никаких заголовков, имитирующих «свой» сайт."""
-    if SCRAPINGBEE_KEY and 'avito.ru' in url:
-        try:
-            print("  через скрапер (ScrapingBee, страна RU)")
-            return _fetch_via_scraper(url, timeout=max(timeout, 60))
-        except Exception as exc:
-            print(f"  ⚠ скрапер не ответил: {str(exc)[:90]} — пробую напрямую")
+def _fetch_direct_body(url: str, timeout: int = 25) -> str:
+    """Прямой запрос: перебор отпечатков, без внешних сервисов."""
     req = urllib.request.Request(url, headers={
         'User-Agent': USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml',
@@ -353,6 +347,23 @@ def fetch(url: str, timeout: int = 25) -> str:
             if marker.lower() in low:
                 raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
     return html
+
+
+def fetch(url: str, timeout: int = 25) -> str:
+    """Сначала напрямую (бесплатно). Скрапер — только если поймали 439/429.
+
+    Кредиты ScrapingBee тратятся лишь на те страницы, которые прямой запрос
+    не отдал, поэтому их хватает надолго.
+    """
+    if SCRAPINGBEE_KEY and 'avito.ru' in url:
+        try:
+            return _fetch_direct_body(url, timeout)
+        except Exception as exc:
+            if '439' in str(exc) or '429' in str(exc):
+                print("  прямой запрос заблокирован — беру скрапер")
+                return _fetch_via_scraper(url, timeout=max(timeout, 60))
+            raise
+    return _fetch_direct_body(url, timeout)
 
 
 def fetch_item(url: str, timeout: int = 20) -> str:
