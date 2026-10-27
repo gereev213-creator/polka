@@ -30375,6 +30375,12 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 owner = int(row['owner_id'] or 0)
         except Exception:
             owner = 0
+        try:
+            _u = int((body or {}).get('user') or 0)
+            if _u:
+                owner = _u
+        except Exception:
+            pass
         if not owner:
             try:
                 cur.execute("SELECT user_id FROM hunt_criteria ORDER BY id DESC LIMIT 1")
