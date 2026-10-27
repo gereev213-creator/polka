@@ -675,14 +675,14 @@
     if (!active) return;
     const navBox = nav.getBoundingClientRect();
     const box = active.getBoundingClientRect();
-    // Плашка — круг 52×52 строго по центру иконки, внутри капсулы
-    const size = 52;
+    // Плашка — пилюля 65×52 (как в макете), по центру иконки
+    const w = 65, h = 52;
     const centerX = (box.left - navBox.left) + box.width / 2;
-    glass.style.width = size + 'px';
-    glass.style.height = size + 'px';
-    glass.style.left = (centerX - size / 2) + 'px';
-    glass.style.top = Math.max(0, (navBox.height - size) / 2) + 'px';
-    glass.style.borderRadius = '999px';
+    glass.style.width = w + 'px';
+    glass.style.height = h + 'px';
+    glass.style.left = (centerX - w / 2) + 'px';
+    glass.style.top = Math.max(0, (navBox.height - h) / 2) + 'px';
+    glass.style.borderRadius = '500px';
   }
 
   const wrap = () => {
