@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-27-01'
+const APP_BUILD = '2026-10-27-02'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -739,6 +739,10 @@ function CriteriaPage() {
       <TopBar left={<IconButton icon="back" to="/" label="Назад" />} />
       <div className="crit-top">
         <div className="page-title">Критерии</div>
+
+      {/* Что реально проверяется — под заголовком, чтобы не ломать шапку */}
+      
+
         <button type="button" className="crit-plus" aria-label="Новый критерий"
           onClick={() => navigate('/hunt')}>+</button>
       </div>
@@ -774,7 +778,13 @@ function CriteriaPage() {
       <div className="hunt-card-note">
         Бесплатно — {limitCount} критерий · проверка раз в час
       </div>
-    </Screen>
+          <div className="crit-checks">
+          <span className="crit-checks-title">Проверяем</span>
+          <span>тип товара</span><span>бренд</span><span>цена</span><span>частник или магазин</span>
+          <span className="crit-checks-title mt-6">Когда есть описание</span>
+          <span className="muted">состояние</span><span className="muted">размер</span><span className="muted">оригинальность</span>
+        </div>
+</Screen>
   )
 }
 
