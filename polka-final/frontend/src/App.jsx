@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-26-21'
+const APP_BUILD = '2026-10-27-01'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1625,91 +1625,30 @@ function HuntLinkPage() {
         Создать критерий
       </button>
 
-      <div className="section-label mt-20">Или ссылкой с Авито</div>
-      <div className="hunt-sub">
-        Выставьте фильтры на Авито и скопируйте адрес — остальное перенесётся само.
-      </div>
-
-      <div className="hunt-card">
-        <div className="hunt-card-head">
-          <span>Вставьте ссылку на поиск</span>
-        </div>
-        <div className="hunt-card-sub">Город, цена и категория определятся сами</div>
-        <div className="hunt-field">
-          <input value={url} onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.avito.ru/..." inputMode="url" />
-          {/* «Вставить» живёт внутри поля справа — как в макете */}
-          <button type="button" className="hunt-paste" onClick={paste}>
-            Вставить
-          </button>
-          {url ? (
-            <button type="button" className="hunt-field-x" aria-label="Очистить"
-              onClick={() => setUrl('')}>×</button>
-          ) : null}
-        </div>
-
-        {chips.length ? (
-          <>
-            <div className="hunt-from-label">Из ссылки</div>
-            <div className="hunt-chips">
-              {chips.map((c) => (
-                <span key={c.label} className={c.kind === 'main' ? 'hunt-chip is-main' : 'hunt-chip'}>{c.label}</span>
-              ))}
-            </div>
-          </>
-        ) : null}
-
-        <button type="button" className="cta-primary hunt-cta" disabled={busy || !url.trim()} onClick={send}>
-          {busy ? 'Проверяю…' : 'Найти лоты'}
-        </button>
-        <div className="hunt-eta">
-          <span className="hunt-eta-dot" />
-          Находки придут в течение часа · критерий сохранится сам
-        </div>
-        {note ? <div className="hunt-note">{note}</div> : null}
-        {chips.length ? (
-          <div className="hunt-card-note">
-            Бот откроет эту ссылку и заберёт ровно то, что в ней: категорию,
-            цену и фильтры. Своих условий не добавляет.
-          </div>
-        ) : null}
-        {limit ? (
-          <div className="link-limit">
-            <div className="link-limit-text">
-              Критерий занят на бесплатном плане. В «Плюсе» — до 10 критериев.
-            </div>
-            <div className="link-limit-actions">
-              <button type="button" className="primary-btn" onClick={() => navigate('/tariffs')}>Открыть Плюс</button>
-            </div>
-          </div>
-        ) : null}
-      </div>
-
-      {/* Инструкция в одну строку: три шага подряд, а не простыня на треть
-          экрана. Развёрнуто её никто не читает, а место она занимала. */}
-      <div className="hunt-steps-row">
+      {/* Примеры: тап сразу создаёт критерий — человеку не нужно ничего вводить */}
+      <div className="section-label mt-20">Попробуйте так</div>
+      <div className="hunt-examples">
         {[
-          ['1', 'фильтры на Авито'],
-          ['2', 'скопируйте адрес'],
-          ['3', 'вставьте сюда'],
-        ].map(([n, text], i) => (
-          <div key={n} className="hunt-step-mini">
-            <span className="hunt-step-dot">{n}</span>
-            <span className="hunt-step-mini-text">{text}</span>
-            {i < 2 ? <span className="hunt-step-sep" /> : null}
-          </div>
+          { t: 'джинсы levis до 3000', q: 'джинсы levis', p: 3000 },
+          { t: 'iPhone 15 Pro до 40000', q: 'iPhone 15 Pro', p: 40000 },
+          { t: 'пуховик до 5000', q: 'пуховик', p: 5000 },
+          { t: 'кроссовки nike до 4000', q: 'кроссовки nike', p: 4000 },
+        ].map((ex) => (
+          <button key={ex.t} type="button" className="hunt-example"
+            onClick={async () => {
+              try {
+                await api.addCriterion({ query: ex.q, max_price: ex.p })
+                setNote(['Критерий создан: ', ex.t])
+              } catch (e) {
+                setNote('Не удалось создать критерий')
+              }
+            }}>
+            {ex.t}
+          </button>
         ))}
       </div>
 
-      <button type="button" className="hunt-words-card" onClick={() => navigate('/hunt/words')}>
-        <span className="hunt-words-icon"><Icon name="chat" /></span>
-        <span className="hunt-words-body">
-          <span className="hunt-words-title">Или опишите словами</span>
-          <span className="hunt-words-sub">Если проще рассказать, чем настраивать фильтры</span>
-        </span>
-        <span className="hunt-words-arrow">›</span>
-      </button>
-    </Screen>
+</Screen>
   )
 }
 
