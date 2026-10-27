@@ -274,6 +274,7 @@ def fetch(url: str, timeout: int = 25) -> str:
     """Один вежливый запрос. Никаких заголовков, имитирующих «свой» сайт."""
     if SCRAPINGBEE_KEY and 'avito.ru' in url:
         try:
+            print("  через скрапер (ScrapingBee, страна RU)")
             return _fetch_via_scraper(url, timeout=max(timeout, 60))
         except Exception as exc:
             print(f"  ⚠ скрапер не ответил: {str(exc)[:90]} — пробую напрямую")
