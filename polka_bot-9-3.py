@@ -21690,6 +21690,12 @@ _LLM_MATCH_PROMPT = (
 
 def _llm_match_cached(title: str, query: str, price: int) -> str:
     """Ответ модели из кэша или пустая строка."""
+    try:
+        db.conn.execute("CREATE TABLE IF NOT EXISTS llm_cache ("
+                        "k TEXT PRIMARY KEY, verdict TEXT, created_at TEXT)")
+        db.conn.commit()
+    except Exception:
+        pass
     key = _hashlib.sha1(f'{query}|{title}|{price}'.encode()).hexdigest()
     try:
         cur = db.conn.cursor()
@@ -30362,7 +30368,11 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         _m = str((body or {}).get('model') or '').strip()
         if _m:
             try:
-                _setting_set('hunt.llm_model', _m)
+                if ',' in _m:
+                    _setting_set('hunt.llm_models', _m)
+                    _setting_set('hunt.llm_model', '')
+                else:
+                    _setting_set('hunt.llm_model', _m)
             except Exception:
                 pass
         try:
