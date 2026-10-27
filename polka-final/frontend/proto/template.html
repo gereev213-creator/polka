@@ -407,10 +407,10 @@ html{ -webkit-text-size-adjust:100% }
 <div class="card menu">
 <button class="mrow" onclick="go('myads')"><span class="grow">Мои объявления</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('favorites')"><span class="grow">Избранное</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
-<button class="mrow" onclick="go('tariffs')"><span>Тарифы</span><span class="datebadge" id="datebadge">до 01.01.2027</span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('tariffs')"><span class="grow">Тарифы</span><span class="datebadge" id="datebadge"></span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('post')"><span class="grow">Разместить объявление</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('referrals')"><span class="grow">Реферальная программа</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
-<button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" data-admin="1" id="adminRow" style="display:none" onclick="window.open('/admin','_blank')"><span class="grow">Админка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Условия использования</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 </div></div></section>
 

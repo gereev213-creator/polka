@@ -185,6 +185,9 @@ function paintEmpty(count) {
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
+      // Админка видна только администратору
+      const adminRow = document.getElementById('adminRow');
+      if (adminRow) adminRow.style.display = data.is_admin ? 'flex' : 'none';
       const stats = document.querySelectorAll('#s-profile .stats b');
       if (stats.length >= 3 && data.stats) {
         if (data.stats.ads != null) stats[0].textContent = data.stats.ads;
