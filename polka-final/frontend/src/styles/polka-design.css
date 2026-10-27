@@ -1,0 +1,143 @@
+/* ── Полка: новый дизайн по готовому прототипу ─────────────────────────────
+   Светлая тема, белые карточки, синий градиент, крупные радиусы.
+   Этот файл подключается последним и перебивает всё остальное. */
+
+:root {
+  --p-bg: #E7EFF6;
+  --p-ink: #2C2C2C;
+  --p-mut: #7A8CA3;
+  --p-blue: #3373FA;
+  --p-deep: #0F5FD6;
+  --p-grad: linear-gradient(100deg, #4780FB, #6B98F5);
+  --p-pale: #E3EDFD;
+  --p-sh: 0 4px 14px rgba(15, 95, 214, .10);
+}
+
+html, body {
+  background: linear-gradient(180deg, #DCE9F5, #EAF2F9) !important;
+  color: var(--p-ink);
+}
+body, .app-shell { color: var(--p-ink); }
+
+/* Карточки: белые, радиус 24, мягкая тень */
+.glass-card, .product-card, .favorite-row, .myad-card, .setting-row,
+.plan-row, .tariff-term, .term-card, .news-card, .news-item, .chat-row {
+  background: #fff !important;
+  border: 0 !important;
+  border-radius: 24px !important;
+  box-shadow: var(--p-sh) !important;
+  color: var(--p-ink) !important;
+}
+
+/* Заголовки и текст */
+.page-title, h1, h2, .hunt-h1 { color: var(--p-ink) !important; font-weight: 870; }
+.row-title, .product-title, .listing-title { color: var(--p-ink) !important; }
+.product-city, .plan-desc, .listing-desc, .muted { color: var(--p-mut) !important; }
+
+/* Кнопки: сине-голубой градиент, пилюля */
+.cta-primary, .primary-btn, .bigbtn, .buy-btn {
+  background: var(--p-grad) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  font-weight: 870 !important;
+  box-shadow: var(--p-sh) !important;
+}
+.ghost-btn, .secondary-btn {
+  background: var(--p-pale) !important;
+  color: var(--p-blue) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  font-weight: 760 !important;
+}
+
+/* Цена: пилюля градиентом, как в прототипе */
+.product-price, .detail-price, .result-price, .myad-price {
+  background: var(--p-grad) !important;
+  color: #fff !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  font-weight: 870 !important;
+}
+
+/* Метки, чипы */
+.tag, .chip, .badge, .plan-balance {
+  background: var(--p-pale) !important;
+  color: var(--p-blue) !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  font-weight: 760 !important;
+}
+.tag.is-accent, .chip.on { background: var(--p-grad) !important; color: #fff !important; }
+
+/* Верхняя панель и шапка */
+.topbar, .top-nav, .app-header { background: transparent !important; }
+.topbar-title { color: var(--p-ink) !important; font-weight: 870; }
+.topbar-link { color: var(--p-blue) !important; font-weight: 760; }
+.icon-btn, .round-btn, .back {
+  background: var(--p-grad) !important;
+  color: #fff !important;
+  border: 0 !important;
+  box-shadow: var(--p-sh) !important;
+}
+
+/* Баннеры */
+.hero-banner, .search-banner, .home-banner {
+  border-radius: 28px !important;
+  box-shadow: var(--p-sh) !important;
+  background: var(--p-grad) !important;
+  color: #fff !important;
+}
+
+/* Нижняя навигация: белая капсула */
+.dock, .bottom-nav, .tabbar {
+  background: #fff !important;
+  border: 0 !important;
+  box-shadow: 0 8px 24px rgba(15, 95, 214, .16) !important;
+  color: var(--p-mut) !important;
+}
+.dock-item.is-active, .tab.is-active, .nav-item.is-active {
+  background: var(--p-grad) !important;
+  color: #fff !important;
+}
+.dock-item, .tab, .nav-item { color: var(--p-mut) !important; }
+
+/* Поля ввода */
+input, textarea, select, .field, .hunt-field input {
+  background: #fff !important;
+  border: 1px solid #D7E3F0 !important;
+  border-radius: 16px !important;
+  color: var(--p-ink) !important;
+}
+input::placeholder, textarea::placeholder { color: #9AAABD !important; }
+
+/* Тарифы: выделенная карточка */
+.term-card.is-selected, .tariff-term.is-selected {
+  background: #fff !important;
+  box-shadow: 0 0 0 2px var(--p-blue), var(--p-sh) !important;
+}
+.term-amount { color: var(--p-ink) !important; font-weight: 870 !important; }
+.term-perday { color: var(--p-mut) !important; }
+.term-old { color: #9AAABD !important; }
+.term-discount { background: var(--p-grad) !important; color: #fff !important; border-radius: 999px !important; }
+
+/* Плитки категорий */
+.cat-tile, .category-tile {
+  background: #fff !important;
+  border: 1px solid #DCE7F3 !important;
+  border-radius: 20px !important;
+  color: var(--p-ink) !important;
+}
+.cat-tile.is-selected, .category-tile.is-selected {
+  border-color: var(--p-blue) !important;
+  box-shadow: 0 0 0 2px rgba(51, 115, 250, .25) !important;
+}
+
+/* Пустые состояния */
+.empty-state {
+  background: #fff !important;
+  border: 0 !important;
+  border-radius: 24px !important;
+  box-shadow: var(--p-sh) !important;
+  color: var(--p-ink) !important;
+}
