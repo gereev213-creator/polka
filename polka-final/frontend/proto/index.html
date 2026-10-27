@@ -294,6 +294,10 @@ html{ -webkit-text-size-adjust:100% }
 .legal{text-align:center;font-size:10px;font-weight:760;color:var(--mut);line-height:1.45}
 .legal button{color:var(--blue);font-size:10px;font-weight:760;padding:0}
 .codebox input{font-size:20px;font-weight:760}
+
+/* Профиль: длинные пункты меню не должны наезжать */
+.mrow{height:auto!important;min-height:52px!important;padding:12px 0!important;align-items:center!important}
+.mrow .grow{font-size:13px!important;line-height:1.25!important;white-space:normal!important;text-align:left}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -368,10 +372,7 @@ html{ -webkit-text-size-adjust:100% }
 <!-- searches -->
 <section class="screen" id="s-searches"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Поиск лотов</span></div>
 <div class="seg"><button class="on">Мои поиски</button><button onclick="go('history')">История</button></div>
-<div class="scroll"><div id="searchList">
-<article class="card scard" onclick="go('history')"><div class="top"><h3>iPhone 15 PRO</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">до 35 000 ₽</span><span class="chip">АКБ &gt; 80%</span><span class="chip">без ремонта</span></div><div class="sfoot"><span class="newpill">+12 новых</span><span class="mut">5 мин назад</span></div></article>
-<article class="card scard" onclick="go('history')"><div class="top"><h3>Куртка Alpha Industries</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">размер M</span><span class="chip">до 7 000 ₽</span></div><div class="sfoot"><span class="newpill">+3 новых</span><span class="mut">только что</span></div></article>
-<article class="card scard off" onclick="go('history')"><div class="top"><h3>Джинсы Levi’s</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-play"/></svg></button></div><div class="chips"><span class="chip">размер S</span><span class="chip">до 4 000 ₽</span></div><div class="sfoot"><span class="mut">на паузе</span><span class="mut">2 дня назад</span></div></article>
+<div class="scroll"><div id="searchList"></div><div class="chips"><span class="chip">размер S</span><span class="chip">до 4 000 ₽</span></div><div class="sfoot"><span class="mut">на паузе</span><span class="mut">2 дня назад</span></div></article>
 </div></div><div class="bottomCta"><button class="bigbtn" onclick="go('newsearch')">Новый поиск</button></div></section>
 
 <!-- new search -->
