@@ -258,22 +258,34 @@ function paintEmpty(count) {
     } catch (e) { }
   }
 
+  function say(text) {
+    const TG = window.Telegram && window.Telegram.WebApp;
+    if (TG && TG.showAlert) TG.showAlert(text);
+    else alert(text);
+  }
+
   async function buy(plan) {
     if (!plan) return;
-    try {
-      const res = await window.PolkaAPI.api('/api/pay/cispay/create', {
-        method: 'POST',
-        body: JSON.stringify({ product: plan.product }),
-      });
-      const url = res.pay_url || res.url || res.link;
-      const TG = window.Telegram && window.Telegram.WebApp;
-      if (url && TG && TG.openLink) TG.openLink(url);
-      else if (url) window.open(url, '_blank');
-      else if (TG && TG.showAlert) TG.showAlert('Не удалось создать счёт');
-    } catch (e) {
-      const TG = window.Telegram && window.Telegram.WebApp;
-      if (TG && TG.showAlert) TG.showAlert('Оплата временно недоступна');
+    const TG = window.Telegram && window.Telegram.WebApp;
+    const tries = [
+      ['/api/pay/cispay/create', { product: plan.product }],
+      ['/api/pay/paw/create', { product: plan.product, promo: window.__promo || '' }],
+    ];
+    for (const [path, body] of tries) {
+      try {
+        const res = await window.PolkaAPI.api(path, { method: 'POST', body: JSON.stringify(body) });
+        const url = res.pay_url || res.url || res.link || res.form_url;
+        if (url) {
+          if (TG && TG.openLink) TG.openLink(url);
+          else window.open(url, '_blank');
+          return;
+        }
+        if (res.detail) { say(res.detail); return; }
+      } catch (e) {
+        // пробуем следующий способ
+      }
     }
+    say('Оплата картой пока не включена. Напишите в поддержку @polka_support');
   }
 
   const wrapGo = () => {
