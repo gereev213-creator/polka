@@ -26260,6 +26260,43 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             return _miniapp_err('save_failed', 500)
         return _miniapp_json({'ok': True, 'id': crit_id, 'active': bool(active)})
 
+    if method == 'POST' and str((body or {}).get('query') or '').strip():
+        # Обычный критерий словами: запрос, цена, город, требования.
+        # До этого POST принимал только ссылку, поэтому форма в приложении
+        # отправляла запрос и не создавала ничего.
+        b = body or {}
+        q = str(b.get('query') or '').strip()[:100]
+        if len(q) < 2:
+            return _miniapp_json({'ok': False, 'error': 'query_required'}, status=400)
+        try:
+            max_price = int(str(b.get('max_price') or 0).replace(' ', '').replace('\u00a0', '') or 0)
+        except Exception:
+            max_price = 0
+        req = str(b.get('requirements') or '').strip()[:200]
+        req_json = {}
+        low = req.lower()
+        if 'оригинал' in low:
+            req_json['original_only'] = 1
+        if 'без ремонта' in low or 'не вскрывал' in low:
+            req_json['not_opened'] = 1
+        if 'частн' in low:
+            req_json['private_only'] = 1
+        if 'комплект' in low:
+            req_json['full_set'] = 1
+        crit_id = add_criterion(
+            int(viewer_id), q, str(b.get('category') or ''), str(b.get('city') or ''),
+            max_price, 10, 0, 0,
+            1 if int(b.get('with_photo') or 0) else 0,
+            'any', req, req_json or None,
+            str(b.get('exclude') or '')[:200], 0, '', '', '')
+        if crit_id == -1:
+            return _miniapp_json({'ok': False, 'error': 'limit',
+                                  'detail': 'На бесплатном тарифе один критерий'}, status=402)
+        if not crit_id:
+            return _miniapp_json({'ok': False, 'error': 'duplicate'}, status=409)
+        return _miniapp_json({'ok': True, 'id': crit_id, 'query': q,
+                              'max_price': max_price, 'requirements': req})
+
     if method == 'POST' and str((body or {}).get('search_link') or '').strip():
         # Создание критерия из ссылки Авито одним запросом: разбираем ссылку,
         # сохраняем путь и фильтры, по ним сборщик ищет ровно эту выдачу.
