@@ -33117,6 +33117,49 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_delete('/api/ads/{ad_id}/favorite', api_miniapp_favorite_del)
     app.router.add_get('/api/favorites', api_miniapp_favorites)
     app.router.add_get('/api/my-ads', api_miniapp_my_ads)
+    async def api_moderation_list(request: aiohttp_web.Request) -> aiohttp_web.Response:
+        """GET /api/moderation — объявления на модерации (только админ)."""
+        viewer_id = _miniapp_viewer(request)
+        if not viewer_id:
+            return _miniapp_err('unauthorized', 401)
+        if int(viewer_id) not in ADMIN_USER_IDS:
+            return _miniapp_err('forbidden', 403)
+        cur = db.conn.cursor()
+        cur.execute(
+            "SELECT id, title, price, city, category, condition, photos, status, "
+            "created_at, user_id FROM ads WHERE status IN ('moderation','checking','review') "
+            "ORDER BY id DESC LIMIT 50")
+        items = [dict(r) for r in cur.fetchall()]
+        return _miniapp_json({'ok': True, 'items': items, 'count': len(items)})
+
+    async def api_moderation_act(request: aiohttp_web.Request) -> aiohttp_web.Response:
+        """POST /api/moderation/{ad_id} {action: approve|reject} — решение админа."""
+        viewer_id = _miniapp_viewer(request)
+        if not viewer_id:
+            return _miniapp_err('unauthorized', 401)
+        if int(viewer_id) not in ADMIN_USER_IDS:
+            return _miniapp_err('forbidden', 403)
+        try:
+            ad_id = int(request.match_info['ad_id'])
+        except (KeyError, ValueError):
+            return _miniapp_err('not_found', 404)
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+        action = str((body or {}).get('action') or '')
+        status = 'active' if action == 'approve' else ('rejected' if action == 'reject' else '')
+        if not status:
+            return _miniapp_err('bad_action', 400)
+        cur = db.conn.cursor()
+        cur.execute("UPDATE ads SET status=? WHERE id=?", (status, ad_id))
+        db.conn.commit()
+        if not cur.rowcount:
+            return _miniapp_err('not_found', 404)
+        return _miniapp_json({'ok': True, 'id': ad_id, 'status': status})
+
+    app.router.add_get('/api/moderation', api_moderation_list)
+    app.router.add_post('/api/moderation/{ad_id}', api_moderation_act)
     app.router.add_get('/api/me', api_miniapp_me)
     app.router.add_get('/api/filters', api_miniapp_filters)
     app.router.add_get('/api/photo/{file_id}', api_miniapp_photo)
