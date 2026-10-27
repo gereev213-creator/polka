@@ -1,6 +1,23 @@
 /* Связка прототипа с нашим бэкендом.
    Авторизация — Telegram initData, как в основном приложении. */
 (function () {
+
+// Пустая лента не должна оставлять голый экран
+function paintEmpty(count) {
+  const html = `<div class="card" style="padding:22px 18px;text-align:center;grid-column:1/-1">
+    <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
+    <div style="font-size:11px;color:#7A8CA3;line-height:1.4">
+      Новые находки приходят в течение часа после создания поиска.
+      Нажмите «Поиск лотов» выше.
+    </div></div>`;
+  if (count) return;
+  ['homeGrid', 'marketGrid'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!el.querySelector('.card')) el.innerHTML = html;
+  });
+}
+
   const TG = window.Telegram && window.Telegram.WebApp;
   if (TG && TG.ready) TG.ready();
   if (TG && TG.expand) TG.expand();
@@ -46,6 +63,8 @@
         window.setLots(items);
         if (typeof window.renderGrids === 'function') window.renderGrids();
         if (typeof window.renderFavs === 'function') window.renderFavs();
+      } else {
+        paintEmpty(0);
       }
       return items.length;
     } catch (e) {
