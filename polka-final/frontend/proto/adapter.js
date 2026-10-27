@@ -300,7 +300,7 @@
       if (q.length < 2) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
-        .map((b) => (b.textContent || '').trim()).filter(Boolean);
+        .map((b) => (b.getAttribute('data-req') || b.textContent || '').trim()).filter(Boolean);
       const minus = [...document.querySelectorAll('#searchForm input')]
         .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
         .filter(Boolean).join(',');
