@@ -105,13 +105,32 @@ async def second_ok(messages, **k):
     return 'да'
 
 
-ns['_llm_completion'] = first_dead
-ns['_llm_match_cached'] = lambda *a: ''
 ns['_setting_get'] = lambda k, d='': 'model-a,model-b'
+ns['_llm_match_cached'] = lambda *a: ''
+
+# обе модели падают → решения нет, правила решат сами
+ns['_llm_completion'] = first_dead
 r5 = asyncio.run(ns['llm_matches_ad']({'title': 'Джинсы Levis', 'price': 1000},
                                       {'query': 'джинсы levis'}))
-check('первая модель упала — берётся вторая', r5 is True, r5)
-check('были попытки обеих моделей', len(tried) >= 1, tried)
+check('все модели упали — решения нет', r5 is None, r5)
+check('попыток было по числу моделей', len(tried) >= 2, tried)
+
+# первая падает, вторая отвечает → решение есть
+tried.clear()
+
+
+async def second_yes(messages, **k):
+    if len(tried) == 0:
+        tried.append('a')
+        raise RuntimeError('nope')
+    tried.append('b')
+    return 'да'
+
+
+ns['_llm_completion'] = second_yes
+r6 = asyncio.run(ns['llm_matches_ad']({'title': 'Джинсы Levis 501', 'price': 1500},
+                                      {'query': 'джинсы levis'}))
+check('первая упала — вторая ответила', r6 is True, r6)
 
 print()
 if fail:
