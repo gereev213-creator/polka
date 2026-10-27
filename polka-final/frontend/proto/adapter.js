@@ -635,15 +635,28 @@
   // Баннер барахолки из настроек: картинка, заголовок, подпись, ссылка
   async function loadBanner() {
     try {
-      // Картинки баннеров ведёт админка: /api/banners отдаёт ссылки по экранам
+      // Картинки баннеров ведёт админка: /api/banners отдаёт ссылки по экранам.
+      // Старый file_id из Telegram может не отдаться (файл удалён) — тогда
+      // проверяем загрузку и оставляем баннер из дизайна, а не битую картинку.
       const data = await window.PolkaAPI.api('/api/banners');
       const b = data.banners || {};
+
+      const alive = (src) => new Promise((resolve) => {
+        if (!src) return resolve(false);
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = src;
+      });
+
       const home = document.querySelector('.searchBanner');
-      if (home && b.search) home.style.background = `url('${b.search}') center/cover`;
+      if (home && b.search && await alive(b.search)) {
+        home.style.background = `url('${b.search}') center/cover`;
+      }
       const el = document.getElementById('channelBanner');
-      if (el && b.welcome) el.style.background = `url('${b.welcome}') center/cover`;
-      const post = document.querySelector('#s-post .photoMain');
-      if (post && b.create_ad) post.style.backgroundImage = `url('${b.create_ad}')`;
+      if (el && b.welcome && await alive(b.welcome)) {
+        el.style.background = `url('${b.welcome}') center/cover`;
+      }
     } catch (e) { }
   }
   document.addEventListener('DOMContentLoaded', loadBanner);
