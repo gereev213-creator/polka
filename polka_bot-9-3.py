@@ -162,8 +162,8 @@ CRYPTO_RUB_TO_USDT = float(os.environ.get("CRYPTO_RUB_TO_USDT", "0.011"))  # ~90
 BOT_PROXY = os.environ.get("BOT_PROXY", "")
 
 # Сервер на Amvera
-SERVER_URL    = os.environ.get("SERVER_URL", "https://polka-udmurtii-nikicev2009.waw0.amvera.tech")
-WEBAPP_URL_ENV = os.environ.get("WEBAPP_URL", "https://polka-udmurtii-nikicev2009.waw0.amvera.tech").rstrip("/")
+SERVER_URL    = os.environ.get("SERVER_URL", "https://polka-mini-app-nikicev2009.mia0.amvera.tech")
+WEBAPP_URL_ENV = os.environ.get("WEBAPP_URL", "https://polka-mini-app-nikicev2009.mia0.amvera.tech").rstrip("/")
 # WEBAPP_PORT задан ниже как WEBAPP_PORT (строка ~313)
 
 # ── MAX Platform (месенджер Макс) ─────────────────────────────────────────────
@@ -503,7 +503,7 @@ CITY_CHANNELS = {
 
 # URL вашего сервера (нужен HTTPS для Mini App)
 # Пример: "https://polka.example.com"
-WEBAPP_URL  = os.environ.get("WEBAPP_URL", "https://polka-udmurtii-nikicev2009.waw0.amvera.tech").rstrip("/")
+WEBAPP_URL  = os.environ.get("WEBAPP_URL", "https://polka-mini-app-nikicev2009.mia0.amvera.tech").rstrip("/")
 # Amvera пробрасывает трафик на порт 80
 WEBAPP_PORT = int(os.environ.get("WEBAPP_PORT", os.environ.get("PORT", "80")))
 
@@ -7944,7 +7944,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_data = db.get_user(user.id)
 
     # Mini App base URL (задается в .env / Amvera)
-    MINIAPP_URL = os.environ.get("MINIAPP_URL", "https://mini.polka.local")
+    MINIAPP_URL = os.environ.get("MINIAPP_URL", "https://polka-mini-app-nikicev2009.mia0.amvera.tech")
 
     def _mbtn(text, cb):
         """Кнопка главного меню с синим стилем (Bot API 9.4)."""
@@ -31716,7 +31716,7 @@ class _MiniappCtxShim:
 
 def _miniapp_url() -> str:
     """Базовый URL Mini App (та же переменная, что в show_main_menu)."""
-    return os.environ.get("MINIAPP_URL", "https://mini.polka.local")
+    return os.environ.get("MINIAPP_URL", "https://polka-mini-app-nikicev2009.mia0.amvera.tech")
 
 
 def _miniapp_open_button(text: str = "Открыть Полку") -> InlineKeyboardButton:
