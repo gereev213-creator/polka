@@ -340,3 +340,97 @@
   document.addEventListener('DOMContentLoaded', () => { wrapGo2(); wireHearts(); });
   setTimeout(() => { wrapGo2(); wireHearts(); }, 800);
 })();
+
+/* ── Мои объявления, создание лота, рефералка ──────────────────────────── */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+  async function loadMyAds() {
+    const box = $('myList');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/my/ads');
+      const items = data.items || [];
+      if (!items.length) {
+        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
+          'Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
+        return;
+      }
+      box.innerHTML = items.map((a) => {
+        const ph = a.photos ? String(a.photos).split(',')[0] : '';
+        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
+        const st = a.status === 'sold' ? 'Продано' : (a.status === 'draft' ? 'Черновик' : 'Активно');
+        return `<article class="card fav" data-open="${a.id}">
+          <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+          <span><h3>${(a.title || '').slice(0, 34)}</h3>
+          <span class="pricepill">${fmt(a.price)}</span><br>
+          <span class="status">${st}</span></span></article>`;
+      }).join('');
+    } catch (e) { }
+  }
+
+  function wirePost() {
+    const form = $('postForm');
+    if (!form || form.__wired) return;
+    form.__wired = true;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const title = ($('adTitle') && $('adTitle').value || '').trim();
+      const price = Number((($('adPrice') && $('adPrice').value) || '').replace(/[^0-9]/g, '')) || 0;
+      if (title.length < 3) return;
+      const cat = (document.querySelector('[data-choice="cat"] .chip.on') || {}).textContent || 'Другое';
+      const cond = (document.querySelector('[data-choice="cond"] .chip.on') || {}).textContent || '';
+      const city = ($('adCity') && $('adCity').value || '').trim();
+      try {
+        await window.PolkaAPI.api('/api/ads', {
+          method: 'POST',
+          body: JSON.stringify({ title, price, category: cat.trim(), condition: cond.trim(), city }),
+        });
+        const TG = window.Telegram && window.Telegram.WebApp;
+        if (TG && TG.showAlert) TG.showAlert('Объявление опубликовано');
+        form.reset();
+      } catch (err) {
+        const TG = window.Telegram && window.Telegram.WebApp;
+        if (TG && TG.showAlert) TG.showAlert('Не удалось опубликовать');
+      }
+    });
+  }
+
+  async function loadReferrals() {
+    try {
+      const data = await window.PolkaAPI.api('/api/referral');
+      const code = data.code || data.link || '';
+      const link = data.link || (code ? ('https://t.me/polka_bot?start=' + code) : '');
+      if (link) {
+        const b = document.querySelector('#s-referrals .linkin b');
+        if (b) b.textContent = link.replace('https://', '');
+        window.__refLink = link;
+        // кнопка «Копировать» в дизайне зовёт copyLink() — подменяем на реальную ссылку
+        window.copyLink = function () {
+          try { navigator.clipboard.writeText(link); } catch (e) {}
+          const TG = window.Telegram && window.Telegram.WebApp;
+          if (TG && TG.showAlert) TG.showAlert('Ссылка скопирована');
+        };
+      }
+      const earned = document.querySelector('#s-referrals .earned');
+      if (earned && data.earned != null) earned.textContent = 'Заработано: ' + fmt(data.earned);
+    } catch (e) { }
+  }
+
+  const wrap = () => {
+    if (typeof window.go !== 'function' || window.go.__rest) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'myads') loadMyAds();
+      if (name === 'post') wirePost();
+      if (name === 'referrals') loadReferrals();
+      return r;
+    };
+    wrapped.__rest = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 800);
+})();
