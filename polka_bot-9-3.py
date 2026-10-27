@@ -30279,6 +30279,36 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     # Сжатие файла. После чистки внутри базы осталось 80 % пустых страниц:
     # строки удалены, а место на диске не вернулось. VACUUM пересобирает файл
     # и отдаёт пустоту системе. Требует места под копию — на диске 5 ГБ, хватает.
+    if action == 'add_crit':
+        # Создать критерий через админку: нужно, когда владелец просит показать
+        # результат, а в интерфейсе ещё нет нужного критерия.
+        q = str((body or {}).get('query') or '').strip()
+        if len(q) < 2:
+            return _miniapp_json({'ok': False, 'error': 'query_required'}, status=400)
+        owner = 0
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT owner_id FROM settings WHERE key='owner_id'")
+            row = cur.fetchone()
+            if row:
+                owner = int(row['owner_id'] or 0)
+        except Exception:
+            owner = 0
+        if not owner:
+            try:
+                cur.execute("SELECT user_id FROM hunt_criteria ORDER BY id DESC LIMIT 1")
+                r2 = cur.fetchone()
+                owner = int(r2['user_id']) if r2 else 0
+            except Exception:
+                owner = 0
+        if not owner:
+            return _miniapp_json({'ok': False, 'error': 'no_owner'}, status=400)
+        cid = add_criterion(owner, q, '', '',
+                            int((body or {}).get('max_price') or 0), 0, 0, 0, 0,
+                            'private' if int((body or {}).get('private') or 0) else 'any',
+                            '', None, '', 0, '', '', '')
+        return _miniapp_json({'ok': bool(cid and cid > 0), 'id': cid, 'query': q})
+
     if action == 'llm_probe':
         # Живая проверка модели: отправляем одну фразу и возвращаем ответ.
         _probe_model = str((body or {}).get('model') or '').strip()
