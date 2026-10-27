@@ -30464,6 +30464,25 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         out['query'] = dict(crit).get('query')
         return _miniapp_json(out)
 
+    if action == 'wipe_test':
+        # Полная уборка тестового: критерии, находки, избранное, объявления
+        # пользователей (source='polka') и кэш модели. Данные Авито не трогаем.
+        cur = db.conn.cursor()
+        out = {}
+        for table in ('hunt_matches', 'hunt_criteria', 'favorites', 'llm_cache'):
+            try:
+                cur.execute(f"DELETE FROM {table}")
+                out[table] = cur.rowcount
+            except Exception as e:
+                out[table] = f'err: {str(e)[:40]}'
+        try:
+            cur.execute("DELETE FROM ads WHERE source='polka'")
+            out['polka_ads'] = cur.rowcount
+        except Exception:
+            out['polka_ads'] = 0
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'deleted': out})
+
     if action == 'reset_criteria':
         # Полный сброс критериев и связанных находок: пользователи начнут
         # добавлять свои, а старые тестовые не должны мешать.
