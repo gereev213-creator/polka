@@ -21718,6 +21718,17 @@ async def llm_matches_ad(ad: Dict, crit: Dict) -> Optional[bool]:
     if not query or not title:
         return None
     price = int(ad.get('price') or 0)
+    # Список моделей — до всех try, чтобы был доступен при любом пути.
+    try:
+        _models = [m.strip() for m in str(
+            _setting_get('hunt.llm_models',
+                         'nvidia/nemotron-3.5-lightning:free,'
+                         'thinkingmachines/inkling-small:free,'
+                         'meta-llama/llama-3.3-70b-instruct:free')).split(',') if m.strip()]
+    except Exception:
+        _models = []
+    if not _models:
+        _models = ['']
     cached = _llm_match_cached(title, query, price)
     if cached in ('1', '0'):
         return cached == '1'
@@ -21736,14 +21747,33 @@ async def llm_matches_ad(ad: Dict, crit: Dict) -> Optional[bool]:
             query=query[:120], title=title[:160], price=price,
             requirements=(f'Требования покупателя: {_req[:160]}\n' if _req else ''),
             details=('\n'.join(_details) + '\n' if _details else ''))
-        raw = await _llm_completion(
-            messages=[{'role': 'user', 'content': prompt}],
-            max_tokens=6, temperature=0,
-        )
     except Exception as e:
-        logger.warning(f"llm_match: {e}")
+        logger.warning(f"llm_match prompt: {e}")
         return None
-    low = str(raw or '').strip().lower()
+
+    # Перебор моделей: одна отвалилась или упёрлась в лимит — берём следующую.
+    verdict = ''
+    for _m in _models:
+        if _m:
+            globals()['LLM_MODEL'] = _m
+        try:
+            raw = await _llm_completion(
+                messages=[{'role': 'user', 'content': prompt}],
+                max_tokens=6, temperature=0,
+            )
+        except Exception as e:
+            logger.warning(f"llm_match {_m or 'default'}: {str(e)[:80]}")
+            continue
+        low = str(raw or '').strip().lower()
+        if low.startswith('да') or low.startswith('yes'):
+            verdict = '1'
+        elif low.startswith('нет') or low.startswith('no'):
+            verdict = '0'
+        if verdict:
+            break
+    if not verdict:
+        return None
+    low = 'да' if verdict == '1' else 'нет'
     verdict = '1' if low.startswith('да') or low.startswith('yes') else ('0' if low.startswith('нет') or low.startswith('no') else '')
     if not verdict:
         return None

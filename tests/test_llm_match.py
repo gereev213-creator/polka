@@ -90,6 +90,29 @@ ns['_llm_completion'] = boom
 r4 = asyncio.run(ns['llm_matches_ad']({'title': 'Джинсы', 'price': 100}, {'query': 'джинсы'}))
 check('ошибка модели не блокирует находку', r4 is None, r4)
 
+
+# ── перебор моделей ────────────────────────────────────────────────────────
+tried = []
+
+
+async def first_dead(messages, **k):
+    tried.append('1')
+    raise RuntimeError('model unavailable')
+
+
+async def second_ok(messages, **k):
+    tried.append('2')
+    return 'да'
+
+
+ns['_llm_completion'] = first_dead
+ns['_llm_match_cached'] = lambda *a: ''
+ns['_setting_get'] = lambda k, d='': 'model-a,model-b'
+r5 = asyncio.run(ns['llm_matches_ad']({'title': 'Джинсы Levis', 'price': 1000},
+                                      {'query': 'джинсы levis'}))
+check('первая модель упала — берётся вторая', r5 is True, r5)
+check('были попытки обеих моделей', len(tried) >= 1, tried)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
