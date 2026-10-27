@@ -407,7 +407,9 @@ function paintEmpty(count) {
       box.innerHTML = items.map((a) => {
         const ph = a.photos ? String(a.photos).split(',')[0] : '';
         const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
-        const st = a.status === 'sold' ? 'Продано' : (a.status === 'draft' ? 'Черновик' : 'Активно');
+        const map = { sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
+                      checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено' };
+        const st = map[a.status] || 'Активно';
         return `<article class="card fav" data-open="${a.id}">
           <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
           <span><h3>${(a.title || '').slice(0, 34)}</h3>
