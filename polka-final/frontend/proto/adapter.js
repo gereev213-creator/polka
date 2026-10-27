@@ -662,3 +662,46 @@
   document.addEventListener('DOMContentLoaded', loadBanner);
   setTimeout(loadBanner, 1200);
 })();
+
+/* ── Подсветка активной вкладки: считаем от реальной кнопки ─────────────── */
+(function () {
+  function positionGlass() {
+    const glass = document.getElementById('navglass');
+    const nav = document.querySelector('#nav .navmain');
+    if (!glass || !nav) return;
+    const active = nav.querySelector('button.active') ||
+                   nav.querySelector('button[data-nav]:hover') ||
+                   nav.querySelector('button');
+    if (!active) return;
+    const navBox = nav.getBoundingClientRect();
+    const box = active.getBoundingClientRect();
+    // Плашка — круг 52×52 строго по центру иконки, внутри капсулы
+    const size = 52;
+    const centerX = (box.left - navBox.left) + box.width / 2;
+    glass.style.width = size + 'px';
+    glass.style.height = size + 'px';
+    glass.style.left = (centerX - size / 2) + 'px';
+    glass.style.top = Math.max(0, (navBox.height - size) / 2) + 'px';
+    glass.style.borderRadius = '999px';
+  }
+
+  const wrap = () => {
+    if (typeof window.go === 'function' && !window.go.__glass) {
+      const orig = window.go;
+      const wrapped = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(positionGlass, 30);
+        setTimeout(positionGlass, 300);
+        return r;
+      };
+      wrapped.__glass = true;
+      window.go = wrapped;
+    }
+    positionGlass();
+  };
+
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 500);
+  setTimeout(positionGlass, 1200);
+  window.addEventListener('resize', positionGlass);
+})();
