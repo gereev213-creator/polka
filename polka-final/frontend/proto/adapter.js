@@ -562,3 +562,35 @@
 
   window.PolkaLegal = showLegal;
 })();
+
+/* ── Вход: показываем экран приветствия, если пользователь не авторизован ── */
+(function () {
+  async function gate() {
+    try {
+      await window.PolkaAPI.api('/api/me');
+    } catch (e) {
+      // 401 — пользователь без Telegram-сессии: показываем вход
+      if (typeof window.go === 'function') window.go('welcome');
+    }
+  }
+
+  // Вход через Telegram: внутри мини-приложения сессия уже есть — идём дальше
+  const wireTg = () => {
+    const btn = document.querySelector('#s-telegram .bigbtn, #s-telegram button');
+    if (btn && !btn.__w) {
+      btn.__w = true;
+      btn.addEventListener('click', async () => {
+        try {
+          await window.PolkaAPI.api('/api/me');
+          if (typeof window.go === 'function') window.go('home', true);
+        } catch (e) {
+          const TG = window.Telegram && window.Telegram.WebApp;
+          if (TG && TG.openTelegramLink) TG.openTelegramLink('https://t.me/polka_bot');
+          else window.location.href = 'https://t.me/polka_bot';
+        }
+      });
+    }
+  };
+  document.addEventListener('DOMContentLoaded', () => { gate(); wireTg(); });
+  setTimeout(() => { wireTg(); }, 900);
+})();
