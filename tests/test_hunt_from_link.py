@@ -24,7 +24,9 @@ checks = [
     ("дубль не создаётся", 'AND filter_blob=?' in SRC),
     # экран ссылки переехал из чата в отдельный компонент /hunt,
     # поэтому проверяем его по App.jsx, а не по HuntChat
-    ("экран со ссылкой", 'hunt-field' in APP and 'huntFromLink' in JSX),
+    # Форму ссылки убрали с экрана: основной путь — слова. Код разбора ссылки
+    # и клиентский вызов сохранены, поэтому проверяем их, а не разметку формы.
+    ("разбор ссылки жив", 'huntFromLink' in JSX and 'huntFromSearchLink' in JSX),
     ("вкладки убраны", 'chat-tabs' not in JSX),
     ("клиент зовёт эндпоинт", 'huntFromLink' in API),
 ]
