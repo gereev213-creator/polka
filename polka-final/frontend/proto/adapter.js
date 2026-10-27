@@ -133,17 +133,29 @@ function paintEmpty(count) {
   const $ = (id) => document.getElementById(id);
   const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
 
+  // Карточка поиска — ровно по макету: заголовок, кнопка паузы, чипы и подвал
   function critCard(c) {
     const paused = !c.active;
-    return `<article class="card scard" data-crit="${c.id}">
+    const chips = [];
+    if (c.max_price) chips.push(`<span class="chip">до ${fmt(c.max_price)}</span>`);
+    if (c.min_price) chips.push(`<span class="chip">от ${fmt(c.min_price)}</span>`);
+    if (c.city) chips.push(`<span class="chip">${c.city}</span>`);
+    if (c.requirements) {
+      String(c.requirements).split(',').slice(0, 3).forEach((r) => {
+        if (r.trim()) chips.push(`<span class="chip">${r.trim()}</span>`);
+      });
+    }
+    const fresh = c.new_count || 0;
+    const when = c.last_run ? 'обновлено ' + String(c.last_run).slice(11, 16) : 'ещё не запускался';
+    return `<article class="card scard" data-crit="${c.id}" data-go="history">
       <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
-      <button class="pause" data-toggle="${c.id}">
+      <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}">
         <svg width="15" height="15"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>
       </button></div>
-      <div class="chips">
-        ${c.max_price ? `<span class="chip">до ${fmt(c.max_price)}</span>` : ''}
-        ${c.city ? `<span class="chip">${c.city}</span>` : ''}
-        <span class="chip">${paused ? 'на паузе' : 'активен'}</span>
+      ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
+      <div class="sfoot">
+        <span class="newpill">${fresh ? '+' + fresh + ' новых' : (paused ? 'на паузе' : 'активен')}</span>
+        <span class="mut">${when}</span>
       </div>
     </article>`;
   }
