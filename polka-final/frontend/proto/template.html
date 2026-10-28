@@ -533,6 +533,9 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
   box-sizing:border-box!important;z-index:1!important;
   pointer-events:none!important;box-shadow:none!important;
   transition:left .25s ease!important}
+
+/* Место под нижнюю панель, чтобы последние карточки не уходили за неё */
+#s-home .scroll,#s-market .scroll,#s-favorites .scroll,#s-profile .scroll{padding-bottom:104px!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -770,5 +773,6 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610282004"></script>
-<script src="adapter.js?v=202610282004"></script><script src="payments.js?v=202610282004"></script><script src="admin.js?v=202610282004"></script><script src="keyboard.js?v=202610282004"></script><script src="telegram-safe.js?v=202610282004"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610282016"></script>
+<script src="adapter.js?v=202610282016"></script><script src="payments.js?v=202610282016"></script><script src="admin.js?v=202610282016"></script><script src="keyboard.js?v=202610282016"></script><script src="dock.js?v=202610282016"></script>
+<script src="telegram-safe.js?v=202610282016"></script></body></html>
