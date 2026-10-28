@@ -32165,7 +32165,8 @@ async def api_miniapp_feed_banners(request: aiohttp_web.Request) -> aiohttp_web.
             continue
         # v= — чтобы после замены баннера браузер не показывал старую картинку
         ver = hashlib.md5(ref.encode()).hexdigest()[:8]
-        items.append({'image': f"/api/feed-banner-image/{i}?v={ver}", 'action': ''})
+        link = _miniapp_settings_get(f"feed_banner_link:{i}") or ''
+        items.append({'image': f"/api/feed-banner-image/{i}?v={ver}", 'action': link})
     if not items:
         items.append({'image': _default_feed_banner_data_url(), 'action': '', 'default': True})
     return _miniapp_json({'items': items})
@@ -32282,6 +32283,29 @@ async def handle_banner_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     key = context.user_data.pop('awaiting_banner_key', None)
     if not await is_admin(update.effective_user.id):
         return True
+    # Ждём ссылку для баннера, если админ только что прислал фото
+    _want_link = context.user_data.get('awaiting_banner_link')
+    if _want_link is not None and update.message and update.message.text:
+        _idx = int(_want_link)
+        _link = str(update.message.text or '').strip()
+        if _link in ('—', '-', 'нет', 'убрать'):
+            _link = ''
+        if _link and not re.match(r'^https?://', _link):
+            _link = 'https://' + _link
+        _miniapp_settings_set(f"feed_banner_link:{_idx}", _link)
+        context.user_data.pop('awaiting_banner_link', None)
+        context.user_data.pop('awaiting_banner_key', None)
+        try:
+            db.log_action(update.effective_user.id, "admin_feed_banner_link",
+                          f"idx={_idx} link={_link[:60]}")
+        except Exception:
+            pass
+        await update.message.reply_text(
+            f"{EM_OK} Ссылка для баннера {_idx + 1} "
+            + (f"сохранена: {_link}" if _link else "очищена."),
+            reply_markup=InlineKeyboardMarkup(_admin_banners_kb()))
+        return True
+
     if not key:
         return True
     if not update.message.photo:
@@ -32293,6 +32317,15 @@ async def handle_banner_photo(update: Update, context: ContextTypes.DEFAULT_TYPE
     if key.startswith('feed_banner:'):
         idx = int(key.split(':')[1])
         _miniapp_settings_set(f"feed_banner:{idx}", file_id)
+        # Ссылка для перехода: админ пришлёт её следующим сообщением.
+        # В приложении она нигде не показывается — только как адрес клика.
+        context.user_data['awaiting_banner_link'] = idx
+        await update.message.reply_text(
+            f"{EM_OK} Баннер {idx + 1} сохранён.\n\n"
+            "Пришлите ссылку, куда вести при нажатии (например https://t.me/polkalot).\n"
+            "Она нигде не отображается — только как адрес перехода.\n"
+            "Чтобы убрать ссылку, отправьте «—».",
+            reply_markup=InlineKeyboardMarkup(_admin_banners_kb()))
         try:
             db.log_action(update.effective_user.id, "admin_feed_banner_set", f"idx={idx}")
         except Exception:

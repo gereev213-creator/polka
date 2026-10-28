@@ -1115,3 +1115,55 @@ function paintEmpty(count) {
     else window.open(url, '_blank');
   };
 })();
+
+/* ── Рекламные баннеры барахолки: до 5 штук, кликабельные ──────────────── */
+(function () {
+  function open(url) {
+    if (!url) return;
+    const TG = window.Telegram && window.Telegram.WebApp;
+    if (TG && TG.openLink) TG.openLink(url);
+    else window.open(url, '_blank');
+  }
+
+  async function loadFeedBanners() {
+    const box = document.getElementById('feedBanners');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/feed-banners');
+      const items = (data.items || []).filter((b) => b && b.image && !b.default).slice(0, 5);
+      if (!items.length) {
+        box.innerHTML = '';
+        return;
+      }
+      box.innerHTML = items.map((b, i) => `
+        <div class="card offer" data-banner="${i}"
+             style="padding:0;overflow:hidden;cursor:${b.action ? 'pointer' : 'default'};position:relative">
+          <img src="${b.image}" alt="" style="width:100%;display:block;border-radius:24px">
+        </div>`).join('');
+      box.querySelectorAll('[data-banner]').forEach((el) => {
+        const b = items[Number(el.getAttribute('data-banner'))];
+        if (b && b.action) {
+          el.addEventListener('click', () => open(b.action));
+        }
+      });
+    } catch (e) {
+      box.innerHTML = '';
+    }
+  }
+
+  const wrap = () => {
+    if (typeof window.go !== 'function' || window.go.__banners) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'market') setTimeout(loadFeedBanners, 120);
+      return r;
+    };
+    wrapped.__banners = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 900);
+  setTimeout(loadFeedBanners, 2000);
+  window.PolkaBanners = loadFeedBanners;
+})();
