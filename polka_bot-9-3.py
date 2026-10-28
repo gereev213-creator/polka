@@ -5627,6 +5627,15 @@ def _format_ad_text(ad: dict, seller=None, verify=None, rating=None,
 
 
 async def publish_ad_to_channel(ad_id: int, context: ContextTypes.DEFAULT_TYPE, skip_max_crosspost: bool = False):
+    # Объявления из мини-приложения живут только в приложении: в основной
+    # канал их не отправляем. В канал идёт только «находка дня».
+    try:
+        _ad_src = db.get_ad(ad_id) or {}
+        if str(_ad_src.get('source') or '') == 'miniapp':
+            logger.info(f"Объявление {ad_id} из мини-приложения — в канал не публикуем")
+            return None
+    except Exception:
+        pass
     ad = db.get_ad(ad_id)
     if not ad:
         return None
@@ -13548,8 +13557,13 @@ async def moderate_ad_action(update: Update, context: ContextTypes.DEFAULT_TYPE)
             if _existing and _existing.get('status') == 'active':
                 await safe_answer(query, f"{EM_OK} Объявление уже опубликовано", show_alert=True)
                 return
-            pub_result = await publish_ad_to_channel(ad_id, context)
-            message_id = pub_result
+            _is_app_ad = str((db.get_ad(ad_id) or {}).get('source') or '') == 'miniapp'
+            if _is_app_ad:
+                # Лот из мини-приложения: одобряем без поста в канал
+                message_id = None
+            else:
+                pub_result = await publish_ad_to_channel(ad_id, context)
+                message_id = pub_result
             ad_info = db.moderate_ad(ad_id, 'active', admin_id, "Одобрено администратором", message_id)
 
             # Индексируем фото для поиска (pHash)
@@ -23174,6 +23188,12 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'legal.terms_url': ('str', None, None,
                         'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
                         'Ссылка на условия пользования (замените на отдельную страницу)'),
+    # Канал: ежедневная «находка дня». Объявления пользователей в канал
+    # больше не публикуются — только этот дайджест.
+    'channel.fod_enabled': ('str', None, None, '1', '1 — публиковать находку дня в канал'),
+    'channel.fod_hour': ('str', None, None, '12', 'Час публикации находки дня (МСК)'),
+    'channel.fod_last': ('str', None, None, '', 'Дата последней публикации находки дня'),
+    'channel.fod_last_ad': ('str', None, None, '0', 'ID последней находки дня'),
     'legal.consent_required': ('str', None, None, '1',
                                '1 — спрашивать согласие при первом входе в приложение'),
     # Оплата картой через CISPay. UUID мерчанта — только на сервере.
@@ -29030,9 +29050,110 @@ async def setup_scheduler(application: Application):
     jq.run_repeating(subscription_reminders,    interval=21600, first=3600) # каждые 6 часов
     logger.info("Шедулер: 9 задач запущены")
 
+
+async def post_finding_of_the_day(bot, force: bool = False) -> Dict:
+    """Публикует «находку дня» в основной канал.
+
+    Берём самое выгодное объявление Авито по скидке к медиане, не повторяем
+    вчерашнее. Объявления пользователей в канал не попадают — только это.
+    """
+    from datetime import datetime as _dt
+    try:
+        if str(cfg_get('channel.fod_enabled') or '1') != '1' and not force:
+            return {'ok': False, 'error': 'disabled'}
+        today = _dt.now().strftime('%Y-%m-%d')
+        if not force and str(cfg_get('channel.fod_last') or '') == today:
+            return {'ok': False, 'error': 'already_sent', 'date': today}
+
+        cur = db.conn.cursor()
+        last_id = int(str(cfg_get('channel.fod_last_ad') or '0') or 0)
+        rows = cur.execute(
+            "SELECT id, title, price, photos, source_url, discount_percent, city "
+            "FROM ads WHERE COALESCE(source,'') NOT IN ('miniapp','polka') "
+            "AND price > 0 AND discount_percent IS NOT NULL "
+            "AND COALESCE(photos,'') NOT IN ('', '[]') "
+            "ORDER BY discount_percent DESC, id DESC LIMIT 30"
+        ).fetchall()
+        pick = None
+        for r in rows:
+            if int(r['id']) != last_id:
+                pick = dict(r)
+                break
+        if not pick:
+            return {'ok': False, 'error': 'no_candidates'}
+
+        photo = ''
+        try:
+            _ph = pick.get('photos')
+            _ph = json.loads(_ph) if isinstance(_ph, str) else _ph
+            if isinstance(_ph, list) and _ph:
+                photo = str(_ph[0])
+        except Exception:
+            photo = ''
+        if photo.startswith('/'):
+            photo = 'https://polka-mini-app-nikicev2009.mia0.amvera.tech' + photo
+
+        price = int(pick.get('price') or 0)
+        disc = int(pick.get('discount_percent') or 0)
+        city = str(pick.get('city') or '')
+        url = str(pick.get('source_url') or '')
+        caption = (
+            "🔥 <b>Находка дня</b>\n\n"
+            f"<b>{str(pick.get('title') or '')[:120]}</b>\n"
+            f"{price:,} ₽".replace(',', ' ') + (f" · −{disc}% ниже рынка" if disc else '') +
+            (f"\n{city}" if city else '') +
+            (f"\n\n{url}" if url else '')
+        )
+
+        sent = None
+        if photo:
+            try:
+                sent = await bot.send_photo(chat_id=ADMIN_CHANNEL_ID, photo=photo,
+                                            caption=caption, parse_mode='HTML')
+            except Exception as e:
+                logger.warning(f"fod photo failed: {e}")
+        if sent is None:
+            sent = await bot.send_message(chat_id=ADMIN_CHANNEL_ID, text=caption,
+                                          parse_mode='HTML', disable_web_page_preview=False)
+        try:
+            cfg_set('channel.fod_last', today)
+            cfg_set('channel.fod_last_ad', str(pick['id']))
+        except Exception:
+            pass
+        return {'ok': True, 'ad_id': pick['id'], 'date': today,
+                'discount': disc, 'message_id': getattr(sent, 'message_id', None)}
+    except Exception as e:
+        logger.error(f"finding of the day: {e}")
+        return {'ok': False, 'error': str(e)[:160]}
+
+
+async def _finding_of_day_loop(bot):
+    """Раз в 15 минут проверяем, не пора ли опубликовать находку дня."""
+    from datetime import datetime as _dt
+    await asyncio.sleep(40)
+    while True:
+        try:
+            hour = int(str(cfg_get('channel.fod_hour') or '12') or 12)
+            now = _dt.now()
+            if now.hour == hour and str(cfg_get('channel.fod_last') or '') != now.strftime('%Y-%m-%d'):
+                res = await post_finding_of_the_day(bot)
+                logger.info(f"finding of the day: {res}")
+        except Exception as e:
+            logger.warning(f"fod loop: {e}")
+        await asyncio.sleep(900)
+
 async def post_init(application: Application):
     # Инициализируем новые таблицы и индексы
     await init_chat_tables()
+    try:
+        globals()['_BOT_INSTANCE'] = application.bot
+    except Exception:
+        pass
+    try:
+        asyncio.create_task(_finding_of_day_loop(application.bot))
+        logger.info("finding of the day: планировщик запущен")
+    except Exception as _fe:
+        logger.warning(f"fod task: {_fe}")
     init_fts5()
     # Сбрасываем старые команды принудительно
     try:
@@ -30800,6 +30921,19 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'fod_now':
+        # Ручная публикация «находки дня» для проверки
+        try:
+            bot = request.app.get('bot') if hasattr(request.app, 'get') else None
+            if bot is None:
+                bot = globals().get('_BOT_INSTANCE')
+            if bot is None:
+                return _miniapp_json({'ok': False, 'error': 'bot_unavailable'}, status=503)
+            res = await post_finding_of_the_day(bot, force=True)
+            return _miniapp_json(res, status=200 if res.get('ok') else 400)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=400)
 
     if action == 'create_promo':
         # Создание промокода из обслуживания (по admin-токену), чтобы можно
@@ -32659,6 +32793,14 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     except Exception:
         pass
     try:
+        # Помечаем источник: такие лоты не публикуются в канал
+        try:
+            _c = db.conn.cursor()
+            _c.execute("UPDATE ads SET source='miniapp' WHERE id=?", (ad_id,))
+            db.conn.commit()
+        except Exception as _se:
+            logger.warning(f"miniapp source mark {ad_id}: {_se}")
+
         db.log_action(viewer_id, "ad_created_miniapp", f"Ad ID: {ad_id}")
     except Exception:
         pass
