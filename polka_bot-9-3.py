@@ -21492,7 +21492,7 @@ def _criterion_where(crit: Dict, active_only: bool = True):
                 return Decision(True, 'ok', 'по заголовку, бренд не проверен',
                                 unverified=True)
             return Decision(False, 'desc_needed', 'нужно описание')
-        if _llm_title_match(ad, crit) == 'yes':
+        if _llm_says_yes(ad, crit):
             # Модель считает, что товар тот: не режем по словам
             pass
         else:
@@ -21795,6 +21795,14 @@ _LLM_MATCH_PROMPT = (
 
 
 
+
+def _llm_says_yes(ad: Dict, crit: Dict) -> bool:
+    """Модель подтверждает товар? Безопасно: любая ошибка = «нет»."""
+    try:
+        return _llm_title_match(ad, crit) == 'yes'
+    except Exception:
+        return False
+
 def _llm_title_match(ad: Dict, crit: Dict) -> str:
     """Спросить модель, подходит ли объявление под критерий по заголовку.
 
@@ -22034,7 +22042,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('condition_new_used')
     alts = _query_alt_numbers(crit.get('query'))
     if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', hay) for n in alts):
-        if _llm_title_match(ad, crit) == 'yes':
+        if _llm_says_yes(ad, crit):
             # Модель считает, что товар тот: не режем по словам
             pass
         else:
@@ -22044,7 +22052,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         # находить «1430», а «13» — «2013».
         if str(word).isdigit():
             if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', hay):
-                if _llm_title_match(ad, crit) != 'yes':
+                if not _llm_says_yes(ad, crit):
                     return no('title_words')
             continue
         variants = query_word_variants(word)
@@ -22054,7 +22062,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         _hay_ap = re.sub(r"[’'`\u2019]", '', hay)
         if variants and not any(
                 v in hay or re.sub(r"[’'`\u2019]", '', v) in _hay_ap for v in variants):
-            if _llm_title_match(ad, crit) != 'yes':
+            if not _llm_says_yes(ad, crit):
                 return no('title_words')
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
@@ -22104,7 +22112,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         if not any(v and (v in _low_title
                           or re.sub(r"[’'`\u2019]", '', v) in _title_ap)
                    for v in _vars):
-            if _llm_title_match(ad, crit) != 'yes':
+            if not _llm_says_yes(ad, crit):
                 return no('title_words')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
     if junk:
