@@ -389,11 +389,6 @@ def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
             return _fetch_via_scraper(url, timeout=max(timeout, 60))
         except Exception as exc:
             print(f"  скрапер не отдал страницу: {str(exc)[:70]}")
-
-
-    Кредиты ScrapingBee тратятся лишь на те страницы, которые прямой запрос
-    не отдал, поэтому их хватает надолго.
-    """
     if AVITO_PROFILE and 'avito.ru' in url:
         try:
             return _fetch_via_profile(url, timeout=max(timeout, 120))
