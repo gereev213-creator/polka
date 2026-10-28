@@ -372,7 +372,12 @@ html{ -webkit-text-size-adjust:100% }
   display:grid;place-items:center;cursor:pointer;line-height:1}
 
 /* Миниатюры фото — отдельной строкой под блоком загрузки */
-#photoThumbs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+/* Лента миниатюр в одну строку: не разъезжается на несколько рядов */
+#photoThumbs{display:flex;flex-wrap:nowrap;gap:8px;margin:10px 0 0;
+  overflow-x:auto;overflow-y:hidden;padding-bottom:4px;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch}
+#photoThumbs::-webkit-scrollbar{display:none}
+#photoThumbs .photoMini{flex:0 0 58px}
 #photoThumbs .photoMini{position:relative;width:58px;height:58px;border-radius:14px;
   background-size:cover;background-position:center;background-color:#E3EDFD;
   box-shadow:inset 0 0 0 1px rgba(51,115,250,.15)}
