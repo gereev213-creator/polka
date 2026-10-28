@@ -413,6 +413,13 @@ html{ -webkit-text-size-adjust:100% }
 #s-market .tools{position:static!important;left:auto!important;right:auto!important;
   top:auto!important;bottom:auto!important;margin:12px 0!important;width:auto!important;
   display:flex!important;gap:10px!important}
+
+/* На карточке товара меню снизу не нужно: оно перекрывало кнопки */
+body:has(#s-product.active) #nav{display:none!important}
+/* Закрашенное сердце на карточке товара */
+#pFav.liked{background:var(--grad)!important}
+#pFav.liked svg{color:#fff!important;fill:#fff!important}
+#pFav.liked svg path{fill:#fff!important;stroke:#fff!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>

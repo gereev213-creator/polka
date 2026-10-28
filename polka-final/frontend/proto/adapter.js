@@ -1320,6 +1320,7 @@ function paintEmpty(count) {
     function rub(n) { return (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD'; }
 
     function fill(id) {
+      window.__currentProductId = id;
       // Ищем и в находках, и в избранном: это разные списки
       const pools = [window.__rawLots || [], window.__favItems || [], window.__productPrev || []];
       let raw = null;
@@ -1464,5 +1465,214 @@ function paintEmpty(count) {
     setTimeout(restructure, 1200);
     setTimeout(restructure, 2500);
     window.PolkaMarketLayout = restructure;
+  } catch (e) { }
+})();
+
+/* ── Карточка товара: кнопки «Открыть», сердце, поделиться ────────────── */
+(function () {
+  try {
+    let currentId = null;
+
+    function currentRaw() {
+      const id = currentId || window.__currentProductId;
+      const pools = [window.__productPrev || [], window.__rawLots || [], window.__favItems || []];
+      for (const pool of pools) {
+        const hit = pool.find((x) => String(x.id) === String(id));
+        if (hit) return hit;
+      }
+      return null;
+    }
+
+    function paintHeart(on) {
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      heart.classList.toggle('liked', !!on);
+      // Дублируем инлайном: прототип сбрасывает класс своим syncProductFav
+      heart.style.background = on ? 'var(--grad)' : '';
+      const svg = heart.querySelector('svg');
+      if (svg) svg.style.color = on ? '#fff' : '';
+      window.__heartOn = !!on;
+      if (on) setTimeout(() => {
+        if (window.__heartOn) heart.classList.add('liked');
+      }, 200);
+    }
+
+    async function toggleCurrentFav() {
+      const id = currentId || window.__currentProductId;
+      if (!id) return;
+      // Состояние держим в переменной: прототип сбрасывал класс, и переключение
+      // срабатывало дважды — сердце мигало и оставалось пустым
+      const on = !window.__heartOn;
+      paintHeart(on);
+      try {
+        await window.PolkaAPI.api('/api/ads/' + id + '/favorite',
+          { method: on ? 'POST' : 'DELETE' });
+      } catch (e) {
+        // откат только если сервер реально отказал
+        if (!/HTTP 2/.test(String(e && e.message))) paintHeart(!on);
+      }
+    }
+
+    function openAvito() {
+      const raw = currentRaw();
+      const url = raw && (raw.url || raw.source_url);
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (!url) {
+        if (TG && TG.showAlert) TG.showAlert('Ссылка на объявление недоступна');
+        return;
+      }
+      if (TG && TG.openLink) TG.openLink(url);
+      else window.open(url, '_blank');
+    }
+
+    function share() {
+      const raw = currentRaw() || {};
+      const url = raw.url || raw.source_url || '';
+      const TG = window.Telegram && window.Telegram.WebApp;
+      const link = 'https://t.me/share/url?url=' + encodeURIComponent(url) +
+                   '&text=' + encodeURIComponent(String(raw.title || 'Находка на ПОЛКЕ'));
+      if (TG && TG.openTelegramLink) TG.openTelegramLink(link);
+      else window.open(link, '_blank');
+    }
+
+    function wire() {
+      // Сердце: заменяем кнопку копией, чтобы убрать обработчик прототипа,
+      // который падал на пустом LOTS и сбрасывал закраску
+      let heartBtn = document.getElementById('pFav');
+      if (heartBtn && !heartBtn.__replaced) {
+        const clone = heartBtn.cloneNode(true);
+        clone.__replaced = true;
+        heartBtn.parentNode.replaceChild(clone, heartBtn);
+        heartBtn = clone;
+        // Обработчик не вешаем: за клик отвечает делегирование ниже.
+        // Два обработчика переключали состояние дважды — сердце мигало.
+      }
+
+      const openBtn = document.getElementById('pOpen');
+      if (openBtn && !openBtn.__w) {
+        openBtn.__w = true;
+        openBtn.addEventListener('click', openAvito);
+      }
+      const heart = document.getElementById('pFav');
+      if (heart && !heart.__w) {
+        heart.__w = true;
+        heart.addEventListener('click', (e) => { e.stopPropagation(); toggleCurrentFav(); });
+      }
+      const shareBtn = document.querySelector('#s-product .pactions .fab:last-child') ||
+                       document.querySelectorAll('#s-product .fab')[1];
+      if (shareBtn && !shareBtn.__w) {
+        shareBtn.__w = true;
+        shareBtn.addEventListener('click', (e) => { e.stopPropagation(); share(); });
+      }
+    }
+
+    // Следим за экраном: на карточке товара меню снизу не нужно
+    const obs = new MutationObserver(() => {
+      const active = (document.querySelector('.screen.active') || {}).id;
+      const nav = document.getElementById('nav');
+      if (nav) nav.style.display = (active === 's-product') ? 'none' : 'flex';
+      if (active === 's-product') {
+        wire();
+        const raw = currentRaw();
+        paintHeart(!!(raw && raw.is_favorite));
+      }
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+      wire();
+    });
+    setTimeout(wire, 800);
+
+    // Запоминаем, какой товар открыли
+    const wrap = () => {
+      if (typeof window.PolkaProduct !== 'function' || window.PolkaProduct.__wire) return;
+      const orig = window.PolkaProduct;
+      const wrapped = function (id) {
+        currentId = id;
+        const r = orig.apply(this, arguments);
+        setTimeout(wire, 60);
+        return r;
+      };
+      wrapped.__wire = true;
+      window.PolkaProduct = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 700);
+  } catch (e) { }
+})();
+
+/* ── Перекрываем syncProductFav прототипа: он сбрасывал сердце ─────────── */
+(function () {
+  try {
+    window.syncProductFav = function () {
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      const on = !!window.__heartOn;
+      heart.classList.toggle('liked', on);
+      heart.style.background = on ? 'var(--grad)' : '';
+      const svg = heart.querySelector('svg');
+      if (svg) svg.style.color = on ? '#fff' : '';
+    };
+    // Наблюдаем и восстанавливаем, если прототип всё же сбросил класс
+    setInterval(() => {
+      const active = (document.querySelector('.screen.active') || {}).id;
+      if (active !== 's-product') return;
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      const want = !!window.__heartOn;
+      if (heart.classList.contains('liked') !== want) {
+        heart.classList.toggle('liked', want);
+        heart.style.background = want ? 'var(--grad)' : '';
+      }
+    }, 400);
+  } catch (e) { }
+})();
+
+
+/* ── Сердце на карточке товара: делегирование, без зависимости от узла ─── */
+(function () {
+  try {
+    let on = false;
+
+    function paint() {
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      heart.classList.toggle('liked', on);
+      heart.style.setProperty('background', on ? 'var(--grad)' : '', 'important');
+      const svg = heart.querySelector('svg');
+      if (svg) {
+        svg.style.setProperty('color', on ? '#fff' : '', 'important');
+        svg.style.setProperty('fill', on ? '#fff' : '', 'important');
+      }
+    }
+
+    document.addEventListener('click', async (e) => {
+      const heart = e.target.closest && e.target.closest('#pFav');
+      if (!heart) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const id = window.__currentProductId;
+      if (!id) return;
+      on = !on;
+      window.__heartOn = on;
+      paint();
+      setTimeout(paint, 150);
+      try {
+        await window.PolkaAPI.api('/api/ads/' + id + '/favorite',
+          { method: on ? 'POST' : 'DELETE' });
+      } catch (err) {
+        on = !on;
+        window.__heartOn = on;
+        paint();
+      }
+    }, true);
+
+    // Страховка: держим закраску, если прототип попытается сбросить
+    setInterval(() => {
+      if ((document.querySelector('.screen.active') || {}).id !== 's-product') return;
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      if (heart.classList.contains('liked') !== on) paint();
+    }, 500);
   } catch (e) { }
 })();
