@@ -31,9 +31,26 @@ function paintEmpty(count) {
     const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     const d = initData();
     if (d) headers['X-Telegram-Init-Data'] = d;
-    const res = await fetch(path, Object.assign({}, opts, { headers }));
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return res.json();
+    let res;
+    try {
+      res = await fetch(path, Object.assign({}, opts, { headers }));
+    } catch (netErr) {
+      const e = new Error('network');
+      e.status = 0;
+      throw e;
+    }
+    if (!res.ok) {
+      const err = new Error('HTTP ' + res.status);
+      err.status = res.status;
+      throw err;
+    }
+    try {
+      return await res.json();
+    } catch (parseErr) {
+      const e = new Error('bad_json');
+      e.status = res.status;
+      throw e;
+    }
   }
 
   // Наши объявления → формат карточек прототипа
@@ -941,4 +958,56 @@ function paintEmpty(count) {
   });
   setTimeout(jump, 1600);
   window.PolkaJump = jump;
+})();
+
+/* ── Видимость ошибок: молчаливые пустые экраны больше не скрывают сбой ── */
+(function () {
+  let shown = 0;
+
+  function banner(text) {
+    if (shown >= 3) return;      // не спамим
+    shown += 1;
+    let el = document.getElementById('apiError');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'apiError';
+      el.style.cssText = [
+        'position:fixed', 'left:12px', 'right:12px', 'bottom:96px', 'z-index:9999',
+        'background:#FFF1F0', 'color:#B3261E', 'border:1px solid #FFD7D5',
+        'border-radius:16px', 'padding:10px 14px', 'font-size:11px',
+        'font-weight:700', 'line-height:1.35', 'box-shadow:0 6px 20px rgba(0,0,0,.12)',
+        'transition:opacity .3s'
+      ].join(';');
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.style.opacity = '1';
+    setTimeout(() => { el.style.opacity = '0'; }, 4500);
+    setTimeout(() => { if (el && el.parentNode) el.parentNode.removeChild(el); }, 5000);
+  }
+
+  // Оборачиваем api(): любая ошибка объясняется человеку словами
+  const wrap = () => {
+    const api = window.PolkaAPI && window.PolkaAPI.api;
+    if (!api || api.__errWrapped) return;
+    const wrapped = async function (path, opts) {
+      try {
+        return await api.call(window.PolkaAPI, path, opts);
+      } catch (e) {
+        const status = (e && e.status) || 0;
+        if (status === 401) banner('Нет доступа к данным. Откройте приложение через Telegram.');
+        else if (status === 403) banner('Это действие доступно только администратору.');
+        else if (status === 404) banner('Сервер не нашёл данные. Обновите приложение.');
+        else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
+        else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
+        else banner('Не удалось загрузить данные (' + status + ').');
+        throw e;
+      }
+    };
+    wrapped.__errWrapped = true;
+    window.PolkaAPI.api = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 300);
+  setTimeout(wrap, 1500);
 })();
