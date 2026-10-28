@@ -900,7 +900,7 @@ function paintEmpty(count) {
 })();
 
 /* ── Фото лота: до 10 штук, добавляются по одному и копятся ───────────── */
-(function () {
+(function () { try {
   const MAX_PHOTOS = 10;
   const state = { urls: [] };
 
@@ -983,4 +983,212 @@ function paintEmpty(count) {
   document.addEventListener('DOMContentLoaded', () => { placeThumbs(); paint(); });
   setTimeout(() => { placeThumbs(); paint(); }, 600);
   setTimeout(placeThumbs, 1500);
+} catch (e) {} })();
+
+/* ── Рекламные баннеры барахолки ──────────────────────────────────────── */
+(function () {
+  try {
+    function open(url) {
+      if (!url) return;
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (TG && TG.openLink) TG.openLink(url);
+      else window.open(url, '_blank');
+    }
+
+    async function loadFeedBanners() {
+      const box = document.getElementById('feedBanners');
+      if (!box) return;
+      try {
+        const data = await window.PolkaAPI.api('/api/feed-banners');
+        const items = (data.items || [])
+          .filter((b) => b && b.image && !b.default && b.action)
+          .slice(0, 5);
+        if (!items.length) { box.innerHTML = ''; return; }
+        box.innerHTML = items.map((b, i) => `
+          <div class="card offer" data-banner="${i}"
+               style="padding:0;overflow:hidden;cursor:pointer;position:relative">
+            <img src="${b.image}" alt="" style="width:100%;display:block;border-radius:24px">
+          </div>`).join('');
+        box.querySelectorAll('[data-banner]').forEach((el) => {
+          const b = items[Number(el.getAttribute('data-banner'))];
+          if (b && b.action) el.addEventListener('click', () => open(b.action));
+        });
+      } catch (e) { }
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__banners) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'market') setTimeout(loadFeedBanners, 120);
+        return r;
+      };
+      wrapped.__banners = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 900);
+    setTimeout(loadFeedBanners, 2000);
+    window.PolkaBanners = loadFeedBanners;
+  } catch (e) { }
+})();
+
+/* ── Барахолка: объявления из /api/ads ────────────────────────────────── */
+(function () {
+  try {
+    const rub = (n) => (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+    function card(a) {
+      let ph = '';
+      try {
+        const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
+        ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
+      } catch (e) { ph = ''; }
+      const bg = ph ? `style="background-image:url('${ph}')"` : '';
+      return `<article class="card lot" data-ad="${a.id}">
+        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+        <h3>${(a.title || '').slice(0, 34)}</h3>
+        <span class="pricepill">${rub(a.price)}</span>
+        <span class="status">${a.city || ''}</span>
+      </article>`;
+    }
+
+    async function loadBoard() {
+      const box = document.getElementById('marketGrid');
+      if (!box) return;
+      try {
+        const data = await window.PolkaAPI.api('/api/ads?limit=40');
+        const items = data.items || [];
+        if (!items.length) {
+          box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
+            <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
+            <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
+              Здесь появятся объявления людей после модерации.</div>
+            <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
+                    onclick="go('post')">Разместить объявление</button></div>`;
+          return;
+        }
+        box.innerHTML = items.map(card).join('');
+      } catch (e) { }
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__board) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'market') setTimeout(loadBoard, 150);
+        return r;
+      };
+      wrapped.__board = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 950);
+    window.PolkaBoard = loadBoard;
+  } catch (e) { }
+})();
+
+/* ── Переход на экран по ссылке из бота (?screen=…) ───────────────────── */
+(function () {
+  try {
+    const MAP = {
+      create: 'post', post: 'post', tariffs: 'tariffs', favorites: 'favorites',
+      profile: 'profile', searches: 'searches', hunt: 'searches', history: 'history',
+      referrals: 'referrals', myads: 'myads', moderation: 'moderation',
+      home: 'home', market: 'market',
+    };
+    function target() {
+      const q = new URLSearchParams(location.search).get('screen') || '';
+      const h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
+      return MAP[String(q).toLowerCase()] || MAP[String(h).toLowerCase()] || '';
+    }
+    function jump() {
+      const to = target();
+      if (!to) return;
+      try {
+        if (typeof window.show === 'function') window.show(to);
+        else if (typeof window.go === 'function') window.go(to, true);
+      } catch (e) { }
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      setTimeout(jump, 1400); setTimeout(jump, 2000);
+    });
+    setTimeout(jump, 1600);
+    window.PolkaJump = jump;
+  } catch (e) { }
+})();
+
+/* ── Модерация объявлений в приложении (только админ) ─────────────────── */
+(function () {
+  try {
+    const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+    function card(a) {
+      let ph = '';
+      try {
+        const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
+        ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
+      } catch (e) { ph = ''; }
+      const bg = ph ? `style="background-image:url('${ph}')"` : '';
+      const sub = [a.city, a.category].filter(Boolean).join(' · ');
+      return `<article class="card fav">
+        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+        <span>
+          <h3>${(a.title || '').slice(0, 40)}</h3>
+          <span class="pricepill">${fmt(a.price)}</span><br>
+          <span class="status">${sub || 'без города'}</span>
+          <span class="modbtns">
+            <button class="bigbtn modok" data-ok="${a.id}">Одобрить</button>
+            <button class="mailbtn modno" data-no="${a.id}">Отклонить</button>
+          </span>
+        </span>
+      </article>`;
+    }
+
+    async function loadModeration() {
+      const box = document.getElementById('modList');
+      if (!box) return;
+      try {
+        const data = await window.PolkaAPI.api('/api/moderation');
+        const items = data.items || [];
+        const badge = document.getElementById('modCount');
+        if (badge) badge.textContent = items.length ? '(' + items.length + ')' : '';
+        box.innerHTML = items.length
+          ? items.map(card).join('')
+          : '<div class="card" style="padding:22px;text-align:center">На модерации пусто</div>';
+        box.querySelectorAll('[data-ok]').forEach((b) =>
+          b.addEventListener('click', () => act(b.getAttribute('data-ok'), 'approve')));
+        box.querySelectorAll('[data-no]').forEach((b) =>
+          b.addEventListener('click', () => act(b.getAttribute('data-no'), 'reject')));
+      } catch (e) {
+        box.innerHTML = '<div class="card" style="padding:22px;text-align:center">Нет доступа</div>';
+      }
+    }
+
+    async function act(id, action) {
+      try {
+        await window.PolkaAPI.api('/api/moderation/' + id, {
+          method: 'POST', body: JSON.stringify({ action }),
+        });
+        loadModeration();
+      } catch (e) { }
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__mod) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'moderation') loadModeration();
+        return r;
+      };
+      wrapped.__mod = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 800);
+    window.PolkaModeration = loadModeration;
+  } catch (e) { }
 })();
