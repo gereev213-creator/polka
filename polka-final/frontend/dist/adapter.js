@@ -1055,7 +1055,10 @@ function paintEmpty(count) {
       };
       set('pTitle', raw.title || '');
       set('pPrice', rub(raw.price));
-      set('pTag', raw.city || '');
+      // город уже есть в строке под ценой — второй плашкой не дублируем
+      set('pTag', '');
+      const tagEl = document.getElementById('pTag');
+      if (tagEl) tagEl.style.display = 'none';
       // Дата в человеческом виде: сегодня/вчера + время
       let when = '';
       const stamp = raw.published_at || raw.created_at || '';
@@ -1752,95 +1755,7 @@ function paintEmpty(count) {
   } catch (e) { }
 })();
 
-/* ── Кнопки карточки товара: свои, без обработчиков прототипа ──────────── */
-(function () {
-  try {
-    let liked = false;
-
-    function paint(btn) {
-      btn.style.setProperty('background', liked ? 'var(--grad)' : 'rgba(255,255,255,.35)', 'important');
-      const svg = btn.querySelector('svg');
-      if (svg) svg.style.setProperty('color', liked ? '#fff' : '#3373FA', 'important');
-    }
-
-    function build() {
-      const screen = document.getElementById('s-product');
-      if (!screen) return;
-      const oldActions = screen.querySelector('.actions') || screen.querySelector('.pactions');
-      if (!oldActions || oldActions.__mine) return;
-
-      const raw = () => {
-        const id = window.__currentProductId;
-        const pools = [window.__productPrev || [], window.__rawLots || [], window.__favItems || []];
-        for (const pool of pools) {
-          const hit = pool.find((x) => String(x.id) === String(id));
-          if (hit) return hit;
-        }
-        return null;
-      };
-
-      const bar = document.createElement('div');
-      bar.className = oldActions.className;
-      bar.__mine = true;
-      bar.style.cssText = oldActions.style.cssText;
-      bar.innerHTML = `
-        <button class="open" id="myOpen" type="button">Открыть</button>
-        <button class="fab" id="myFav" type="button"><svg width="20" height="20"><use href="#i-heart"/></svg></button>
-        <button class="fab" id="myShare" type="button"><svg width="20" height="20"><use href="#i-plane"/></svg></button>`;
-
-      oldActions.replaceWith(bar);
-
-      bar.querySelector('#myOpen').addEventListener('click', (e) => {
-        e.preventDefault();
-        const r = raw();
-        const url = r && (r.url || r.source_url);
-        const TG = window.Telegram && window.Telegram.WebApp;
-        if (!url) { if (TG && TG.showAlert) TG.showAlert('Ссылка недоступна'); return; }
-        try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (err) { }
-        try { window.open(url, '_blank'); return; } catch (err) { }
-        if (TG && TG.showAlert) TG.showAlert('Ссылка: ' + url);
-      });
-
-      bar.querySelector('#myFav').addEventListener('click', async (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const id = window.__currentProductId;
-        if (!id) return;
-        liked = !liked;
-        paint(bar.querySelector('#myFav'));
-        bar.querySelector('#myFav').classList.toggle('liked', liked);
-        try {
-          await window.PolkaAPI.api('/api/ads/' + id + '/favorite',
-            { method: liked ? 'POST' : 'DELETE' });
-        } catch (err) {
-          liked = !liked;
-          paint(bar.querySelector('#myFav'));
-        }
-      });
-
-      bar.querySelector('#myShare').addEventListener('click', (e) => {
-        e.preventDefault();
-        const r = raw() || {};
-        const url = r.url || r.source_url || '';
-        const TG = window.Telegram && window.Telegram.WebApp;
-        const link = 'https://t.me/share/url?url=' + encodeURIComponent(url) +
-                     '&text=' + encodeURIComponent(String(r.title || 'Находка на ПОЛКЕ'));
-        if (TG && TG.openTelegramLink) TG.openTelegramLink(link);
-        else window.open(link, '_blank');
-      });
-    }
-
-    const obs = new MutationObserver(() => {
-      if ((document.querySelector('.screen.active') || {}).id === 's-product') build();
-    });
-    document.addEventListener('DOMContentLoaded', () => {
-      obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
-      build();
-    });
-    setTimeout(build, 1000);
-    setTimeout(build, 2000);
-  } catch (e) { }
-})();
+/* Кнопки карточки товара: оставлена одна — «Открыть на Авито» (её даёт прототип) */
 
 /* ── Видимость кнопок действия: без :has(), надёжно ───────────────────── */
 (function () {
