@@ -388,6 +388,18 @@ html{ -webkit-text-size-adjust:100% }
 /* Меню внизу видно всегда: прототип включал его только на вкладках,
    а на стартовом экране оставлял скрытым */
 #nav{display:flex!important}
+
+/* Рекламные баннеры: лента со свайпом и точками */
+#feedBanners{margin-bottom:4px}
+.bannerTrack{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;
+  gap:10px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.bannerTrack::-webkit-scrollbar{display:none}
+.bannerSlide{flex:0 0 100%;scroll-snap-align:center;border-radius:24px;overflow:hidden;
+  box-shadow:var(--sh);cursor:pointer;background:#E3EDFD}
+.bannerSlide img{width:100%;display:block;border-radius:24px;object-fit:cover}
+.bannerDots{display:flex;gap:6px;justify-content:center;margin-top:8px}
+.bannerDots i{width:6px;height:6px;border-radius:50%;background:#C2D5F8;transition:width .2s}
+.bannerDots i.on{background:#3373FA;width:16px;border-radius:999px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>

@@ -1044,7 +1044,7 @@ function paintEmpty(count) {
   setTimeout(placeThumbs, 1500);
 } catch (e) {} })();
 
-/* ── Рекламные баннеры барахолки ──────────────────────────────────────── */
+/* ── Рекламные баннеры: лента по одному, как в старом приложении ─────── */
 (function () {
   try {
     function open(url) {
@@ -1063,15 +1063,36 @@ function paintEmpty(count) {
           .filter((b) => b && b.image && !b.default && b.action)
           .slice(0, 5);
         if (!items.length) { box.innerHTML = ''; return; }
-        box.innerHTML = items.map((b, i) => `
-          <div class="card offer" data-banner="${i}"
-               style="padding:0;overflow:hidden;cursor:pointer;position:relative">
-            <img src="${b.image}" alt="" style="width:100%;display:block;border-radius:24px">
-          </div>`).join('');
-        box.querySelectorAll('[data-banner]').forEach((el) => {
-          const b = items[Number(el.getAttribute('data-banner'))];
-          if (b && b.action) el.addEventListener('click', () => open(b.action));
-        });
+
+        // Горизонтальная лента: один баннер на экран, свайп вбок
+        box.innerHTML = `
+          <div class="bannerTrack" id="bannerTrack">
+            ${items.map((b, i) => `
+              <div class="bannerSlide" data-slide="${i}" data-url="${b.action || ''}">
+                <img src="${b.image}" alt="">
+              </div>`).join('')}
+          </div>
+          <div class="bannerDots" id="bannerDots">
+            ${items.map((_, i) => `<i data-dot="${i}"${i === 0 ? ' class="on"' : ''}></i>`).join('')}
+          </div>`;
+
+        const track = document.getElementById('bannerTrack');
+        const dots = document.getElementById('bannerDots');
+
+        const syncDots = () => {
+          if (!track || !dots) return;
+          const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+          dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === idx));
+        };
+        if (track) {
+          track.addEventListener('scroll', () => {
+            window.clearTimeout(track.__t);
+            track.__t = window.setTimeout(syncDots, 80);
+          });
+          track.querySelectorAll('[data-slide]').forEach((slide) => {
+            slide.addEventListener('click', () => open(slide.getAttribute('data-url')));
+          });
+        }
       } catch (e) { }
     }
 
