@@ -24056,11 +24056,13 @@ def ensure_consent_column() -> None:
 
 def legal_docs() -> Dict:
     """Ссылки на документы и нужно ли спрашивать согласие."""
+    base = str(cfg_get('public.base_url')
+               or os.environ.get('PUBLIC_BASE_URL')
+               or 'https://polka-mini-app-nikicev2009.mia0.amvera.tech').rstrip('/')
     return {
-        'privacy_url': str(cfg_get('legal.privacy_url')
-                           or 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'),
-        'terms_url': str(cfg_get('legal.terms_url')
-                         or 'https://telegra.ph/Politika-konfidencialnosti-07-20-93'),
+        # Свои документы лежат в dist/legal и раздаются тем же сервером
+        'privacy_url': str(cfg_get('legal.privacy_url') or f'{base}/legal/privacy.html'),
+        'terms_url': str(cfg_get('legal.terms_url') or f'{base}/legal/terms.html'),
         'consent_required': str(cfg_get('legal.consent_required') or '1') == '1',
     }
 
@@ -25034,8 +25036,10 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'inn': str(cfg_get('pay.legal_inn') or ''),
         'support': str(cfg_get('pay.support_contact') or ''),
         'refund_days': str(cfg_get('pay.refund_days') or '14'),
-        'offer_url': str(cfg_get('pay.offer_url') or ''),
-        'privacy_url': str(cfg_get('pay.privacy_url') or ''),
+        # По умолчанию ссылаемся на собственные документы, иначе провайдер
+        # видит пустые поля и отклоняет модерацию платёжной страницы.
+        'offer_url': str(cfg_get('pay.offer_url') or legal_docs()['terms_url']),
+        'privacy_url': str(cfg_get('pay.privacy_url') or legal_docs()['privacy_url']),
     }
     viewer = _miniapp_viewer(request)
     user_plan = resolve_plan(viewer) if viewer else 'trial'

@@ -604,7 +604,8 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <button class="mrow" onclick="go('post')"><span class="grow">Разместить объявление</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('referrals')"><span class="grow">Реферальная программа</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" data-admin="1" id="modRow" style="display:none" onclick="go('moderation')"><span class="grow">Модерация <span id="modCount"></span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" data-admin="1" id="adminRow" style="display:none" onclick="go('admin')"><span class="grow">Админка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" id="supportRow" onclick="openSupport()"><span class="grow">Поддержка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
-<button class="mrow" onclick="toast('Откроется в браузере')"><span class="grow">Условия использования</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="openLegal('terms')"><span class="grow">Пользовательское соглашение</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="openLegal('privacy')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 </div></div></section>
 
 <!-- my ads -->
@@ -718,4 +719,14 @@ addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
 </script><script src="telegram-web-app.js?v=20261029012517"></script>
-<script src="adapter.js?v=20261029012517"></script><script src="payments.js?v=20261029012517"></script><script src="admin.js?v=20261029012517"></script><script src="keyboard.js?v=20261029012517"></script><script src="telegram-safe.js?v=20261029012517"></script></body></html>
+<script src="adapter.js?v=20261029012517"></script><script src="payments.js?v=20261029012517"></script><script src="admin.js?v=20261029012517"></script><script src="keyboard.js?v=20261029012517"></script><script src="telegram-safe.js?v=20261029012517"></script><script>
+  // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
+  window.openLegal = function (kind) {
+    const base = location.origin;
+    const url = base + (kind === 'privacy' ? '/legal/privacy.html' : '/legal/terms.html');
+    const TG = window.Telegram && window.Telegram.WebApp;
+    try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (e) { }
+    window.open(url, '_blank');
+  };
+</script>
+</body></html>
