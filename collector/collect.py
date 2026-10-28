@@ -101,6 +101,11 @@ class Blocked(Exception):
 SCRAPINGBEE_KEY = os.environ.get('SCRAPINGBEE_KEY', '')
 SCRAPINGBEE_URL = 'https://app.scrapingbee.com/api/v1/'
 _SCRAPER_BROKEN = []   # заполняется, если скрапер ответил 401
+# Бюджет скрапера на один проход: 1000 бесплатных кредитов, ~25 на страницу.
+# Тратим не больше 4 страниц за проход, чтобы запаса хватило на несколько дней,
+# а не на один прогон.
+SCRAPER_PAGES_PER_RUN = int(os.environ.get('SCRAPER_PAGES_PER_RUN', '4'))
+_SCRAPER_USED = []
 PROXY = os.environ.get('POLKA_PROXY', '')
 _OPENER = None
 
@@ -385,7 +390,9 @@ def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
     prefer_scraper=True — сразу через скрапер: так берём страницы с q=
     (поиск по тексту), которые обычный запрос от Авито не получает.
     """
-    if prefer_scraper and SCRAPINGBEE_KEY and not _SCRAPER_BROKEN and 'avito.ru' in url:
+    if (prefer_scraper and SCRAPINGBEE_KEY and not _SCRAPER_BROKEN
+            and len(_SCRAPER_USED) < SCRAPER_PAGES_PER_RUN and 'avito.ru' in url):
+        _SCRAPER_USED.append(url)
         try:
             return _fetch_via_scraper(url, timeout=max(timeout, 60))
         except Exception as exc:
