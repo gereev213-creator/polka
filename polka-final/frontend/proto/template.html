@@ -346,9 +346,8 @@ html{ -webkit-text-size-adjust:100% }
 
 /* Подсветка вкладки — сама кнопка, а не отдельная плашка:
    так она физически не может уехать на другую вкладку */
-#navglass{display:none!important}
-.navmain>button.on{background:rgba(255,255,255,.20)!important;
-  box-shadow:inset 0 0 0 1px rgba(255,255,255,.28)!important}
+#navglass{display:block!important}
+.navmain>button.on{background:transparent!important;box-shadow:none!important}
 
 /* Прокрутка контента: flex не должен сжимать карточки — из-за этого
    последние пункты профиля обрезались и страница не листалась */

@@ -819,7 +819,8 @@ function paintEmpty(count) {
       b.classList.toggle('active', b.getAttribute('data-nav') === want && b.closest('.navmain'));
       b.classList.toggle('on', b.getAttribute('data-nav') === want && b.closest('.navmain'));
     });
-    const active = nav.querySelector('button[data-nav="' + want + '"]') ||
+    const active = nav.querySelector('button.on') ||
+                   nav.querySelector('button[data-nav="' + want + '"]') ||
                    nav.querySelector('button');
     if (!active) return;
     const navBox = nav.getBoundingClientRect();
@@ -828,6 +829,7 @@ function paintEmpty(count) {
     // больше иконки. Так она всегда внутри и не вылезает за края.
     const h = Math.max(40, navBox.height - 8);
     const w = Math.round(h * 1.28);
+    glass.style.transition = 'left .22s ease, width .22s ease';
     const centerX = (box.left - navBox.left) + box.width / 2;
     glass.style.width = w + 'px';
     glass.style.height = h + 'px';
