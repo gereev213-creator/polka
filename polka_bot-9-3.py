@@ -26430,7 +26430,33 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         # До этого POST принимал только ссылку, поэтому форма в приложении
         # отправляла запрос и не создавала ничего.
         b = body or {}
-        q = str(b.get('query') or '').strip()[:100]
+        raw_q = str(b.get('query') or '').strip()[:140]
+
+        # Разбираем человеческую фразу: «футболка мужская nike до 1000
+        # рублей с рук оригинал» → запрос + цена + частник + оригинал.
+        # Иначе эти условия оставались в тексте и мешали отбору.
+        import re as _re
+        q = raw_q
+        _pm = _re.search(r'(?:до|дешевле|максимум|не дороже)\s*([\d\s]{2,9})\s*(?:₽|рубл\w*|руб\b|р\b|р\.)?', q, _re.I)
+        if _pm and not b.get('max_price'):
+            try:
+                b['max_price'] = int(_re.sub(r'\D', '', _pm.group(1)) or 0)
+            except Exception:
+                pass
+            q = (q[:_pm.start()] + ' ' + q[_pm.end():]).strip()
+        _req = []
+        if _re.search(r'\bс рук\b|частник|частное лицо|не магазин', raw_q, _re.I):
+            _req.append('только частные')
+            q = _re.sub(r'\bс рук\b|частник\w*|частное лицо|не магазин', ' ', q, flags=_re.I)
+        if _re.search(r'оригинал', raw_q, _re.I):
+            _req.append('оригинал')
+            q = _re.sub(r'оригинал\w*', ' ', q, flags=_re.I)
+        q = _re.sub(r'\s+', ' ', q).strip()
+        if len(q) < 2:
+            q = raw_q
+        if _req:
+            _prev = str(b.get('requirements') or '')
+            b['requirements'] = (', '.join(_req + ([_prev] if _prev else [])))[:200]
         if len(q) < 2:
             return _miniapp_json({'ok': False, 'error': 'query_required'}, status=400)
         try:
