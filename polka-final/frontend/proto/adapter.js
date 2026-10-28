@@ -1965,3 +1965,54 @@ function paintEmpty(count) {
     setTimeout(restructure, 2200);
   } catch (e) { }
 })();
+
+/* ── Плашка меню: центр ровно по активной иконке ─────────────────────────
+   Размер и вид — из первого дизайна (65×52, стекло 10%). Считаем left от
+   реальной кнопки, потому что жёсткие смещения прототипа давали перекос. */
+(function () {
+  try {
+    const W = 65;
+    const H = 52;
+
+    function center() {
+      const nav = document.querySelector('#nav .navmain');
+      const glass = document.getElementById('navglass');
+      if (!nav || !glass) return;
+      const buttons = [...nav.querySelectorAll('button')];
+      let active = nav.querySelector('button.on');
+      if (!active) {
+        const screen = (document.querySelector('.screen.active') || {}).id || '';
+        const MAP = { 's-home': 'home', 's-market': 'market', 's-favorites': 'favorites',
+                      's-profile': 'profile', 's-searches': 'home', 's-history': 'home' };
+        const want = MAP[screen] || 'home';
+        active = buttons.find((b) => b.dataset.nav === want) || buttons[0];
+      }
+      if (!active) return;
+      const navBox = nav.getBoundingClientRect();
+      const box = active.getBoundingClientRect();
+      const left = (box.left - navBox.left) + box.width / 2 - W / 2;
+      glass.style.setProperty('left', Math.round(left) + 'px', 'important');
+      glass.style.setProperty('width', W + 'px', 'important');
+      glass.style.setProperty('height', H + 'px', 'important');
+      glass.style.setProperty('top', '4px', 'important');
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__glasscenter) return;
+      const orig = window.go;
+      const wrapped = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(center, 20);
+        setTimeout(center, 160);
+        return r;
+      };
+      wrapped.__glasscenter = true;
+      window.go = wrapped;
+    };
+
+    document.addEventListener('DOMContentLoaded', () => { wrap(); center(); });
+    setTimeout(() => { wrap(); center(); }, 700);
+    window.addEventListener('resize', center);
+    setInterval(center, 600);
+  } catch (e) { }
+})();
