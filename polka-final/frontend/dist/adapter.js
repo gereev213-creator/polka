@@ -895,6 +895,23 @@ function paintEmpty(count) {
     track.scrollLeft = track.scrollWidth;
   }
 
+  function setNote(text, isError) {
+    const track = document.getElementById('photoTrack');
+    if (!track) return;
+    let note = document.getElementById('photoNote');
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'photoNote';
+      note.style.cssText = 'font-size:11px;font-weight:700;margin:2px 0 8px;' +
+        'padding:6px 10px;border-radius:12px;display:none';
+      track.parentElement.insertBefore(note, track.nextSibling);
+    }
+    note.textContent = text || '';
+    note.style.display = text ? 'block' : 'none';
+    note.style.color = isError ? '#C93A3A' : '#2C6BD6';
+    note.style.background = isError ? 'rgba(201,58,58,.10)' : 'rgba(51,115,250,.10)';
+  }
+
   async function upload(files) {
     const fd = new FormData();
     [...files].slice(0, MAX_PHOTOS - state.urls.length).forEach((f) => fd.append('photos', f));
@@ -902,7 +919,11 @@ function paintEmpty(count) {
     const init = window.PolkaAPI.initData();
     if (init) headers['X-Telegram-Init-Data'] = init;
     const res = await fetch('/api/ads/photos', { method: 'POST', body: fd, headers });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      let detail = '';
+      try { const j = await res.json(); detail = j.error || j.detail || ''; } catch (e) { }
+      throw new Error('HTTP ' + res.status + (detail ? ' · ' + detail : ''));
+    }
     return res.json();
   }
 
@@ -911,13 +932,19 @@ function paintEmpty(count) {
     if (!inp || !inp.files || !inp.files.length) return;
     const files = [...inp.files];
     inp.value = '';
+    setNote('Загружаем фото…', false);
     try {
       const data = await upload(files);
-      state.urls = state.urls.concat(data.urls || []).slice(0, MAX_PHOTOS);
+      const urls = data.urls || [];
+      state.urls = state.urls.concat(urls).slice(0, MAX_PHOTOS);
       paint();
+      setNote(urls.length ? 'Добавлено фото: ' + urls.length : 'Сервер не вернул ссылки', !urls.length);
+      setTimeout(() => setNote('', false), 2500);
     } catch (err) {
+      const msg = String(err && err.message || err);
+      setNote('Не удалось загрузить фото · ' + msg, true);
       const TG = window.Telegram && window.Telegram.WebApp;
-      if (TG && TG.showAlert) TG.showAlert('Не удалось загрузить фото');
+      if (TG && TG.showAlert) TG.showAlert('Не удалось загрузить фото: ' + msg);
     }
   }, true);
 
