@@ -18762,7 +18762,7 @@ async def api_referral(request: aiohttp_web.Request) -> aiohttp_web.Response:
         count = 0
     bonus = min(count, PLAN_REF_MAX_BONUS)
     return _miniapp_json({'count': count, 'bonus_criteria': bonus,
-                          'link': f"https://t.me/{os.environ.get('BOT_USERNAME', '')}?startapp=ref{viewer_id}"})
+                          'link': f"https://t.me/{os.environ.get('BOT_USERNAME') or BOT_USERNAME}?startapp=ref{viewer_id}"})
 
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
