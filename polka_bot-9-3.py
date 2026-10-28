@@ -33759,6 +33759,26 @@ def main():
                     f"keys={[k for k in ('moderating_ad','moderating_payment','creating_ad','active_chat','_awaiting_code','_awaiting_email','_preview_editing_field','editing_ad_id','waiting_promo','grant_step','del_ad_step','republish_step') if ud.get(k)]}"
                     f" text={update.message.text[:50]!r}")
 
+        # ── Админ: ссылка для баннера ленты (после фото) — самый высокий приоритет
+        if ud.get('awaiting_banner_link') is not None:
+            _idx = int(ud.pop('awaiting_banner_link'))
+            _link = str(update.message.text or '').strip()
+            if _link in ('—', '-', 'нет', 'убрать'):
+                _link = ''
+            if _link and not re.match(r'^https?://', _link):
+                _link = 'https://' + _link
+            _miniapp_settings_set(f"feed_banner_link:{_idx}", _link)
+            try:
+                db.log_action(update.effective_user.id, "admin_feed_banner_link",
+                              f"idx={_idx} link={_link[:60]}")
+            except Exception:
+                pass
+            await update.message.reply_text(
+                f"{EM_OK} Ссылка для баннера {_idx + 1} "
+                + (f"сохранена: {_link}" if _link else "очищена."),
+                reply_markup=InlineKeyboardMarkup(_admin_banners_kb()))
+            return
+
         # ── Админ: причина отклонения объявления / платежа — приоритет выше
         #    всех остальных флагов. Если ставить AFTER проверки creating_ad,
         #    недозакрытая сессия создания объявления у админа молча глотает

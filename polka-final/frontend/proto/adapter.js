@@ -1074,6 +1074,7 @@ function paintEmpty(count) {
         // сам экран, плашка сверху тут только мешает.
         else if (status === 400) { /* без плашки */ }
         else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
+        else if (status === 200) banner('Сервер ответил не тем. Обновите приложение.');
         else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
         else banner('Не удалось загрузить данные (' + status + ').');
         throw e;
@@ -1195,7 +1196,7 @@ function paintEmpty(count) {
     const box = document.getElementById('marketGrid');
     if (!box) return;
     try {
-      const data = await window.PolkaAPI.api('/api/board?limit=40');
+      const data = await window.PolkaAPI.api('/api/ads?limit=40');
       const items = data.items || [];
       if (!items.length) {
         box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
