@@ -488,6 +488,16 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #nav,#nav *{box-shadow:none!important;filter:none!important;
   -webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 #nav{background:transparent!important}
+
+/* Убираем любые псевдоэлементы и фоны у кнопок меню */
+#nav *::before,#nav *::after{content:none!important;display:none!important}
+#nav .plusbtn{background:linear-gradient(112deg,#4780FB,#6B98F5)!important}
+#nav .navmain{background:linear-gradient(112deg,#4780FB,#6B98F5)!important}
+
+/* Контейнер меню ровно по содержимому — никакой площади за кнопками */
+#nav{width:auto!important;left:15px!important;right:15px!important;
+  display:flex!important;align-items:center!important;background:none!important}
+#nav::before,#nav::after{content:none!important;display:none!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -724,5 +734,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610281947"></script>
-<script src="adapter.js?v=202610281947"></script><script src="payments.js?v=202610281947"></script><script src="admin.js?v=202610281947"></script><script src="keyboard.js?v=202610281947"></script><script src="telegram-safe.js?v=202610281947"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610281948"></script>
+<script src="adapter.js?v=202610281948"></script><script src="payments.js?v=202610281948"></script><script src="admin.js?v=202610281948"></script><script src="keyboard.js?v=202610281948"></script><script src="telegram-safe.js?v=202610281948"></script></body></html>
