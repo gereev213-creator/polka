@@ -75,10 +75,8 @@ function paintEmpty(count) {
   }
 
 
-  // Ручная отрисовка ленты: прототипный renderGrids падает с ошибкой
-  // «Cannot read properties of null», и сетка оставалась пустой.
+  // Отрисовка ленты ровно по макету: .lot > .lotimg + h3 + .pricepill
   function renderLotsManual(items, rawItems) {
-    const rub = (n) => (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD';
     const src = (rawItems && rawItems.length === items.length) ? rawItems : items;
     const html = items.map((l, i) => {
       const r = src[i] || {};
@@ -88,21 +86,41 @@ function paintEmpty(count) {
         ph = Array.isArray(arr) ? (arr[0] || '') : String(arr || '');
       }
       const bg = ph ? `style="background-image:url('${ph}')"` : '';
-      return `<article class="card lot" data-lot="${l.id}">
-        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-        <h3>${String(l.title || '').slice(0, 34)}</h3>
-        <span class="pricepill">${rub(l.price)}</span>
-        <span class="status">${l.city || ''}${l.discount ? ' · −' + l.discount + '%' : ''}</span>
+      const liked = l.fav ? ' on' : '';
+      return `<article class="lot" data-open="${l.id}">
+        <div class="lotimg" ${bg}>${ph ? '' : 'Нет фото'}
+          <button class="heart${liked}" data-fav="${l.id}">
+            <svg width="13" height="13"><use href="#i-heart"/></svg>
+          </button>
+        </div>
+        <h3>${String(l.title || '').slice(0, 46)}</h3>
+        <div class="pricepill">${(Number(l.price) || 0).toLocaleString('ru-RU')} \u20BD</div>
       </article>`;
     }).join('');
     ['homeGrid', 'marketGrid'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.innerHTML = html;
-      el.querySelectorAll('[data-lot]').forEach((card) => {
-        card.addEventListener('click', () => {
-          const lotId = card.getAttribute('data-lot');
-          if (typeof window.openLot === 'function') window.openLot(Number(lotId));
+      // Тап по карточке открывает товар, тап по сердечку — в избранное
+      el.querySelectorAll('.lot').forEach((card) => {
+        card.addEventListener('click', (e) => {
+          const heart = e.target.closest('[data-fav]');
+          const lotId = card.getAttribute('data-open');
+          if (heart) {
+            e.stopPropagation();
+            if (window.PolkaAPI && window.PolkaAPI.api) {
+              const on = !heart.classList.contains('on');
+              heart.classList.toggle('on', on);
+              window.PolkaAPI.api('/api/ads/' + lotId + '/favorite',
+                { method: on ? 'POST' : 'DELETE' }).catch(() => { });
+            }
+            return;
+          }
+          if (typeof window.PolkaProduct === 'function') {
+            window.PolkaProduct(lotId);
+          } else if (typeof window.openLot === 'function') {
+            try { window.openLot(Number(lotId)); } catch (e) { }
+          }
         });
       });
     });
@@ -113,6 +131,7 @@ function paintEmpty(count) {
       const data = await api('/api/findings?limit=40');
       const rawItems = data.items || [];
       const items = rawItems.map(toLot);
+      window.__rawLots = rawItems;   // для экрана товара
       if (items.length) {
         try { window.setLots && window.setLots(items); } catch (e) { }
         // Рисуем сами: встроенный renderGrids падает на этом прототипе
@@ -1230,5 +1249,98 @@ function paintEmpty(count) {
     document.addEventListener('DOMContentLoaded', wrap);
     setTimeout(wrap, 800);
     window.PolkaModeration = loadModeration;
+  } catch (e) { }
+})();
+
+/* ── Карточка товара по макету ────────────────────────────────────────── */
+(function () {
+  try {
+    function rub(n) { return (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD'; }
+
+    function fill(id) {
+      const raw = (window.__rawLots || []).find((x) => String(x.id) === String(id));
+      if (!raw) return;
+      const set = (elId, text) => {
+        const el = document.getElementById(elId);
+        if (el) el.textContent = text || '';
+      };
+      set('pTitle', raw.title || '');
+      set('pPrice', rub(raw.price));
+      set('pTag', raw.discount_percent ? ('−' + raw.discount_percent + '%') : (raw.city || ''));
+      // Дата в человеческом виде: сегодня/вчера + время
+      let when = '';
+      const stamp = raw.published_at || raw.created_at || '';
+      if (stamp) {
+        const d = new Date(String(stamp));
+        if (!isNaN(d.getTime())) {
+          const hh = String(d.getHours()).padStart(2, '0');
+          const mm = String(d.getMinutes()).padStart(2, '0');
+          when = hh + ':' + mm;
+        }
+      }
+      set('pMeta', [raw.city, when, raw.condition || ''].filter(Boolean).join(' · '));
+      set('pDesc', raw.description || 'Описание на Авито — откройте объявление');
+
+      const photos = Array.isArray(raw.photos) ? raw.photos : [];
+      const ph = document.getElementById('photo');
+      const paintPhoto = () => {
+        if (!ph) return;
+        if (photos.length) {
+          ph.style.backgroundImage = `url('${photos[0]}')`;
+          ph.style.backgroundSize = 'cover';
+          ph.style.backgroundPosition = 'center';
+        }
+      };
+      paintPhoto();
+      setTimeout(paintPhoto, 60);
+      setTimeout(paintPhoto, 250);
+      const noPhoto = document.getElementById('nophoto');
+      if (noPhoto) noPhoto.style.display = photos.length ? 'none' : 'block';
+      const counter = document.getElementById('counter');
+      if (counter) counter.style.display = photos.length ? 'block' : 'none';
+      const dots = document.getElementById('dots');
+      if (dots) dots.style.display = photos.length ? 'flex' : 'none';
+
+      // Ссылка на Авито
+      let link = document.getElementById('lotOpen');
+      if (link) link.remove();
+      const adUrl = raw.url || raw.source_url || '';
+      if (adUrl) {
+        const host = document.querySelector('#s-product .pbody') ||
+                     document.querySelector('#s-product');
+        const a = document.createElement('a');
+        a.id = 'lotOpen';
+        a.href = adUrl;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.className = 'bigbtn';
+        a.style.cssText = 'display:block;text-align:center;line-height:54px;' +
+                          'text-decoration:none;margin-top:12px';
+        a.textContent = 'Открыть на Авито';
+        host.appendChild(a);
+      }
+    }
+
+    const wrap = () => {
+      if (typeof window.openLot !== 'function' || window.openLot.__filled) return;
+      const orig = window.openLot;
+      const wrapped = function (id) {
+        const r = orig.apply(this, arguments);
+        setTimeout(() => fill(id), 30);
+        return r;
+      };
+      wrapped.__filled = true;
+      window.openLot = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 700);
+    window.PolkaProduct = function (id) {
+      fill(id);
+      try {
+        if (typeof window.go === 'function') window.go('product');
+      } catch (e) { }
+      // Прототип мог перезаписать поля своим пустым состоянием — заполняем ещё раз
+      setTimeout(() => fill(id), 120);
+    };
   } catch (e) { }
 })();
