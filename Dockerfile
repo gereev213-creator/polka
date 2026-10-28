@@ -10,7 +10,7 @@ RUN npm run build
 # Новый дизайн: готовый прототип заказчика становится точкой входа,
 # адаптер связывает его с нашим API (лоты, поиск, избранное).
 # React-сборка остаётся для админки: сохраняем до подмены точки входа
-RUN cp dist/index.html dist/react.html && cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js && cp proto/payments.js dist/payments.js && cp proto/admin.js dist/admin.js && cp proto/telegram-web-app.js dist/telegram-web-app.js
+RUN cp dist/index.html dist/react.html && cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js && cp proto/payments.js dist/payments.js && cp proto/admin.js dist/admin.js && cp proto/keyboard.js dist/keyboard.js && cp proto/telegram-web-app.js dist/telegram-web-app.js
 
 FROM python:3.13-slim
 
