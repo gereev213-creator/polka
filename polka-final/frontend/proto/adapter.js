@@ -165,7 +165,15 @@ function paintEmpty(count) {
       });
     }
     const fresh = c.new_count || 0;
-    const when = c.last_run ? 'обновлено ' + String(c.last_run).slice(11, 16) : 'ещё не запускался';
+    const _ts = c.last_run || c.last_check || c.updated_at || c.last_match_at || '';
+    let when = 'проверим в ближайший проход';
+    if (_ts) {
+      const raw = String(_ts).replace('T', ' ');
+      const hhmm = raw.slice(11, 16);
+      when = hhmm ? 'проверено ' + hhmm : 'уже проверялся';
+    } else if (fresh > 0) {
+      when = 'находки есть';
+    }
     return `<article class="card scard" data-crit="${c.id}" data-go="history">
       <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
       <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}">

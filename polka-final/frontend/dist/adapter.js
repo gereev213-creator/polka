@@ -165,7 +165,15 @@ function paintEmpty(count) {
       });
     }
     const fresh = c.new_count || 0;
-    const when = c.last_run ? 'обновлено ' + String(c.last_run).slice(11, 16) : 'ещё не запускался';
+    const _ts = c.last_run || c.last_check || c.updated_at || c.last_match_at || '';
+    let when = 'проверим в ближайший проход';
+    if (_ts) {
+      const raw = String(_ts).replace('T', ' ');
+      const hhmm = raw.slice(11, 16);
+      when = hhmm ? 'проверено ' + hhmm : 'уже проверялся';
+    } else if (fresh > 0) {
+      when = 'находки есть';
+    }
     return `<article class="card scard" data-crit="${c.id}" data-go="history">
       <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
       <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}">
@@ -1074,6 +1082,7 @@ function paintEmpty(count) {
         // сам экран, плашка сверху тут только мешает.
         else if (status === 400) { /* без плашки */ }
         else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
+        else if (status === 200) banner('Сервер ответил не тем. Обновите приложение.');
         else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
         else banner('Не удалось загрузить данные (' + status + ').');
         throw e;
@@ -1195,7 +1204,7 @@ function paintEmpty(count) {
     const box = document.getElementById('marketGrid');
     if (!box) return;
     try {
-      const data = await window.PolkaAPI.api('/api/board?limit=40');
+      const data = await window.PolkaAPI.api('/api/ads?limit=40');
       const items = data.items || [];
       if (!items.length) {
         box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
