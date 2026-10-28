@@ -462,6 +462,31 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #s-home .searchBanner{margin-bottom:14px}
 #s-market #feedBanners{margin-bottom:12px}
 #s-market .tools{margin-bottom:12px}
+
+/* ── Экран создания объявления ─────────────────────────────────────────── */
+#s-post{display:flex;flex-direction:column}
+#s-post .scroll{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;
+  padding-bottom:150px!important;-webkit-overflow-scrolling:touch}
+/* Плитка добавления фото */
+#photoTrack{display:flex!important;gap:10px;overflow-x:auto;flex-wrap:nowrap;
+  padding:2px 0 12px;scrollbar-width:none}
+#photoTrack::-webkit-scrollbar{display:none}
+#photoTrack .photoAdd{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:24px;
+  background:linear-gradient(150deg,#5c8ff9,#3373FA);color:#fff;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+  box-shadow:0 8px 20px rgba(51,115,250,.28);transition:transform .15s ease}
+#photoTrack .photoAdd:active{transform:scale(.96)}
+#photoTrack .photoAdd .pa-ico{display:block;margin-bottom:-2px}
+#photoTrack .photoAdd .pa-plus{position:absolute;right:8px;top:6px;font-size:16px;font-weight:800;
+  opacity:.9;line-height:1}
+#photoTrack .photoAdd small{font-size:9px;font-weight:800;letter-spacing:.02em;opacity:.95;
+  text-align:center;line-height:1.15;padding:0 4px}
+#photoTrack .photoSlot{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:24px;
+  background:#E3EDFD center/cover no-repeat;box-shadow:0 6px 16px rgba(15,95,214,.14)}
+#photoTrack .photoSlot b{position:absolute;top:-6px;right:-6px;width:22px;height:22px;
+  border-radius:50%;background:#3373FA;color:#fff;font-size:13px;font-weight:800;
+  display:grid;place-items:center;cursor:pointer;line-height:1;
+  box-shadow:0 2px 6px rgba(15,95,214,.35)}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -584,10 +609,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <section class="screen" id="s-admin"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Админка</span></div><div class="scroll" id="adminBody"></div></section><section class="screen" id="s-moderation"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Модерация</span></div><div class="scroll" id="modList"></div></section><section class="screen" id="s-myads"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Мои объявления</span></div><div class="scroll"><div id="myList"></div></div><div class="bottomCta"><button class="bigbtn" onclick="go('post')">Создать объявление</button></div></section>
 
 <!-- create listing -->
-<section class="screen" id="s-post"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Создание объявления</span></div>
-<div class="scroll">
-<div class="photos" id="photoTrack"><label class="photoAdd" for="photoInput"><span>+</span><small>Фото</small></label><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></div></div>
-<form class="card form" id="postForm">
+<section class="screen" id="s-post"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Создание объявления</span></div><div class="scroll"><div class="photos" id="photoTrack"><label class="photoAdd" for="photoInput"><svg class="pa-ico" width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.2l1.1-1.6c.3-.4.8-.6 1.3-.6h3.8c.5 0 1 .2 1.3.6L16.3 6h1.2A2.5 2.5 0 0 1 20 8.5v8A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5v-8Z" fill="none" stroke="#fff" stroke-width="1.7"/><circle cx="12" cy="12.4" r="3.1" fill="none" stroke="#fff" stroke-width="1.7"/></svg><span class="pa-plus">+</span><small>Добавить фото</small></label><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></div><form class="card form" id="postForm">
 <div class="field"><label>Название</label><input id="adTitle" placeholder="Например, iPhone 13, 128 Гб" required></div>
 <div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="Например: 5 000" inputmode="numeric" required></div>
 <div class="field"><label>Категория</label><div class="chips" style="margin-top:0" data-choice="cat"><button type="button" class="chip on">Техника</button><button type="button" class="chip">Одежда</button><button type="button" class="chip">Другое</button></div></div>
@@ -693,5 +715,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029005937"></script>
-<script src="adapter.js?v=20261029005937"></script><script src="payments.js?v=20261029005937"></script><script src="admin.js?v=20261029005937"></script><script src="keyboard.js?v=20261029005937"></script><script src="telegram-safe.js?v=20261029005937"></script></body></html>
+</script><script src="telegram-web-app.js?v=20261029010954"></script>
+<script src="adapter.js?v=20261029010954"></script><script src="payments.js?v=20261029010954"></script><script src="admin.js?v=20261029010954"></script><script src="keyboard.js?v=20261029010954"></script><script src="telegram-safe.js?v=20261029010954"></script></body></html>
