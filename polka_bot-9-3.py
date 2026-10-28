@@ -29316,8 +29316,13 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     if show_suspect:
         # Показать подозрительно дешёвые (этап D3) — по запросу ?show_suspect=1
         statuses = f"({statuses} OR hm.reject_reason = 'price_suspect')"
-    where = ["hm.user_id = ?", statuses, "a.status='active'"]
-    params: List = [int(viewer_id)]
+    # Матч принадлежит пользователю ИЛИ его критерию: после смены аккаунта
+    # id в матчах и в критериях может разойтись, и лента оставалась пустой,
+    # хотя бот уже прислал находки в чат.
+    where = ["(hm.user_id = ? OR hm.crit_id IN "
+             "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
+             statuses, "a.status='active'"]
+    params: List = [int(viewer_id), int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")
         params.append(int(min_discount))

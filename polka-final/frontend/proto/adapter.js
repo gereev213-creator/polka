@@ -234,9 +234,14 @@ function paintEmpty(count) {
           av.textContent = letter;
         }
       }
-      // Под аватаром только юзернейм — служебный id не показываем
+      // id нужен, чтобы привязать критерии и находки к аккаунту
       const idNode = document.getElementById('tgUserId');
-      if (idNode) idNode.style.display = 'none';
+      if (idNode && u.telegram_id) {
+        idNode.style.display = 'block';
+        idNode.textContent = 'id: ' + u.telegram_id;
+      } else if (idNode) {
+        idNode.style.display = 'none';
+      }
       const ht = $('handleText');
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
       const plus = $('pluspill');

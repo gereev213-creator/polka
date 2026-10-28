@@ -111,7 +111,12 @@ _q_part = ''
 if link_targets and 'q=' in link_targets[0]['url']:
     _q_part = link_targets[0]['url'].split('q=')[1].split('&')[0]
 check('название критерия не попало в q', bool(link_targets) and 'mo' not in _q_part, link_targets)
-check('обычный критерий строится как раньше', any(not t.get('link') and 'lacoste' in t['url'].lower() for t in targets), [t['url'] for t in targets])
+# Авито отдаёт 0 карточек на ссылки с q=, поэтому сбор идёт по разделу,
+# а слова критерия отсеиваются уже на сервере по заголовкам. Значит в URL
+# не должно быть q — это и проверяем.
+check('обычный критерий идёт по разделу без q=',
+      any(not t.get('link') and 'q=' not in t['url'] for t in targets),
+      [t['url'] for t in targets])
 
 print('\nИТОГ:', 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ' if not fails else f'ПРОВАЛЕНО: {len(fails)}')
 sys.exit(1 if fails else 0)
