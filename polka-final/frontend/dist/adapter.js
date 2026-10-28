@@ -882,3 +882,33 @@ function paintEmpty(count) {
   setTimeout(wrap, 800);
   window.PolkaModeration = loadModeration;
 })();
+
+/* ── Переход на конкретный экран по ссылке из бота ─────────────────────── */
+(function () {
+  // Бот открывает приложение как  .../?screen=create  или  .../#create
+  const MAP = {
+    create: 'post', post: 'post', tariffs: 'tariffs', favorites: 'favorites',
+    favorites_page: 'favorites', profile: 'profile', searches: 'searches',
+    hunt: 'searches', history: 'history', referrals: 'referrals',
+    myads: 'myads', moderation: 'moderation', home: 'home', market: 'market',
+  };
+
+  function target() {
+    const q = new URLSearchParams(location.search).get('screen') ||
+              new URLSearchParams(location.search).get('tgWebAppStartParam') || '';
+    const h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
+    return MAP[String(q).toLowerCase()] || MAP[String(h).toLowerCase()] || '';
+  }
+
+  function jump() {
+    const to = target();
+    if (!to) return;
+    try {
+      if (typeof window.go === 'function') window.go(to, true);
+    } catch (e) { }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => setTimeout(jump, 400));
+  setTimeout(jump, 1200);
+  window.PolkaJump = jump;
+})();

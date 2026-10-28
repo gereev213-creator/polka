@@ -7952,7 +7952,7 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     def _wbtn(text, path):
         """Кнопка открытия Mini App. HashRouter: путь через /#/"""
-        return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{MINIAPP_URL}/#{path}"))
+        return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{MINIAPP_URL}/?screen={path}"))
 
     # ТЗ §6: пользовательские функции живут в Mini App — главное действие
     # меню бота это "Открыть Полку". Старые callback-handlers (create_ad,
@@ -13682,7 +13682,7 @@ async def handle_moderation_reason(update: Update, context: ContextTypes.DEFAULT
                 text=f"{EM_FAIL} Ваше объявление отклонено\n\n{title}\n\nПричина: {reason}\n\nИсправьте и создайте заново — это займёт минуту.",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(" Создать заново",
-                                          web_app=WebAppInfo(url=f"{_miniapp_url()}/create"))],
+                                          web_app=WebAppInfo(url=f"{_miniapp_url()}/?screen=create"))],
                 ]),
             )
         except Exception as e:
