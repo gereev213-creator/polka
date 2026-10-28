@@ -29609,7 +29609,9 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         if not crits_now:
             # У аккаунта нет своих критериев, но находки в системе есть:
             # показываем последние отправленные, иначе лента пустая при живом боте
-            if os.environ.get('FEED_OPEN', '1') != '0':
+            # Открытая лента ВЫКЛЮЧЕНА: находки принадлежат тому, чьи критерии
+            # их нашли. Общей может быть только барахолка.
+            if os.environ.get('FEED_OPEN', '0') == '1':
                 try:
                     cur = db.conn.cursor()
                     cur.execute("SELECT COUNT(*) AS c FROM hunt_matches "
