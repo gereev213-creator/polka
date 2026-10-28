@@ -839,22 +839,26 @@ function paintEmpty(count) {
 (function () {
   const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
 
+  // Карточка по структуре из дизайна: .fav = фото слева, текст справа
   function card(a) {
-    const ph = a.photos ? String(a.photos).split(',')[0] : '';
+    let ph = '';
+    try {
+      const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
+      ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
+    } catch (e) { ph = ''; }
     const bg = ph ? `style="background-image:url('${ph}')"` : '';
-    return `<article class="card fav" style="display:block">
-      <div style="display:flex;gap:12px">
-        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-        <span style="flex:1">
-          <h3>${(a.title || '').slice(0, 40)}</h3>
-          <span class="pricepill">${fmt(a.price)}</span><br>
-          <span class="status">${a.city || ''} ${a.category ? '· ' + a.category : ''}</span>
+    const sub = [a.city, a.category].filter(Boolean).join(' · ');
+    return `<article class="card fav">
+      <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+      <span>
+        <h3>${(a.title || '').slice(0, 40)}</h3>
+        <span class="pricepill">${fmt(a.price)}</span><br>
+        <span class="status">${sub || 'без города'}</span>
+        <span class="modbtns">
+          <button class="bigbtn modok" data-ok="${a.id}">Одобрить</button>
+          <button class="mailbtn modno" data-no="${a.id}">Отклонить</button>
         </span>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button class="bigbtn" style="height:44px;font-size:12px" data-ok="${a.id}">Одобрить</button>
-        <button class="mailbtn" style="height:44px;font-size:12px" data-no="${a.id}">Отклонить</button>
-      </div>
+      </span>
     </article>`;
   }
 

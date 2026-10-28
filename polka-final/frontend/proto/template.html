@@ -303,6 +303,29 @@ html{ -webkit-text-size-adjust:100% }
            overflow:hidden!important;cursor:pointer}
 #photoMain #photoLabel{position:relative;z-index:1}
 .photoSmall{display:grid!important;place-items:center!important;cursor:pointer}
+
+/* Модерация: кнопки под описанием, не растягивая карточку */
+.modbtns{display:flex;gap:8px;margin-top:10px;width:100%}
+.modbtns .bigbtn,.modbtns .mailbtn{height:40px!important;font-size:11px!important;flex:1 1 0;min-width:0;text-transform:uppercase}
+
+/* Модерация: фото слева, текст справа, кнопки под текстом */
+#modList .fav{display:flex!important;align-items:flex-start!important;gap:12px!important;
+              padding:12px!important}
+#modList .fav .th{flex:0 0 84px!important;width:84px!important;height:84px!important;
+                  border-radius:16px!important;background-size:cover!important;background-position:center!important}
+#modList .fav > span:last-child{flex:1 1 auto!important;min-width:0!important;display:block!important;text-align:left!important}
+#modList .fav h3{text-align:left!important;margin:0 0 8px!important;font-size:13px!important}
+#modList .fav .pricepill{display:inline-flex!important}
+#modList .fav .status{display:block!important;margin-top:6px!important}
+#modList .modbtns{display:flex!important;gap:8px!important;margin-top:10px!important;width:100%!important}
+#modList .modbtns .bigbtn,#modList .modbtns .mailbtn{flex:1 1 0!important;min-width:0!important;
+  height:38px!important;font-size:10.5px!important;padding:0 6px!important;border-radius:999px!important}
+
+/* Модерация: заголовок всегда слева, фото не схлопывается */
+#modList h3{text-align:left!important;width:100%!important}
+#modList .fav .th{display:block!important;min-width:84px!important;min-height:84px!important;
+                  background-color:#E3EDFD!important}
+#modList .fav>span{text-align:left!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
