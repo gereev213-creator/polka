@@ -530,6 +530,9 @@ function paintEmpty(count) {
       }
       const earned = document.querySelector('#s-referrals .earned');
       if (earned) earned.textContent = 'Приглашено: ' + invited;
+      // Вставляем ссылку в поле на экране
+      const linkNode = document.getElementById('refLink');
+      if (linkNode) linkNode.textContent = link ? link.replace('https://', '') : 'ссылка недоступна';
       const list = document.getElementById('refList');
       const rows = data.referrals || data.items || [];
       if (list) {
@@ -1041,4 +1044,23 @@ function paintEmpty(count) {
   document.addEventListener('DOMContentLoaded', wrap);
   setTimeout(wrap, 300);
   setTimeout(wrap, 1500);
+})();
+
+/* ── Рефералка: поделиться ссылкой ────────────────────────────────────── */
+(function () {
+  window.shareRef = function () {
+    const node = document.getElementById('refLink');
+    const link = node ? ('https://' + node.textContent.trim()) : '';
+    if (!link || link === 'https://—') return;
+    const TG = window.Telegram && window.Telegram.WebApp;
+    const text = 'Находи лучшие объявления по своим критериям — ПОЛКА';
+    if (TG && TG.openTelegramLink) {
+      TG.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) +
+                          '&text=' + encodeURIComponent(text));
+    } else if (navigator.share) {
+      navigator.share({ title: 'ПОЛКА', text, url: link }).catch(() => {});
+    } else {
+      window.open('https://t.me/share/url?url=' + encodeURIComponent(link), '_blank');
+    }
+  };
 })();

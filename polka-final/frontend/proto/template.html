@@ -326,6 +326,13 @@ html{ -webkit-text-size-adjust:100% }
 #modList .fav .th{display:block!important;min-width:84px!important;min-height:84px!important;
                   background-color:#E3EDFD!important}
 #modList .fav>span{text-align:left!important}
+
+/* Рефералка: ссылка читаемая, пустой список без крика */
+#s-referrals .linkin{background:#E7EFF6!important}
+#s-referrals .linkin svg{color:#3373FA!important;stroke:#3373FA!important}
+#s-referrals #refLink{color:#2C2C2C!important;font-weight:800!important;font-size:11.5px!important}
+#s-referrals #refList .mrow{height:auto!important;min-height:44px!important;padding:10px 0!important}
+#s-referrals #refList span{text-transform:none!important;font-size:12px!important;font-weight:700!important;color:#7A8CA3!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -474,8 +481,31 @@ html{ -webkit-text-size-adjust:100% }
 </div></section>
 
 <!-- referrals -->
-<section class="screen" id="s-referrals"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Рефералы</span></div><div class="scroll">
-<div class="card menu" id="refList" style="padding:8px 14px"></div></div></section>
+<section class="screen" id="s-referrals">
+<div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Рефералы</span></div>
+<div class="scroll">
+  <div class="card" style="padding:18px">
+    <h3 style="margin:0 0 6px">Пригласи друзей</h3>
+    <p class="mut" style="margin:0 0 12px;font-size:11px;line-height:1.4">Поделись ссылкой — получи 20% от пополнения реферала</p>
+    <span class="newpill earned">Приглашено: 0</span>
+  </div>
+  <div class="card" style="padding:16px">
+    <div class="mut" style="font-size:10px;margin-bottom:6px">Твоя ссылка</div>
+    <div class="linkin" style="display:flex;align-items:center;gap:8px;background:#E7EFF6;border-radius:14px;padding:10px 12px">
+      <svg width="15" height="15" style="flex:0 0 15px"><use href="#i-link"/></svg>
+      <b id="refLink" style="font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</b>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="bigbtn" style="height:44px;font-size:12px;flex:1" onclick="copyLink()">Копировать</button>
+      <button class="mailbtn" style="height:44px;font-size:12px;flex:1" onclick="shareRef()">Поделиться</button>
+    </div>
+  </div>
+  <div class="card" style="padding:6px 14px">
+    <h3 style="margin:10px 4px 4px;font-size:13px">Рефералы</h3>
+    <div id="refList"></div>
+  </div>
+</div>
+</section>
 
 <div id="fade"></div>
 <!-- nav -->
