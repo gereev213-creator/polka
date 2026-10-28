@@ -334,6 +334,12 @@ html{ -webkit-text-size-adjust:100% }
 #s-referrals #refLink{color:#2C2C2C!important;font-weight:800!important;font-size:11.5px!important}
 #s-referrals #refList .mrow{height:auto!important;min-height:44px!important;padding:10px 0!important}
 #s-referrals #refList span{text-transform:none!important;font-size:12px!important;font-weight:700!important;color:#7A8CA3!important}
+
+/* Карточки не должны липнуть друг к другу */
+.scroll{display:flex;flex-direction:column;gap:12px}
+.scroll>.card{margin-bottom:0}
+#refList{gap:0}
+#s-referrals .scroll>.card{margin-bottom:0}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
