@@ -48,7 +48,12 @@ from html.parser import HTMLParser
 # Включить: POLKA_SEARCH_BY_QUERY=1 (или свой шаблон url_template со своим q) —
 # если Авито изменит поведение либо если у вас прокси, с которого поиск идёт.
 # Проверка формы ссылки:  python3 collect.py --check-query "iphone 13 pro"
-SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') != '0'
+# С включённым скрапером поиск по тексту снова имеет смысл: он обходит
+# блокировку и отдаёт карточки. Без скрапера q= бесполезен — Авито даёт 0.
+SEARCH_BY_QUERY = os.environ.get(
+    'POLKA_SEARCH_BY_QUERY',
+    '1' if os.environ.get('SCRAPINGBEE_KEY') else '0'
+) != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -373,8 +378,18 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
     return html
 
 
-def fetch(url: str, timeout: int = 25) -> str:
-    """Сначала напрямую (бесплатно). Скрапер — только если поймали 439/429.
+def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
+    """Сначала напрямую (бесплатно). Скрапер — если поймали 439/429.
+
+    prefer_scraper=True — сразу через скрапер: так берём страницы с q=
+    (поиск по тексту), которые обычный запрос от Авито не получает.
+    """
+    if prefer_scraper and SCRAPINGBEE_KEY and 'avito.ru' in url:
+        try:
+            return _fetch_via_scraper(url, timeout=max(timeout, 60))
+        except Exception as exc:
+            print(f"  скрапер не отдал страницу: {str(exc)[:70]}")
+
 
     Кредиты ScrapingBee тратятся лишь на те страницы, которые прямой запрос
     не отдал, поэтому их хватает надолго.
@@ -1587,7 +1602,7 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
             continue
         state = 'active'
         try:
-            html = fetch(url)
+            html = fetch(url, prefer_scraper=('q=' in url))
             low = html.lower()
             if any(marker in low for marker in GONE_MARKERS):
                 state = 'gone'
@@ -1624,7 +1639,7 @@ def check_proxy(url: str) -> int:
     print(f"Клиент: {'curl_cffi, отпечаток ' + IMPERSONATE if _cffi else 'urllib (curl_cffi НЕ установлен!)'}")
     print(f"Проверяем: {url}")
     try:
-        html = fetch(url)
+        html = fetch(url, prefer_scraper=('q=' in url))
     except Blocked as exc:
         print(f"  ⛔ {exc}")
         if PROXY:
@@ -1939,7 +1954,7 @@ def run_once(cfg: dict) -> int:
             items = []
             print(f"\n→ {source}: {url}")
             try:
-                html = fetch(url)
+                html = fetch(url, prefer_scraper=('q=' in url))
             except Blocked as exc:
                 print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
                 # Всё, что успели собрать на предыдущих страницах, уже
@@ -2134,7 +2149,7 @@ def check_url(url: str) -> int:
         return 2
     print(f"Проверяю: {url}")
     try:
-        html = fetch(url, timeout=45)
+        html = fetch(url, timeout=45, prefer_scraper=('q=' in url))
     except Exception as exc:
         print(f"  ✖ не открылась: {str(exc)[:140]}")
         print("    Если это 429/439 — Авито отбил запрос: подождите 10–15 минут")
@@ -2181,7 +2196,7 @@ def check_query(text: str) -> int:
     for title, url in variants:
         print(f"\n{title}: {url}")
         try:
-            html = fetch(url, timeout=45)
+            html = fetch(url, timeout=45, prefer_scraper=('q=' in url))
         except Exception as exc:
             print(f"  ✖ не получилось: {str(exc)[:120]}")
             time.sleep(random.uniform(4.0, 7.0))
