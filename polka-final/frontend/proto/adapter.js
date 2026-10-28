@@ -249,7 +249,11 @@ function paintEmpty(count) {
         idNode.textContent = '';
       }
       const ht = $('handleText');
-      if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
+      if (ht) {
+        // @username, если он есть; иначе имя из Telegram как есть, без «@»
+        const un = String(u.username || '').trim();
+        ht.textContent = un ? ('@' + un) : (String(u.name || 'гость'));
+      }
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
@@ -632,11 +636,26 @@ function paintEmpty(count) {
       А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H',
       О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X',
     }[ch] || ch));
+    let res = null;
     try {
-      const res = await window.PolkaAPI.api('/api/promo/redeem', {
+      // Как введено — так и пробуем: в базе есть коды кириллицей («РОК»)
+      res = await window.PolkaAPI.api('/api/promo/redeem', {
         method: 'POST',
-        body: JSON.stringify({ code: norm }),
+        body: JSON.stringify({ code }),
       });
+    } catch (e1) {
+      // Не подошёл — пробуем с заменой похожих букв (ОРА → OPA)
+      try {
+        res = await window.PolkaAPI.api('/api/promo/redeem', {
+          method: 'POST',
+          body: JSON.stringify({ code: norm }),
+        });
+      } catch (e2) {
+        if (msg) { msg.textContent = 'Промокод не найден'; msg.style.display = 'block'; }
+        return;
+      }
+    }
+    try {
       const pct = res.percent || res.discount || 0;
       if (msg) msg.textContent = pct ? ('Скидка ' + pct + '%') : 'Промокод применён';
       if (off && pct) { off.textContent = '−' + pct + '%'; off.style.display = 'inline'; }
