@@ -1911,3 +1911,70 @@ function paintEmpty(count) {
     setInterval(apply, 800);
   } catch (e) { }
 })();
+
+/* ── Рекламные баннеры: лента со свайпом и автопрокруткой ──────────────── */
+(function () {
+  try {
+    function openLink(url) {
+      if (!url) return;
+      const TG = window.Telegram && window.Telegram.WebApp;
+      if (TG && TG.openLink) { try { TG.openLink(url); return; } catch (e) { } }
+      window.open(url, '_blank');
+    }
+
+    async function loadBanners() {
+      const box = document.getElementById('feedBanners');
+      if (!box) return;
+      try {
+        const data = await window.PolkaAPI.api('/api/feed-banners');
+        const items = (data.items || []).filter((b) => b && b.image && !b.default && b.action).slice(0, 5);
+        if (!items.length) { box.innerHTML = ''; return; }
+
+        box.innerHTML = `
+          <div class="bannerTrack" id="bannerTrack">
+            ${items.map((b, i) => `<div class="bannerSlide" data-slide="${i}" data-url="${b.action}">
+              <img src="${b.image}" alt=""></div>`).join('')}
+          </div>
+          <div class="bannerDots" id="bannerDots">
+            ${items.map((_, i) => `<i data-dot="${i}"${i === 0 ? ' class="on"' : ''}></i>`).join('')}
+          </div>`;
+
+        const track = document.getElementById('bannerTrack');
+        const dots = document.getElementById('bannerDots');
+        if (!track) return;
+
+        track.querySelectorAll('[data-slide]').forEach((el) => {
+          el.addEventListener('click', () => openLink(el.getAttribute('data-url')));
+        });
+
+        let pos = 0;
+        window.clearInterval(window.__bannerTimer);
+        if (items.length > 1) {
+          window.__bannerTimer = window.setInterval(() => {
+            if (!document.body.contains(track)) { window.clearInterval(window.__bannerTimer); return; }
+            if ((document.querySelector('.screen.active') || {}).id !== 's-market') return;
+            pos = (pos + 1) % items.length;
+            track.scrollTo({ left: pos * track.clientWidth, behavior: 'smooth' });
+            if (dots) dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === pos));
+          }, 4000);
+        }
+      } catch (e) { }
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__bn) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'market') setTimeout(loadBanners, 150);
+        return r;
+      };
+      wrapped.__bn = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 700);
+    setTimeout(loadBanners, 2200);
+    window.PolkaBanners = loadBanners;
+  } catch (e) { }
+})();
