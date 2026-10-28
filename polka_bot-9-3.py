@@ -31994,11 +31994,10 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
             'name': (seller.get('first_name') or 'Продавец') if seller else 'Продавец',
             'username': (seller.get('username') or '') if seller else '',
             'verified': bool(verify and verify.get('status') == 'verified'),
-        # Админка в приложении: показываем пункт только администратору
+        # Админка и аватар в приложении
         'is_admin': (viewer_id in ADMIN_USER_IDS
                      or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
-        # Аватар берём из initData: в таблице users колонки photo_url нет
-        'photo_url': (_tg_photo_from_init(init_data) or '') if init_data else '',
+        'photo_url': _tg_photo_from_init(init_data) if init_data else '',
             'rating': (rating or {}).get('avg') or None,
             'reviews_count': (rating or {}).get('count') or 0,
         },
