@@ -48,7 +48,7 @@ from html.parser import HTMLParser
 # Включить: POLKA_SEARCH_BY_QUERY=1 (или свой шаблон url_template со своим q) —
 # если Авито изменит поведение либо если у вас прокси, с которого поиск идёт.
 # Проверка формы ссылки:  python3 collect.py --check-query "iphone 13 pro"
-SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
