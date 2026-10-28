@@ -541,105 +541,40 @@ function paintEmpty(count) {
           'Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
         return;
       }
-      window.__favItems = items;
+      const statusMap = { sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
+                          checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено' };
       box.innerHTML = items.map((a) => {
-        const ph = a.photos ? String(a.photos).split(',')[0] : '';
-        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
-        const map = { sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
-                      checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено' };
-        const st = map[a.status] || 'Активно';
-        return `<article class="card fav" data-open="${a.id}">
+        let ph = '';
+        const raw = a.photos;
+        if (Array.isArray(raw)) ph = raw[0] || '';
+        else if (typeof raw === 'string' && raw.trim()) {
+          try {
+            const arr = JSON.parse(raw.replace(/'/g, '"'));
+            ph = Array.isArray(arr) ? (arr[0] || '') : '';
+          } catch (e) { ph = raw.startsWith('http') ? raw : ''; }
+        }
+        const bg = ph ? `style="background-image:url('${ph}')"` : '';
+        return `<article class="card fav" data-myad="${a.id}">
           <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-          <span><h3>${(a.title || '').slice(0, 34)}</h3>
-          <span class="pricepill">${fmt(a.price)}</span><br>
-          <span class="status">${st}</span></span></article>`;
+          <span class="favtext">
+            <h3>${(a.title || '').slice(0, 40)}</h3>
+            <span class="pricepill">${fmt(a.price)}</span>
+            <span class="status">${statusMap[a.status] || 'Активно'}</span>
+          </span>
+        </article>`;
       }).join('');
     } catch (e) { }
   }
 
-  function wirePost() {
-    const form = $('postForm');
-    if (!form || form.__wired) return;
-    form.__wired = true;
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const title = ($('adTitle') && $('adTitle').value || '').trim();
-      const price = Number((($('adPrice') && $('adPrice').value) || '').replace(/[^0-9]/g, '')) || 0;
-      if (title.length < 3) return;
-      const cat = (document.querySelector('[data-choice="cat"] .chip.on') || {}).textContent || 'Другое';
-      const cond = (document.querySelector('[data-choice="cond"] .chip.on') || {}).textContent || '';
-      const city = ($('adCity') && $('adCity').value || '').trim();
-      try {
-        await window.PolkaAPI.api('/api/ads', {
-          method: 'POST',
-          body: JSON.stringify({
-            title,
-            price,
-            category: cat.trim(),
-            condition: cond.trim(),
-            city,
-            // Сервер ждёт массив ссылок, а не строку через запятую
-            photos: window.PolkaPhotos ? window.PolkaPhotos() : [],
-            description: (document.getElementById('adDesc') || {}).value || '',
-            delivery: (document.getElementById('adDelivery') || {}).checked ? 1 : 0,
-          }),
-        });
-        const TG = window.Telegram && window.Telegram.WebApp;
-        if (TG && TG.showAlert) TG.showAlert('Объявление опубликовано');
-        form.reset();
-      } catch (err) {
-        const TG = window.Telegram && window.Telegram.WebApp;
-        if (TG && TG.showAlert) TG.showAlert('Не удалось опубликовать');
-      }
-    });
-  }
-
-  async function loadReferrals() {
-    try {
-      const data = await window.PolkaAPI.api('/api/referral');
-      const link = data.link || '';
-      const invited = data.count || 0;
-      if (link) {
-        const b = document.querySelector('#s-referrals .linkin b');
-        if (b) b.textContent = link.replace('https://', '');
-        window.__refLink = link;
-        // кнопка «Копировать» в дизайне зовёт copyLink() — подменяем на реальную ссылку
-        window.copyLink = function () {
-          try { navigator.clipboard.writeText(link); } catch (e) {}
-          const TG = window.Telegram && window.Telegram.WebApp;
-          if (TG && TG.showAlert) TG.showAlert('Ссылка скопирована');
-        };
-      }
-      const earned = document.querySelector('#s-referrals .earned');
-      if (earned) earned.textContent = 'Приглашено: ' + invited;
-      const bal = document.getElementById('refBalance');
-      if (bal) {
-        const b = Number(data.balance || 0);
-        bal.textContent = 'Баланс: ' + b.toLocaleString('ru-RU') + ' \u20BD'
-          + ' · тратится только на подписку Плюс';
-      }
-      // Вставляем ссылку в поле на экране
-      const linkNode = document.getElementById('refLink');
-      if (linkNode) linkNode.textContent = link ? link.replace('https://', '') : 'ссылка недоступна';
-      const list = document.getElementById('refList');
-      const rows = data.referrals || data.items || [];
-      if (list) {
-        list.innerHTML = rows.length
-          ? rows.map((r) => `<div class="mrow"><span class="grow">${(r.name || 'пользователь').slice(0, 24)}</span><span class="chev">${r.days ? '+' + r.days : ''}</span></div>`).join('')
-          : '<div class="mrow"><span class="grow" style="color:#7A8CA3">Пока никого не пригласили</span></div>';
-      }
-    } catch (e) { }
-  }
-
-
-  // Избранное: список из /api/favorites (а не фильтр по лотам)
+  // Избранное — ровно как в референсе: фото, название, цена, корзина
   async function loadFavs() {
     const box = document.getElementById('favList');
+    const empty = document.getElementById('favEmpty');
     if (!box) return;
     try {
       const data = await window.PolkaAPI.api('/api/favorites');
       const items = data.items || [];
-      const empty = document.getElementById('favEmpty');
+      window.__favItems = items;
       if (!items.length) {
         box.innerHTML = '';
         if (empty) empty.style.display = 'block';
@@ -647,25 +582,32 @@ function paintEmpty(count) {
       }
       if (empty) empty.style.display = 'none';
       box.innerHTML = items.map((a) => {
-        const ph = a.photos ? String(a.photos).split(',')[0] : '';
-        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
-        const price = (a.price || 0).toLocaleString('ru-RU') + ' \u20BD';
+        let ph = '';
+        const raw = a.photos;
+        if (Array.isArray(raw)) ph = raw[0] || '';
+        else if (typeof raw === 'string' && raw.trim()) {
+          try {
+            const arr = JSON.parse(raw.replace(/'/g, '"'));
+            ph = Array.isArray(arr) ? (arr[0] || '') : '';
+          } catch (e) { ph = raw.startsWith('http') ? raw : ''; }
+        }
+        const bg = ph ? `style="background-image:url('${ph}')"` : '';
         return `<article class="card fav" data-fav-open="${a.id}">
           <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-          <span><h3>${(a.title || '').slice(0, 34)}</h3>
-          <span class="pricepill">${price}</span><br>
-          <span class="status">${a.city || ''}</span></span>
+          <span class="favtext">
+            <h3>${(a.title || '').slice(0, 40)}</h3>
+            <span class="pricepill">${fmt(a.price)}</span>
+          </span>
           <button class="trash" data-fav-del="${a.id}">
             <svg width="14" height="14"><use href="#i-trash"/></svg>
-          </button></article>`;
+          </button>
+        </article>`;
       }).join('');
 
-      // Тап по карточке — открыть товар, крестик — убрать из избранного
       box.querySelectorAll('[data-fav-open]').forEach((card) => {
         card.addEventListener('click', async (e) => {
           if (e.target.closest('[data-fav-del]')) return;
           const id = card.getAttribute('data-fav-open');
-          // Данные берём заново с сервера: кеш мог не сохраниться
           let raw = (window.__favItems || []).find((x) => String(x.id) === String(id));
           if (!raw) {
             try {
@@ -673,17 +615,7 @@ function paintEmpty(count) {
               raw = (fresh.items || []).find((x) => String(x.id) === String(id));
             } catch (err) { }
           }
-          if (!raw) {
-            raw = {
-              id: Number(id),
-              title: (card.querySelector('h3') || {}).textContent || '',
-              price: Number((((card.querySelector('.pricepill') || {}).textContent) || '0')
-                .replace(/[^0-9]/g, '')),
-              photos: [],
-            };
-          }
-          if (window.PolkaProductData) window.PolkaProductData(raw);
-          else if (window.PolkaProduct) window.PolkaProduct(id);
+          if (raw && window.PolkaProductData) window.PolkaProductData(raw);
         });
       });
       box.querySelectorAll('[data-fav-del]').forEach((btn) => {
