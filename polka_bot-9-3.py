@@ -22286,6 +22286,15 @@ def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
     except (TypeError, ValueError):
         logger.warning(f"hunt_match_store: пропуск, id не число: {user_id!r} {crit_id!r} {ad_id!r}")
         return
+    # Критерий на паузе — находки по нему не создаём вовсе.
+    try:
+        _cur = db.conn.cursor()
+        _cur.execute("SELECT active FROM hunt_criteria WHERE id=?", (crit_id,))
+        _row = _cur.fetchone()
+        if _row is not None and not int(_row['active'] or 0):
+            return
+    except Exception:
+        pass
     if force_status:
         status = force_status
     elif decision.reason == 'desc_needed':
@@ -32433,6 +32442,30 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     title = str(body.get('title', '')).strip()
     if not (3 <= len(title) <= 200):
         return _miniapp_err('bad_title', 400)
+    # Лимит лотов: пробный 24 часа — 1 лот, «Плюс» — 10 в месяц,
+    # без подписки — нельзя. Так человек видит смысл купить Плюс.
+    try:
+        _plan = str((db.get_user(viewer_id) or {}).get('plan') or 'trial')
+        _cur = db.conn.cursor()
+        _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status IN "
+                     "('active','moderation','checking','review')", (viewer_id,))
+        _used = int((_cur.fetchone() or {'c': 0})['c'] or 0)
+        _limits = {'trial': 1, 'plus': 10, 'pro': 30}
+        _lim = _limits.get(_plan, 0)
+        if _lim == 0:
+            return _miniapp_json({'ok': False, 'error': 'no_plan',
+                                  'detail': 'Создание объявлений доступно на пробном периоде '
+                                            'или с подпиской Плюс'}, status=403)
+        if _used >= _lim:
+            return _miniapp_json({'ok': False, 'error': 'ad_limit',
+                                  'detail': f'Достигнут лимит: {_lim} '
+                                            + ('лот на пробном периоде' if _plan == 'trial'
+                                               else 'лотов в месяц в Плюсе'),
+                                  'used': _used, 'limit': _lim, 'plan': _plan},
+                                 status=402)
+    except Exception as e:
+        logger.warning(f'ad limit check: {e}')
+
     photos = body.get('photos') or []
     if not isinstance(photos, list) or len(photos) > MINIAPP_MAX_PHOTOS:
         return _miniapp_err('bad_photos', 400)
@@ -32903,6 +32936,11 @@ async def api_miniapp_ad_delete(request: aiohttp_web.Request) -> aiohttp_web.Res
     try:
         cur = db.conn.cursor()
         cur.execute("DELETE FROM favorites WHERE ad_id = ?", (ad_id,))
+        # Удалённый лот не должен больше всплывать в находках у других людей
+        try:
+            cur.execute("DELETE FROM hunt_matches WHERE ad_id = ?", (ad_id,))
+        except Exception:
+            pass
         cur.execute("DELETE FROM ads WHERE id = ?", (ad_id,))
         db.conn.commit()
         try:
