@@ -29493,8 +29493,13 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
            f"hm.unverified AS hunt_unverified, hm.deliver_after AS hunt_deliver_after "
            f"FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
            f"WHERE {' AND '.join(where)} "
-           f"ORDER BY CASE WHEN hm.reject_reason = 'price_below_floor' THEN 1 ELSE 0 END, "
-           f"COALESCE(hm.discount, 0) DESC, a.id DESC LIMIT ? OFFSET ?")
+           # Сначала то, что бот только что прислал: человек ждёт в ленте
+           # ту же находку, что увидел в чате. Раньше сортировка была по
+           # скидке, и свежая находка могла оказаться ниже или за пределами
+           # первой страницы.
+           f"ORDER BY CASE WHEN hm.status IN ('sent','ready') THEN 0 ELSE 1 END, "
+           f"CASE WHEN hm.reject_reason = 'price_below_floor' THEN 1 ELSE 0 END, "
+           f"hm.id DESC, a.id DESC LIMIT ? OFFSET ?")
     try:
         cursor.execute(sql, (*params, limit + 1, offset))
         rows = [dict(r) for r in cursor.fetchall()]
