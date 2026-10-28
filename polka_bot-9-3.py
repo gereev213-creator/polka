@@ -18749,6 +18749,64 @@ async def api_pay_invoice(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json({'ok': True, 'invoice_url': link})
 
 
+async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/pay/with-balance {product} — оплата подписки с баланса.
+
+    Баланс начисляется только с рефералов и тратится только на «Плюс».
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    product = str((body or {}).get('product') or 'plus_30')
+    price_map = {'plus_week': ('week', 7), 'week': ('week', 7),
+                 'plus_30': ('plus_30', 30), 'plus_90': ('plus_90', 90)}
+    _, days = price_map.get(product, ('plus_30', 30))
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT amount FROM pay_plans WHERE product=?", (product,))
+        row = cur.fetchone()
+        price = int(row['amount']) if row else 0
+    except Exception:
+        price = 0
+    if not price:
+        price = 149 if days >= 30 else 49
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT balance FROM referral_balance WHERE user_id=?", (int(viewer_id),))
+        row = cur.fetchone()
+        balance = int(row['balance'] or 0) if row else 0
+    except Exception:
+        balance = 0
+    if balance < price:
+        return _miniapp_json({'ok': False, 'error': 'not_enough',
+                              'balance': balance, 'price': price}, status=400)
+    try:
+        cur = db.conn.cursor()
+        cur.execute("UPDATE referral_balance SET balance = balance - ? WHERE user_id=?",
+                    (price, int(viewer_id)))
+        cur.execute("INSERT INTO referral_withdrawals "
+                    "(user_id, amount, method, details, status, created_at, processed_at) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (int(viewer_id), price, 'subscription', f'Оплата подписки {product}',
+                     'approved', get_moscow_time().isoformat(), get_moscow_time().isoformat()))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f'pay with balance: {e}')
+        return _miniapp_err('save_failed', 500)
+    expires = ''
+    try:
+        expires = _grant_plus_days(int(viewer_id), days) or ''
+    except Exception as e:
+        logger.warning(f'grant after balance pay: {e}')
+    return _miniapp_json({'ok': True, 'paid': True, 'days': days,
+                          'balance': balance - price, 'expires_at': expires,
+                          'plan': 'plus'})
+
+
 async def api_referral(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/referral — ссылка и число приглашённых (этап H1)."""
     viewer_id = _miniapp_viewer(request)
@@ -33217,63 +33275,6 @@ def create_api_app() -> aiohttp_web.Application:
 
     app.router.add_get('/api/moderation', api_moderation_list)
     app.router.add_post('/api/moderation/{ad_id}', api_moderation_act)
-    async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Response:
-        """POST /api/pay/with-balance {product} — оплата подписки с баланса.
-
-        Баланс начисляется только с рефералов и тратится только на «Плюс».
-        """
-        viewer_id = _miniapp_viewer(request)
-        if not viewer_id:
-            return _miniapp_err('unauthorized', 401)
-        try:
-            body = await request.json()
-        except Exception:
-            body = {}
-        product = str((body or {}).get('product') or 'plus_30')
-        price_map = {'plus_week': ('week', 7), 'week': ('week', 7),
-                     'plus_30': ('plus_30', 30), 'plus_90': ('plus_90', 90)}
-        _, days = price_map.get(product, ('plus_30', 30))
-        try:
-            cur = db.conn.cursor()
-            cur.execute("SELECT amount FROM pay_plans WHERE product=?", (product,))
-            row = cur.fetchone()
-            price = int(row['amount']) if row else 0
-        except Exception:
-            price = 0
-        if not price:
-            price = 149 if days >= 30 else 49
-        try:
-            cur = db.conn.cursor()
-            cur.execute("SELECT balance FROM referral_balance WHERE user_id=?", (int(viewer_id),))
-            row = cur.fetchone()
-            balance = int(row['balance'] or 0) if row else 0
-        except Exception:
-            balance = 0
-        if balance < price:
-            return _miniapp_json({'ok': False, 'error': 'not_enough',
-                                  'balance': balance, 'price': price}, status=400)
-        try:
-            cur = db.conn.cursor()
-            cur.execute("UPDATE referral_balance SET balance = balance - ? WHERE user_id=?",
-                        (price, int(viewer_id)))
-            cur.execute("INSERT INTO referral_withdrawals "
-                        "(user_id, amount, method, details, status, created_at, processed_at) "
-                        "VALUES (?,?,?,?,?,?,?)",
-                        (int(viewer_id), price, 'subscription', f'Оплата подписки {product}',
-                         'approved', get_moscow_time().isoformat(), get_moscow_time().isoformat()))
-            db.conn.commit()
-        except Exception as e:
-            logger.warning(f'pay with balance: {e}')
-            return _miniapp_err('save_failed', 500)
-        expires = ''
-        try:
-            expires = _grant_plus_days(int(viewer_id), days) or ''
-        except Exception as e:
-            logger.warning(f'grant after balance pay: {e}')
-        return _miniapp_json({'ok': True, 'paid': True, 'days': days,
-                              'balance': balance - price, 'expires_at': expires,
-                              'plan': 'plus'})
-
     app.router.add_get('/api/me', api_miniapp_me)
     app.router.add_get('/api/filters', api_miniapp_filters)
     app.router.add_get('/api/photo/{file_id}', api_miniapp_photo)
