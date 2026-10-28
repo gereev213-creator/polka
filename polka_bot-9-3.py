@@ -23459,11 +23459,6 @@ def promo_create(code: str, kind: str, value: int, max_uses: int = 0, per_user: 
     if len(code) < 3:
         return {'ok': False, 'error': 'short_code'}
     if kind not in PROMO_KINDS:
-        elif kind == 'discount':
-        # Скидка на оплату: запоминаем, что код использован этим человеком,
-        # и отдаём процент — платёж применит его при создании счёта.
-        granted = f"скидка {value}% на оплату"
-    else:
         return {'ok': False, 'error': 'bad_kind'}
     try:
         value = int(value)
@@ -23657,7 +23652,12 @@ def promo_redeem(user_id: int, code: str) -> Dict:
             db.update_user(int(user_id), plan='trial', trial_started_at=new_start)
             granted = f'пробный период +{value} дн.'
         else:
-            return {'ok': False, 'error': 'bad_kind'}
+            elif kind == 'discount':
+        # Скидка на оплату: код отмечается использованным, а процент
+        # применит платёж при создании счёта.
+        granted = f"скидка {value}% на оплату"
+    else:
+        return {'ok': False, 'error': 'bad_kind'}
         cursor.execute("INSERT INTO promo_redemptions (code_id, code, user_id, kind, value,"
                        " created_at) VALUES (?,?,?,?,?,?)",
                        (int(promo['id']), code, int(user_id), kind, value, now.isoformat()))
