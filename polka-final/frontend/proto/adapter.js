@@ -213,14 +213,30 @@ function paintEmpty(count) {
       const data = await window.PolkaAPI.api('/api/me');
       const u = data.user || {};
       const av = document.getElementById('avatarCircle');
-      if (av && u.photo_url) {
-        av.style.background = `url('${u.photo_url}') center/cover`;
+      const tgUser = (window.Telegram && window.Telegram.WebApp &&
+                      window.Telegram.WebApp.initDataUnsafe &&
+                      window.Telegram.WebApp.initDataUnsafe.user) || {};
+      const photo = tgUser.photo_url || u.photo_url || '';
+      if (av) {
+        if (photo) {
+          av.style.background = `url('${photo}') center/cover`;
+          av.style.backgroundSize = 'cover';
+          av.textContent = '';
+        } else {
+          // Нет фото — показываем первую букву имени, а не пустой круг
+          const letter = ((tgUser.first_name || u.name || 'П').trim()[0] || 'П').toUpperCase();
+          av.style.background = 'var(--grad)';
+          av.style.display = 'grid';
+          av.style.placeItems = 'center';
+          av.style.color = '#fff';
+          av.style.fontSize = '34px';
+          av.style.fontWeight = '870';
+          av.textContent = letter;
+        }
       }
+      // Под аватаром только юзернейм — служебный id не показываем
       const idNode = document.getElementById('tgUserId');
-      if (idNode && u.telegram_id) {
-        idNode.style.display = 'block';
-        idNode.textContent = 'Telegram id: ' + u.telegram_id;
-      }
+      if (idNode) idNode.style.display = 'none';
       const ht = $('handleText');
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
       const plus = $('pluspill');
