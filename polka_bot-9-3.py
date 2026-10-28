@@ -31994,10 +31994,6 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
             'name': (seller.get('first_name') or 'Продавец') if seller else 'Продавец',
             'username': (seller.get('username') or '') if seller else '',
             'verified': bool(verify and verify.get('status') == 'verified'),
-        # Админка и аватар в приложении
-        'is_admin': (viewer_id in ADMIN_USER_IDS
-                     or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
-        'photo_url': _tg_photo_from_init(init_data) if init_data else '',
             'rating': (rating or {}).get('avg') or None,
             'reviews_count': (rating or {}).get('count') or 0,
         },
@@ -33285,6 +33281,10 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'moderation_ads': moderation_count,
         'favorites': fav_count,
         'since': (user.get('registration_date') or '')[:10] if user else '',
+        # Админка и аватар в приложении
+        'is_admin': (viewer_id in ADMIN_USER_IDS
+                     or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
+        'photo_url': _tg_photo_from_init(init_data) if init_data else '',
         # Нужен фронту, чтобы увести пользователя в бота за видео:
         # Mini App не может открыть чат сама, только по ссылке t.me
         'bot_username': BOT_USERNAME,
