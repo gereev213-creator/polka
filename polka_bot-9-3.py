@@ -30699,6 +30699,20 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         out['query'] = dict(crit).get('query')
         return _miniapp_json(out)
 
+    if action == 'clear_feed_banners':
+        # Сносим все демонстрационные баннеры ленты: и картинки, и ссылки
+        cur = db.conn.cursor()
+        removed = 0
+        for i in range(5):
+            for key in (f'feed_banner:{i}', f'feed_banner_link:{i}'):
+                try:
+                    cur.execute("DELETE FROM settings WHERE key=?", (key,))
+                    removed += cur.rowcount
+                except Exception:
+                    pass
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'removed': removed})
+
     if action == 'bind_criteria':
         # Переносим все критерии и находки на аккаунт, с которого реально
         # заходят в приложение. Нужно, когда критерии создавались тестово.

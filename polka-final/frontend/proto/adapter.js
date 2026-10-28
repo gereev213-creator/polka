@@ -1130,7 +1130,11 @@ function paintEmpty(count) {
     if (!box) return;
     try {
       const data = await window.PolkaAPI.api('/api/feed-banners');
-      const items = (data.items || []).filter((b) => b && b.image && !b.default).slice(0, 5);
+      // Показываем только настоящие рекламные баннеры: у них есть ссылка.
+      // Заглушки «здесь могла быть ваша реклама» без ссылки не рисуем.
+      const items = (data.items || [])
+        .filter((b) => b && b.image && !b.default && b.action)
+        .slice(0, 5);
       if (!items.length) {
         box.innerHTML = '';
         return;
