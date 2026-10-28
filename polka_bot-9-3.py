@@ -30690,6 +30690,34 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         out['query'] = dict(crit).get('query')
         return _miniapp_json(out)
 
+    if action == 'bind_criteria':
+        # Переносим все критерии и находки на аккаунт, с которого реально
+        # заходят в приложение. Нужно, когда критерии создавались тестово.
+        try:
+            to_id = int((body or {}).get('to') or 0)
+        except Exception:
+            to_id = 0
+        if not to_id:
+            return _miniapp_json({'ok': False, 'error': 'need to'}, status=400)
+        cur = db.conn.cursor()
+        moved_c = 0
+        try:
+            cur.execute("UPDATE hunt_criteria SET user_id=? WHERE user_id<>?", (to_id, to_id))
+            moved_c = cur.rowcount
+        except Exception as e:
+            logger.warning(f'bind criteria: {e}')
+        try:
+            cur.execute("UPDATE hunt_matches SET user_id=? WHERE user_id<>?", (to_id, to_id))
+        except Exception as e:
+            logger.warning(f'bind matches: {e}')
+        try:
+            cur.execute("UPDATE ads SET user_id=? WHERE source='polka' AND user_id<>?",
+                        (to_id, to_id))
+        except Exception:
+            pass
+        db.conn.commit()
+        return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
     if action == 'create_promo':
         # Создание промокода из обслуживания (по admin-токену), чтобы можно
         # было завести код без захода в бота.
