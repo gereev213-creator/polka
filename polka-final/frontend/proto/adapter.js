@@ -74,14 +74,50 @@ function paintEmpty(count) {
     };
   }
 
+
+  // Ручная отрисовка ленты: прототипный renderGrids падает с ошибкой
+  // «Cannot read properties of null», и сетка оставалась пустой.
+  function renderLotsManual(items, rawItems) {
+    const rub = (n) => (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD';
+    const src = (rawItems && rawItems.length === items.length) ? rawItems : items;
+    const html = items.map((l, i) => {
+      const r = src[i] || {};
+      let ph = l.photo || (l.photos && l.photos[0]) || '';
+      if (!ph) {
+        const arr = r.photos;
+        ph = Array.isArray(arr) ? (arr[0] || '') : String(arr || '');
+      }
+      const bg = ph ? `style="background-image:url('${ph}')"` : '';
+      return `<article class="card lot" data-lot="${l.id}">
+        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+        <h3>${String(l.title || '').slice(0, 34)}</h3>
+        <span class="pricepill">${rub(l.price)}</span>
+        <span class="status">${l.city || ''}${l.discount ? ' · −' + l.discount + '%' : ''}</span>
+      </article>`;
+    }).join('');
+    ['homeGrid', 'marketGrid'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.innerHTML = html;
+      el.querySelectorAll('[data-lot]').forEach((card) => {
+        card.addEventListener('click', () => {
+          const lotId = card.getAttribute('data-lot');
+          if (typeof window.openLot === 'function') window.openLot(Number(lotId));
+        });
+      });
+    });
+  }
+
   async function loadLots() {
     try {
       const data = await api('/api/findings?limit=40');
-      const items = (data.items || []).map(toLot);
-      if (window.setLots && items.length) {
-        window.setLots(items);
-        if (typeof window.renderGrids === 'function') window.renderGrids();
-        if (typeof window.renderFavs === 'function') window.renderFavs();
+      const rawItems = data.items || [];
+      const items = rawItems.map(toLot);
+      if (items.length) {
+        try { window.setLots && window.setLots(items); } catch (e) { }
+        // Рисуем сами: встроенный renderGrids падает на этом прототипе
+        try { renderLotsManual(items, rawItems); } catch (e) { }
+        try { if (typeof window.renderFavs === 'function') window.renderFavs(); } catch (e) { }
       } else {
         paintEmpty(0);
       }
