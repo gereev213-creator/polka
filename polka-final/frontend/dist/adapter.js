@@ -888,16 +888,17 @@ function paintEmpty(count) {
     const box = active.getBoundingClientRect();
     // Пилюля по размеру самого меню: высота = капсула минус 8, ширина чуть
     // больше иконки. Так она всегда внутри и не вылезает за края.
-    // Плашка внутри капсулы: высота минус 8, ширина кнопки минус 8,
-    // чтобы края не выходили за скругление
-    const h = Math.max(40, navBox.height - 8);
-    const w = Math.round(box.width) - 8;
+    // Размеры из макета: пилюля 65×52, центр по кнопке, внутри капсулы
+    const h = 52;
+    const w = 65;
     glass.style.transition = 'left .22s ease, width .22s ease';
     const centerX = (box.left - navBox.left) + box.width / 2;
     glass.style.width = w + 'px';
     glass.style.height = h + 'px';
     glass.style.left = Math.round(centerX - w / 2) + 'px';
-    glass.style.top = Math.round((navBox.height - h) / 2) + 'px';
+    // Фиксированные 4px от верхнего края капсулы: расчёт по navBox давал
+    // смещение, и плашка выходила за пределы меню
+    glass.style.top = '4px';
     glass.style.borderRadius = '500px';
   }
 

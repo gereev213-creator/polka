@@ -465,14 +465,21 @@ body:not(:has(#s-post.active)) #s-post .bottomCta{display:none!important}
 body:not(:has(#s-newsearch.active)) #s-newsearch .bottomCta{display:none!important}
 
 /* Плашка подсветки не должна торчать за кнопкой */
-/* Плашка внутри меню: ровно по кнопке, капсула обрезает края */
-#navglass{display:block!important;background:rgba(255,255,255,.22)!important;
-  border-radius:999px!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.30)!important;
-  pointer-events:none!important}
-.navmain{overflow:hidden!important}
-.navmain>button{color:#C2D5F8!important}
-.navmain>button.on{color:#FFFFFF!important}
+/* Плашка как в макете: 65×52, внутри капсулы, мягкая */
+#navglass{display:block!important;position:absolute!important;
+  width:65px!important;height:52px!important;border-radius:500px!important;
+  background:rgba(255,255,255,.22)!important;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.32), inset 0 -1px 0 rgba(255,255,255,.12)!important;
+  pointer-events:none!important;z-index:0!important}
 .navmain{position:relative!important;overflow:hidden!important}
+.navmain>button{position:relative!important;z-index:1!important;color:#C2D5F8!important}
+.navmain>button.on{color:#fff!important}
+
+/* У самого контейнера меню не должно быть своей плашки — только капсула */
+#nav{background:transparent!important;box-shadow:none!important;
+  backdrop-filter:none!important;-webkit-backdrop-filter:none!important;
+  border:none!important;padding:0!important}
+#fade{background:transparent!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -709,5 +716,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610281842"></script>
-<script src="adapter.js?v=202610281842"></script><script src="payments.js?v=202610281842"></script><script src="admin.js?v=202610281842"></script><script src="keyboard.js?v=202610281842"></script><script src="telegram-safe.js?v=202610281842"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610281923"></script>
+<script src="adapter.js?v=202610281923"></script><script src="payments.js?v=202610281923"></script><script src="admin.js?v=202610281923"></script><script src="keyboard.js?v=202610281923"></script><script src="telegram-safe.js?v=202610281923"></script></body></html>
