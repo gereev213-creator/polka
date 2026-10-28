@@ -1130,7 +1130,11 @@ function paintEmpty(count) {
     if (!box) return;
     try {
       const data = await window.PolkaAPI.api('/api/feed-banners');
-      const items = (data.items || []).filter((b) => b && b.image && !b.default).slice(0, 5);
+      // Показываем только настоящие рекламные баннеры: у них есть ссылка.
+      // Заглушки «здесь могла быть ваша реклама» без ссылки не рисуем.
+      const items = (data.items || [])
+        .filter((b) => b && b.image && !b.default && b.action)
+        .slice(0, 5);
       if (!items.length) {
         box.innerHTML = '';
         return;
@@ -1166,4 +1170,67 @@ function paintEmpty(count) {
   setTimeout(wrap, 900);
   setTimeout(loadFeedBanners, 2000);
   window.PolkaBanners = loadFeedBanners;
+})();
+
+/* ── Барахолка: объявления пользователей из /api/board ─────────────────── */
+(function () {
+  function rub(n) { return (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD'; }
+
+  function card(a) {
+    let ph = '';
+    try {
+      const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
+      ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
+    } catch (e) { ph = ''; }
+    const bg = ph ? `style="background-image:url('${ph}')"` : '';
+    return `<article class="card lot" data-ad="${a.id}">
+      <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+      <h3>${(a.title || '').slice(0, 34)}</h3>
+      <span class="pricepill">${rub(a.price)}</span>
+      <span class="status">${a.city || ''}</span>
+    </article>`;
+  }
+
+  async function loadBoard() {
+    const box = document.getElementById('marketGrid');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/board?limit=40');
+      const items = data.items || [];
+      if (!items.length) {
+        box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
+          <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
+          <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
+            Здесь появятся объявления людей после модерации.
+          </div>
+          <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
+                  onclick="go('post')">Разместить объявление</button>
+        </div>`;
+        return;
+      }
+      box.innerHTML = items.map(card).join('');
+      box.querySelectorAll('[data-ad]').forEach((el) => {
+        el.addEventListener('click', () => {
+          const id = el.getAttribute('data-ad');
+          if (typeof window.openLot === 'function') window.openLot(Number(id));
+          else if (typeof window.go === 'function') window.go('market');
+        });
+      });
+    } catch (e) { }
+  }
+
+  const wrap = () => {
+    if (typeof window.go !== 'function' || window.go.__board) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'market') setTimeout(loadBoard, 150);
+      return r;
+    };
+    wrapped.__board = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', wrap);
+  setTimeout(wrap, 950);
+  window.PolkaBoard = loadBoard;
 })();
