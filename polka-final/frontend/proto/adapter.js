@@ -859,75 +859,8 @@ function paintEmpty(count) {
   setTimeout(loadBanner, 1200);
 })();
 
-/* ── Подсветка активной вкладки: считаем от реальной кнопки ─────────────── */
-(function () {
-  function positionGlass() {
-    const glass = document.getElementById('navglass');
-    const nav = document.querySelector('#nav .navmain');
-    if (!glass || !nav) return;
-    // Вкладка определяется ТЕКУЩИМ ЭКРАНОМ, а не классом .active:
-    // класс не всегда обновляется, и плашка уезжала на «Находки».
-    const screen = (document.querySelector('.screen.active') || {}).id || '';
-    const MAP = {
-      's-home': 'home', 's-market': 'market', 's-favorites': 'favorites',
-      's-profile': 'profile', 's-myads': 'profile', 's-tariffs': 'profile',
-      's-post': 'profile', 's-referrals': 'profile', 's-admin': 'profile',
-      's-moderation': 'profile', 's-searches': 'home', 's-history': 'home',
-      's-newsearch': 'home', 's-product': 'home',
-    };
-    const want = MAP[screen] || 'home';
-    nav.querySelectorAll('button').forEach((b) => {
-      b.classList.toggle('active', b.getAttribute('data-nav') === want && b.closest('.navmain'));
-      b.classList.toggle('on', b.getAttribute('data-nav') === want && b.closest('.navmain'));
-    });
-    const active = nav.querySelector('button.on') ||
-                   nav.querySelector('button[data-nav="' + want + '"]') ||
-                   nav.querySelector('button');
-    if (!active) return;
-    const navBox = nav.getBoundingClientRect();
-    const box = active.getBoundingClientRect();
-    // Пилюля по размеру самого меню: высота = капсула минус 8, ширина чуть
-    // больше иконки. Так она всегда внутри и не вылезает за края.
-    // Пилюля 56×48 из polka-menu по центру активной иконки
-    const h = 48;
-    const w = 56;
-    glass.style.transition = 'left .22s ease, width .22s ease';
-    const centerX = (box.left - navBox.left) + box.width / 2;
-    glass.style.width = w + 'px';
-    glass.style.height = h + 'px';
-    glass.style.left = Math.round(centerX - w / 2) + 'px';
-    // Фиксированные 4px от верхнего края капсулы: расчёт по navBox давал
-    // смещение, и плашка выходила за пределы меню
-    glass.style.top = '4px';
-    glass.style.borderRadius = '500px';
-  }
-
-  const wrap = () => {
-    if (typeof window.go === 'function' && !window.go.__glass) {
-      const orig = window.go;
-      const wrapped = function () {
-        const r = orig.apply(this, arguments);
-        setTimeout(positionGlass, 30);
-        setTimeout(positionGlass, 300);
-        return r;
-      };
-      wrapped.__glass = true;
-      window.go = wrapped;
-    }
-    positionGlass();
-  };
-
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 500);
-  setTimeout(positionGlass, 1200);
-  window.addEventListener('resize', positionGlass);
-
-  // Наблюдаем за сменой экрана: класс .active может переехать без вызова go(),
-  // тогда плашка оставалась на прежней вкладке.
-  const obs = new MutationObserver(() => positionGlass());
-  obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
-  setInterval(positionGlass, 700);
-})();
+/* ── Подсветка вкладки: позиционирование делает прототип (show → NAVSHOW) ──
+   Своих размеров и позиций не задаём: плашка 65×52 из первого дизайна. */
 
 /* ── Фото лота: дорожка со слотами, до 10 штук ─────────────────────────── */
 (function () {
