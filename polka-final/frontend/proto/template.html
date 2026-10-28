@@ -528,14 +528,28 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
   border-radius:999px!important;background:none!important;box-shadow:none!important;
   color:#C2D5F8!important;position:relative!important;z-index:2!important}
 #nav .navmain button.on{background:none!important;box-shadow:none!important;color:#fff!important}
-#nav #navglass{background:rgba(255,255,255,.18)!important;
-  border:1.5px solid rgba(255,255,255,.55)!important;
-  box-sizing:border-box!important;z-index:1!important;
-  pointer-events:none!important;box-shadow:none!important;
-  transition:left .25s ease!important}
+
 
 /* Место под нижнюю панель, чтобы последние карточки не уходили за неё */
 #s-home .scroll,#s-market .scroll,#s-favorites .scroll,#s-profile .scroll{padding-bottom:104px!important}
+
+/* ── Меню: капсула прототипа + плашка стилем из polka-menu ────────────── */
+#nav{display:flex!important;position:absolute;left:15px;right:15px;bottom:15px;
+  align-items:center;gap:10px;z-index:20;background:none!important;border:0!important;
+  box-shadow:none!important;filter:none!important}
+#nav .navmain{position:relative;flex:1 1 auto;height:60px;border-radius:999px;
+  background:linear-gradient(112deg,#4780FB,#6B98F5);display:flex;align-items:center;
+  overflow:hidden;box-shadow:none!important}
+#nav .navmain button{flex:1 1 0;height:60px;background:none;border:0;display:grid;
+  place-items:center;color:#C2D5F8;position:relative;z-index:2}
+#nav .navmain button.on{background:none!important;box-shadow:none!important;color:#3373FA!important}
+#nav .plusbtn{flex:0 0 52px;width:52px;height:52px;border-radius:50%;border:0;
+  background:linear-gradient(112deg,#4780FB,#6B98F5);color:#fff;display:grid;
+  place-items:center;box-shadow:none!important}
+#nav #navglass{position:absolute;top:6px;left:0;width:56px;height:48px;border-radius:19px;
+  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(226,238,255,.95));
+  box-shadow:0 3px 12px rgba(51,115,250,.20),inset 0 1px 1px #fff,inset 0 -2px 5px rgba(51,115,250,.08);
+  z-index:1;pointer-events:none;transition:left .22s ease}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -773,6 +787,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610282016"></script>
-<script src="adapter.js?v=202610282016"></script><script src="payments.js?v=202610282016"></script><script src="admin.js?v=202610282016"></script><script src="keyboard.js?v=202610282016"></script><script src="dock.js?v=202610282016"></script>
-<script src="telegram-safe.js?v=202610282016"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610282017"></script>
+<script src="adapter.js?v=202610282017"></script><script src="payments.js?v=202610282017"></script><script src="admin.js?v=202610282017"></script><script src="keyboard.js?v=202610282017"></script><script src="telegram-safe.js?v=202610282017"></script></body></html>
