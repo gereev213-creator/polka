@@ -388,7 +388,14 @@ def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
         try:
             return _fetch_via_scraper(url, timeout=max(timeout, 60))
         except Exception as exc:
-            print(f"  скрапер не отдал страницу: {str(exc)[:70]}")
+            msg = str(exc)
+            print(f"  скрапер не отдал страницу: {msg[:70]}")
+            if '401' in msg or 'UNAUTHORIZED' in msg.upper():
+                # Ключ недействителен или кончились кредиты: не тратим время
+                # на каждую страницу, дальше идём обычным путём по разделу.
+                global SCRAPINGBEE_KEY
+                SCRAPINGBEE_KEY = ''
+                print("  скрапер отключён до конца прохода (401)")
     if AVITO_PROFILE and 'avito.ru' in url:
         try:
             return _fetch_via_profile(url, timeout=max(timeout, 120))
