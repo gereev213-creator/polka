@@ -1934,3 +1934,34 @@ function paintEmpty(count) {
 
 /* Старое меню прототипа отключено: используется меню из референса (menu.js) */
 
+
+/* ── Прокрутка страницы: фиксируем только лого и название раздела ────────
+   Баннер и поиск должны уезжать вместе с карточками, а не висеть поверх. */
+(function () {
+  try {
+    function restructure() {
+      [['s-home', 'home-scroll'], ['s-market', 'market-scroll']].forEach(([id, flag]) => {
+        const screen = document.getElementById(id);
+        if (!screen) return;
+        const scroll = screen.querySelector('.scroll');
+        if (!scroll || scroll.dataset.bannerInside === '1') return;
+
+        // всё, что стоит между шапкой и прокруткой, переносим внутрь прокрутки
+        const header = screen.querySelector('.ahead');
+        [...screen.children].forEach((child) => {
+          if (child === header || child === scroll) return;
+          if (child.classList.contains('scroll')) return;
+          scroll.insertBefore(child, scroll.firstChild);
+        });
+        scroll.dataset.bannerInside = '1';
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      restructure();
+      setTimeout(restructure, 400);
+      setTimeout(restructure, 1500);
+    });
+    setTimeout(restructure, 2200);
+  } catch (e) { }
+})();

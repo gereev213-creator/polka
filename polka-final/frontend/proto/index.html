@@ -453,6 +453,16 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
   box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.12)}
 .plusbtn{flex:0 0 60px;width:60px;height:60px;border-radius:50%;background:var(--grad);
   color:#fff;display:grid;place-items:center;box-shadow:0 10px 24px rgba(15,95,214,.25)}
+
+/* Шапка на месте, всё остальное прокручивается внутри экрана */
+#s-home .scroll,#s-market .scroll{display:block!important;overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;padding-bottom:126px!important}
+/* Шапка перекрывает прокручиваемое содержимое: лого и раздел остаются на месте */
+#s-home .ahead,#s-market .ahead{flex:none;position:relative;top:0!important;z-index:3;
+  background:linear-gradient(180deg,var(--bg) 72%,rgba(231,239,246,0));padding-bottom:10px}
+#s-home .searchBanner{margin-bottom:14px}
+#s-market #feedBanners{margin-bottom:12px}
+#s-market .tools{margin-bottom:12px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -684,5 +694,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029003315"></script>
-<script src="adapter.js?v=20261029003315"></script><script src="payments.js?v=20261029003315"></script><script src="admin.js?v=20261029003315"></script><script src="keyboard.js?v=20261029003315"></script><script src="telegram-safe.js?v=20261029003315"></script></body></html>
+</script><script src="telegram-web-app.js?v=20261029005126"></script>
+<script src="adapter.js?v=20261029005126"></script><script src="payments.js?v=20261029005126"></script><script src="admin.js?v=20261029005126"></script><script src="keyboard.js?v=20261029005126"></script><script src="telegram-safe.js?v=20261029005126"></script></body></html>
