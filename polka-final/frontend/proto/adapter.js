@@ -1098,3 +1098,13 @@ function paintEmpty(count) {
     }
   };
 })();
+
+/* ── Поддержка: открыть чат @suppolka ──────────────────────────────────── */
+(function () {
+  window.openSupport = function () {
+    const url = 'https://t.me/suppolka';
+    const TG = window.Telegram && window.Telegram.WebApp;
+    if (TG && TG.openTelegramLink) TG.openTelegramLink(url);
+    else window.open(url, '_blank');
+  };
+})();
