@@ -29462,7 +29462,9 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         rows = [dict(r) for r in cursor.fetchall()]
     except Exception as e:
         logger.error(f"findings from matches: {e}")
-        return _miniapp_err('load_failed', 500)
+        # Пустая лента лучше ошибки: причина уже в логе
+        return _miniapp_json({'items': [], 'has_more': False,
+                              'error': 'load_failed', 'detail': str(e)[:120]})
 
     has_more = len(rows) > limit
     rows = rows[:limit]
