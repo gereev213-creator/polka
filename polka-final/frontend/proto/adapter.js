@@ -1999,57 +1999,5 @@ function paintEmpty(count) {
   } catch (e) { }
 })();
 
-/* ── Плашка меню: пилюля 56×48 по центру активной иконки ───────────────── */
-(function () {
-  try {
-    const W = 56;
-    const H = 48;
+/* Старое меню прототипа отключено: используется меню из референса (menu.js) */
 
-    function position() {
-      const glass = document.getElementById('navglass');
-      const nav = document.querySelector('#nav .navmain');
-      if (!glass || !nav) return;
-      const active = nav.querySelector('button.on') || nav.querySelector('button');
-      if (!active) return;
-      const navBox = nav.getBoundingClientRect();
-      const box = active.getBoundingClientRect();
-      const centerX = (box.left - navBox.left) + box.width / 2;
-      glass.style.setProperty('left', Math.round(centerX - W / 2) + 'px', 'important');
-      glass.style.setProperty('width', W + 'px', 'important');
-      glass.style.setProperty('height', H + 'px', 'important');
-      glass.style.setProperty('top', Math.round((navBox.height - H) / 2) + 'px', 'important');
-      glass.style.setProperty('border-radius', '19px', 'important');
-      // Стиль плашки из polka-menu: светлый градиент, мягкая тень, белая обводка
-      glass.style.setProperty('background', 'linear-gradient(180deg,rgba(255,255,255,.98),rgba(226,238,255,.95))', 'important');
-      glass.style.setProperty('border', '0', 'important');
-      glass.style.setProperty('box-shadow', '0 3px 12px rgba(51,115,250,.20),inset 0 1px 1px #fff,inset 0 -2px 5px rgba(51,115,250,.08)', 'important');
-    }
-
-    const HIDDEN_ON = ['s-product', 's-post', 's-newsearch', 's-myads', 's-admin', 's-moderation'];
-
-    function sync() {
-      const nav = document.getElementById('nav');
-      if (!nav) return;
-      const active = (document.querySelector('.screen.active') || {}).id || 's-home';
-      nav.style.setProperty('display', HIDDEN_ON.includes(active) ? 'none' : 'flex', 'important');
-      position();
-    }
-
-    window.__positionGlass = position;
-    window.__syncNav = sync;
-
-    document.addEventListener('DOMContentLoaded', () => { sync(); setTimeout(sync, 200); });
-    setTimeout(sync, 700);
-    setTimeout(sync, 1500);
-    window.addEventListener('resize', sync);
-    setInterval(sync, 700);
-
-    const obs = new MutationObserver(() => position());
-    document.addEventListener('DOMContentLoaded', () => {
-      const nav = document.querySelector('#nav .navmain');
-      if (nav) obs.observe(nav, { attributes: true, subtree: true, attributeFilter: ['class'] });
-      const glass = document.getElementById('navglass');
-      if (glass) new MutationObserver(() => position()).observe(glass, { attributes: true, attributeFilter: ['style'] });
-    });
-  } catch (e) { }
-})();
