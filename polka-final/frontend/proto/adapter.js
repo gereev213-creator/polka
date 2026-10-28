@@ -457,8 +457,15 @@ function paintEmpty(count) {
         await window.PolkaAPI.api('/api/ads', {
           method: 'POST',
           body: JSON.stringify({
-            title, price, category: cat.trim(), condition: cond.trim(), city,
-            photos: (window.PolkaPhotos ? window.PolkaPhotos() : []).join(','),
+            title,
+            price,
+            category: cat.trim(),
+            condition: cond.trim(),
+            city,
+            // Сервер ждёт массив ссылок, а не строку через запятую
+            photos: window.PolkaPhotos ? window.PolkaPhotos() : [],
+            description: (document.getElementById('adDesc') || {}).value || '',
+            delivery: (document.getElementById('adDelivery') || {}).checked ? 1 : 0,
           }),
         });
         const TG = window.Telegram && window.Telegram.WebApp;
