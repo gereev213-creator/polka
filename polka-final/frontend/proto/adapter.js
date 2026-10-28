@@ -1275,8 +1275,19 @@ function paintEmpty(count) {
         if (TG && TG.showAlert) TG.showAlert('Ссылка на объявление недоступна');
         return;
       }
-      if (TG && TG.openLink) TG.openLink(url);
-      else window.open(url, '_blank');
+      // Telegram иногда отказывает openLink: тогда копируем адрес и показываем его
+      try {
+        if (TG && TG.openLink) {
+          TG.openLink(url, { try_instant_view: false });
+          return;
+        }
+      } catch (e) { }
+      try {
+        window.open(url, '_blank');
+        return;
+      } catch (e) { }
+      try { navigator.clipboard.writeText(url); } catch (e) { }
+      if (TG && TG.showAlert) TG.showAlert('Ссылка скопирована:\n' + url);
     }
 
     function share() {
