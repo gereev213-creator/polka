@@ -33208,7 +33208,13 @@ async def api_root(request: aiohttp_web.Request) -> aiohttp_web.Response:
         # Страницу НЕ кешируем: в ней ссылки на файлы сборки, и после
         # деплоя человек видел бы старую версию. Файлы сборки кешируются
         # спокойно — у них хеш в имени.
-        resp = aiohttp_web.FileResponse(index)
+        try:
+            with open(index, 'rb') as fh:
+                body = fh.read()
+            resp = aiohttp_web.Response(body=body, content_type='text/html')
+            resp.enable_compression()
+        except Exception:
+            resp = aiohttp_web.FileResponse(index)
         resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
         resp.headers['Pragma'] = 'no-cache'
         return resp
@@ -33236,6 +33242,21 @@ async def api_miniapp_spa(request: aiohttp_web.Request) -> aiohttp_web.Response:
             return resp
     path = os.path.join(dist, safe)
     if safe and os.path.isfile(path):
+        # index.html весит 700 КБ (шрифты и картинки внутри) и без сжатия
+        # грузится десятки секунд. Отдаём с gzip: браузер получает ~150 КБ.
+        if path.endswith(('.html', '.js', '.css', '.json')):
+            try:
+                with open(path, 'rb') as fh:
+                    body = fh.read()
+                ctype = ('text/html' if path.endswith('.html')
+                         else 'application/javascript' if path.endswith('.js')
+                         else 'text/css' if path.endswith('.css') else 'application/json')
+                resp = aiohttp_web.Response(body=body, content_type=ctype)
+                resp.enable_compression()
+                resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                return resp
+            except Exception:
+                pass
         return aiohttp_web.FileResponse(path)
     index = os.path.join(dist, 'index.html')
     if os.path.isfile(index):
