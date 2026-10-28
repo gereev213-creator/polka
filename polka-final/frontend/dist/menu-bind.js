@@ -1,6 +1,5 @@
-/* Связка меню из референса с экранами приложения */
+/* Связка меню из Figma-фрейма с экранами приложения */
 (() => {
-  const MENU = () => document.getElementById('polka-reference-menu');
   const PAGE = { home: 'home', market: 'market', saved: 'favorites', profile: 'profile', add: 'post' };
   const BACK = { 's-home': 'home', 's-market': 'market', 's-favorites': 'saved', 's-profile': 'profile' };
   const HIDDEN_ON = ['s-product', 's-post', 's-newsearch', 's-myads', 's-admin', 's-moderation'];
@@ -12,15 +11,15 @@
   });
 
   function sync() {
-    const menu = MENU();
+    const menu = window.PolkaMenu && window.PolkaMenu.el;
     if (!menu) return;
     const active = (document.querySelector('.screen.active') || {}).id || 's-home';
     menu.style.setProperty('display', HIDDEN_ON.includes(active) ? 'none' : 'flex', 'important');
-    const page = BACK[active] || '';
-    menu.querySelectorAll('.polka-item').forEach((btn) => {
-      if (btn.dataset.page === page) btn.setAttribute('aria-current', 'page');
-      else btn.removeAttribute('aria-current');
-    });
+    const page = BACK[active];
+    if (!page) return;
+    const cur = menu.querySelector('.polka-item[aria-current="page"]');
+    if (cur && cur.dataset.page === page) return;
+    if (window.PolkaMenu.setActive) window.PolkaMenu.setActive(page);
   }
 
   const wrap = () => {
@@ -36,7 +35,7 @@
     window.go = wrapped;
   };
 
-  document.addEventListener('DOMContentLoaded', () => { wrap(); sync(); setTimeout(() => { wrap(); sync(); }, 600); });
-  setTimeout(() => { wrap(); sync(); }, 1200);
+  document.addEventListener('DOMContentLoaded', () => { wrap(); sync(); setTimeout(() => { wrap(); sync(); }, 500); });
+  setTimeout(() => { wrap(); sync(); }, 1100);
   setInterval(sync, 900);
 })();
