@@ -6,10 +6,12 @@
 function paintEmpty(count) {
   const html = `<div class="card" style="padding:22px 18px;text-align:center;grid-column:1/-1">
     <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
-    <div style="font-size:11px;color:#7A8CA3;line-height:1.4">
-      Новые находки приходят в течение часа после создания поиска.
-      Нажмите «Поиск лотов» выше.
-    </div></div>`;
+    <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
+      Создайте поиск — и находки начнут приходить в течение часа.
+    </div>
+    <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
+            onclick="go('newsearch')">Создать поиск</button>
+  </div>`;
   if (count) return;
   ['homeGrid', 'marketGrid'].forEach((id) => {
     const el = document.getElementById(id);
