@@ -242,13 +242,11 @@ function paintEmpty(count) {
           av.textContent = letter;
         }
       }
-      // id нужен, чтобы привязать критерии и находки к аккаунту
+      // Под аватаром только юзернейм — служебный id не показываем
       const idNode = document.getElementById('tgUserId');
-      if (idNode && u.telegram_id) {
-        idNode.style.display = 'block';
-        idNode.textContent = 'id: ' + u.telegram_id;
-      } else if (idNode) {
+      if (idNode) {
         idNode.style.display = 'none';
+        idNode.textContent = '';
       }
       const ht = $('handleText');
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
