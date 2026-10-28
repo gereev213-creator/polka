@@ -9,7 +9,9 @@
 
   function apply() {
     var tg = window.Telegram && window.Telegram.WebApp;
-    var top = 54;   // запас, если Telegram ничего не сообщил
+    // Запас: если Telegram не сообщил высоту панели, берём 96 px — столько
+    // занимают «Закрыть», «•••» и стрелка в полноэкранном режиме.
+    var top = tg ? 96 : 54;
 
     if (tg) {
       try {
@@ -20,11 +22,12 @@
           top = content + 8;
         } else if (safe) {
           top = safe + 54;
-        } else if (tg.isExpanded && tg.viewportStableHeight) {
-          top = 54;
+        } else if (tg.isExpanded) {
+          top = 96;
         }
       } catch (e) { /* остаёмся на запасе */ }
     }
+    if (tg && top < 96) top = 96;   // панель Telegram ниже 90 px не бывает
     document.documentElement.style.setProperty('--tg-top', top + 'px');
   }
 
