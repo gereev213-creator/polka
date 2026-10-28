@@ -135,6 +135,34 @@ import io
 # Токен и администраторы
 TOKEN = os.environ.get("BOT_TOKEN", "")
 ADMIN_USER_IDS = [int(x.strip()) for x in os.environ.get("ADMIN_IDS", "6115882628").split(",") if x.strip().isdigit()]
+# Админы по username: удобно, когда числовой id неизвестен.
+ADMIN_USERNAMES = {u.strip().lower() for u in os.environ.get(
+    "ADMIN_USERNAMES", "gereev,nikicev2009,nikitagereev,shytik8").split(",") if u.strip()}
+
+
+def _tg_username_from_init(init_data: str) -> str:
+    """Username из Telegram initData — чтобы узнавать админа без числового id."""
+    try:
+        from urllib.parse import parse_qsl
+        import json as _json
+        for key, value in parse_qsl(str(init_data or ''), strict_parsing=False):
+            if key == 'user':
+                return str(_json.loads(value).get('username') or '').lower()
+    except Exception:
+        pass
+    return ''
+
+
+def _is_admin_request(request) -> bool:
+    """Админ ли запрос: по id или по username из initData."""
+    try:
+        viewer = _miniapp_viewer(request)
+    except Exception:
+        viewer = None
+    if viewer and int(viewer) in ADMIN_USER_IDS:
+        return True
+    uname = _tg_username_from_init(request.headers.get('X-Telegram-Init-Data', ''))
+    return bool(uname and uname in ADMIN_USERNAMES)
 
 # Имя бота (без @) — используется в deep-link кнопках внутри канала
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "polkaudmbot")
@@ -29685,6 +29713,9 @@ async def _admin_guard(request):
     if not ok and int(viewer_id) in ADMIN_TELEGRAM_IDS:
         ok = True
     if not ok:
+        uname = _tg_username_from_init(request.headers.get('X-Telegram-Init-Data', ''))
+        ok = bool(uname and uname in ADMIN_USERNAMES)
+    if not ok:
         return None, _miniapp_err('forbidden', 403)
     if not _admin_rate_ok(viewer_id):
         return None, _miniapp_json({'error': 'too_many', 'detail': 'Слишком часто, подождите'},
@@ -31784,7 +31815,8 @@ def _miniapp_serialize_ad(ad: dict, viewer_id: Optional[int] = None,
             'username': (seller.get('username') or '') if seller else '',
             'verified': bool(verify and verify.get('status') == 'verified'),
         # Админка в приложении: показываем пункт только администратору
-        'is_admin': viewer_id in ADMIN_USER_IDS,
+        'is_admin': (viewer_id in ADMIN_USER_IDS
+                     or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
         # Аватар берём из initData: в таблице users колонки photo_url нет
         'photo_url': (_tg_photo_from_init(init_data) or '') if init_data else '',
             'rating': (rating or {}).get('avg') or None,
