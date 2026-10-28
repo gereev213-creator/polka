@@ -1354,8 +1354,11 @@ function paintEmpty(count) {
     // Следим за экраном: на карточке товара меню снизу не нужно
     const obs = new MutationObserver(() => {
       const active = (document.querySelector('.screen.active') || {}).id;
+      // Только скрываем на карточке товара. Показывать здесь нельзя:
+      // наблюдатель срабатывает на любой class (в том числе на чипах формы)
+      // и меню мигало на экране создания объявления.
       const nav = document.getElementById('nav');
-      if (nav) nav.style.display = (active === 's-product') ? 'none' : 'flex';
+      if (nav && active === 's-product') nav.style.display = 'none';
       if (active === 's-product') {
         wire();
         const raw = currentRaw();
