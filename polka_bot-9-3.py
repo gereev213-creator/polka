@@ -22293,9 +22293,12 @@ def ad_has_defect(ad: Dict) -> str:
     for marker in _DEFECT_MARKERS:
         if marker in text:
             return 'defect' if marker not in ('копия', 'реплика', '1:1') else 'replica'
+    # Состояние ищем и в отдельном поле, и в тексте: у половины объявлений
+    # condition приходит пустым, а «удовлетворительное» написано в описании.
     cond = str(ad.get('condition') or '').lower()
+    both = cond + ' ' + text
     for bad in _BAD_CONDITIONS:
-        if bad in cond:
+        if bad in both:
             return 'condition_worn'
     return ''
 
