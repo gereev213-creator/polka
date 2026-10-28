@@ -599,10 +599,15 @@ function paintEmpty(count) {
     const code = (inp && inp.value || '').trim().toUpperCase();
     if (!code) return;
     if (msg) { msg.textContent = 'Проверяем…'; msg.style.display = 'block'; }
+    // Русские буквы, похожие на латинские: «ОРА» вместо «OPA» — частая ошибка
+    const norm = code.replace(/[АВЕКМНОРСТУХ]/g, (ch) => ({
+      А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H',
+      О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X',
+    }[ch] || ch));
     try {
       const res = await window.PolkaAPI.api('/api/promo/redeem', {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: norm }),
       });
       const pct = res.percent || res.discount || 0;
       if (msg) msg.textContent = pct ? ('Скидка ' + pct + '%') : 'Промокод применён';
@@ -1021,6 +1026,9 @@ function paintEmpty(count) {
           banner('Доступ только для администратора' + (tgId ? '. Ваш id: ' + tgId : '') + '.');
         }
         else if (status === 404) banner('Сервер не нашёл данные. Обновите приложение.');
+        // 400 — ошибка проверки (например, промокод не найден): её показывает
+        // сам экран, плашка сверху тут только мешает.
+        else if (status === 400) { /* без плашки */ }
         else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
         else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
         else banner('Не удалось загрузить данные (' + status + ').');

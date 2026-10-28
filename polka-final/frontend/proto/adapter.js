@@ -599,10 +599,15 @@ function paintEmpty(count) {
     const code = (inp && inp.value || '').trim().toUpperCase();
     if (!code) return;
     if (msg) { msg.textContent = 'Проверяем…'; msg.style.display = 'block'; }
+    // Русские буквы, похожие на латинские: «ОРА» вместо «OPA» — частая ошибка
+    const norm = code.replace(/[АВЕКМНОРСТУХ]/g, (ch) => ({
+      А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H',
+      О: 'O', Р: 'P', С: 'C', Т: 'T', У: 'Y', Х: 'X',
+    }[ch] || ch));
     try {
       const res = await window.PolkaAPI.api('/api/promo/redeem', {
         method: 'POST',
-        body: JSON.stringify({ code }),
+        body: JSON.stringify({ code: norm }),
       });
       const pct = res.percent || res.discount || 0;
       if (msg) msg.textContent = pct ? ('Скидка ' + pct + '%') : 'Промокод применён';
