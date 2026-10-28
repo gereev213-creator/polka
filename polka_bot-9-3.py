@@ -23459,6 +23459,11 @@ def promo_create(code: str, kind: str, value: int, max_uses: int = 0, per_user: 
     if len(code) < 3:
         return {'ok': False, 'error': 'short_code'}
     if kind not in PROMO_KINDS:
+        elif kind == 'discount':
+        # Скидка на оплату: запоминаем, что код использован этим человеком,
+        # и отдаём процент — платёж применит его при создании счёта.
+        granted = f"скидка {value}% на оплату"
+    else:
         return {'ok': False, 'error': 'bad_kind'}
     try:
         value = int(value)
