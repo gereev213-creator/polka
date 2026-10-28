@@ -242,9 +242,8 @@ function paintEmpty(count) {
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
-      // Показываем админские пункты всегда: сервер сам откажет не-админу (403),
-      // зато админ точно их увидит, даже если флаг не пришёл.
-      const isAdm = true;
+      // Админские пункты видит только администратор
+      const isAdm = !!(u.is_admin || data.is_admin || window.__isAdmin);
       ['adminRow', 'modRow'].forEach((id) => {
         const row = document.getElementById(id);
         if (row) row.style.display = isAdm ? 'flex' : 'none';
@@ -1014,7 +1013,13 @@ function paintEmpty(count) {
       } catch (e) {
         const status = (e && e.status) || 0;
         if (status === 401) banner('Нет доступа к данным. Откройте приложение через Telegram.');
-        else if (status === 403) banner('Это действие доступно только администратору.');
+        else if (status === 403) {
+          const tgId = (window.Telegram && window.Telegram.WebApp &&
+                        window.Telegram.WebApp.initDataUnsafe &&
+                        window.Telegram.WebApp.initDataUnsafe.user &&
+                        window.Telegram.WebApp.initDataUnsafe.user.id) || '';
+          banner('Доступ только для администратора' + (tgId ? '. Ваш id: ' + tgId : '') + '.');
+        }
         else if (status === 404) banner('Сервер не нашёл данные. Обновите приложение.');
         else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
         else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
