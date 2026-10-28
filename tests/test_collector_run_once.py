@@ -82,7 +82,7 @@ def reset():
 
 # ── а) первая цель падает с URLError: ничего не отправлено, проход жив
 reset()
-collect.fetch = lambda url: (_ for _ in ()).throw(
+collect.fetch = lambda url, **kw: (_ for _ in ()).throw(
     urllib.error.URLError('сеть недоступна'))
 sent = collect.run_once(cfg_with([T1, T2]))
 assert sent == 0, sent
@@ -94,7 +94,7 @@ reset()
 calls = {'n': 0}
 
 
-def fetch_second_fails(url):
+def fetch_second_fails(url, **kw):
     calls['n'] += 1
     if calls['n'] == 1:
         return 'первая'
@@ -110,7 +110,7 @@ print('б) вторая цель с URLError — отправка ровно о�
 
 # ── в) цель на две страницы: отправка для каждой страницы
 reset()
-collect.fetch = lambda url: ('стр1' if 'p=2' not in url else 'стр2')
+collect.fetch = lambda url, **kw: ('стр1' if 'p=2' not in url else 'стр2')
 sent = collect.run_once(cfg_with([{'url': T1['url'], 'city': 'Ижевск', 'pages': 2}]))
 assert len(PUSHED) == 2, PUSHED
 assert PUSHED[0] == ['лот-стр1'] and PUSHED[1] == ['лот-стр2'], PUSHED
@@ -122,7 +122,7 @@ reset()
 step = {'n': 0}
 
 
-def fetch_blocked_on_second_page(url):
+def fetch_blocked_on_second_page(url, **kw):
     step['n'] += 1
     if step['n'] == 1:
         return 'страница-до-блока'
