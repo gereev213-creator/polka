@@ -33317,6 +33317,16 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         return _miniapp_err('unauthorized', 401)
     init_data = request.headers.get('X-Telegram-Init-Data', '')
     user = _miniapp_ensure_user(viewer_id, init_data) or {}
+    # Держим username в базе свежим: его меняют, а профиль должен показывать
+    # актуальный @юзернейм, а не имя.
+    try:
+        _tg = _miniapp_init_user(init_data) or {}
+        _un = str(_tg.get('username') or '').strip()
+        if _un and _un != str((user or {}).get('username') or ''):
+            db.update_user(int(viewer_id), username=_un)
+            user['username'] = _un
+    except Exception:
+        pass
 
     # Счётчики читаем в отдельном потоке под блокировкой: общее соединение
     # SQLite нельзя использовать из двух задач одновременно — иначе

@@ -250,9 +250,12 @@ function paintEmpty(count) {
       }
       const ht = $('handleText');
       if (ht) {
-        // @username, если он есть; иначе имя из Telegram как есть, без «@»
-        const un = String(u.username || '').trim();
-        ht.textContent = un ? ('@' + un) : (String(u.name || 'гость'));
+        // Показываем ТОЛЬКО юзернейм: @cuesoul. Берём его из Telegram,
+        // потому что в базе username может быть пустым или устаревшим.
+        const tgUn = String((tgUser && tgUser.username) || '').trim();
+        const apiUn = String(u.username || '').trim();
+        const un = tgUn || apiUn;
+        ht.textContent = un ? ('@' + un) : String(u.name || 'гость');
       }
       const plus = $('pluspill');
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
