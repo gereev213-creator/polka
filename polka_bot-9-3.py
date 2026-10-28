@@ -21492,7 +21492,11 @@ def _criterion_where(crit: Dict, active_only: bool = True):
                 return Decision(True, 'ok', 'по заголовку, бренд не проверен',
                                 unverified=True)
             return Decision(False, 'desc_needed', 'нужно описание')
-        return no('title_words')
+        if _llm_title_match(ad, crit) == 'yes':
+            # Модель считает, что товар тот: не режем по словам
+            pass
+        else:
+            return no('title_words')
     for word in []:
         variants = query_word_variants(word)
         if not variants:
@@ -21790,6 +21794,42 @@ _LLM_MATCH_PROMPT = (
 )
 
 
+
+def _llm_title_match(ad: Dict, crit: Dict) -> str:
+    """Спросить модель, подходит ли объявление под критерий по заголовку.
+
+    Возвращает 'yes' | 'no' | '' (модель недоступна). Нужен там, где правила
+    по словам отбрасывают объявление: «iPhone 14 pro» против заголовка
+    «iPhone 13 Pro 128 ГБ» правила режут, а смысл — близок.
+    """
+    try:
+        if str(get_setting('hunt.llm', '1')) not in ('1', 'true', 'True'):
+            return ''
+        title = str(ad.get('title') or '')[:120]
+        query = str(crit.get('query') or '')[:120]
+        price = int(ad.get('price') or 0)
+        if not title or not query:
+            return ''
+        cached = _llm_match_cached(title, query, price)
+        if cached in ('yes', 'no'):
+            return cached
+        prompt = _LLM_MATCH_PROMPT.format(
+            query=query,
+            requirements=(f"Дополнительно: {crit.get('requirements')}\n"
+                          if crit.get('requirements') else ''),
+            title=title,
+            price=price,
+            details='',
+        )
+        answer = _llm_completion(prompt, max_tokens=4, temperature=0)
+        text = str(answer or '').strip().lower()
+        verdict = 'yes' if text.startswith('да') else ('no' if text.startswith('нет') else '')
+        if verdict:
+            _llm_match_store(title, query, price, verdict)
+        return verdict
+    except Exception:
+        return ''
+
 def _llm_match_cached(title: str, query: str, price: int) -> str:
     """Ответ модели из кэша или пустая строка."""
     try:
@@ -21994,13 +22034,18 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('condition_new_used')
     alts = _query_alt_numbers(crit.get('query'))
     if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', hay) for n in alts):
-        return no('title_words')
+        if _llm_title_match(ad, crit) == 'yes':
+            # Модель считает, что товар тот: не режем по словам
+            pass
+        else:
+            return no('title_words')
     for word in _query_words_required(crit.get('query')):
         # Числа (размер, память, год) сверяем отдельным словом: «43» не должно
         # находить «1430», а «13» — «2013».
         if str(word).isdigit():
             if not re.search(r'(?<![0-9])' + re.escape(str(word)) + r'(?![0-9])', hay):
-                return no('title_words')
+                if _llm_title_match(ad, crit) != 'yes':
+                    return no('title_words')
             continue
         variants = query_word_variants(word)
         # Сравниваем без апострофов: в объявлениях пишут «Levi's», «Levi’s»,
@@ -22009,7 +22054,8 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         _hay_ap = re.sub(r"[’'`\u2019]", '', hay)
         if variants and not any(
                 v in hay or re.sub(r"[’'`\u2019]", '', v) in _hay_ap for v in variants):
-            return no('title_words')
+            if _llm_title_match(ad, crit) != 'yes':
+                return no('title_words')
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
     # «Nike Air Max» — уточнители проверяем только в технике.
@@ -22058,7 +22104,8 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         if not any(v and (v in _low_title
                           or re.sub(r"[’'`\u2019]", '', v) in _title_ap)
                    for v in _vars):
-            return no('title_words')
+            if _llm_title_match(ad, crit) != 'yes':
+                return no('title_words')
     junk = hunt_junk_word(title_raw, query) or hunt_junk_start_word(title_raw, query)
     if junk:
         # Реплика и «1:1» — это не аксессуар, а подделка: причина другая
