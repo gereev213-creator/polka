@@ -10698,7 +10698,7 @@ async def copy_ref_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     user_id = int(query.data.split(':')[1])
     bot_username = (await context.bot.get_me()).username
-    ref_link = f"https://t.me/{bot_username}?start=ref_{user_id}"
+    ref_link = f"https://t.me/{bot_username}?startapp=ref_{user_id}"
     
     await safe_answer(query, f"Ссылка: {ref_link}")
 
@@ -18762,7 +18762,7 @@ async def api_referral(request: aiohttp_web.Request) -> aiohttp_web.Response:
         count = 0
     bonus = min(count, PLAN_REF_MAX_BONUS)
     return _miniapp_json({'count': count, 'bonus_criteria': bonus,
-                          'link': f"https://t.me/{os.environ.get('BOT_USERNAME', '')}?start=ref{viewer_id}"})
+                          'link': f"https://t.me/{os.environ.get('BOT_USERNAME', '')}?startapp=ref{viewer_id}"})
 
 
 async def precheckout_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
