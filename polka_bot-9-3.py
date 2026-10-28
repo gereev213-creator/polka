@@ -31809,7 +31809,7 @@ async def api_views_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
 # =====================================================================
 
 MINIAPP_PHOTO_STORAGE_CHAT_ENV = "PHOTO_STORAGE_CHAT_ID"
-MINIAPP_MAX_PHOTOS = 5
+MINIAPP_MAX_PHOTOS = 10   # столько же, сколько принимает Авито
 MINIAPP_MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 
