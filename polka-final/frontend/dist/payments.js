@@ -98,9 +98,13 @@
         STATE.plans[0] || null;
       paintPlans();
       showBalanceButton();
-      if (STATE.plan && STATE.plan !== 'trial') {
+      if (STATE.plan && STATE.plan !== 'trial' && STATE.plan !== 'free') {
         STATE.paid = true;
         paintPaid(0);
+        const badge = document.getElementById('trialBadge');
+        if (badge) badge.textContent = 'Плюс активен';
+        const title = document.getElementById('trialTitle');
+        if (title) title.textContent = 'Плюс активен';
       }
       wirePayButton();
       return STATE.plans;
