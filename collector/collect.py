@@ -100,6 +100,7 @@ class Blocked(Exception):
 # от рендера. Включается переменной SCRAPINGBEE_KEY.
 SCRAPINGBEE_KEY = os.environ.get('SCRAPINGBEE_KEY', '')
 SCRAPINGBEE_URL = 'https://app.scrapingbee.com/api/v1/'
+_SCRAPER_BROKEN = []   # заполняется, если скрапер ответил 401
 PROXY = os.environ.get('POLKA_PROXY', '')
 _OPENER = None
 
@@ -384,17 +385,16 @@ def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
     prefer_scraper=True — сразу через скрапер: так берём страницы с q=
     (поиск по тексту), которые обычный запрос от Авито не получает.
     """
-    if prefer_scraper and SCRAPINGBEE_KEY and 'avito.ru' in url:
+    if prefer_scraper and SCRAPINGBEE_KEY and not _SCRAPER_BROKEN and 'avito.ru' in url:
         try:
             return _fetch_via_scraper(url, timeout=max(timeout, 60))
         except Exception as exc:
             msg = str(exc)
             print(f"  скрапер не отдал страницу: {msg[:70]}")
             if '401' in msg or 'UNAUTHORIZED' in msg.upper():
-                # Ключ недействителен или кончились кредиты: не тратим время
-                # на каждую страницу, дальше идём обычным путём по разделу.
-                global SCRAPINGBEE_KEY
-                SCRAPINGBEE_KEY = ''
+                # Ключ недействителен или кончились кредиты: выключаем флаг,
+                # чтобы дальше не тратить по минуте на каждую страницу.
+                _SCRAPER_BROKEN.append(True)
                 print("  скрапер отключён до конца прохода (401)")
     if AVITO_PROFILE and 'avito.ru' in url:
         try:
