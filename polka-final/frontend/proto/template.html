@@ -65,7 +65,7 @@ background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38
 /* bottom nav */
 #nav{position:absolute;left:15px;right:15px;bottom:15px;display:none;gap:10px;z-index:20}
 #nav.show{display:flex}
-.navmain{flex:none;width:300px;height:60px;border-radius:999px;background:var(--grad);box-shadow:0 10px 24px rgba(15,95,214,.25);display:flex;padding:0;position:relative}
+.navmain{flex:1 1 auto!important;width:auto!important;min-width:0!important;height:60px;border-radius:999px;background:var(--grad);box-shadow:0 10px 24px rgba(15,95,214,.25);display:flex;padding:0;position:relative}
 .navmain button{flex:none;height:60px;border-radius:999px;color:#C2D5F8;display:grid;place-items:center;position:relative;z-index:1}
 .navmain button.on{background:rgba(255,255,255,.22);box-shadow:inset 0 0 0 1px rgba(255,255,255,.35);color:#fff}
 .plusbtn{flex:0 0 52px!important;width:52px!important;min-width:52px!important;height:52px!important;border-radius:50%!important;display:grid!important;place-items:center!important;background:var(--grad)!important;color:#fff!important;box-shadow:var(--sh)!important}
@@ -462,7 +462,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #s-post .scroll{padding-bottom:110px!important}
 
 /* ── Меню из референса: капсула без свечения + плашка внутри ─────────── */
-.navmain{flex:none;width:300px;height:60px;border-radius:999px;background:var(--grad);
+.navmain{flex:1 1 auto!important;width:auto!important;min-width:0!important;height:60px;border-radius:999px;background:var(--grad);
   box-shadow:none!important;display:flex;padding:0;position:relative;overflow:hidden!important}
 .navmain button{flex:none;height:60px;border-radius:999px;color:#C2D5F8;
   display:grid;place-items:center;position:relative;z-index:1;background:transparent!important;
@@ -483,6 +483,11 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #fade{display:none!important;background:none!important}
 .navmain,.plusbtn{box-shadow:none!important;filter:none!important}
 #nav{filter:none!important}
+
+/* Окончательно: ни теней, ни размытия, ни фонов у контейнера меню */
+#nav,#nav *{box-shadow:none!important;filter:none!important;
+  -webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+#nav{background:transparent!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -719,5 +724,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610281945"></script>
-<script src="adapter.js?v=202610281945"></script><script src="payments.js?v=202610281945"></script><script src="admin.js?v=202610281945"></script><script src="keyboard.js?v=202610281945"></script><script src="telegram-safe.js?v=202610281945"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610281947"></script>
+<script src="adapter.js?v=202610281947"></script><script src="payments.js?v=202610281947"></script><script src="admin.js?v=202610281947"></script><script src="keyboard.js?v=202610281947"></script><script src="telegram-safe.js?v=202610281947"></script></body></html>
