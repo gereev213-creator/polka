@@ -1890,6 +1890,14 @@ function paintEmpty(count) {
     ];
     function apply() {
       const active = (document.querySelector('.screen.active') || {}).id || '';
+      // Главное правило: любая кнопка действия видна только на своём экране.
+      // Найдено в аудите: кнопки «Опубликовать» и «Создать поиск» рисовались
+      // поверх меню, потому что лежали вне неактивных секций.
+      document.querySelectorAll('.bottomCta').forEach((cta) => {
+        const own = cta.closest('.screen');
+        const visible = own ? own.classList.contains('active') : false;
+        cta.style.display = visible ? 'block' : 'none';
+      });
       RULES.forEach(([screen, sel]) => {
         const el = document.querySelector(sel);
         if (el) el.style.display = (active === screen) ? 'block' : 'none';
