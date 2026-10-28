@@ -31857,7 +31857,12 @@ def _miniapp_cors_headers() -> dict:
 
 
 def _miniapp_json(data: dict, status: int = 200) -> aiohttp_web.Response:
-    return aiohttp_web.json_response(data, status=status, headers=_miniapp_cors_headers())
+    headers = dict(_miniapp_cors_headers())
+    # API не кешируем: иначе после обновления Telegram показывает старые
+    # баннеры, находки и счётчики.
+    headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    headers['Pragma'] = 'no-cache'
+    return aiohttp_web.json_response(data, status=status, headers=headers)
 
 
 def _miniapp_err(code: str, status: int) -> aiohttp_web.Response:
