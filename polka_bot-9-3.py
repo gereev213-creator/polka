@@ -25004,7 +25004,9 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'offer_url': str(cfg_get('pay.offer_url') or ''),
         'privacy_url': str(cfg_get('pay.privacy_url') or ''),
     }
-    return _miniapp_json({'ok': True, 'plans': plans,
+    viewer = _miniapp_viewer(request)
+    user_plan = resolve_plan(viewer) if viewer else 'trial'
+    return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
                           'enabled': cispay_enabled() or paw_enabled(),
                           'cispay_enabled': cispay_enabled(),
                           'paw_enabled': paw_enabled(),
@@ -31885,6 +31887,32 @@ def _miniapp_parse_price(value) -> int:
 
 
 
+
+def resolve_plan(user_id: int) -> str:
+    """Актуальный план: активная подписка важнее поля users.plan.
+
+    После оплаты подписка пишется в subscriptions, а users.plan может
+    остаться пустым — из-за этого приложение показывало «пробный».
+    """
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT plan, expires_at FROM subscriptions WHERE user_id=? "
+                    "ORDER BY id DESC LIMIT 1", (int(user_id),))
+        row = cur.fetchone()
+        if row and str(row['expires_at'] or '') > get_moscow_time().isoformat():
+            return str(row['plan'] or 'plus')
+    except Exception:
+        pass
+    try:
+        user = db.get_user(int(user_id)) or {}
+        plan = str(user.get('plan') or '')
+        if plan:
+            return plan
+    except Exception:
+        pass
+    return 'trial'
+
+
 def _safe_photos(raw) -> list:
     """Фото из базы: JSON-строка, список или одна ссылка — всегда список строк."""
     if isinstance(raw, list):
@@ -33321,6 +33349,7 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'favorites': fav_count,
         'since': (user.get('registration_date') or '')[:10] if user else '',
         # Админка и аватар в приложении
+        'plan': resolve_plan(viewer_id),
         'is_admin': (viewer_id in ADMIN_USER_IDS
                      or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
         'photo_url': _tg_photo_from_init(init_data) if init_data else '',
