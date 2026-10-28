@@ -25477,6 +25477,11 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     kb = None
     if ad.get('source_url'):
         kb = InlineKeyboardMarkup([[
+            # Кнопка в приложение: находка живёт в ленте Mini App, и человек
+            # должен попадать туда прямо из уведомления, а не только на Авито.
+            InlineKeyboardButton("Открыть в приложении",
+                                 web_app=WebAppInfo(url=_miniapp_url()))
+        ], [
             InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте", url=str(ad['source_url']))
         ], [
             # Убрать лот: человек посмотрел и понял — не то.
