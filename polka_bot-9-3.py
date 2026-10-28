@@ -22067,6 +22067,13 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
     # «Nike Air Max» — уточнители проверяем только в технике.
+    # Дефекты и копии: «удовлетворительное», «меняли дисплей», «на запчасти»
+    try:
+        _defect = ad_has_defect(ad) if 'ad_has_defect' in globals() else ''
+    except Exception:
+        _defect = ''
+    if _defect:
+        return no(_defect)
     _cats = f"{ad.get('category') or ''} {crit.get('category') or ''}".lower()
     _strict = bool(int(crit.get('strict_model') or 0))
     if _strict or any(h in _cats for h in HUNT_STRICT_MODEL_HINTS):
@@ -22268,6 +22275,29 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
 # ── Записи решений: hunt_matches ────────────────────────────────────────────
 HUNT_STATUSES = ('pending_details', 'ready', 'sending', 'sent', 'rejected', 'send_failed')
 
+
+# Признаки дефекта и «на запчасти»: такой лот не должен уходить как находка
+_DEFECT_MARKERS = (
+    'меняли дисплей', 'менялся дисплей', 'замена дисплея', 'заменен дисплей',
+    'заменён дисплей', 'после падения', 'после воды', 'утоплен', 'не работает',
+    'на запчасти', 'на запчаст', 'донор', 'битый', 'трещин', 'скол', 'не включается',
+    'утопленник', 'восстановлен', 'refurbished', 'копия', 'реплика', '1:1',
+)
+_BAD_CONDITIONS = ('удовлетворительное', 'плохое', 'не работает', 'битое')
+
+
+def ad_has_defect(ad: Dict) -> str:
+    """Возвращает причину отказа, если в лоте есть дефект или это копия."""
+    text = ' '.join(str(ad.get(f) or '') for f in
+                    ('title', 'description', 'condition', 'size')).lower()
+    for marker in _DEFECT_MARKERS:
+        if marker in text:
+            return 'defect' if marker not in ('копия', 'реплика', '1:1') else 'replica'
+    cond = str(ad.get('condition') or '').lower()
+    for bad in _BAD_CONDITIONS:
+        if bad in cond:
+            return 'condition_worn'
+    return ''
 
 def hunt_match_store(user_id: int, crit_id: int, ad_id: int, decision: Decision,
                      desc_state: str = '', force_status: str = '',
