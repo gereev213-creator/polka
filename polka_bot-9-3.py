@@ -29051,7 +29051,33 @@ async def setup_scheduler(application: Application):
     logger.info("Шедулер: 9 задач запущены")
 
 
-async def post_finding_of_the_day(bot, force: bool = False) -> Dict:
+
+async def _fod_send_raw(photo: str, caption: str) -> Dict:
+    """Отправка в канал напрямую через Bot API — не зависит от объекта бота."""
+    import aiohttp as _ah
+    base = f"https://api.telegram.org/bot{TOKEN}"
+    try:
+        async with _ah.ClientSession(timeout=_ah.ClientTimeout(total=30)) as sess:
+            if photo:
+                data = _ah.FormData()
+                data.add_field('chat_id', str(ADMIN_CHANNEL_ID))
+                data.add_field('caption', caption)
+                data.add_field('parse_mode', 'HTML')
+                data.add_field('photo', photo)
+                async with sess.post(base + '/sendPhoto', data=data) as r:
+                    j = await r.json(content_type=None)
+                    if j.get('ok'):
+                        return {'ok': True, 'message_id': j['result']['message_id']}
+            payload = {'chat_id': ADMIN_CHANNEL_ID, 'text': caption, 'parse_mode': 'HTML'}
+            async with sess.post(base + '/sendMessage', json=payload) as r:
+                j = await r.json(content_type=None)
+                return {'ok': bool(j.get('ok')), 'message_id': (j.get('result') or {}).get('message_id'),
+                        'error': None if j.get('ok') else str(j.get('description'))[:120]}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)[:120]}
+
+
+async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
     """Публикует «находку дня» в основной канал.
 
     Берём самое выгодное объявление Авито по скидке к медиане, не повторяем
@@ -29105,23 +29131,31 @@ async def post_finding_of_the_day(bot, force: bool = False) -> Dict:
             (f"\n\n{url}" if url else '')
         )
 
-        sent = None
-        if photo:
-            try:
-                sent = await bot.send_photo(chat_id=ADMIN_CHANNEL_ID, photo=photo,
-                                            caption=caption, parse_mode='HTML')
-            except Exception as e:
-                logger.warning(f"fod photo failed: {e}")
-        if sent is None:
-            sent = await bot.send_message(chat_id=ADMIN_CHANNEL_ID, text=caption,
-                                          parse_mode='HTML', disable_web_page_preview=False)
+        sent_id = None
+        if bot is not None:
+            sent = None
+            if photo:
+                try:
+                    sent = await bot.send_photo(chat_id=ADMIN_CHANNEL_ID, photo=photo,
+                                                caption=caption, parse_mode='HTML')
+                except Exception as e:
+                    logger.warning(f"fod photo failed: {e}")
+            if sent is None:
+                sent = await bot.send_message(chat_id=ADMIN_CHANNEL_ID, text=caption,
+                                              parse_mode='HTML', disable_web_page_preview=False)
+            sent_id = getattr(sent, 'message_id', None)
+        else:
+            raw = await _fod_send_raw(photo, caption)
+            if not raw.get('ok'):
+                return {'ok': False, 'error': raw.get('error') or 'send_failed'}
+            sent_id = raw.get('message_id')
         try:
             cfg_set('channel.fod_last', today)
             cfg_set('channel.fod_last_ad', str(pick['id']))
         except Exception:
             pass
         return {'ok': True, 'ad_id': pick['id'], 'date': today,
-                'discount': disc, 'message_id': getattr(sent, 'message_id', None)}
+                'discount': disc, 'message_id': sent_id}
     except Exception as e:
         logger.error(f"finding of the day: {e}")
         return {'ok': False, 'error': str(e)[:160]}
@@ -30925,11 +30959,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
     if action == 'fod_now':
         # Ручная публикация «находки дня» для проверки
         try:
-            bot = request.app.get('bot') if hasattr(request.app, 'get') else None
-            if bot is None:
-                bot = globals().get('_BOT_INSTANCE')
-            if bot is None:
-                return _miniapp_json({'ok': False, 'error': 'bot_unavailable'}, status=503)
+            bot = globals().get('_BOT_INSTANCE')
             res = await post_finding_of_the_day(bot, force=True)
             return _miniapp_json(res, status=200 if res.get('ok') else 400)
         except Exception as e:
