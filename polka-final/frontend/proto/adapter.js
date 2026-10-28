@@ -696,7 +696,11 @@ function paintEmpty(count) {
     }
     try {
       const pct = res.percent || res.discount || (res.kind === 'discount' ? res.value : 0) || 0;
-      if (pct) window.__promo = norm;   // платёж применит этот код
+      if (pct) {
+        window.__promo = norm;              // платёж применит этот код
+        window.__promoPercent = pct;        // скидка для пересчёта цены
+        window.dispatchEvent(new CustomEvent('polka:promo', { detail: { percent: pct } }));
+      }
       if (msg) msg.textContent = pct ? ('Скидка ' + pct + '%') : 'Промокод применён';
       if (off && pct) { off.textContent = '−' + pct + '%'; off.style.display = 'inline'; }
       window.__promo = code;

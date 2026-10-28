@@ -1,3 +1,4 @@
+/* GUARDED */
 /* ============================================================
    ПОЛКА — оплата подписки «Плюс»
    Единственный файл, который связывает кнопку «Оплатить»
@@ -56,9 +57,16 @@
 
   function paintPlans() {
     var node = priceNode();
-    if (node && STATE.current && STATE.current.amount) {
-      node.innerHTML = rub(STATE.current.amount).replace(' \u20BD', ' <span>руб/мес</span>');
+    if (!node || !STATE.current || !STATE.current.amount) return;
+    var base = Number(STATE.current.amount) || 0;
+    var pct = Number(window.__promoPercent || 0);
+    var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
+    var html = rub(price).replace(' \u20BD', ' <span>руб/мес</span>');
+    if (pct) {
+      html += ' <span style="text-decoration:line-through;opacity:.6;font-size:12px">'
+            + rub(base) + '</span>';
     }
+    node.innerHTML = html;
   }
 
   function paintPaid(days) {
@@ -344,6 +352,11 @@
 
   function init() {
     wirePayButton();
+    // Скидка пришла — пересчитываем цену на кнопке
+    window.addEventListener('polka:promo', function () {
+      STATE.paid = false;
+      paintPlans();
+    });
     wireScreenSwitch();
     loadPlans();
     document.addEventListener('visibilitychange', function () {
