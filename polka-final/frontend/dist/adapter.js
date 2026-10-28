@@ -541,6 +541,7 @@ function paintEmpty(count) {
           'Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
         return;
       }
+      window.__favItems = items;
       box.innerHTML = items.map((a) => {
         const ph = a.photos ? String(a.photos).split(',')[0] : '';
         const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
@@ -649,12 +650,52 @@ function paintEmpty(count) {
         const ph = a.photos ? String(a.photos).split(',')[0] : '';
         const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
         const price = (a.price || 0).toLocaleString('ru-RU') + ' \u20BD';
-        return `<article class="card fav" data-open="${a.id}">
+        return `<article class="card fav" data-fav-open="${a.id}">
           <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
           <span><h3>${(a.title || '').slice(0, 34)}</h3>
           <span class="pricepill">${price}</span><br>
-          <span class="status">${a.city || ''}</span></span></article>`;
+          <span class="status">${a.city || ''}</span></span>
+          <button class="trash" data-fav-del="${a.id}">
+            <svg width="14" height="14"><use href="#i-trash"/></svg>
+          </button></article>`;
       }).join('');
+
+      // Тап по карточке — открыть товар, крестик — убрать из избранного
+      box.querySelectorAll('[data-fav-open]').forEach((card) => {
+        card.addEventListener('click', async (e) => {
+          if (e.target.closest('[data-fav-del]')) return;
+          const id = card.getAttribute('data-fav-open');
+          // Данные берём заново с сервера: кеш мог не сохраниться
+          let raw = (window.__favItems || []).find((x) => String(x.id) === String(id));
+          if (!raw) {
+            try {
+              const fresh = await window.PolkaAPI.api('/api/favorites');
+              raw = (fresh.items || []).find((x) => String(x.id) === String(id));
+            } catch (err) { }
+          }
+          if (!raw) {
+            raw = {
+              id: Number(id),
+              title: (card.querySelector('h3') || {}).textContent || '',
+              price: Number((((card.querySelector('.pricepill') || {}).textContent) || '0')
+                .replace(/[^0-9]/g, '')),
+              photos: [],
+            };
+          }
+          if (window.PolkaProductData) window.PolkaProductData(raw);
+          else if (window.PolkaProduct) window.PolkaProduct(id);
+        });
+      });
+      box.querySelectorAll('[data-fav-del]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute('data-fav-del');
+          try {
+            await window.PolkaAPI.api('/api/ads/' + id + '/favorite', { method: 'DELETE' });
+            loadFavs();
+          } catch (err) { }
+        });
+      });
     } catch (e) { }
   }
 
@@ -1279,7 +1320,13 @@ function paintEmpty(count) {
     function rub(n) { return (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD'; }
 
     function fill(id) {
-      const raw = (window.__rawLots || []).find((x) => String(x.id) === String(id));
+      // Ищем и в находках, и в избранном: это разные списки
+      const pools = [window.__rawLots || [], window.__favItems || [], window.__productPrev || []];
+      let raw = null;
+      for (const pool of pools) {
+        raw = pool.find((x) => String(x.id) === String(id));
+        if (raw) break;
+      }
       if (!raw) return;
       const set = (elId, text) => {
         const el = document.getElementById(elId);
@@ -1355,6 +1402,12 @@ function paintEmpty(count) {
     };
     document.addEventListener('DOMContentLoaded', wrap);
     setTimeout(wrap, 700);
+    window.PolkaProductData = function (raw) {
+      // Данные пришли из избранного — держим отдельно от ленты
+      window.__productPrev = [raw];
+      window.PolkaProduct(raw.id || raw.ad_id);
+    };
+
     window.PolkaProduct = function (id) {
       fill(id);
       try {
