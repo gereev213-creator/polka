@@ -36,7 +36,7 @@
       background: linear-gradient(112deg, #4780FB, #6B98F5);
     }
 
-    /* Белая плашка active (Frame glass) */
+    /* Плашка active — glassmorphism: матовое стекло поверх градиента */
     #polka-reference-menu .polka-glass {
       position: absolute;
       top: 6px;
@@ -44,11 +44,14 @@
       width: 56px;
       height: 48px;
       border-radius: 19px;
-      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(226,238,255,.95));
+      background: rgba(255, 255, 255, .18);
+      -webkit-backdrop-filter: blur(14px) saturate(180%);
+      backdrop-filter: blur(14px) saturate(180%);
+      border: 1.5px solid rgba(255, 255, 255, .55);
       box-shadow:
-        0 3px 12px rgba(51,115,250,.20),
-        inset 0 1px 1px #fff,
-        inset 0 -2px 5px rgba(51,115,250,.08);
+        0 4px 14px rgba(24, 66, 170, .18),
+        inset 0 1px 0 rgba(255, 255, 255, .55),
+        inset 0 -1px 2px rgba(255, 255, 255, .18);
       z-index: 1;
       pointer-events: none;
       transition: left .22s ease;
@@ -66,7 +69,7 @@
       color: #C2D5F8;
     }
     #polka-reference-menu .polka-item[aria-current="page"] {
-      color: #3373FA;
+      color: #FFFFFF;
     }
     #polka-reference-menu .polka-item svg {
       display: block;
