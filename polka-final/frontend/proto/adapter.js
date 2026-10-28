@@ -862,10 +862,33 @@ function paintEmpty(count) {
 /* ── Подсветка вкладки: позиционирование делает прототип (show → NAVSHOW) ──
    Своих размеров и позиций не задаём: плашка 65×52 из первого дизайна. */
 
-/* ── Фото лота: дорожка со слотами, до 10 штук ─────────────────────────── */
+/* ── Фото лота: сжатие в браузере + загрузка по одной, до 10 штук ────────
+   Раньше 10 файлов отправлялись одним запросом на десятки мегабайт, и
+   Telegram WebView рвал соединение («Load failed»). Теперь каждое фото
+   уменьшается до 1600px по длинной стороне, сжимается в JPEG и уходит
+   отдельным запросом с прогрессом. */
 (function () {
   const MAX_PHOTOS = 10;
+  const MAX_SIDE = 1600;
+  const QUALITY = 0.82;
   const state = { urls: [] };
+
+  function setNote(text, isError) {
+    const track = document.getElementById('photoTrack');
+    if (!track) return;
+    let note = document.getElementById('photoNote');
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'photoNote';
+      note.style.cssText = 'font-size:11px;font-weight:700;margin:2px 0 8px;' +
+        'padding:6px 10px;border-radius:12px;display:none';
+      (track.parentElement || track).insertBefore(note, track.nextSibling);
+    }
+    note.textContent = text || '';
+    note.style.display = text ? 'block' : 'none';
+    note.style.color = isError ? '#C93A3A' : '#2C6BD6';
+    note.style.background = isError ? 'rgba(201,58,58,.10)' : 'rgba(51,115,250,.10)';
+  }
 
   function paint() {
     const track = document.getElementById('photoTrack');
@@ -885,79 +908,107 @@ function paintEmpty(count) {
         e.stopPropagation();
         state.urls.splice(Number(btn.getAttribute('data-del')), 1);
         paint();
-        track.scrollLeft = 0;
       });
     });
-    if (add) {
-      const full = state.urls.length >= MAX_PHOTOS;
-      add.style.display = full ? 'none' : 'grid';
-    }
+    if (add) add.style.display = state.urls.length >= MAX_PHOTOS ? 'none' : 'grid';
     track.scrollLeft = track.scrollWidth;
   }
 
-  function setNote(text, isError) {
-    const track = document.getElementById('photoTrack');
-    if (!track) return;
-    let note = document.getElementById('photoNote');
-    if (!note) {
-      note = document.createElement('div');
-      note.id = 'photoNote';
-      note.style.cssText = 'font-size:11px;font-weight:700;margin:2px 0 8px;' +
-        'padding:6px 10px;border-radius:12px;display:none';
-      track.parentElement.insertBefore(note, track.nextSibling);
-    }
-    note.textContent = text || '';
-    note.style.display = text ? 'block' : 'none';
-    note.style.color = isError ? '#C93A3A' : '#2C6BD6';
-    note.style.background = isError ? 'rgba(201,58,58,.10)' : 'rgba(51,115,250,.10)';
+  // Уменьшение и сжатие: телефон отдаёт 4–8 МБ на кадр, после обработки ~200 КБ
+  function compress(file) {
+    return new Promise((resolve) => {
+      try {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const scale = Math.min(1, MAX_SIDE / Math.max(img.width, img.height));
+            const w = Math.max(1, Math.round(img.width * scale));
+            const h = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+            canvas.toBlob((blob) => {
+              URL.revokeObjectURL(url);
+              resolve(blob || file);
+            }, 'image/jpeg', QUALITY);
+          } catch (e) {
+            URL.revokeObjectURL(url);
+            resolve(file);
+          }
+        };
+        img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+        img.src = url;
+      } catch (e) {
+        resolve(file);
+      }
+    });
   }
 
-  async function upload(files) {
-    const fd = new FormData();
-    [...files].slice(0, MAX_PHOTOS - state.urls.length).forEach((f) => fd.append('photos', f));
-    const headers = {};
-    const init = window.PolkaAPI.initData();
-    if (init) headers['X-Telegram-Init-Data'] = init;
-    const res = await fetch('/api/ads/photos', { method: 'POST', body: fd, headers });
-    if (!res.ok) {
-      let detail = '';
-      try { const j = await res.json(); detail = j.error || j.detail || ''; } catch (e) { }
-      throw new Error('HTTP ' + res.status + (detail ? ' · ' + detail : ''));
+  async function uploadOne(blob, index, total) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const fd = new FormData();
+        fd.append('photos', blob, 'photo_' + index + '.jpg');
+        const headers = {};
+        const init = window.PolkaAPI.initData();
+        if (init) headers['X-Telegram-Init-Data'] = init;
+        const res = await fetch('/api/ads/photos', { method: 'POST', body: fd, headers });
+        if (!res.ok) {
+          let detail = '';
+          try { const j = await res.json(); detail = j.error || j.detail || ''; } catch (e) { }
+          throw new Error('HTTP ' + res.status + (detail ? ' · ' + detail : ''));
+        }
+        const data = await res.json();
+        return (data.urls || [])[0] || '';
+      } catch (err) {
+        if (attempt === 2) throw err;
+        await new Promise((r) => setTimeout(r, 600));
+      }
     }
-    return res.json();
+    return '';
   }
 
   document.addEventListener('change', async (e) => {
     const inp = e.target.closest && e.target.closest('#photoInput');
     if (!inp || !inp.files || !inp.files.length) return;
-    const files = [...inp.files];
+    const files = [...inp.files].slice(0, MAX_PHOTOS - state.urls.length);
     inp.value = '';
-    setNote('Загружаем фото…', false);
-    try {
-      const data = await upload(files);
-      const urls = data.urls || [];
-      state.urls = state.urls.concat(urls).slice(0, MAX_PHOTOS);
-      paint();
-      setNote(urls.length ? 'Добавлено фото: ' + urls.length : 'Сервер не вернул ссылки', !urls.length);
-      setTimeout(() => setNote('', false), 2500);
-    } catch (err) {
-      const msg = String(err && err.message || err);
-      setNote('Не удалось загрузить фото · ' + msg, true);
-      const TG = window.Telegram && window.Telegram.WebApp;
-      if (TG && TG.showAlert) TG.showAlert('Не удалось загрузить фото: ' + msg);
+    if (!files.length) return;
+
+    let done = 0;
+    let failed = 0;
+    for (let i = 0; i < files.length; i += 1) {
+      setNote(`Готовим фото ${i + 1} из ${files.length}…`, false);
+      const blob = await compress(files[i]);
+      setNote(`Загружаем ${i + 1} из ${files.length}…`, false);
+      try {
+        const url = await uploadOne(blob, i, files.length);
+        if (url) {
+          state.urls.push(url);
+          done += 1;
+          paint();
+        } else {
+          failed += 1;
+        }
+      } catch (err) {
+        failed += 1;
+        setNote('Не удалось загрузить фото · ' + String(err && err.message || err), true);
+      }
+    }
+
+    if (failed === 0) {
+      setNote('Добавлено фото: ' + done, false);
+      setTimeout(() => setNote('', false), 2200);
+    } else {
+      setNote(`Загружено ${done}, не удалось ${failed}`, true);
     }
   }, true);
 
-  function syncAddTile() {
-    const track = document.getElementById('photoTrack');
-    const add = track && track.querySelector('.photoAdd');
-    if (!add) return;
-    add.style.display = state.urls.length >= MAX_PHOTOS ? 'none' : 'grid';
-  }
-
   window.PolkaPhotos = () => state.urls.slice();
   window.PolkaResetPhotos = () => { state.urls = []; paint(); };
-  document.addEventListener('DOMContentLoaded', () => { paint(); syncAddTile(); });
+  document.addEventListener('DOMContentLoaded', paint);
   setTimeout(paint, 600);
 })();
 
