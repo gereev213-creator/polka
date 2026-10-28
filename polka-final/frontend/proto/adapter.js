@@ -13,7 +13,7 @@ function paintEmpty(count) {
             onclick="go('newsearch')">Создать поиск</button>
   </div>`;
   if (count) return;
-  ['homeGrid', 'marketGrid'].forEach((id) => {
+  ['homeGrid'].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     if (!el.querySelector('.card')) el.innerHTML = html;
@@ -97,7 +97,9 @@ function paintEmpty(count) {
         <div class="pricepill">${(Number(l.price) || 0).toLocaleString('ru-RU')} \u20BD</div>
       </article>`;
     }).join('');
-    ['homeGrid', 'marketGrid'].forEach((id) => {
+    // Находки рисуем ТОЛЬКО на экране находок. Барахолка — отдельный
+    // список объявлений пользователей, туда находки попадать не должны.
+    ['homeGrid'].forEach((id) => {
       const el = document.getElementById(id);
       if (!el) return;
       el.innerHTML = html;
@@ -1554,4 +1556,88 @@ function paintEmpty(count) {
   setTimeout(wrap, 800);
   window.PolkaPost = wirePost;
   window.wirePost = wirePost;
+})();
+
+/* ── Барахолка: объявления людей из /api/ads ──────────────────────────── */
+(function () {
+  try {
+    const rub = (n) => (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD';
+
+    function photoOf(a) {
+      const raw = a.photos;
+      if (Array.isArray(raw)) return raw[0] || '';
+      if (typeof raw === 'string' && raw.trim()) {
+        try {
+          const arr = JSON.parse(raw.replace(/'/g, '"'));
+          return Array.isArray(arr) ? (arr[0] || '') : '';
+        } catch (e) { return raw.startsWith('http') ? raw : ''; }
+      }
+      return '';
+    }
+
+    async function loadBoard() {
+      const box = document.getElementById('marketGrid');
+      if (!box) return;
+      try {
+        const data = await window.PolkaAPI.api('/api/ads?limit=40');
+        const items = data.items || [];
+        if (!items.length) {
+          box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
+            <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
+            <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
+              Здесь появятся объявления людей после модерации.</div>
+            <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
+                    onclick="go('post')">Разместить объявление</button></div>`;
+          return;
+        }
+        box.innerHTML = items.map((a) => {
+          const ph = photoOf(a);
+          const bg = ph ? `style="background-image:url('${ph}')"` : '';
+          return `<article class="lot" data-open="${a.id}">
+            <div class="lotimg" ${bg}>${ph ? '' : 'Нет фото'}
+              <button class="heart" data-fav="${a.id}">
+                <svg width="13" height="13"><use href="#i-heart"/></svg>
+              </button>
+            </div>
+            <h3>${String(a.title || '').slice(0, 46)}</h3>
+            <div class="pricepill">${rub(a.price)}</div>
+          </article>`;
+        }).join('');
+
+        box.querySelectorAll('.lot').forEach((card) => {
+          card.addEventListener('click', () => {
+            const id = card.getAttribute('data-open');
+            const raw = items.find((x) => String(x.id) === String(id));
+            if (raw && window.PolkaProductData) window.PolkaProductData(raw);
+          });
+        });
+        box.querySelectorAll('[data-fav]').forEach((heart) => {
+          heart.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const on = !heart.classList.contains('on');
+            heart.classList.toggle('on', on);
+            try {
+              await window.PolkaAPI.api('/api/ads/' + heart.getAttribute('data-fav') + '/favorite',
+                { method: on ? 'POST' : 'DELETE' });
+            } catch (err) { heart.classList.toggle('on', !on); }
+          });
+        });
+      } catch (e) { }
+    }
+
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__board2) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'market') setTimeout(loadBoard, 150);
+        return r;
+      };
+      wrapped.__board2 = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 900);
+    window.PolkaBoard = loadBoard;
+  } catch (e) { }
 })();
