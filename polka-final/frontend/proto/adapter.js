@@ -1530,46 +1530,111 @@ function paintEmpty(count) {
     } catch (e) { }
   }
 
-  async function wirePost() {
-    const form = $('postForm');
-    if (!form || form.__wired) return;
-    form.__wired = true;
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const val = (id) => (($(id) || {}).value || '').trim();
-      const title = val('adTitle');
-      const price = Number(val('adPrice').replace(/[^0-9]/g, '')) || 0;
-      const cat = val('adCategory') || 'Другое';
-      const cond = val('adCondition') || 'Отличное';
-      const city = val('adCity');
-      if (title.length < 3 || !price) {
-        const TG = window.Telegram && window.Telegram.WebApp;
-        if (TG && TG.showAlert) TG.showAlert('Укажите название и цену');
-        return;
-      }
-      try {
-        await window.PolkaAPI.api('/api/ads', {
-          method: 'POST',
-          body: JSON.stringify({
-            title, price, category: cat, condition: cond, city,
-            photos: window.PolkaPhotos ? window.PolkaPhotos() : [],
-            description: val('adDesc'),
-            delivery: (($('adDelivery') || {}).checked) ? 1 : 0,
-          }),
+  function alertSafe(text) {
+    const TG = window.Telegram && window.Telegram.WebApp;
+    try { if (TG && TG.showAlert) { TG.showAlert(text); return; } } catch (e) { }
+    try { window.alert ? window.alert(text) : null; } catch (e) { }
+  }
+
+  // Единая функция отправки: вызывается и сабмитом формы, и кликом по кнопке
+  async function submitPost() {
+    if (window.__posting) return;
+    const val = (id) => (($(id) || {}).value || '').trim();
+    const chipOn = (choice) => {
+      const group = document.querySelector('#s-post .chips[data-choice="' + choice + '"] .chip.on');
+      return group ? group.textContent.trim() : '';
+    };
+    const CAT = { 'Техника': 'Техника', 'Одежда': 'Одежда', 'Другое': 'Другое' };
+    const COND = { 'Отличное': 'Отличное', 'Хорошее': 'Хорошее', 'Есть нюансы': 'Есть нюансы' };
+    const title = val('adTitle');
+    const price = Number(val('adPrice').replace(/[^0-9]/g, '')) || 0;
+    const city = val('adCity');
+    const description = val('adDesc');
+    const category = CAT[chipOn('cat')] || 'Другое';
+    const condition = COND[chipOn('cond')] || 'Отличное';
+    const delivery = document.getElementById('delivery');
+    const photos = (window.PolkaPhotos ? window.PolkaPhotos() : []).filter((u) => typeof u === 'string' && u);
+
+    const note = document.getElementById('postNote');
+    const btn = document.querySelector('#s-post .bottomCta button');
+    const say = (text, isError) => {
+      if (!note) return;
+      note.textContent = text || '';
+      note.style.display = text ? 'block' : 'none';
+      note.style.color = isError ? '#C93A3A' : '#2C6BD6';
+    };
+
+    if (title.length < 3 || !price) {
+      say('Укажите название (от 3 символов) и цену', true);
+      alertSafe('Укажите название и цену');
+      return;
+    }
+
+    window.__posting = true;
+    if (btn) { btn.disabled = true; btn.style.opacity = '.75'; }
+    say('Публикуем…', false);
+
+    let data = null;
+    try {
+      data = await window.PolkaAPI.api('/api/ads', {
+        method: 'POST',
+        body: JSON.stringify({
+          title, price, category, condition, city, description,
+          photos, delivery: delivery && delivery.classList.contains('on') ? 1 : 0,
+        }),
+      });
+    } catch (err) {
+      const msg = String((err && err.message) || err);
+      const code = (msg.match(/\b(4\d\d|5\d\d)\b/) || [])[1] || '';
+      const text = 'Не удалось опубликовать' + (code ? ' · ' + code : '') + ' · ' + msg.slice(0, 80);
+      say(text, true);
+      alertSafe(code === '402' || code === '403'
+        ? 'Лимит объявлений исчерпан. Оформите подписку Плюс.'
+        : text);
+      window.__posting = false;
+      if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+      return;
+    }
+
+    // Успех: всё, что ниже, не должно влиять на статус публикации
+    say('Отправлено на модерацию', false);
+    try {
+      if (window.PolkaResetPhotos) window.PolkaResetPhotos();
+      const form = $('postForm');
+      if (form) form.reset();
+      document.querySelectorAll('#s-post .chips').forEach((group) => {
+        group.querySelectorAll('.chip').forEach((c, i) => c.classList.toggle('on', i === 0));
+      });
+    } catch (e) { }
+    window.__posting = false;
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    alertSafe('Объявление отправлено на модерацию');
+    // Переход в «Мои объявления»: если go не сработал, переключаем экраны сами
+    try {
+      if (typeof window.go === 'function') window.go('myads');
+    } catch (e) { }
+    setTimeout(() => {
+      const active = (document.querySelector('.screen.active') || {}).id;
+      if (active !== 's-myads') {
+        document.querySelectorAll('.screen').forEach((s) => {
+          s.classList.toggle('active', s.id === 's-myads');
         });
-        if (window.PolkaResetPhotos) window.PolkaResetPhotos();
-        form.reset();
-        const TG = window.Telegram && window.Telegram.WebApp;
-        if (TG && TG.showAlert) TG.showAlert('Отправлено на модерацию');
-        if (typeof window.go === 'function') window.go('myads');
-      } catch (err) {
-        const TG = window.Telegram && window.Telegram.WebApp;
-        const msg = String(err && err.message || '');
-        if (TG && TG.showAlert) TG.showAlert(msg.includes('402') || msg.includes('403')
-          ? 'Лимит объявлений исчерпан. Оформите Плюс.'
-          : 'Не удалось опубликовать');
       }
-    });
+    }, 180);
+    return data;
+  }
+
+  function wirePost() {
+    const form = $('postForm');
+    if (form && !form.__wired) {
+      form.__wired = true;
+      form.addEventListener('submit', (e) => { e.preventDefault(); submitPost(); });
+    }
+    const btn = document.querySelector('#s-post .bottomCta button');
+    if (btn && !btn.__wired) {
+      btn.__wired = true;
+      btn.addEventListener('click', (e) => { e.preventDefault(); submitPost(); });
+    }
   }
 
   const wrap = () => {
