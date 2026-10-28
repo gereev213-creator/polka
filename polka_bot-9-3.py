@@ -23651,13 +23651,12 @@ def promo_redeem(user_id: int, code: str) -> Dict:
             new_start = (now - timedelta(hours=max(0, hours - value * 24))).isoformat()
             db.update_user(int(user_id), plan='trial', trial_started_at=new_start)
             granted = f'пробный период +{value} дн.'
+        elif kind == 'discount':
+            # Скидка на оплату: код отмечается использованным, а процент
+            # применит платёж при создании счёта.
+            granted = f'скидка {value}% на оплату'
         else:
-            elif kind == 'discount':
-        # Скидка на оплату: код отмечается использованным, а процент
-        # применит платёж при создании счёта.
-        granted = f"скидка {value}% на оплату"
-    else:
-        return {'ok': False, 'error': 'bad_kind'}
+            return {'ok': False, 'error': 'bad_kind'}
         cursor.execute("INSERT INTO promo_redemptions (code_id, code, user_id, kind, value,"
                        " created_at) VALUES (?,?,?,?,?,?)",
                        (int(promo['id']), code, int(user_id), kind, value, now.isoformat()))
