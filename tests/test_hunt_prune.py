@@ -16,8 +16,13 @@ checks.append(("удаление неподходящих через NOT", 'WHER
 # 3. Прореживание — по паре пользователь+критерий, а не по объявлению
 checks.append(("партиция по user_id и crit_id",
                'PARTITION BY user_id, crit_id' in SRC))
-checks.append(("нет глобального удаления по ad_id",
-               'DELETE FROM hunt_matches WHERE ad_id' not in SRC))
+# Удаление находок по ad_id допустимо РОВНО в одном месте — при удалении
+# самого объявления: иначе лот остаётся в лентах у других людей.
+# В прореживании и чистке такого удаления быть не должно.
+_prune_src = SRC[SRC.find('def hunt_prune'):SRC.find('def hunt_prune') + 4000] \
+    if 'def hunt_prune' in SRC else SRC
+checks.append(("в прореживании нет удаления по ad_id",
+               'DELETE FROM hunt_matches WHERE ad_id' not in _prune_src))
 # 4. Одинаковые критерии у разных людей не смешиваются
 checks.append(("ключ учитывает пользователя",
                'hm.user_id = ?' in SRC and 'PARTITION BY user_id' in SRC))
