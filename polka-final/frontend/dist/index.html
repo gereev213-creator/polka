@@ -430,17 +430,17 @@ html{ -webkit-text-size-adjust:100% }
 <div class="photos"><label class="photoMain" id="photoMain" for="photoInput"><span id="photoLabel">+ Добавить фото</span><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></label><div class="photoSide"><label class="photoSmall" for="photoInput">+</label><label class="photoSmall" for="photoInput">+</label></div></div>
 <form class="card form" id="postForm">
 <div class="field"><label>Название</label><input id="adTitle" placeholder="Например, iPhone 13, 128 Гб" required></div>
-<div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="11 000" inputmode="numeric" required></div>
+<div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="Например: 5 000" inputmode="numeric" required></div>
 <div class="field"><label>Категория</label><div class="chips" style="margin-top:0" data-choice="cat"><button type="button" class="chip on">Техника</button><button type="button" class="chip">Одежда</button><button type="button" class="chip">Другое</button></div></div>
 <div class="field"><label>Состояние</label><div class="chips" style="margin-top:0" data-choice="cond"><button type="button" class="chip on">Отличное</button><button type="button" class="chip">Хорошее</button><button type="button" class="chip">Есть нюансы</button></div></div>
-<div class="field"><label>Город</label><input id="adCity" value="Москва"></div>
+<div class="field"><label>Город</label><input id="adCity" placeholder="Ваш город"></div>
 <div class="field"><label>Описание</label><textarea id="adDesc" rows="3" placeholder="Комплект, состояние, причина продажи"></textarea></div>
 <div class="switchrow"><b>Доставка</b><button type="button" class="switch on" id="delivery" aria-label="Доставка"></button></div>
 </form></div><div class="bottomCta"><button class="bigbtn" form="postForm">Опубликовать</button></div></section>
 
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
-<div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно · 17:42</span><span class="tbar" id="tbar"></span></div>
+<div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно</span><span class="tbar" id="tbar"></span></div>
 <div class="tarwrap" id="tarwrap"><div class="plus">
 <div class="top"><span class="name">Плюс</span><button class="chev" id="termsBtn"><svg width="15" height="15"><use href="#i-d"/></svg></button></div>
 <ul><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>10 критериев</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>Аналитика</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>ИИ фильтрация</li></ul>

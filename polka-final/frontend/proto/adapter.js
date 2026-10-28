@@ -484,6 +484,13 @@ function paintEmpty(count) {
       }
       const earned = document.querySelector('#s-referrals .earned');
       if (earned) earned.textContent = 'Приглашено: ' + invited;
+      const list = document.getElementById('refList');
+      const rows = data.referrals || data.items || [];
+      if (list) {
+        list.innerHTML = rows.length
+          ? rows.map((r) => `<div class="mrow"><span class="grow">${(r.name || 'пользователь').slice(0, 24)}</span><span class="chev">${r.days ? '+' + r.days : ''}</span></div>`).join('')
+          : '<div class="mrow"><span class="grow" style="color:#7A8CA3">Пока никого не пригласили</span></div>';
+      }
     } catch (e) { }
   }
 
