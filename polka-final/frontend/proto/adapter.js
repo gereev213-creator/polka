@@ -1504,6 +1504,15 @@ function paintEmpty(count) {
     const condition = COND[chipOn('cond')] || 'Отличное';
     const delivery = document.getElementById('delivery');
     const photos = (window.PolkaPhotos ? window.PolkaPhotos() : []).filter((u) => typeof u === 'string' && u);
+    // Контакт продавца: username из Telegram, иначе id — сервер тоже умеет
+    // подставлять, но лучше отправлять сразу, чтобы лот не падал с 400.
+    let contact = '';
+    try {
+      const u = window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initDataUnsafe
+        && window.Telegram.WebApp.initDataUnsafe.user;
+      if (u && u.username) contact = '@' + u.username;
+      else if (u && u.id) contact = 'Telegram: ' + u.id;
+    } catch (e) { }
 
     const note = document.getElementById('postNote');
     const btn = document.querySelector('#s-post .bottomCta button');
@@ -1530,13 +1539,27 @@ function paintEmpty(count) {
         method: 'POST',
         body: JSON.stringify({
           title, price, category, condition, city, description,
+          contact_info: contact,
           photos, delivery: delivery && delivery.classList.contains('on') ? 1 : 0,
         }),
       });
     } catch (err) {
       const msg = String((err && err.message) || err);
       const code = (msg.match(/\b(4\d\d|5\d\d)\b/) || [])[1] || '';
-      const text = 'Не удалось опубликовать' + (code ? ' · ' + code : '') + ' · ' + msg.slice(0, 80);
+      const reasons = {
+        missing_contact_info: 'не указан контакт для связи',
+        missing_city: 'не указан город',
+        missing_category: 'не выбрана категория',
+        missing_title: 'не указано название',
+        bad_title: 'название слишком короткое',
+        bad_photos: 'проблема с фотографиями',
+        ad_limit: 'закончился лимит объявлений',
+        no_plan: 'нужна подписка Плюс',
+        unauthorized: 'нужно открыть приложение из Telegram',
+      };
+      let reason = '';
+      Object.keys(reasons).forEach((k) => { if (msg.includes(k)) reason = reasons[k]; });
+      const text = 'Не удалось опубликовать: ' + (reason || ('код ' + (code || '?')));
       say(text, true);
       alertSafe(code === '402' || code === '403'
         ? 'Лимит объявлений исчерпан. Оформите подписку Плюс.'

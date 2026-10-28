@@ -32588,6 +32588,15 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
         return _miniapp_err('bad_json', 400)
     if not isinstance(body, dict):
         return _miniapp_err('bad_json', 400)
+    # Контакт продавца: если мини-приложение не передало, берём из Telegram.
+    # Раньше лот падал с missing_contact_info и человек не понимал причину.
+    if not str(body.get('contact_info') or '').strip():
+        try:
+            _u = db.get_user(viewer_id) or {}
+            _uname = str(_u.get('username') or '').strip()
+            body['contact_info'] = ('@' + _uname) if _uname else f'Telegram: {viewer_id}'
+        except Exception:
+            body['contact_info'] = f'Telegram: {viewer_id}'
     for field in _MINIAPP_AD_REQUIRED:
         if not str(body.get(field) or '').strip():
             return _miniapp_err(f'missing_{field}', 400)
