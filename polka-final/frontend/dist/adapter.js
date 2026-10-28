@@ -698,65 +698,15 @@ function paintEmpty(count) {
     }
   };
 
-  // Правовые страницы: показываем текстом поверх экрана
-  const LEGAL = {
-    privacy: {
-      title: 'Политика конфиденциальности',
-      text: [
-        'Мы собираем минимум данных, необходимых для работы сервиса:',
-        '• идентификатор Telegram и имя — для входа и вашего профиля;',
-        '• параметры поисков (слова, цена, город) — чтобы находить лоты;',
-        '• сохранённые лоты и объявления — для избранного и барахолки.',
-        'Мы не передаём ваши данные третьим лицам, кроме платёжного провайдера при оплате.',
-        'Данные хранятся на серверах в России. Удалить аккаунт можно по запросу в поддержку.',
-        'Контакт: @polka_support',
-      ],
-    },
-    terms: {
-      title: 'Условия использования',
-      text: [
-        'Сервис «ПОЛКА» помогает находить объявления и вести свои лоты.',
-        '1. Мы не являемся стороной сделки между покупателем и продавцом.',
-        '2. Находки формируются автоматически; мы не гарантируем наличие товара и его качество.',
-        '3. Подписка «Плюс» оплачивается вперёд. Возврат — в течение 24 часов, если сервис не использовался.',
-        '4. Запрещено публиковать запрещённые законом товары и копии брендов под видом оригинала.',
-        '5. Мы можем ограничить доступ при нарушении условий.',
-        'Поддержка: @polka_support',
-      ],
-    },
+  // Правовые документы: открываем реальные страницы /legal/*.html.
+  // Старая шторка с кратким текстом удалена — она показывала устаревшие
+  // условия и неверный контакт поддержки.
+  window.PolkaLegal = function (kind) {
+    const url = location.origin + (kind === 'terms' ? '/legal/terms.html' : '/legal/privacy.html');
+    const TG = window.Telegram && window.Telegram.WebApp;
+    try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (e) { }
+    window.open(url, '_blank');
   };
-
-  function showLegal(kind) {
-    const doc = LEGAL[kind];
-    if (!doc) return;
-    const old = document.getElementById('legalSheet');
-    if (old) old.remove();
-    const wrap = document.createElement('div');
-    wrap.id = 'legalSheet';
-    wrap.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(20,40,70,.45);'
-      + 'display:flex;align-items:flex-end';
-    wrap.innerHTML = `<div style="background:#fff;color:#2C2C2C;width:100%;max-height:82vh;overflow:auto;border-radius:24px 24px 0 0;padding:20px 18px 28px;font-size:13px;line-height:1.5">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-        <b style="font-size:15px">${doc.title}</b>
-        <button id="legalClose" style="width:32px;height:32px;border-radius:50%;background:#E3EDFD;color:#3373FA;font-size:16px">✕</button>
-      </div>
-      ${doc.text.map((p) => `<p style="margin:0 0 8px">${p}</p>`).join('')}
-    </div>`;
-    document.body.appendChild(wrap);
-    wrap.addEventListener('click', (e) => { if (e.target === wrap) wrap.remove(); });
-    const btn = document.getElementById('legalClose');
-    if (btn) btn.onclick = () => wrap.remove();
-  }
-
-  document.addEventListener('click', (e) => {
-    const b = e.target.closest && e.target.closest('.mrow');
-    if (!b) return;
-    const txt = (b.textContent || '').toLowerCase();
-    if (txt.includes('политика')) { e.preventDefault(); e.stopPropagation(); showLegal('privacy'); }
-    if (txt.includes('условия')) { e.preventDefault(); e.stopPropagation(); showLegal('terms'); }
-  }, true);
-
-  window.PolkaLegal = showLegal;
 })();
 
 /* ── Вход: показываем экран приветствия, если пользователь не авторизован ── */
