@@ -518,6 +518,17 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #postNote{display:none;font-size:12px;font-weight:700;text-align:center;
   margin:8px 14px 0;padding:8px 12px;border-radius:14px;background:rgba(51,115,250,.10)}
 #s-post .bottomCta button:disabled{cursor:default}
+
+/* Поля ввода: курсор не должен убегать вниз — фиксируем высоту и строку */
+#s-post .field input,#s-newsearch .field input{
+  height:52px!important;padding:0 16px!important;line-height:52px!important;
+  font-size:15px!important;box-sizing:border-box!important;display:block!important;width:100%!important}
+#s-post .field textarea,#s-newsearch .field textarea{
+  min-height:110px!important;padding:14px 16px!important;line-height:1.4!important;
+  font-size:15px!important;box-sizing:border-box!important;display:block!important;width:100%!important}
+@media (max-width:360px){
+  #s-post .field input,#s-newsearch .field input{font-size:14px!important}
+}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -747,8 +758,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029030501"></script>
-<script src="adapter.js?v=20261029030501"></script><script src="payments.js?v=20261029030501"></script><script src="admin.js?v=20261029030501"></script><script src="keyboard.js?v=20261029030501"></script><script src="telegram-safe.js?v=20261029030501"></script><script>
+</script><script src="telegram-web-app.js?v=20261029031034"></script>
+<script src="adapter.js?v=20261029031034"></script><script src="payments.js?v=20261029031034"></script><script src="admin.js?v=20261029031034"></script><script src="keyboard.js?v=20261029031034"></script><script src="telegram-safe.js?v=20261029031034"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
