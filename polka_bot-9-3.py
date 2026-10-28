@@ -30478,6 +30478,23 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         out['query'] = dict(crit).get('query')
         return _miniapp_json(out)
 
+    if action == 'create_promo':
+        # Создание промокода из обслуживания (по admin-токену), чтобы можно
+        # было завести код без захода в бота.
+        try:
+            res = promo_create(
+                code=str((body or {}).get('code') or ''),
+                kind=str((body or {}).get('kind') or 'percent'),
+                value=(body or {}).get('value') or (body or {}).get('discount') or 0,
+                max_uses=(body or {}).get('max_uses') or 100,
+                per_user=(body or {}).get('per_user') or 1,
+                expires_at=str((body or {}).get('expires_at') or ''),
+                by=0,
+            )
+            return _miniapp_json(res, status=200 if res.get('ok') else 400)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=400)
+
     if action == 'wipe_test':
         # Полная уборка тестового: критерии, находки, избранное, объявления
         # пользователей (source='polka') и кэш модели. Данные Авито не трогаем.
