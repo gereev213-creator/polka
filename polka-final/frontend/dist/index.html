@@ -401,6 +401,19 @@ html{ -webkit-text-size-adjust:100% }
 .bannerDots{display:flex;gap:6px;justify-content:center;margin-top:8px}
 .bannerDots i{width:6px;height:6px;border-radius:50%;background:#C2D5F8;transition:width .2s}
 .bannerDots i.on{background:#3373FA;width:16px;border-radius:999px}
+
+/* Барахолка: строка поиска в общем потоке, между баннером и лентой */
+.searchRow{position:static!important;left:auto!important;right:auto!important;top:auto!important;bottom:auto!important;margin:12px 0!important;width:auto!important}
+#s-market .scroll>.searchRow,#s-market .searchRow{position:static!important;
+  display:flex!important;gap:10px!important;margin:12px 0!important;width:auto!important;
+  left:auto!important;right:auto!important;top:auto!important;bottom:auto!important}
+#s-market .searchRow>*{flex:1 1 0}
+#s-market .grid{margin-top:4px!important}
+
+/* Строка поиска барахолки в общем потоке */
+#s-market .tools{position:static!important;left:auto!important;right:auto!important;
+  top:auto!important;bottom:auto!important;margin:12px 0!important;width:auto!important;
+  display:flex!important;gap:10px!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>

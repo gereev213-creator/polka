@@ -1365,3 +1365,51 @@ function paintEmpty(count) {
     };
   } catch (e) { }
 })();
+
+/* ── Барахолка: логотип и баннер прокручиваются вместе с лентой ─────────── */
+(function () {
+  try {
+    function restructure() {
+      const screen = document.getElementById('s-market');
+      if (!screen) return;
+      const scroll = screen.querySelector('.scroll');
+      const head = screen.querySelector('.ahead');
+      const banners = document.getElementById('feedBanners');
+      if (!scroll) return;
+
+      // Шапка и баннеры — внутрь прокручиваемой области, чтобы уезжали
+      // наверх вместе с лентой, а находки не заезжали под них.
+      if (head && head.parentNode !== scroll) {
+        head.style.position = 'static';
+        head.style.marginBottom = '10px';
+        scroll.insertBefore(head, scroll.firstChild);
+      }
+      if (banners && banners.parentNode !== scroll) {
+        scroll.insertBefore(banners, head ? head.nextSibling : scroll.firstChild);
+      }
+      // Строка поиска — после баннеров, перед лентой
+      const searchRow = screen.querySelector('.tools') ||
+                        screen.querySelector('.searchRow') ||
+                        document.querySelector('.tools.searchRow');
+      if (searchRow && searchRow.parentNode !== scroll) {
+        scroll.insertBefore(searchRow, banners ? banners.nextSibling : scroll.firstChild);
+      }
+      // Гарантируем порядок: шапка → баннеры → поиск → лента
+      [head, banners, searchRow].forEach((el) => {
+        if (el && el.parentNode === scroll) scroll.appendChild(el);
+      });
+      const grid = screen.querySelector('#marketGrid');
+      if (grid) {
+        const gridWrap = grid.parentNode;
+        if (gridWrap && gridWrap !== scroll) scroll.appendChild(gridWrap);
+        else if (gridWrap === scroll) scroll.appendChild(grid);
+      }
+      screen.style.paddingTop = 'calc(var(--tg-top) + 8px)';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => setTimeout(restructure, 400));
+    setTimeout(restructure, 1200);
+    setTimeout(restructure, 2500);
+    window.PolkaMarketLayout = restructure;
+  } catch (e) { }
+})();
