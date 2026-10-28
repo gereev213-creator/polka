@@ -1125,6 +1125,32 @@ function paintEmpty(count) {
           const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
           dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === idx));
         };
+
+        // Автопрокрутка: баннеры меняются сами, каждые 4 секунды
+        if (track && items.length > 1) {
+          let pos = 0;
+          window.clearInterval(window.__bannerTimer);
+          window.__bannerTimer = window.setInterval(() => {
+            if (!document.body.contains(track)) {
+              window.clearInterval(window.__bannerTimer);
+              return;
+            }
+            if ((document.querySelector('.screen.active') || {}).id !== 's-market') return;
+            pos = (pos + 1) % items.length;
+            track.scrollTo({ left: pos * track.clientWidth, behavior: 'smooth' });
+          }, 4000);
+
+          // Тап по точке — переход к баннеру
+          if (dots) {
+            dots.querySelectorAll('[data-dot]').forEach((dot) => {
+              dot.addEventListener('click', () => {
+                const i = Number(dot.getAttribute('data-dot')) || 0;
+                pos = i;
+                track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
+              });
+            });
+          }
+        }
         if (track) {
           track.addEventListener('scroll', () => {
             window.clearTimeout(track.__t);
