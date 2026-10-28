@@ -96,9 +96,17 @@
     const pct = (document.getElementById('promoPct') || {}).value || '';
     if (!code.trim() || !pct) return say('Введите код и скидку');
     try {
+      // Сервер ждёт kind и value, а не discount: иначе bad_kind
+      const value = Number(pct) || 0;
       await api('/api/admin/promo', {
         method: 'POST',
-        body: JSON.stringify({ code: code.trim().toUpperCase(), discount: Number(pct) || 0 }),
+        body: JSON.stringify({
+          code: code.trim().toUpperCase(),
+          kind: 'discount',          // скидка на оплату, %
+          value: value,
+          max_uses: 0,               // без ограничения
+          per_user: 1,
+        }),
       });
       document.getElementById('promoCode').value = '';
       document.getElementById('promoPct').value = '';
