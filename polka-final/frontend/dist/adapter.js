@@ -888,9 +888,9 @@ function paintEmpty(count) {
     const box = active.getBoundingClientRect();
     // Пилюля по размеру самого меню: высота = капсула минус 8, ширина чуть
     // больше иконки. Так она всегда внутри и не вылезает за края.
-    // Пилюля 65×52 из макета: центр по активной кнопке
+    // Круг 52×52 по центру активной иконки
     const h = 52;
-    const w = 65;
+    const w = 52;
     glass.style.transition = 'left .22s ease, width .22s ease';
     const centerX = (box.left - navBox.left) + box.width / 2;
     glass.style.width = w + 'px';
@@ -1771,6 +1771,7 @@ function paintEmpty(count) {
           if (name === 'moderation' && window.PolkaModeration) window.PolkaModeration();
           if (name === 'market' && window.PolkaBoard) window.PolkaBoard();
           if (name === 'admin' && window.PolkaAdmin && window.PolkaAdmin.reload) window.PolkaAdmin.reload();
+          if (window.__positionGlass) window.__positionGlass();
         } catch (e) { }
         return r;
       };
@@ -1995,5 +1996,44 @@ function paintEmpty(count) {
     setTimeout(wrap, 700);
     setTimeout(loadBanners, 2200);
     window.PolkaBanners = loadBanners;
+  } catch (e) { }
+})();
+
+/* ── Плашка меню: круг 52×52 по центру активной иконки ────────────────── */
+(function () {
+  try {
+    function position() {
+      const glass = document.getElementById('navglass');
+      const nav = document.querySelector('#nav .navmain');
+      if (!glass || !nav) return;
+      const active = nav.querySelector('button.on') || nav.querySelector('button');
+      if (!active) return;
+      const navBox = nav.getBoundingClientRect();
+      const box = active.getBoundingClientRect();
+      const size = 52;
+      const centerX = (box.left - navBox.left) + box.width / 2;
+      glass.style.setProperty('left', Math.round(centerX - size / 2) + 'px', 'important');
+      // Прототип переписывает размеры плашки своим JS — возвращаем свои
+      glass.style.setProperty('width', size + 'px', 'important');
+      glass.style.setProperty('height', size + 'px', 'important');
+      glass.style.setProperty('top', '4px', 'important');
+      glass.style.setProperty('border-radius', '50%', 'important');
+    }
+    window.__positionGlass = position;
+    document.addEventListener('DOMContentLoaded', () => { position(); setTimeout(position, 200); });
+    setTimeout(position, 800);
+    setTimeout(position, 1600);
+    window.addEventListener('resize', position);
+    // следим за сменой активной вкладки
+    const obs = new MutationObserver(() => position());
+    document.addEventListener('DOMContentLoaded', () => {
+      const nav = document.querySelector('#nav .navmain');
+      if (nav) obs.observe(nav, { attributes: true, subtree: true, attributeFilter: ['class'] });
+    });
+    setInterval(position, 700);
+    document.addEventListener('DOMContentLoaded', () => {
+      const glass = document.getElementById('navglass');
+      if (glass) new MutationObserver(() => position()).observe(glass, { attributes: true, attributeFilter: ['style'] });
+    });
   } catch (e) { }
 })();

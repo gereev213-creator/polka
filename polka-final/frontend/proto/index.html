@@ -210,9 +210,9 @@ background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38
 .pricepill{font-size:10px;font-weight:760;border:0;box-shadow:0 2px 6px rgba(30,123,255,.28),0 1px 2px rgba(10,58,128,.12)}
 .navmain,.plusbtn{border:0;box-shadow:none}
 /* True Figma GLASS: white fill at 10% (Frame 347/367/368) — only these elements */
-.heart,#navglass,.pay,.plus .chev{background:rgba(255,255,255,.10);-webkit-backdrop-filter:blur(6px) saturate(160%);backdrop-filter:blur(6px) saturate(160%);border:0;box-shadow:inset 0 1px 1px rgba(255,255,255,.50),inset 0 -1px 1px rgba(255,255,255,.16),inset 1px 0 1px rgba(255,255,255,.20)}
+.heart,.pay,.plus .chev{background:rgba(255,255,255,.10);-webkit-backdrop-filter:blur(6px) saturate(160%);backdrop-filter:blur(6px) saturate(160%);border:0;box-shadow:inset 0 1px 1px rgba(255,255,255,.50),inset 0 -1px 1px rgba(255,255,255,.16),inset 1px 0 1px rgba(255,255,255,.20)}
 .heart{color:#fff}.heart.onpic{color:#3373FA}
-#navglass{position:absolute;top:4px;left:5px;width:65px;height:52px;border-radius:500px;transition:left .25s ease;z-index:0;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:inset 0 1px 0 rgba(255,255,255,.32),inset 0 -1px 0 rgba(255,255,255,.12)}
+#navglass{position:absolute;transition:left .25s ease;z-index:1;-webkit-backdrop-filter:none;backdrop-filter:none}
 .navmain{background:linear-gradient(112deg,#4780FB,#6B98F5)}
 .plusbtn{background:linear-gradient(112deg,#4780FB,#6B98F5)}
 .navmain button.on{background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;color:#fff}
@@ -348,7 +348,11 @@ html{ -webkit-text-size-adjust:100% }
 
 /* Подсветка вкладки — сама кнопка, а не отдельная плашка:
    так она физически не может уехать на другую вкладку */
-#navglass{display:block!important}
+#navglass{display:block!important;position:absolute!important;top:4px!important;
+  width:52px!important;height:52px!important;border-radius:50%!important;
+  background:rgba(255,255,255,.18)!important;border:1.5px solid rgba(255,255,255,.55)!important;
+  box-sizing:border-box!important;z-index:1!important;pointer-events:none!important;
+  transition:left .25s ease!important}
 .navmain>button.on{background:transparent!important;box-shadow:none!important}
 
 /* Прокрутка контента: flex не должен сжимать карточки — из-за этого
@@ -524,12 +528,12 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #nav .navmain button{flex:1 1 0!important;height:60px!important;margin:0!important;
   border-radius:999px!important;background:none!important;box-shadow:none!important;
   color:#C2D5F8!important;position:relative!important;z-index:2!important}
-#nav .navmain button.on{background:rgba(255,255,255,.22)!important;
-  box-shadow:none!important;color:#fff!important}
-#nav #navglass{display:block!important;position:absolute!important;top:4px!important;
-  left:5px!important;width:65px!important;height:52px!important;border-radius:500px!important;
-  background:rgba(255,255,255,.10)!important;z-index:1!important;pointer-events:none!important;
-  box-shadow:none!important;transition:left .25s ease!important}
+#nav .navmain button.on{background:none!important;box-shadow:none!important;color:#fff!important}
+#nav #navglass{background:rgba(255,255,255,.18)!important;
+  border:1.5px solid rgba(255,255,255,.55)!important;
+  box-sizing:border-box!important;z-index:1!important;
+  pointer-events:none!important;box-shadow:none!important;
+  transition:left .25s ease!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -767,5 +771,5 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=202610282000"></script>
-<script src="adapter.js?v=202610282000"></script><script src="payments.js?v=202610282000"></script><script src="admin.js?v=202610282000"></script><script src="keyboard.js?v=202610282000"></script><script src="telegram-safe.js?v=202610282000"></script></body></html>
+</script><script src="telegram-web-app.js?v=202610282004"></script>
+<script src="adapter.js?v=202610282004"></script><script src="payments.js?v=202610282004"></script><script src="admin.js?v=202610282004"></script><script src="keyboard.js?v=202610282004"></script><script src="telegram-safe.js?v=202610282004"></script></body></html>
