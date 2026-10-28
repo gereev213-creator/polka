@@ -450,6 +450,14 @@ body:has(#s-newsearch.active) .bottomCta{padding-bottom:max(14px, env(safe-area-
    Иначе при жесте вниз видно предыдущий экран, как на скриншоте. */
 html,body{overflow:hidden!important;height:100%!important;position:fixed!important;width:100%!important}
 #wrap,#stage{overflow:hidden!important}
+
+/* Кнопка действия внизу экрана, а не сверху: position:fixed сломался,
+   когда html и body стали fixed */
+.bottomCta{position:absolute!important;left:14px!important;right:14px!important;
+  bottom:0!important;top:auto!important;z-index:15!important;
+  padding:10px 0 max(12px, env(safe-area-inset-bottom))!important;
+  background:transparent!important}
+#s-post .scroll,#s-newsearch .scroll{padding-bottom:96px!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>

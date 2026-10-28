@@ -1641,3 +1641,39 @@ function paintEmpty(count) {
     window.PolkaBoard = loadBoard;
   } catch (e) { }
 })();
+
+/* ── Кнопка «Опубликовать»: гарантируем её наличие внизу экрана ────────── */
+(function () {
+  try {
+    function ensurePostCta() {
+      const screen = document.getElementById('s-post');
+      if (!screen) return;
+      let cta = screen.querySelector('.bottomCta');
+      if (!cta) {
+        cta = document.createElement('div');
+        cta.className = 'bottomCta';
+        cta.innerHTML = '<button class="bigbtn" form="postForm">Опубликовать</button>';
+        screen.appendChild(cta);
+      }
+      cta.style.cssText = 'position:absolute;left:14px;right:14px;bottom:0;top:auto;' +
+                          'z-index:15;padding:10px 0 max(12px, env(safe-area-inset-bottom))';
+      const scroll = screen.querySelector('.scroll');
+      if (scroll) scroll.style.paddingBottom = '96px';
+    }
+    document.addEventListener('DOMContentLoaded', () => setTimeout(ensurePostCta, 300));
+    setTimeout(ensurePostCta, 900);
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__postcta) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'post') setTimeout(ensurePostCta, 60);
+        return r;
+      };
+      wrapped.__postcta = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 700);
+  } catch (e) { }
+})();
