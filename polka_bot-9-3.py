@@ -29617,7 +29617,7 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     # Без опознанного пользователя лента пустая: иначе get_user_criteria(None)
     # возвращал все критерии, и находки одного человека видели все.
     if not viewer_id:
-        return _miniapp_json({'items': [], 'has_more': False, 'need_auth': True})
+        return _miniapp_err('unauthorized', 401)
     try:
         min_discount = max(0, int(request.query.get('min_discount', 10) or 10))
     except ValueError:

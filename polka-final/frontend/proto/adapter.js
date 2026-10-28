@@ -638,6 +638,7 @@ function paintEmpty(count) {
       });
     } catch (e) { }
   }
+  window.PolkaLoadFavs = loadFavs;
 
   // (старый враппер удалён: он вызывал функции вне своей области)
 })();
@@ -1083,7 +1084,7 @@ function paintEmpty(count) {
       };
       set('pTitle', raw.title || '');
       set('pPrice', rub(raw.price));
-      set('pTag', raw.discount_percent ? ('−' + raw.discount_percent + '%') : (raw.city || ''));
+      set('pTag', raw.city || '');
       // Дата в человеческом виде: сегодня/вчера + время
       let when = '';
       const stamp = raw.published_at || raw.created_at || '';
@@ -1560,6 +1561,8 @@ function paintEmpty(count) {
   document.addEventListener('DOMContentLoaded', () => { wrap(); wirePost(); });
   setTimeout(wrap, 800);
   window.PolkaPost = wirePost;
+  window.PolkaLoadMyAds = loadMyAds;
+  window.PolkaLoadReferrals = loadReferrals;
   window.wirePost = wirePost;
 })();
 
@@ -1680,5 +1683,231 @@ function paintEmpty(count) {
     };
     document.addEventListener('DOMContentLoaded', wrap);
     setTimeout(wrap, 700);
+  } catch (e) { }
+})();
+
+/* ── Центральный обработчик: избранное, экраны, сердце ────────────────── */
+(function () {
+  try {
+    let heartOn = false;
+
+    function paintProductHeart() {
+      const heart = document.getElementById('pFav');
+      if (!heart) return;
+      heart.classList.toggle('liked', heartOn);
+      heart.style.setProperty('background', heartOn ? 'var(--grad)' : '', 'important');
+      const svg = heart.querySelector('svg');
+      if (svg) {
+        svg.style.setProperty('color', heartOn ? '#fff' : '', 'important');
+        svg.style.setProperty('fill', heartOn ? '#fff' : '', 'important');
+      }
+    }
+
+    async function toggleFavorite(id, on, paint) {
+      if (paint) paint(on);
+      try {
+        await window.PolkaAPI.api('/api/ads/' + id + '/favorite',
+          { method: on ? 'POST' : 'DELETE' });
+      } catch (e) {
+        if (paint) paint(!on);
+      }
+    }
+
+    // Один обработчик на все сердечки: и в ленте, и на товаре
+    document.addEventListener('click', (e) => {
+      const heart = e.target.closest && e.target.closest('#pFav');
+      if (heart) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        // Несколько обработчиков на кнопке срабатывали трижды — глушим повторы
+        const now = Date.now();
+        if (now - (window.__heartClickAt || 0) < 600) return;
+        window.__heartClickAt = now;
+        const id = window.__currentProductId;
+        if (!id) return;
+        heartOn = !heartOn;
+        window.__heartOn = heartOn;
+        toggleFavorite(id, heartOn, () => {
+          paintProductHeart();
+          setTimeout(paintProductHeart, 150);
+        });
+        return;
+      }
+      const feedHeart = e.target.closest && e.target.closest('.heart');
+      if (feedHeart) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const card = feedHeart.closest('.lot');
+        const id = card && card.getAttribute('data-open');
+        if (!id) return;
+        const on = !feedHeart.classList.contains('on');
+        feedHeart.classList.toggle('on', on);
+        toggleFavorite(id, on, () => { });
+      }
+    }, true);
+
+    // Экраны: грузим данные при переходе
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__boot) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        try {
+          if (name === 'favorites' && window.PolkaLoadFavs) window.PolkaLoadFavs();
+          if (name === 'myads' && window.PolkaLoadMyAds) window.PolkaLoadMyAds();
+          if (name === 'referrals' && window.PolkaLoadReferrals) window.PolkaLoadReferrals();
+          if (name === 'post' && window.PolkaPost) window.PolkaPost();
+          if (name === 'moderation' && window.PolkaModeration) window.PolkaModeration();
+          if (name === 'market' && window.PolkaBoard) window.PolkaBoard();
+          if (name === 'admin' && window.PolkaAdmin && window.PolkaAdmin.reload) window.PolkaAdmin.reload();
+        } catch (e) { }
+        return r;
+      };
+      wrapped.__boot = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', wrap);
+    setTimeout(wrap, 500);
+    setTimeout(wrap, 1500);
+
+    // Держим сердце закрашенным, пока экран товара открыт
+    setInterval(() => {
+      if ((document.querySelector('.screen.active') || {}).id !== 's-product') return;
+      paintProductHeart();
+    }, 500);
+
+    window.__bootReady = true;
+  } catch (e) { }
+})();
+
+/* ── Кнопки карточки товара: свои, без обработчиков прототипа ──────────── */
+(function () {
+  try {
+    let liked = false;
+
+    function paint(btn) {
+      btn.style.setProperty('background', liked ? 'var(--grad)' : 'rgba(255,255,255,.35)', 'important');
+      const svg = btn.querySelector('svg');
+      if (svg) svg.style.setProperty('color', liked ? '#fff' : '#3373FA', 'important');
+    }
+
+    function build() {
+      const screen = document.getElementById('s-product');
+      if (!screen) return;
+      const oldActions = screen.querySelector('.actions') || screen.querySelector('.pactions');
+      if (!oldActions || oldActions.__mine) return;
+
+      const raw = () => {
+        const id = window.__currentProductId;
+        const pools = [window.__productPrev || [], window.__rawLots || [], window.__favItems || []];
+        for (const pool of pools) {
+          const hit = pool.find((x) => String(x.id) === String(id));
+          if (hit) return hit;
+        }
+        return null;
+      };
+
+      const bar = document.createElement('div');
+      bar.className = oldActions.className;
+      bar.__mine = true;
+      bar.style.cssText = oldActions.style.cssText;
+      bar.innerHTML = `
+        <button class="open" id="myOpen" type="button">Открыть</button>
+        <button class="fab" id="myFav" type="button"><svg width="20" height="20"><use href="#i-heart"/></svg></button>
+        <button class="fab" id="myShare" type="button"><svg width="20" height="20"><use href="#i-plane"/></svg></button>`;
+
+      oldActions.replaceWith(bar);
+
+      bar.querySelector('#myOpen').addEventListener('click', (e) => {
+        e.preventDefault();
+        const r = raw();
+        const url = r && (r.url || r.source_url);
+        const TG = window.Telegram && window.Telegram.WebApp;
+        if (!url) { if (TG && TG.showAlert) TG.showAlert('Ссылка недоступна'); return; }
+        try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (err) { }
+        try { window.open(url, '_blank'); return; } catch (err) { }
+        if (TG && TG.showAlert) TG.showAlert('Ссылка: ' + url);
+      });
+
+      bar.querySelector('#myFav').addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = window.__currentProductId;
+        if (!id) return;
+        liked = !liked;
+        paint(bar.querySelector('#myFav'));
+        bar.querySelector('#myFav').classList.toggle('liked', liked);
+        try {
+          await window.PolkaAPI.api('/api/ads/' + id + '/favorite',
+            { method: liked ? 'POST' : 'DELETE' });
+        } catch (err) {
+          liked = !liked;
+          paint(bar.querySelector('#myFav'));
+        }
+      });
+
+      bar.querySelector('#myShare').addEventListener('click', (e) => {
+        e.preventDefault();
+        const r = raw() || {};
+        const url = r.url || r.source_url || '';
+        const TG = window.Telegram && window.Telegram.WebApp;
+        const link = 'https://t.me/share/url?url=' + encodeURIComponent(url) +
+                     '&text=' + encodeURIComponent(String(r.title || 'Находка на ПОЛКЕ'));
+        if (TG && TG.openTelegramLink) TG.openTelegramLink(link);
+        else window.open(link, '_blank');
+      });
+    }
+
+    const obs = new MutationObserver(() => {
+      if ((document.querySelector('.screen.active') || {}).id === 's-product') build();
+    });
+    document.addEventListener('DOMContentLoaded', () => {
+      obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+      build();
+    });
+    setTimeout(build, 1000);
+    setTimeout(build, 2000);
+  } catch (e) { }
+})();
+
+/* ── Видимость кнопок действия: без :has(), надёжно ───────────────────── */
+(function () {
+  try {
+    const RULES = [
+      ['s-post', '#s-post .bottomCta'],
+      ['s-newsearch', '#s-newsearch .bottomCta'],
+    ];
+    function apply() {
+      const active = (document.querySelector('.screen.active') || {}).id || '';
+      RULES.forEach(([screen, sel]) => {
+        const el = document.querySelector(sel);
+        if (el) el.style.display = (active === screen) ? 'block' : 'none';
+      });
+      ['s-post', 's-newsearch', 's-admin', 's-moderation', 's-myads'].forEach((id) => {
+        if (active === id) return;
+        const cta = document.querySelector('#' + id + ' .bottomCta');
+        if (cta) cta.style.display = 'none';
+      });
+      const nav = document.getElementById('nav');
+      if (nav) {
+        const hideNav = ['s-product', 's-post', 's-newsearch', 's-myads', 's-admin', 's-moderation'];
+        nav.style.display = hideNav.includes(active) ? 'none' : 'flex';
+      }
+    }
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__vis) return;
+      const orig = window.go;
+      const wrapped = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(apply, 30);
+        setTimeout(apply, 200);
+        return r;
+      };
+      wrapped.__vis = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', () => { wrap(); apply(); });
+    setTimeout(() => { wrap(); apply(); }, 600);
+    setInterval(apply, 800);
   } catch (e) { }
 })();
