@@ -29521,7 +29521,9 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
                 'price': int(row.get('price') or 0),
                 'city': row.get('city') or '',
                 'url': row.get('source_url') or row.get('url') or '',
-                'photos': _miniapp_photo_urls(row.get('photos')),
+                # photos в базе — JSON-строка; без разбора она уходила
+                # посимвольно («/api/photo/[», «/api/photo/\"» и т.д.)
+                'photos': _miniapp_photo_urls(_safe_photos(row.get('photos'))),
                 'is_favorite': False,
                 'description': '',
             }
@@ -31921,6 +31923,25 @@ def _miniapp_parse_price(value) -> int:
         return max(0, int(value))
     digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
     return int(digits) if digits else 0
+
+
+
+def _safe_photos(raw) -> list:
+    """Фото из базы: JSON-строка, список или одна ссылка — всегда список строк."""
+    if isinstance(raw, list):
+        return [str(x) for x in raw if x]
+    text = str(raw or '').strip()
+    if not text:
+        return []
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list):
+            return [str(x) for x in parsed if x]
+    except Exception:
+        pass
+    if text.startswith('http'):
+        return [text]
+    return []
 
 
 def _miniapp_photo_urls(photos) -> list:
