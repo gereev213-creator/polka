@@ -804,8 +804,22 @@ function paintEmpty(count) {
     const glass = document.getElementById('navglass');
     const nav = document.querySelector('#nav .navmain');
     if (!glass || !nav) return;
-    const active = nav.querySelector('button.active') ||
-                   nav.querySelector('button[data-nav]:hover') ||
+    // Вкладка определяется ТЕКУЩИМ ЭКРАНОМ, а не классом .active:
+    // класс не всегда обновляется, и плашка уезжала на «Находки».
+    const screen = (document.querySelector('.screen.active') || {}).id || '';
+    const MAP = {
+      's-home': 'home', 's-market': 'market', 's-favorites': 'favorites',
+      's-profile': 'profile', 's-myads': 'profile', 's-tariffs': 'profile',
+      's-post': 'profile', 's-referrals': 'profile', 's-admin': 'profile',
+      's-moderation': 'profile', 's-searches': 'home', 's-history': 'home',
+      's-newsearch': 'home', 's-product': 'home',
+    };
+    const want = MAP[screen] || 'home';
+    nav.querySelectorAll('button').forEach((b) => {
+      b.classList.toggle('active', b.getAttribute('data-nav') === want && b.closest('.navmain'));
+      b.classList.toggle('on', b.getAttribute('data-nav') === want && b.closest('.navmain'));
+    });
+    const active = nav.querySelector('button[data-nav="' + want + '"]') ||
                    nav.querySelector('button');
     if (!active) return;
     const navBox = nav.getBoundingClientRect();
@@ -841,6 +855,12 @@ function paintEmpty(count) {
   setTimeout(wrap, 500);
   setTimeout(positionGlass, 1200);
   window.addEventListener('resize', positionGlass);
+
+  // Наблюдаем за сменой экрана: класс .active может переехать без вызова go(),
+  // тогда плашка оставалась на прежней вкладке.
+  const obs = new MutationObserver(() => positionGlass());
+  obs.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+  setInterval(positionGlass, 700);
 })();
 
 /* ── Фото лота: выбираем файлы и грузим на сервер ─────────────────────── */
