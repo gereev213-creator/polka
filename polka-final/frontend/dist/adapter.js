@@ -314,8 +314,14 @@ function paintEmpty(count) {
         const un = tgUn || apiUn;
         ht.textContent = un ? ('@' + un) : String(u.name || 'гость');
       }
-      const plus = $('pluspill');
-      if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
+      // Плашка «ПЛЮС» под ником: показываем, когда подписка активна
+      const plan = String(u.plan || data.plan || 'trial');
+      const plus = document.getElementById('pluspill');
+      if (plus) {
+        const active = plan && plan !== 'trial' && plan !== 'free';
+        plus.style.display = active ? 'inline-flex' : 'none';
+        plus.textContent = active ? 'ПЛЮС' : '';
+      }
       // Админка видна только администратору
       // Админские пункты видит только администратор
       const tgName = (window.Telegram && window.Telegram.WebApp &&
