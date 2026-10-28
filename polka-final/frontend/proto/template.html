@@ -363,6 +363,22 @@ html{ -webkit-text-size-adjust:100% }
 :root{--tg-top:54px}
 .screen{padding-top:calc(var(--tg-top) + 8px)!important}
 .ahead,.subhead{top:calc(var(--tg-top) + 2px)!important}
+
+/* Миниатюры загруженных фото лота */
+#photoThumbs .photoMini{position:relative;width:56px;height:56px;border-radius:12px;
+  background-size:cover;background-position:center;background-color:#E3EDFD}
+#photoThumbs .photoMini b{position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+  border-radius:50%;background:#3373FA;color:#fff;font-size:13px;font-weight:800;
+  display:grid;place-items:center;cursor:pointer;line-height:1}
+
+/* Миниатюры фото — отдельной строкой под блоком загрузки */
+#photoThumbs{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 0}
+#photoThumbs .photoMini{position:relative;width:58px;height:58px;border-radius:14px;
+  background-size:cover;background-position:center;background-color:#E3EDFD;
+  box-shadow:inset 0 0 0 1px rgba(51,115,250,.15)}
+#photoThumbs .photoMini b{position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+  border-radius:50%;background:#3373FA;color:#fff;font-size:13px;font-weight:800;
+  display:grid;place-items:center;cursor:pointer;line-height:1}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -500,6 +516,7 @@ html{ -webkit-text-size-adjust:100% }
 
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
+<div id="photoThumbs"></div>
 <div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно</span><span class="tbar" id="tbar"></span></div>
 <div class="tarwrap" id="tarwrap"><div class="plus">
 <div class="top"><span class="name">Плюс</span><button class="chev" id="termsBtn"><svg width="15" height="15"><use href="#i-d"/></svg></button></div>

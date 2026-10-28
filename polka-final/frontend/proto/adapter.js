@@ -898,28 +898,47 @@ function paintEmpty(count) {
   setInterval(positionGlass, 700);
 })();
 
-/* ── Фото лота: выбираем файлы и грузим на сервер ─────────────────────── */
+/* ── Фото лота: до 10 штук, добавляются по одному и копятся ───────────── */
 (function () {
-  const state = { files: [], urls: [] };
+  const MAX_PHOTOS = 10;
+  const state = { urls: [] };
 
   function paint() {
     const main = document.getElementById('photoMain');
     const label = document.getElementById('photoLabel');
-    const first = state.urls[0];
-    if (main && first) {
-      main.style.background = `url('${first}') center/cover`;
+    const thumbs = document.getElementById('photoThumbs');
+
+    if (main) {
+      main.style.background = state.urls.length
+        ? `url('${state.urls[0]}') center/cover`
+        : '';
     }
     if (label) {
+      const left = MAX_PHOTOS - state.urls.length;
       label.textContent = state.urls.length
-        ? state.urls.length + ' фото'
+        ? (state.urls.length + ' из ' + MAX_PHOTOS + ' · ещё ' + left)
         : '+ Добавить фото';
       label.style.opacity = state.urls.length ? '0' : '1';
+    }
+    if (thumbs) {
+      thumbs.innerHTML = state.urls.map((u, i) => `
+        <span class="photoMini" data-photo="${i}"
+              style="background-image:url('${u}')">
+          <b data-del="${i}">×</b>
+        </span>`).join('');
+      thumbs.querySelectorAll('[data-del]').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          state.urls.splice(Number(btn.getAttribute('data-del')), 1);
+          paint();
+        });
+      });
     }
   }
 
   async function upload(files) {
     const fd = new FormData();
-    [...files].slice(0, 5).forEach((f) => fd.append('photos', f));
+    [...files].slice(0, MAX_PHOTOS - state.urls.length).forEach((f) => fd.append('photos', f));
     const headers = {};
     const init = window.PolkaAPI.initData();
     if (init) headers['X-Telegram-Init-Data'] = init;
@@ -931,10 +950,12 @@ function paintEmpty(count) {
   document.addEventListener('change', async (e) => {
     const inp = e.target.closest && e.target.closest('#photoInput');
     if (!inp || !inp.files || !inp.files.length) return;
-    state.files = [...inp.files].slice(0, 5);
+    const files = [...inp.files];
+    inp.value = '';   // чтобы можно было выбрать те же файлы снова
     try {
-      const data = await upload(state.files);
-      state.urls = data.urls || [];
+      const data = await upload(files);
+      const add = (data.urls || []);
+      state.urls = state.urls.concat(add).slice(0, MAX_PHOTOS);
       paint();
     } catch (err) {
       const TG = window.Telegram && window.Telegram.WebApp;
@@ -942,324 +963,23 @@ function paintEmpty(count) {
     }
   }, true);
 
-  // при публикации отдаём ссылки на фото
+  // Ставим строку миниатюр сразу после блока загрузки фото, чтобы она не
+  // оказывалась внутри колонки с «+» и не обрезалась.
+  function placeThumbs() {
+    let box = document.getElementById('photoThumbs');
+    const photos = document.querySelector('#s-post .photos');
+    if (!photos) return;
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'photoThumbs';
+    }
+    if (box.previousElementSibling !== photos) {
+      photos.parentNode.insertBefore(box, photos.nextSibling);
+    }
+  }
+
   window.PolkaPhotos = () => state.urls.slice();
-})();
-
-/* ── Модерация объявлений в приложении (только админ) ──────────────────── */
-(function () {
-  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
-
-  // Карточка по структуре из дизайна: .fav = фото слева, текст справа
-  function card(a) {
-    let ph = '';
-    try {
-      const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
-      ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
-    } catch (e) { ph = ''; }
-    const bg = ph ? `style="background-image:url('${ph}')"` : '';
-    const sub = [a.city, a.category].filter(Boolean).join(' · ');
-    return `<article class="card fav">
-      <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-      <span>
-        <h3>${(a.title || '').slice(0, 40)}</h3>
-        <span class="pricepill">${fmt(a.price)}</span><br>
-        <span class="status">${sub || 'без города'}</span>
-        <span class="modbtns">
-          <button class="bigbtn modok" data-ok="${a.id}">Одобрить</button>
-          <button class="mailbtn modno" data-no="${a.id}">Отклонить</button>
-        </span>
-      </span>
-    </article>`;
-  }
-
-  async function loadModeration() {
-    const box = document.getElementById('modList');
-    if (!box) return;
-    try {
-      const data = await window.PolkaAPI.api('/api/moderation');
-      const items = data.items || [];
-      const badge = document.getElementById('modCount');
-      if (badge) badge.textContent = items.length ? '(' + items.length + ')' : '';
-      box.innerHTML = items.length
-        ? items.map(card).join('')
-        : '<div class="card" style="padding:22px;text-align:center">На модерации пусто</div>';
-      box.querySelectorAll('[data-ok]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-ok'), 'approve')));
-      box.querySelectorAll('[data-no]').forEach((b) => b.addEventListener('click', () => act(b.getAttribute('data-no'), 'reject')));
-    } catch (e) {
-      box.innerHTML = '<div class="card" style="padding:22px;text-align:center">Нет доступа</div>';
-    }
-  }
-
-  async function act(id, action) {
-    try {
-      await window.PolkaAPI.api('/api/moderation/' + id, {
-        method: 'POST',
-        body: JSON.stringify({ action }),
-      });
-      loadModeration();
-    } catch (e) { }
-  }
-
-  const wrap = () => {
-    if (typeof window.go !== 'function' || window.go.__mod) return;
-    const orig = window.go;
-    const wrapped = function (name) {
-      const r = orig.apply(this, arguments);
-      if (name === 'moderation') loadModeration();
-      return r;
-    };
-    wrapped.__mod = true;
-    window.go = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 800);
-  window.PolkaModeration = loadModeration;
-})();
-
-/* ── Переход на конкретный экран по ссылке из бота ─────────────────────── */
-(function () {
-  // Бот открывает приложение как  .../?screen=create  или  .../#create
-  const MAP = {
-    create: 'post', post: 'post', tariffs: 'tariffs', favorites: 'favorites',
-    favorites_page: 'favorites', profile: 'profile', searches: 'searches',
-    hunt: 'searches', history: 'history', referrals: 'referrals',
-    myads: 'myads', moderation: 'moderation', home: 'home', market: 'market',
-  };
-
-  function target() {
-    const q = new URLSearchParams(location.search).get('screen') ||
-              new URLSearchParams(location.search).get('tgWebAppStartParam') || '';
-    const h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
-    return MAP[String(q).toLowerCase()] || MAP[String(h).toLowerCase()] || '';
-  }
-
-  function jump() {
-    const to = target();
-    if (!to) return;
-    try {
-      // Прототип при загрузке сам показывает home (около 1.1 с), поэтому
-      // переключаем экран уже после этого.
-      if (typeof window.show === 'function') window.show(to);
-      else if (typeof window.go === 'function') window.go(to, true);
-    } catch (e) { }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    setTimeout(jump, 1400);
-    setTimeout(jump, 2000);
-    setTimeout(jump, 2800);
-  });
-  setTimeout(jump, 1600);
-  window.PolkaJump = jump;
-})();
-
-/* ── Видимость ошибок: молчаливые пустые экраны больше не скрывают сбой ── */
-(function () {
-  let shown = 0;
-
-  function banner(text) {
-    if (shown >= 3) return;      // не спамим
-    shown += 1;
-    let el = document.getElementById('apiError');
-    if (!el) {
-      el = document.createElement('div');
-      el.id = 'apiError';
-      el.style.cssText = [
-        'position:fixed', 'left:12px', 'right:12px', 'bottom:96px', 'z-index:9999',
-        'background:#FFF1F0', 'color:#B3261E', 'border:1px solid #FFD7D5',
-        'border-radius:16px', 'padding:10px 14px', 'font-size:11px',
-        'font-weight:700', 'line-height:1.35', 'box-shadow:0 6px 20px rgba(0,0,0,.12)',
-        'transition:opacity .3s'
-      ].join(';');
-      document.body.appendChild(el);
-    }
-    el.textContent = text;
-    el.style.opacity = '1';
-    setTimeout(() => { el.style.opacity = '0'; }, 4500);
-    setTimeout(() => { if (el && el.parentNode) el.parentNode.removeChild(el); }, 5000);
-  }
-
-  // Оборачиваем api(): любая ошибка объясняется человеку словами
-  const wrap = () => {
-    const api = window.PolkaAPI && window.PolkaAPI.api;
-    if (!api || api.__errWrapped) return;
-    const wrapped = async function (path, opts) {
-      try {
-        return await api.call(window.PolkaAPI, path, opts);
-      } catch (e) {
-        const status = (e && e.status) || 0;
-        if (status === 401) banner('Нет доступа к данным. Откройте приложение через Telegram.');
-        else if (status === 403) {
-          const tgId = (window.Telegram && window.Telegram.WebApp &&
-                        window.Telegram.WebApp.initDataUnsafe &&
-                        window.Telegram.WebApp.initDataUnsafe.user &&
-                        window.Telegram.WebApp.initDataUnsafe.user.id) || '';
-          banner('Доступ только для администратора' + (tgId ? '. Ваш id: ' + tgId : '') + '.');
-        }
-        else if (status === 404) banner('Сервер не нашёл данные. Обновите приложение.');
-        // 400 — ошибка проверки (например, промокод не найден): её показывает
-        // сам экран, плашка сверху тут только мешает.
-        else if (status === 400) { /* без плашки */ }
-        else if (status >= 500) banner('Сервер временно недоступен. Попробуйте через минуту.');
-        else if (status === 200) banner('Сервер ответил не тем. Обновите приложение.');
-        else if (status === 0) banner('Нет связи с сервером. Проверьте интернет.');
-        else banner('Не удалось загрузить данные (' + status + ').');
-        throw e;
-      }
-    };
-    wrapped.__errWrapped = true;
-    window.PolkaAPI.api = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 300);
-  setTimeout(wrap, 1500);
-})();
-
-/* ── Рефералка: поделиться ссылкой ────────────────────────────────────── */
-(function () {
-  window.shareRef = function () {
-    const node = document.getElementById('refLink');
-    const link = node ? ('https://' + node.textContent.trim()) : '';
-    if (!link || link === 'https://—') return;
-    const TG = window.Telegram && window.Telegram.WebApp;
-    const text = 'Находи лучшие объявления по своим критериям — ПОЛКА';
-    if (TG && TG.openTelegramLink) {
-      TG.openTelegramLink('https://t.me/share/url?url=' + encodeURIComponent(link) +
-                          '&text=' + encodeURIComponent(text));
-    } else if (navigator.share) {
-      navigator.share({ title: 'ПОЛКА', text, url: link }).catch(() => {});
-    } else {
-      window.open('https://t.me/share/url?url=' + encodeURIComponent(link), '_blank');
-    }
-  };
-})();
-
-/* ── Поддержка: открыть чат @suppolka ──────────────────────────────────── */
-(function () {
-  window.openSupport = function () {
-    const url = 'https://t.me/suppolka';
-    const TG = window.Telegram && window.Telegram.WebApp;
-    if (TG && TG.openTelegramLink) TG.openTelegramLink(url);
-    else window.open(url, '_blank');
-  };
-})();
-
-/* ── Рекламные баннеры барахолки: до 5 штук, кликабельные ──────────────── */
-(function () {
-  function open(url) {
-    if (!url) return;
-    const TG = window.Telegram && window.Telegram.WebApp;
-    if (TG && TG.openLink) TG.openLink(url);
-    else window.open(url, '_blank');
-  }
-
-  async function loadFeedBanners() {
-    const box = document.getElementById('feedBanners');
-    if (!box) return;
-    try {
-      const data = await window.PolkaAPI.api('/api/feed-banners');
-      // Показываем только настоящие рекламные баннеры: у них есть ссылка.
-      // Заглушки «здесь могла быть ваша реклама» без ссылки не рисуем.
-      const items = (data.items || [])
-        .filter((b) => b && b.image && !b.default && b.action)
-        .slice(0, 5);
-      if (!items.length) {
-        box.innerHTML = '';
-        return;
-      }
-      box.innerHTML = items.map((b, i) => `
-        <div class="card offer" data-banner="${i}"
-             style="padding:0;overflow:hidden;cursor:${b.action ? 'pointer' : 'default'};position:relative">
-          <img src="${b.image}" alt="" style="width:100%;display:block;border-radius:24px">
-        </div>`).join('');
-      box.querySelectorAll('[data-banner]').forEach((el) => {
-        const b = items[Number(el.getAttribute('data-banner'))];
-        if (b && b.action) {
-          el.addEventListener('click', () => open(b.action));
-        }
-      });
-    } catch (e) {
-      box.innerHTML = '';
-    }
-  }
-
-  const wrap = () => {
-    if (typeof window.go !== 'function' || window.go.__banners) return;
-    const orig = window.go;
-    const wrapped = function (name) {
-      const r = orig.apply(this, arguments);
-      if (name === 'market') setTimeout(loadFeedBanners, 120);
-      return r;
-    };
-    wrapped.__banners = true;
-    window.go = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 900);
-  setTimeout(loadFeedBanners, 2000);
-  window.PolkaBanners = loadFeedBanners;
-})();
-
-/* ── Барахолка: объявления пользователей из /api/board ─────────────────── */
-(function () {
-  function rub(n) { return (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD'; }
-
-  function card(a) {
-    let ph = '';
-    try {
-      const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
-      ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
-    } catch (e) { ph = ''; }
-    const bg = ph ? `style="background-image:url('${ph}')"` : '';
-    return `<article class="card lot" data-ad="${a.id}">
-      <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-      <h3>${(a.title || '').slice(0, 34)}</h3>
-      <span class="pricepill">${rub(a.price)}</span>
-      <span class="status">${a.city || ''}</span>
-    </article>`;
-  }
-
-  async function loadBoard() {
-    const box = document.getElementById('marketGrid');
-    if (!box) return;
-    try {
-      const data = await window.PolkaAPI.api('/api/ads?limit=40');
-      const items = data.items || [];
-      if (!items.length) {
-        box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
-          <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
-          <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
-            Здесь появятся объявления людей после модерации.
-          </div>
-          <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
-                  onclick="go('post')">Разместить объявление</button>
-        </div>`;
-        return;
-      }
-      box.innerHTML = items.map(card).join('');
-      box.querySelectorAll('[data-ad]').forEach((el) => {
-        el.addEventListener('click', () => {
-          const id = el.getAttribute('data-ad');
-          if (typeof window.openLot === 'function') window.openLot(Number(id));
-          else if (typeof window.go === 'function') window.go('market');
-        });
-      });
-    } catch (e) { }
-  }
-
-  const wrap = () => {
-    if (typeof window.go !== 'function' || window.go.__board) return;
-    const orig = window.go;
-    const wrapped = function (name) {
-      const r = orig.apply(this, arguments);
-      if (name === 'market') setTimeout(loadBoard, 150);
-      return r;
-    };
-    wrapped.__board = true;
-    window.go = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 950);
-  window.PolkaBoard = loadBoard;
+  document.addEventListener('DOMContentLoaded', () => { placeThumbs(); paint(); });
+  setTimeout(() => { placeThumbs(); paint(); }, 600);
+  setTimeout(placeThumbs, 1500);
 })();
