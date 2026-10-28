@@ -141,7 +141,7 @@ print('г) Blocked — выход с кодом 3, уже собранное о�
 # ── д) ограничение целей за проход и ротация очереди
 reset()
 many = [{'url': f'https://www.avito.ru/izhevsk/cat{i}', 'city': 'Ижевск'} for i in range(5)]
-collect.fetch = lambda url: url.rstrip('/').split('/')[-1]
+collect.fetch = lambda url, **kw: url.rstrip('/').split('/')[-1]
 collect.run_once(cfg_with(many, max_targets=2))
 assert len(PUSHED) == 2, PUSHED
 # второй проход берёт следующие: у прошедших обновилось время последнего захода
