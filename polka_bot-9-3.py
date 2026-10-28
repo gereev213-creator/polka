@@ -26265,6 +26265,15 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             return _miniapp_err('save_failed', 500)
         return _miniapp_json({'ok': True, 'id': crit_id, 'active': bool(active)})
 
+    # Тело читаем один раз и до всех веток: иначе POST падал с
+    # UnboundLocalError «cannot access local variable 'body'».
+    body = {}
+    if method in ('POST', 'PUT'):
+        try:
+            body = await request.json()
+        except Exception:
+            body = {}
+
     if method == 'POST' and str((body or {}).get('query') or '').strip():
         # Обычный критерий словами: запрос, цена, город, требования.
         # До этого POST принимал только ссылку, поэтому форма в приложении
