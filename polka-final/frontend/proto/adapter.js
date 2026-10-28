@@ -197,6 +197,11 @@ function paintEmpty(count) {
       if (av && u.photo_url) {
         av.style.background = `url('${u.photo_url}') center/cover`;
       }
+      const idNode = document.getElementById('tgUserId');
+      if (idNode && u.telegram_id) {
+        idNode.style.display = 'block';
+        idNode.textContent = 'Telegram id: ' + u.telegram_id;
+      }
       const ht = $('handleText');
       if (ht) ht.textContent = u.name ? '@' + String(u.name).replace(/\s+/g, '').toLowerCase() : '@гость';
       const plus = $('pluspill');
