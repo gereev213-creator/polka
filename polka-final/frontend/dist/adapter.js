@@ -659,7 +659,8 @@ function paintEmpty(count) {
       }
     }
     try {
-      const pct = res.percent || res.discount || 0;
+      const pct = res.percent || res.discount || (res.kind === 'discount' ? res.value : 0) || 0;
+      if (pct) window.__promo = norm;   // платёж применит этот код
       if (msg) msg.textContent = pct ? ('Скидка ' + pct + '%') : 'Промокод применён';
       if (off && pct) { off.textContent = '−' + pct + '%'; off.style.display = 'inline'; }
       window.__promo = code;

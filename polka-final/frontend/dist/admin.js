@@ -63,9 +63,18 @@
     ].join('');
 
     const promoHtml = state.promo.length
-      ? state.promo.slice(0, 8).map((p) => row(
-          (p.code || '—') + (p.discount ? ' · ' + p.discount + '%' : ''),
-          (p.uses || 0) + '/' + (p.max_uses || '∞'))).join('')
+      ? state.promo.slice(0, 12).map((p) => {
+          const val = p.value || p.discount || 0;
+          const mark = p.active ? '' : ' · выкл';
+          const label = (p.code || '—') + (val ? ' · ' + val + (p.kind === 'discount' ? '%' : '') : '') + mark;
+          return `<div class="mrow" style="min-height:38px!important;padding:6px 0!important">
+            <span class="grow" style="font-size:12px!important">${label}</span>
+            <button class="mailbtn" style="height:28px;font-size:9px;padding:0 10px;margin-right:6px"
+                    onclick="PolkaAdmin.togglePromo('${p.code}', ${p.active ? 0 : 1})">
+              ${p.active ? 'выключить' : 'включить'}</button>
+            <span style="font-size:12px;font-weight:870;color:#3373FA">${p.uses || 0}/${p.max_uses || '∞'}</span>
+          </div>`;
+        }).join('')
       : '<div style="font-size:11px;color:#7A8CA3">Промокодов нет</div>';
 
     box.innerHTML =
@@ -89,6 +98,18 @@
     render();
     await Promise.all([loadMetrics(), loadPromo()]);
     render();
+  }
+
+  async function togglePromo(code, active) {
+    try {
+      await api('/api/admin/promo', {
+        method: 'POST',
+        body: JSON.stringify({ action: active ? 'activate' : 'deactivate', code: code }),
+      });
+      await reload();
+    } catch (e) {
+      say('Не удалось изменить промокод');
+    }
   }
 
   async function addPromo() {
@@ -131,5 +152,5 @@
 
   document.addEventListener('DOMContentLoaded', wire);
   setTimeout(wire, 800);
-  window.PolkaAdmin = { reload: reload, addPromo: addPromo };
+  window.PolkaAdmin = { reload: reload, addPromo: addPromo, togglePromo: togglePromo };
 })(window, document);
