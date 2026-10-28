@@ -29593,6 +29593,20 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     if os.environ.get('FEED_LEGACY', '0') != '1':
         crits_now = [c for c in get_user_criteria(viewer_id) if c.get('active')]
         if not crits_now:
+            # У аккаунта нет своих критериев, но находки в системе есть:
+            # показываем последние отправленные, иначе лента пустая при живом боте
+            if os.environ.get('FEED_OPEN', '1') != '0':
+                try:
+                    cur = db.conn.cursor()
+                    cur.execute("SELECT COUNT(*) AS c FROM hunt_matches "
+                                "WHERE status IN ('sent','ready')")
+                    has_any = int((cur.fetchone() or {'c': 0})['c'] or 0) > 0
+                except Exception:
+                    has_any = False
+                if has_any:
+                    return await _findings_from_matches(
+                        viewer_id, min_discount, category, city, limit, offset,
+                        False, open_feed=True)
             return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
         show_suspect = str(request.query.get('show_suspect') or '') == '1'
         return await _findings_from_matches(viewer_id, min_discount, category, city, limit,
