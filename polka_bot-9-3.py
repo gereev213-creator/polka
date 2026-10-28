@@ -29449,7 +29449,7 @@ async def api_chat_media_upload(request: aiohttp_web.Request) -> aiohttp_web.Res
 
 async def _findings_from_matches(viewer_id: int, min_discount: int, category: str,
                                  city: str, limit: int, offset: int,
-                                 show_suspect: bool = False):
+                                 show_suspect: bool = False, open_feed: bool = False):
     """Лента из hunt_matches — то же, что решил evaluate_ad.
 
     Своих правил отбора у ленты больше нет: статус, причина и скидка приходят
@@ -29466,10 +29466,15 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     # Матч принадлежит пользователю ИЛИ его критерию: после смены аккаунта
     # id в матчах и в критериях может разойтись, и лента оставалась пустой,
     # хотя бот уже прислал находки в чат.
-    where = ["(hm.user_id = ? OR hm.crit_id IN "
-             "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
-             statuses, "a.status='active'"]
-    params: List = [int(viewer_id), int(viewer_id)]
+    if open_feed:
+        # Открытая лента: показываем последние находки системы, без привязки
+        where = ["1=1", statuses, "a.status='active'"]
+        params: List = []
+    else:
+        where = ["(hm.user_id = ? OR hm.crit_id IN "
+                 "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
+                 statuses, "a.status='active'"]
+        params: List = [int(viewer_id), int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")
         params.append(int(min_discount))
