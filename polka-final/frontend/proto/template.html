@@ -474,7 +474,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #photoTrack .photoAdd{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:24px;
   background:linear-gradient(150deg,#5c8ff9,#3373FA);color:#fff;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
-  box-shadow:0 8px 20px rgba(51,115,250,.28);transition:transform .15s ease}
+  box-shadow:none;transition:transform .15s ease}
 #photoTrack .photoAdd:active{transform:scale(.96)}
 #photoTrack .photoAdd .pa-ico{display:block;margin-bottom:-2px}
 #photoTrack .photoAdd .pa-plus{position:absolute;right:8px;top:6px;font-size:16px;font-weight:800;
@@ -483,7 +483,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
   letter-spacing:.03em;opacity:.95;text-align:center;line-height:1!important;
   padding:0;white-space:nowrap}
 #photoTrack .photoSlot{position:relative;flex:0 0 96px;width:96px;height:96px;border-radius:24px;
-  background:#E3EDFD center/cover no-repeat;box-shadow:0 6px 16px rgba(15,95,214,.14)}
+  background:#E3EDFD center/cover no-repeat;box-shadow:none}
 #photoTrack .photoSlot b{position:absolute;top:-6px;right:-6px;width:22px;height:22px;
   border-radius:50%;background:#3373FA;color:#fff;font-size:13px;font-weight:800;
   display:grid;place-items:center;cursor:pointer;line-height:1;
@@ -735,8 +735,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029020213"></script>
-<script src="adapter.js?v=20261029020213"></script><script src="payments.js?v=20261029020213"></script><script src="admin.js?v=20261029020213"></script><script src="keyboard.js?v=20261029020213"></script><script src="telegram-safe.js?v=20261029020213"></script><script>
+</script><script src="telegram-web-app.js?v=20261029021438"></script>
+<script src="adapter.js?v=20261029021438"></script><script src="payments.js?v=20261029021438"></script><script src="admin.js?v=20261029021438"></script><script src="keyboard.js?v=20261029021438"></script><script src="telegram-safe.js?v=20261029021438"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
