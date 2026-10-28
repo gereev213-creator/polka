@@ -29579,6 +29579,10 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     подписчик и держится, а не за «свежую публикацию».
     """
     viewer_id = _miniapp_viewer(request)
+    # Без опознанного пользователя лента пустая: иначе get_user_criteria(None)
+    # возвращал все критерии, и находки одного человека видели все.
+    if not viewer_id:
+        return _miniapp_json({'items': [], 'has_more': False, 'need_auth': True})
     try:
         min_discount = max(0, int(request.query.get('min_discount', 10) or 10))
     except ValueError:
@@ -29628,72 +29632,8 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         return await _findings_from_matches(viewer_id, min_discount, category, city, limit,
                                             offset, show_suspect)
 
-    crits = [c for c in get_user_criteria(viewer_id) if c.get('active')]
-    if not crits:
-        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
-
-    where = ["a.status='active'", "a.source <> 'polka'"]
-    params: List = []
-    titles_cond, titles_params = [], []
-    for crit in crits:
-        word_cond, word_params = [], []
-        # Те же правила, что и в рассылке: обязательны бренд и модель, а не
-        # все слова запроса. Здесь был СТАРЫЙ код — из-за него лента и чат
-        # вели себя по-разному.
-        for w in _query_words_required(crit.get('query')):
-            variants = query_word_variants(w)
-            if not variants:
-                continue
-            word_cond.append("(" + " OR ".join("COALESCE(a.title_lower, a.title) LIKE ?"
-                                               for _ in variants) + ")")
-            word_params.extend(f"%{v}%" for v in variants)
-        # Потолок цены из критерия. Без него в ленте показывались айфоны
-        # за 78 000 ₽ при выставленном лимите 30 000 ₽ — человек ставил
-        # цену, а получал всё подряд.
-        word_cond.append("a.price > 0")
-        _apply_criterion_filters(word_cond, word_params, crit, prefix="a.")
-        if word_cond:
-            titles_cond.append("(" + " AND ".join(word_cond) + ")")
-            titles_params.extend(word_params)
-    if not titles_cond:
-        return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
-    where.append("(" + " OR ".join(titles_cond) + ")")
-    params.extend(titles_params)
-    # Скрытые лоты не показываем: человек их уже убрал
-    where.append("a.id NOT IN (SELECT ad_id FROM hunt_hidden WHERE user_id = ?)")
-    params.append(viewer_id)
-    for bad in HUNT_ACCESSORY_WORDS:
-        where.append("COALESCE(a.title_lower, a.title) NOT LIKE ?")
-        params.append(f"%{bad}%")
-    if city:
-        where.append("a.city = ?")
-        params.append(city)
-    def _fetch_findings():
-        cursor = db.conn.cursor()
-        cursor.execute(
-            f"SELECT a.*, (SELECT COUNT(*) FROM search_notifications_sent s2 "
-            f" WHERE s2.ad_id = a.id AND s2.user_id = ?) AS was_sent "
-            f"FROM ads a WHERE {' AND '.join(where)} "
-            f"ORDER BY COALESCE(a.discount_percent, 0) DESC, a.id DESC LIMIT ? OFFSET ?",
-            (viewer_id, *params, limit + 1, offset))
-        return [dict(r) for r in cursor.fetchall()]
-
-    try:
-        # K2: та же блокировка, что у приёма находок — чтение не попадает
-        # внутрь чужой транзакции
-        rows = _db_read(_fetch_findings)
-    except Exception as e:
-        logger.error(f"findings list: {e}")
-        return _miniapp_err('load_failed', 500)
-
-    has_more = len(rows) > limit
-    rows = rows[:limit]
-    fav_counts, fav_mine = _miniapp_fav_map([a['id'] for a in rows], viewer_id)
-    return _miniapp_json({
-        'items': [_miniapp_serialize_ad(a, viewer_id, fav_counts, fav_mine) for a in rows],
-        'has_more': has_more,
-    })
-
+    # Старый общий путь удалён: он показывал находки всем пользователям.
+    return _miniapp_json({'items': [], 'has_more': False, 'need_criteria': True})
 
 async def api_serve_html(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /chat — отдаёт мини-апп HTML"""
