@@ -29475,7 +29475,11 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         admin = False
     items = []
     for row in rows:
-        item = _miniapp_serialize_ad(row, viewer_id, fav_counts, fav_mine)
+        try:
+            item = _miniapp_serialize_ad(row, viewer_id, fav_counts, fav_mine)
+        except Exception as e:
+            logger.warning(f"findings serialize: {e}")
+            continue
         status = str(row.get('hunt_status') or '')
         stored = str(row.get('hunt_delivery') or '')
         if status == 'sent':
