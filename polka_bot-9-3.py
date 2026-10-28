@@ -29478,8 +29478,18 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         try:
             item = _miniapp_serialize_ad(row, viewer_id, fav_counts, fav_mine)
         except Exception as e:
+            # Не роняем ленту: собираем минимальную карточку вручную
             logger.warning(f"findings serialize: {e}")
-            continue
+            item = {
+                'id': row.get('id'),
+                'title': row.get('title') or '',
+                'price': int(row.get('price') or 0),
+                'city': row.get('city') or '',
+                'url': row.get('source_url') or row.get('url') or '',
+                'photos': _miniapp_photo_urls(row.get('photos')),
+                'is_favorite': False,
+                'description': '',
+            }
         status = str(row.get('hunt_status') or '')
         stored = str(row.get('hunt_delivery') or '')
         if status == 'sent':
