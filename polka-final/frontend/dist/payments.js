@@ -89,6 +89,7 @@
         STATE.plans.filter(function (p) { return p.product === 'plus_30'; })[0] ||
         STATE.plans[0] || null;
       paintPlans();
+      showBalanceButton();
       if (STATE.plan && STATE.plan !== 'trial') {
         STATE.paid = true;
         paintPaid(0);
@@ -214,6 +215,62 @@
 
   /* ---------- главное действие кнопки ---------- */
 
+  /* ---------- оплата с баланса рефералов ---------- */
+
+  async function balance() {
+    try {
+      const res = await window.PolkaAPI.api('/api/referral');
+      return Number(res.balance || 0);
+    } catch (e) { return 0; }
+  }
+
+  async function payWithBalance() {
+    const plan = STATE.current || { product: 'plus_30' };
+    try {
+      const res = await window.PolkaAPI.api('/api/pay/with-balance', {
+        method: 'POST',
+        body: JSON.stringify({ product: plan.product })
+      });
+      if (res && res.paid) {
+        STATE.paid = true;
+        paintPaid(res.days || 0);
+        Haptic('medium');
+        say('Оплачено с баланса. Плюс активен' +
+            (res.days ? ' на ' + res.days + ' дней' : '') + '.');
+        return true;
+      }
+      say('Не удалось оплатить с баланса');
+    } catch (e) {
+      say('Недостаточно средств на балансе. Приглашайте друзей — 20% с их пополнений.');
+    }
+    return false;
+  }
+
+  async function showBalanceButton() {
+    const bal = await balance();
+    let btn = document.getElementById('balancePayBtn');
+    const payBtn = document.getElementById('payBtn');
+    if (!payBtn || !bal) return;
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.id = 'balancePayBtn';
+      btn.className = 'mailbtn';
+      // Ставим отдельной плашкой под синей карточкой, а не внутри неё
+      btn.style.cssText = 'height:48px;font-size:12px;width:100%;margin-top:2px';
+      const anchor = document.querySelector('#s-tariffs .scroll');
+      const card = payBtn.closest('.card');
+      if (anchor && card && card.parentNode === anchor) {
+        anchor.insertBefore(btn, card.nextSibling);
+      } else {
+        (anchor || payBtn.parentNode).appendChild(btn);
+      }
+      btn.addEventListener('click', payWithBalance);
+    }
+    const price = (STATE.current && STATE.current.amount) || 149;
+    btn.textContent = 'Оплатить с баланса (' + bal.toLocaleString('ru-RU') + ' \u20BD)';
+    btn.style.display = (!STATE.paid && bal >= price) ? 'block' : 'none';
+  }
+
   async function pay() {
     if (STATE.paid) {
       say('Плюс уже активен');
@@ -312,6 +369,8 @@
   /* ---------- публичный интерфейс ---------- */
   window.PolkaPay = {
     pay: pay,
+    payWithBalance: payWithBalance,
+    balance: balance,
     reload: loadPlans,
     status: checkStatus,
     state: STATE

@@ -530,6 +530,12 @@ function paintEmpty(count) {
       }
       const earned = document.querySelector('#s-referrals .earned');
       if (earned) earned.textContent = 'Приглашено: ' + invited;
+      const bal = document.getElementById('refBalance');
+      if (bal) {
+        const b = Number(data.balance || 0);
+        bal.textContent = 'Баланс: ' + b.toLocaleString('ru-RU') + ' \u20BD'
+          + ' · тратится только на подписку Плюс';
+      }
       // Вставляем ссылку в поле на экране
       const linkNode = document.getElementById('refLink');
       if (linkNode) linkNode.textContent = link ? link.replace('https://', '') : 'ссылка недоступна';
