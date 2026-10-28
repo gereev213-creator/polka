@@ -639,23 +639,9 @@ function paintEmpty(count) {
     } catch (e) { }
   }
 
-  const wrap = () => {
-    if (typeof window.go !== 'function' || window.go.__rest) return;
-    const orig = window.go;
-    const wrapped = function (name) {
-      const r = orig.apply(this, arguments);
-      if (name === 'myads') loadMyAds();
-      if (name === 'favorites') loadFavs();
-      if (name === 'post' && window.wirePost) window.wirePost();
-      if (name === 'referrals') loadReferrals();
-      return r;
-    };
-    wrapped.__rest = true;
-    window.go = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrap);
-  setTimeout(wrap, 800);
+  // (старый враппер удалён: он вызывал функции вне своей области)
 })();
+
 
 /* ── Промокод и правовые страницы ──────────────────────────────────────── */
 (function () {
