@@ -2043,3 +2043,32 @@ function paintEmpty(count) {
     setInterval(center, 600);
   } catch (e) { }
 })();
+
+/* ── Один активный экран, всегда ──────────────────────────────────────────
+   Проверка после каждого перехода: если по какой-то причине активных стало
+   больше одного, оставляем последний и гасим остальные. */
+(function () {
+  try {
+    function normalize() {
+      const actives = [...document.querySelectorAll('.screen.active')];
+      if (actives.length <= 1) return;
+      const keep = actives[actives.length - 1];
+      actives.forEach((s) => { if (s !== keep) s.classList.remove('active'); });
+    }
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__one) return;
+      const orig = window.go;
+      const wrapped = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(normalize, 10);
+        setTimeout(normalize, 120);
+        return r;
+      };
+      wrapped.__one = true;
+      window.go = wrapped;
+    };
+    document.addEventListener('DOMContentLoaded', () => { wrap(); normalize(); });
+    setTimeout(() => { wrap(); normalize(); }, 600);
+    setInterval(normalize, 800);
+  } catch (e) { }
+})();
