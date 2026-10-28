@@ -243,7 +243,15 @@ function paintEmpty(count) {
       if (plus) plus.style.display = (data.plan && data.plan !== 'trial') ? 'inline-flex' : 'none';
       // Админка видна только администратору
       // Админские пункты видит только администратор
-      const isAdm = !!(u.is_admin || data.is_admin || window.__isAdmin);
+      const tgName = (window.Telegram && window.Telegram.WebApp &&
+                      window.Telegram.WebApp.initDataUnsafe &&
+                      window.Telegram.WebApp.initDataUnsafe.user &&
+                      window.Telegram.WebApp.initDataUnsafe.user.username) || '';
+      // username берём и из Telegram, и из ответа /api/me — что-то одно да придёт
+      const uname = String(tgName || u.username || '').toLowerCase();
+      const LOCAL_ADMINS = ['gereev', 'nikicev2009', 'nikitagereev', 'shytik8'];
+      const isAdm = !!(u.is_admin || data.is_admin || window.__isAdmin ||
+                       (uname && LOCAL_ADMINS.includes(uname)));
       ['adminRow', 'modRow'].forEach((id) => {
         const row = document.getElementById(id);
         if (row) row.style.display = isAdm ? 'flex' : 'none';
