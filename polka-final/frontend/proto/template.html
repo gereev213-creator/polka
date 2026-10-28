@@ -415,7 +415,16 @@ html{ -webkit-text-size-adjust:100% }
   display:flex!important;gap:10px!important}
 
 /* На карточке товара меню снизу не нужно: оно перекрывало кнопки */
-body:has(#s-product.active) #nav{display:none!important}
+/* Меню снизу мешает на экранах с кнопкой действия внизу */
+body:has(#s-product.active) #nav,
+body:has(#s-post.active) #nav,
+body:has(#s-newsearch.active) #nav,
+body:has(#s-admin.active) #nav,
+body:has(#s-moderation.active) #nav,
+body:has(#s-myads.active) #nav{display:none!important}
+/* И даём место, чтобы кнопка не липла к краю */
+body:has(#s-post.active) .bottomCta,
+body:has(#s-newsearch.active) .bottomCta{padding-bottom:max(14px, env(safe-area-inset-bottom))!important}
 /* Закрашенное сердце на карточке товара */
 #pFav.liked{background:var(--grad)!important}
 #pFav.liked svg{color:#fff!important;fill:#fff!important}
