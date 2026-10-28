@@ -638,7 +638,7 @@ function paintEmpty(count) {
       const r = orig.apply(this, arguments);
       if (name === 'myads') loadMyAds();
       if (name === 'favorites') loadFavs();
-      if (name === 'post') wirePost();
+      if (name === 'post' && window.wirePost) window.wirePost();
       if (name === 'referrals') loadReferrals();
       return r;
     };
@@ -931,42 +931,34 @@ function paintEmpty(count) {
   setInterval(positionGlass, 700);
 })();
 
-/* ── Фото лота: до 10 штук, добавляются по одному и копятся ───────────── */
-(function () { try {
+/* ── Фото лота: дорожка со слотами, до 10 штук ─────────────────────────── */
+(function () {
   const MAX_PHOTOS = 10;
   const state = { urls: [] };
 
   function paint() {
-    const main = document.getElementById('photoMain');
-    const label = document.getElementById('photoLabel');
-    const thumbs = document.getElementById('photoThumbs');
-
-    if (main) {
-      main.style.background = state.urls.length
-        ? `url('${state.urls[0]}') center/cover`
-        : '';
-    }
-    if (label) {
-      const left = MAX_PHOTOS - state.urls.length;
-      label.textContent = state.urls.length
-        ? (state.urls.length + ' из ' + MAX_PHOTOS + ' · ещё ' + left)
-        : '+ Добавить фото';
-      label.style.opacity = state.urls.length ? '0' : '1';
-    }
-    if (thumbs) {
-      thumbs.innerHTML = state.urls.map((u, i) => `
-        <span class="photoMini" data-photo="${i}"
-              style="background-image:url('${u}')">
-          <b data-del="${i}">×</b>
-        </span>`).join('');
-      thumbs.querySelectorAll('[data-del]').forEach((btn) => {
-        btn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          state.urls.splice(Number(btn.getAttribute('data-del')), 1);
-          paint();
-        });
+    const track = document.getElementById('photoTrack');
+    if (!track) return;
+    track.querySelectorAll('.photoSlot').forEach((el) => el.remove());
+    const add = track.querySelector('.photoAdd');
+    state.urls.forEach((u, i) => {
+      const slot = document.createElement('div');
+      slot.className = 'photoSlot';
+      slot.style.backgroundImage = `url('${u}')`;
+      slot.innerHTML = `<b data-del="${i}">×</b>`;
+      track.insertBefore(slot, add);
+    });
+    track.querySelectorAll('[data-del]').forEach((btn) => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        state.urls.splice(Number(btn.getAttribute('data-del')), 1);
+        paint();
+        track.scrollLeft = 0;
       });
-    }
+    });
+    if (add) add.style.display = state.urls.length >= MAX_PHOTOS ? 'none' : 'grid';
+    track.scrollLeft = track.scrollWidth;
   }
 
   async function upload(files) {
@@ -984,11 +976,10 @@ function paintEmpty(count) {
     const inp = e.target.closest && e.target.closest('#photoInput');
     if (!inp || !inp.files || !inp.files.length) return;
     const files = [...inp.files];
-    inp.value = '';   // чтобы можно было выбрать те же файлы снова
+    inp.value = '';
     try {
       const data = await upload(files);
-      const add = (data.urls || []);
-      state.urls = state.urls.concat(add).slice(0, MAX_PHOTOS);
+      state.urls = state.urls.concat(data.urls || []).slice(0, MAX_PHOTOS);
       paint();
     } catch (err) {
       const TG = window.Telegram && window.Telegram.WebApp;
@@ -996,207 +987,10 @@ function paintEmpty(count) {
     }
   }, true);
 
-  // Ставим строку миниатюр сразу после блока загрузки фото, чтобы она не
-  // оказывалась внутри колонки с «+» и не обрезалась.
-  function placeThumbs() {
-    let box = document.getElementById('photoThumbs');
-    const photos = document.querySelector('#s-post .photos');
-    if (!photos) return;
-    if (!box) {
-      box = document.createElement('div');
-      box.id = 'photoThumbs';
-    }
-    if (box.previousElementSibling !== photos) {
-      photos.parentNode.insertBefore(box, photos.nextSibling);
-    }
-  }
-
   window.PolkaPhotos = () => state.urls.slice();
-  document.addEventListener('DOMContentLoaded', () => { placeThumbs(); paint(); });
-  setTimeout(() => { placeThumbs(); paint(); }, 600);
-  setTimeout(placeThumbs, 1500);
-} catch (e) {} })();
-
-/* ── Рекламные баннеры: лента по одному, как в старом приложении ─────── */
-(function () {
-  try {
-    function open(url) {
-      if (!url) return;
-      const TG = window.Telegram && window.Telegram.WebApp;
-      if (TG && TG.openLink) TG.openLink(url);
-      else window.open(url, '_blank');
-    }
-
-    async function loadFeedBanners() {
-      const box = document.getElementById('feedBanners');
-      if (!box) return;
-      try {
-        const data = await window.PolkaAPI.api('/api/feed-banners');
-        const items = (data.items || [])
-          .filter((b) => b && b.image && !b.default && b.action)
-          .slice(0, 5);
-        if (!items.length) { box.innerHTML = ''; return; }
-
-        // Горизонтальная лента: один баннер на экран, свайп вбок
-        box.innerHTML = `
-          <div class="bannerTrack" id="bannerTrack">
-            ${items.map((b, i) => `
-              <div class="bannerSlide" data-slide="${i}" data-url="${b.action || ''}">
-                <img src="${b.image}" alt="">
-              </div>`).join('')}
-          </div>
-          <div class="bannerDots" id="bannerDots">
-            ${items.map((_, i) => `<i data-dot="${i}"${i === 0 ? ' class="on"' : ''}></i>`).join('')}
-          </div>`;
-
-        const track = document.getElementById('bannerTrack');
-        const dots = document.getElementById('bannerDots');
-
-        const syncDots = () => {
-          if (!track || !dots) return;
-          const idx = Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
-          dots.querySelectorAll('i').forEach((d, i) => d.classList.toggle('on', i === idx));
-        };
-
-        // Автопрокрутка: баннеры меняются сами, каждые 4 секунды
-        if (track && items.length > 1) {
-          let pos = 0;
-          window.clearInterval(window.__bannerTimer);
-          window.__bannerTimer = window.setInterval(() => {
-            if (!document.body.contains(track)) {
-              window.clearInterval(window.__bannerTimer);
-              return;
-            }
-            if ((document.querySelector('.screen.active') || {}).id !== 's-market') return;
-            pos = (pos + 1) % items.length;
-            track.scrollTo({ left: pos * track.clientWidth, behavior: 'smooth' });
-          }, 4000);
-
-          // Тап по точке — переход к баннеру
-          if (dots) {
-            dots.querySelectorAll('[data-dot]').forEach((dot) => {
-              dot.addEventListener('click', () => {
-                const i = Number(dot.getAttribute('data-dot')) || 0;
-                pos = i;
-                track.scrollTo({ left: i * track.clientWidth, behavior: 'smooth' });
-              });
-            });
-          }
-        }
-        if (track) {
-          track.addEventListener('scroll', () => {
-            window.clearTimeout(track.__t);
-            track.__t = window.setTimeout(syncDots, 80);
-          });
-          track.querySelectorAll('[data-slide]').forEach((slide) => {
-            slide.addEventListener('click', () => open(slide.getAttribute('data-url')));
-          });
-        }
-      } catch (e) { }
-    }
-
-    const wrap = () => {
-      if (typeof window.go !== 'function' || window.go.__banners) return;
-      const orig = window.go;
-      const wrapped = function (name) {
-        const r = orig.apply(this, arguments);
-        if (name === 'market') setTimeout(loadFeedBanners, 120);
-        return r;
-      };
-      wrapped.__banners = true;
-      window.go = wrapped;
-    };
-    document.addEventListener('DOMContentLoaded', wrap);
-    setTimeout(wrap, 900);
-    setTimeout(loadFeedBanners, 2000);
-    window.PolkaBanners = loadFeedBanners;
-  } catch (e) { }
-})();
-
-/* ── Барахолка: объявления из /api/ads ────────────────────────────────── */
-(function () {
-  try {
-    const rub = (n) => (Number(n) || 0).toLocaleString('ru-RU') + ' \u20BD';
-
-    function card(a) {
-      let ph = '';
-      try {
-        const arr = typeof a.photos === 'string' ? JSON.parse(a.photos.replace(/'/g, '"')) : a.photos;
-        ph = Array.isArray(arr) && arr.length ? String(arr[0]) : '';
-      } catch (e) { ph = ''; }
-      const bg = ph ? `style="background-image:url('${ph}')"` : '';
-      return `<article class="card lot" data-ad="${a.id}">
-        <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
-        <h3>${(a.title || '').slice(0, 34)}</h3>
-        <span class="pricepill">${rub(a.price)}</span>
-        <span class="status">${a.city || ''}</span>
-      </article>`;
-    }
-
-    async function loadBoard() {
-      const box = document.getElementById('marketGrid');
-      if (!box) return;
-      try {
-        const data = await window.PolkaAPI.api('/api/ads?limit=40');
-        const items = data.items || [];
-        if (!items.length) {
-          box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
-            <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
-            <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
-              Здесь появятся объявления людей после модерации.</div>
-            <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
-                    onclick="go('post')">Разместить объявление</button></div>`;
-          return;
-        }
-        box.innerHTML = items.map(card).join('');
-      } catch (e) { }
-    }
-
-    const wrap = () => {
-      if (typeof window.go !== 'function' || window.go.__board) return;
-      const orig = window.go;
-      const wrapped = function (name) {
-        const r = orig.apply(this, arguments);
-        if (name === 'market') setTimeout(loadBoard, 150);
-        return r;
-      };
-      wrapped.__board = true;
-      window.go = wrapped;
-    };
-    document.addEventListener('DOMContentLoaded', wrap);
-    setTimeout(wrap, 950);
-    window.PolkaBoard = loadBoard;
-  } catch (e) { }
-})();
-
-/* ── Переход на экран по ссылке из бота (?screen=…) ───────────────────── */
-(function () {
-  try {
-    const MAP = {
-      create: 'post', post: 'post', tariffs: 'tariffs', favorites: 'favorites',
-      profile: 'profile', searches: 'searches', hunt: 'searches', history: 'history',
-      referrals: 'referrals', myads: 'myads', moderation: 'moderation',
-      home: 'home', market: 'market',
-    };
-    function target() {
-      const q = new URLSearchParams(location.search).get('screen') || '';
-      const h = (location.hash || '').replace(/^#\/?/, '').split(/[?/]/)[0];
-      return MAP[String(q).toLowerCase()] || MAP[String(h).toLowerCase()] || '';
-    }
-    function jump() {
-      const to = target();
-      if (!to) return;
-      try {
-        if (typeof window.show === 'function') window.show(to);
-        else if (typeof window.go === 'function') window.go(to, true);
-      } catch (e) { }
-    }
-    document.addEventListener('DOMContentLoaded', () => {
-      setTimeout(jump, 1400); setTimeout(jump, 2000);
-    });
-    setTimeout(jump, 1600);
-    window.PolkaJump = jump;
-  } catch (e) { }
+  window.PolkaResetPhotos = () => { state.urls = []; paint(); };
+  document.addEventListener('DOMContentLoaded', paint);
+  setTimeout(paint, 600);
 })();
 
 /* ── Модерация объявлений в приложении (только админ) ─────────────────── */
@@ -1633,4 +1427,131 @@ function paintEmpty(count) {
       if (heart.classList.contains('liked') !== on) paint();
     }, 500);
   } catch (e) { }
+})();
+
+/* ── Мои объявления, создание лота, рефералка (восстановлено) ───────────── */
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
+  const STATUS = { sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
+                   checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено' };
+
+  function photoOf(a) {
+    const raw = a.photos;
+    if (Array.isArray(raw)) return raw[0] || '';
+    if (typeof raw === 'string' && raw.trim()) {
+      try {
+        const arr = JSON.parse(raw.replace(/'/g, '"'));
+        return Array.isArray(arr) ? (arr[0] || '') : '';
+      } catch (e) { return raw.startsWith('http') ? raw : ''; }
+    }
+    return '';
+  }
+
+  function card(a, extra) {
+    const ph = photoOf(a);
+    const bg = ph ? `style="background-image:url('${ph}')"` : '';
+    return `<article class="card fav">
+      <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
+      <span class="favtext">
+        <h3>${(a.title || '').slice(0, 40)}</h3>
+        <span class="pricepill">${fmt(a.price)}</span>
+        ${extra ? `<span class="status">${extra}</span>` : ''}
+      </span>
+    </article>`;
+  }
+
+  async function loadMyAds() {
+    const box = $('myList');
+    if (!box) return;
+    try {
+      const data = await window.PolkaAPI.api('/api/my-ads');
+      const items = data.items || [];
+      box.innerHTML = items.length
+        ? items.map((a) => card(a, STATUS[a.status] || 'Активно')).join('')
+        : '<div class="card" style="padding:18px;text-align:center">Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
+    } catch (e) { }
+  }
+
+  async function loadReferrals() {
+    try {
+      const data = await window.PolkaAPI.api('/api/referral');
+      const linkNode = $('refLink');
+      if (linkNode) linkNode.textContent = (data.link || '').replace('https://', '') || 'ссылка недоступна';
+      const bal = $('refBalance');
+      if (bal) bal.textContent = 'Баланс: ' + Number(data.balance || 0).toLocaleString('ru-RU')
+        + ' \u20BD · тратится только на подписку Плюс';
+      const earned = document.querySelector('#s-referrals .earned');
+      if (earned) earned.textContent = 'Приглашено: ' + (data.count || 0);
+      const list = $('refList');
+      const rows = data.referrals || data.items || [];
+      if (list) {
+        list.innerHTML = rows.length
+          ? rows.map((r) => `<div class="mrow"><span class="grow">${(r.name || 'пользователь').slice(0, 24)}</span>
+              <span class="chev">${r.days ? '+' + r.days : ''}</span></div>`).join('')
+          : '<div class="mrow"><span class="grow" style="color:#7A8CA3">Пока никого не пригласили</span></div>';
+      }
+    } catch (e) { }
+  }
+
+  async function wirePost() {
+    const form = $('postForm');
+    if (!form || form.__wired) return;
+    form.__wired = true;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const val = (id) => (($(id) || {}).value || '').trim();
+      const title = val('adTitle');
+      const price = Number(val('adPrice').replace(/[^0-9]/g, '')) || 0;
+      const cat = val('adCategory') || 'Другое';
+      const cond = val('adCondition') || 'Отличное';
+      const city = val('adCity');
+      if (title.length < 3 || !price) {
+        const TG = window.Telegram && window.Telegram.WebApp;
+        if (TG && TG.showAlert) TG.showAlert('Укажите название и цену');
+        return;
+      }
+      try {
+        await window.PolkaAPI.api('/api/ads', {
+          method: 'POST',
+          body: JSON.stringify({
+            title, price, category: cat, condition: cond, city,
+            photos: window.PolkaPhotos ? window.PolkaPhotos() : [],
+            description: val('adDesc'),
+            delivery: (($('adDelivery') || {}).checked) ? 1 : 0,
+          }),
+        });
+        if (window.PolkaResetPhotos) window.PolkaResetPhotos();
+        form.reset();
+        const TG = window.Telegram && window.Telegram.WebApp;
+        if (TG && TG.showAlert) TG.showAlert('Отправлено на модерацию');
+        if (typeof window.go === 'function') window.go('myads');
+      } catch (err) {
+        const TG = window.Telegram && window.Telegram.WebApp;
+        const msg = String(err && err.message || '');
+        if (TG && TG.showAlert) TG.showAlert(msg.includes('402') || msg.includes('403')
+          ? 'Лимит объявлений исчерпан. Оформите Плюс.'
+          : 'Не удалось опубликовать');
+      }
+    });
+  }
+
+  const wrap = () => {
+    if (typeof window.go !== 'function' || window.go.__rest) return;
+    const orig = window.go;
+    const wrapped = function (name) {
+      const r = orig.apply(this, arguments);
+      if (name === 'myads') loadMyAds();
+      if (name === 'favorites' && typeof loadFavs === 'function') loadFavs();
+      if (name === 'post' && window.wirePost) window.wirePost();
+      if (name === 'referrals') loadReferrals();
+      return r;
+    };
+    wrapped.__rest = true;
+    window.go = wrapped;
+  };
+  document.addEventListener('DOMContentLoaded', () => { wrap(); wirePost(); });
+  setTimeout(wrap, 800);
+  window.PolkaPost = wirePost;
+  window.wirePost = wirePost;
 })();

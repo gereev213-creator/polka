@@ -420,6 +420,22 @@ body:has(#s-product.active) #nav{display:none!important}
 #pFav.liked{background:var(--grad)!important}
 #pFav.liked svg{color:#fff!important;fill:#fff!important}
 #pFav.liked svg path{fill:#fff!important;stroke:#fff!important}
+
+/* Фото лота — одна горизонтальная дорожка со слотами */
+#photoTrack{display:flex!important;gap:8px!important;overflow-x:auto!important;
+  flex-wrap:nowrap!important;padding:2px 0 8px!important;scrollbar-width:none;
+  -webkit-overflow-scrolling:touch}
+#photoTrack::-webkit-scrollbar{display:none}
+#photoTrack .photoAdd,#photoTrack .photoSlot{flex:0 0 84px!important;width:84px!important;
+  height:84px!important;border-radius:18px!important;position:relative!important}
+#photoTrack .photoAdd{background:var(--grad);color:#fff;display:grid!important;
+  place-items:center!important;cursor:pointer;box-shadow:var(--sh)}
+#photoTrack .photoAdd span{font-size:26px;font-weight:800;line-height:1}
+#photoTrack .photoAdd small{font-size:9px;font-weight:800;opacity:.9;margin-top:-2px}
+#photoTrack .photoSlot{background:#E3EDFD center/cover no-repeat;box-shadow:var(--sh)}
+#photoTrack .photoSlot b{position:absolute;top:-6px;right:-6px;width:20px;height:20px;
+  border-radius:50%;background:#3373FA;color:#fff;font-size:13px;font-weight:800;
+  display:grid;place-items:center;cursor:pointer;line-height:1}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -544,7 +560,7 @@ body:has(#s-product.active) #nav{display:none!important}
 <!-- create listing -->
 <section class="screen" id="s-post"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Создание объявления</span></div>
 <div class="scroll">
-<div class="photos"><label class="photoMain" id="photoMain" for="photoInput"><span id="photoLabel">+ Добавить фото</span><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></label><div class="photoSide"><label class="photoSmall" for="photoInput">+</label><label class="photoSmall" for="photoInput">+</label></div></div>
+<div class="photos" id="photoTrack"><label class="photoAdd" for="photoInput"><span>+</span><small>Фото</small></label><input id="photoInput" type="file" accept="image/*" multiple style="position:absolute;width:1px;height:1px;opacity:0"></div></div>
 <form class="card form" id="postForm">
 <div class="field"><label>Название</label><input id="adTitle" placeholder="Например, iPhone 13, 128 Гб" required></div>
 <div class="field"><label>Цена, ₽</label><input id="adPrice" placeholder="Например: 5 000" inputmode="numeric" required></div>
