@@ -465,11 +465,13 @@ body:not(:has(#s-post.active)) #s-post .bottomCta{display:none!important}
 body:not(:has(#s-newsearch.active)) #s-newsearch .bottomCta{display:none!important}
 
 /* Плашка подсветки не должна торчать за кнопкой */
-/* Лишнюю плашку убрали: активную вкладку показываем яркой иконкой */
-#navglass{display:none!important;background:transparent!important;box-shadow:none!important}
-.navmain>button{color:#B9CFF7!important}
+/* Плашка внутри меню: ровно по кнопке, капсула обрезает края */
+#navglass{display:block!important;background:rgba(255,255,255,.22)!important;
+  border-radius:999px!important;box-shadow:inset 0 0 0 1px rgba(255,255,255,.30)!important;
+  pointer-events:none!important}
+.navmain{overflow:hidden!important}
+.navmain>button{color:#C2D5F8!important}
 .navmain>button.on{color:#FFFFFF!important}
-.navmain>button.on svg{filter:drop-shadow(0 1px 2px rgba(15,95,214,.35))}
 .navmain{position:relative!important;overflow:hidden!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>

@@ -895,9 +895,10 @@ function paintEmpty(count) {
     const box = active.getBoundingClientRect();
     // Пилюля по размеру самого меню: высота = капсула минус 8, ширина чуть
     // больше иконки. Так она всегда внутри и не вылезает за края.
-    // Плашка ровно по кнопке: та же ширина и высота, тот же радиус
+    // Плашка внутри капсулы: высота минус 8, ширина кнопки минус 8,
+    // чтобы края не выходили за скругление
     const h = Math.max(40, navBox.height - 8);
-    const w = Math.round(box.width);
+    const w = Math.round(box.width) - 8;
     glass.style.transition = 'left .22s ease, width .22s ease';
     const centerX = (box.left - navBox.left) + box.width / 2;
     glass.style.width = w + 'px';
