@@ -904,11 +904,18 @@ function paintEmpty(count) {
     const to = target();
     if (!to) return;
     try {
-      if (typeof window.go === 'function') window.go(to, true);
+      // Прототип при загрузке сам показывает home (около 1.1 с), поэтому
+      // переключаем экран уже после этого.
+      if (typeof window.show === 'function') window.show(to);
+      else if (typeof window.go === 'function') window.go(to, true);
     } catch (e) { }
   }
 
-  document.addEventListener('DOMContentLoaded', () => setTimeout(jump, 400));
-  setTimeout(jump, 1200);
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(jump, 1400);
+    setTimeout(jump, 2000);
+    setTimeout(jump, 2800);
+  });
+  setTimeout(jump, 1600);
   window.PolkaJump = jump;
 })();
