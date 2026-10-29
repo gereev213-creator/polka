@@ -31133,6 +31133,29 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'channel_check':
+        # Проверка канала: права бота и пробная отправка простого текста
+        import time as _t
+        chat = fod_chat_id()
+        me = await _tg_call('getMe', {})
+        bot_id = (me.get('result') or {}).get('id')
+        member = await _tg_call('getChatMember', {'chat_id': chat, 'user_id': bot_id}) if bot_id else {}
+        mres = member.get('result') or {}
+        probe = await _tg_call('sendMessage', {
+            'chat_id': chat,
+            'text': f"Проверка канала {_t.strftime('%H:%M:%S')}",
+            'disable_notification': True,
+        })
+        return _miniapp_json({
+            'ok': bool(probe.get('ok')),
+            'chat_id': str(chat),
+            'bot': (me.get('result') or {}).get('username'),
+            'member_status': mres.get('status'),
+            'can_post_messages': mres.get('can_post_messages'),
+            'send_error': None if probe.get('ok') else probe.get('description'),
+            'message_id': ((probe.get('result') or {}).get('message_id')) if probe.get('ok') else None,
+        })
+
     if action == 'fod_now':
         # Ручная публикация «находки дня» для проверки
         try:
@@ -31143,10 +31166,14 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 me = await _tg_call('getMe', {})
                 bot_id = ((me.get('result') or {}).get('id')) if me.get('ok') else None
                 member = await _tg_call('getChatMember', {'chat_id': chat, 'user_id': bot_id}) if bot_id else {}
+                mres = member.get('result') or {}
                 res['diag'] = {
                     'chat_id': str(chat),
                     'bot_username': ((me.get('result') or {}).get('username')) if me.get('ok') else None,
-                    'member_status': ((member.get('result') or {}).get('status')) if member.get('ok') else member.get('description'),
+                    'member_status': mres.get('status') if member.get('ok') else member.get('description'),
+                    'can_post_messages': mres.get('can_post_messages'),
+                    'can_edit_messages': mres.get('can_edit_messages'),
+                    'can_send_photos': mres.get('can_send_photos'),
                 }
             return _miniapp_json(res, status=200 if res.get('ok') else 400)
         except Exception as e:
