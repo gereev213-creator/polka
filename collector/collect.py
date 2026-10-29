@@ -1986,6 +1986,11 @@ def run_once(cfg: dict) -> int:
             n_today += 1
     print(f"целей сегодня {n_today} из {len(targets)}")
 
+    # Блок на ОДНОЙ странице не должен обрывать весь проход: Авито может
+    # отдать 439 на конкретном URL (узкий подраздел, поиск по тексту) и при
+    # этом спокойно отдать соседний раздел. Раньше первый же блок убивал
+    # проход целиком, и сбор часами не работал.
+    blocked_streak = 0
     for target in picked:
         source = target.get('source', 'avito')
         city = target.get('city', '')
@@ -1999,18 +2004,21 @@ def run_once(cfg: dict) -> int:
             try:
                 html = fetch(url, prefer_scraper=('q=' in url))
             except Blocked as exc:
-                print(f"  ⛔ {exc} — останавливаюсь, чтобы не усугублять")
-                # Всё, что успели собрать на предыдущих страницах, уже
-                # отправлено (отправка идёт постранично) — терять нечего.
+                blocked_streak += 1
+                print(f"  ⛔ {exc} — пропускаю эту страницу (блок {blocked_streak})")
+                # Собираем, что успели: отправка идёт постранично.
                 save_targets_state(state)
-                # Код 3 = «нас заблокировали». Супервизор на сервере по нему
-                # делает длинную паузу вместо бессмысленных повторов.
-                raise SystemExit(3)
+                if blocked_streak >= 2:
+                    # Два блока подряд — похоже на блокировку по IP. Уходим
+                    # на паузу, но только теперь, а не после первого 439.
+                    raise SystemExit(3)
+                continue
             except (urllib.error.URLError, TimeoutError) as exc:
                 # Сеть отвалилась на этой странице — идём к следующей.
                 # items остаётся пустым: к предыдущей цели не обращаемся.
                 print(f"  ✖ не открылось: {exc}")
                 continue
+            blocked_streak = 0
             items = parse_page(html)
             first_page_dated = date_sorted_first_page(url)
             for item in items:

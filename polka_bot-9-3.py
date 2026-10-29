@@ -20696,7 +20696,9 @@ async def _collector_inline_loop():
                 # растёт и сохраняется в настройке, чтобы перезапуск её не сбрасывал.
                 try:
                     prev = int(cfg_get('collector.blocked_until_ts') or 0)
-                    wait_min = 45 if not prev or prev < _time.time() else 90
+                    # Пауза короче: одиночные блоки по конкретным URL теперь
+                    # не роняют проход, поэтому 90 минут простоя не нужны.
+                    wait_min = 15 if not prev or prev < _time.time() else 45
                 except Exception:
                     wait_min = 45
                 _setting_set('collector.blocked_until_ts', str(int(_time.time() + wait_min * 60)))
