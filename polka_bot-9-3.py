@@ -23206,6 +23206,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'emoji.map': ('str', None, None, '{}', 'JSON вида {"fire": {"id": "...", "char": "🔥"}}'),
     # Канал: ежедневная «находка дня». Объявления пользователей в канал
     # больше не публикуются — только этот дайджест.
+    'channel.fod_chat': ('str', None, None, '', 'ID или @username канала для находки дня (пусто — основной)'),
     'channel.fod_enabled': ('str', None, None, '1', '1 — публиковать находку дня в канал'),
     'channel.fod_hour': ('str', None, None, '12', 'Час публикации находки дня (МСК)'),
     'channel.fod_last': ('str', None, None, '', 'Дата последней публикации находки дня'),
@@ -29182,6 +29183,29 @@ async def admin_emoji_collect(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.warning(f"emoji collect: {e}")
 
+def fod_chat_id():
+    """Куда публиковать находку дня: настройка или основной канал."""
+    raw = str(cfg_get('channel.fod_chat') or '').strip()
+    if not raw:
+        return ADMIN_CHANNEL_ID
+    try:
+        return int(raw)
+    except ValueError:
+        return raw
+
+
+async def _tg_call(method: str, payload: Dict) -> Dict:
+    """Прямой вызов Bot API — для диагностики прав в канале."""
+    import aiohttp as _ah
+    url = f"https://api.telegram.org/bot{TOKEN}/{method}"
+    try:
+        async with _ah.ClientSession(timeout=_ah.ClientTimeout(total=20)) as sess:
+            async with sess.post(url, json=payload) as r:
+                return await r.json(content_type=None)
+    except Exception as e:
+        return {'ok': False, 'description': str(e)[:120]}
+
+
 def miniapp_link() -> str:
     """Прямая ссылка на мини-приложение с открытием «Находок»."""
     return os.environ.get('MINIAPP_LINK', 'https://t.me/polkalotapp?startapp=home')
@@ -29195,7 +29219,7 @@ async def _fod_send_raw(photo: str, caption: str) -> Dict:
         async with _ah.ClientSession(timeout=_ah.ClientTimeout(total=30)) as sess:
             if photo:
                 data = _ah.FormData()
-                data.add_field('chat_id', str(ADMIN_CHANNEL_ID))
+                data.add_field('chat_id', str(fod_chat_id()))
                 data.add_field('caption', caption)
                 data.add_field('parse_mode', 'HTML')
                 data.add_field('reply_markup', json.dumps(
@@ -29206,7 +29230,7 @@ async def _fod_send_raw(photo: str, caption: str) -> Dict:
                     j = await r.json(content_type=None)
                     if j.get('ok'):
                         return {'ok': True, 'message_id': j['result']['message_id']}
-            payload = {'chat_id': ADMIN_CHANNEL_ID, 'text': caption, 'parse_mode': 'HTML',
+            payload = {'chat_id': fod_chat_id(), 'text': caption, 'parse_mode': 'HTML',
                        'reply_markup': {'inline_keyboard': [
                            [{'text': 'Открыть ПОЛКУ', 'url': miniapp_link()}]]}}
             async with sess.post(base + '/sendMessage', json=payload) as r:
@@ -29281,7 +29305,7 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
             sent = None
             keyboard = InlineKeyboardMarkup([[
                 _InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]])
-            kwargs = {'chat_id': ADMIN_CHANNEL_ID, 'reply_markup': keyboard}
+            kwargs = {'chat_id': fod_chat_id(), 'reply_markup': keyboard}
             if cap_entities:
                 kwargs['caption_entities'] = cap_entities
                 kwargs['text_entities'] = cap_entities
@@ -31114,6 +31138,16 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         try:
             bot = globals().get('_BOT_INSTANCE')
             res = await post_finding_of_the_day(bot, force=True)
+            if not res.get('ok'):
+                chat = fod_chat_id()
+                me = await _tg_call('getMe', {})
+                bot_id = ((me.get('result') or {}).get('id')) if me.get('ok') else None
+                member = await _tg_call('getChatMember', {'chat_id': chat, 'user_id': bot_id}) if bot_id else {}
+                res['diag'] = {
+                    'chat_id': str(chat),
+                    'bot_username': ((me.get('result') or {}).get('username')) if me.get('ok') else None,
+                    'member_status': ((member.get('result') or {}).get('status')) if member.get('ok') else member.get('description'),
+                }
             return _miniapp_json(res, status=200 if res.get('ok') else 400)
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=400)
