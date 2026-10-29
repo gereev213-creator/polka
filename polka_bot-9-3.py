@@ -7989,20 +7989,30 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Кнопка главного меню с синим стилем (Bot API 9.4)."""
         return InlineKeyboardButton(text, callback_data=cb, style="primary")
 
-    def _wbtn(text, path):
-        """Кнопка открытия Mini App. HashRouter: путь через /#/"""
-        return InlineKeyboardButton(text, web_app=WebAppInfo(url=f"{MINIAPP_URL}/?screen={path}"))
+    def _wbtn(text, screen):
+        """Кнопка открытия Mini App сразу на нужном разделе.
+
+        Приложение читает ?screen= и открывает соответствующий экран.
+        Раньше сюда передавали «/» и «/?tab=…», и все кнопки вели на «Находки».
+        """
+        key = str(screen or '').strip().lstrip('/')
+        key = key.replace('?tab=', '').replace('?screen=', '')
+        url = f"{MINIAPP_URL}/" + (f"?screen={key}" if key and key != '/' else '')
+        return InlineKeyboardButton(text, web_app=WebAppInfo(url=url))
 
     # ТЗ §6: пользовательские функции живут в Mini App — главное действие
     # меню бота это "Открыть Полку". Старые callback-handlers (create_ad,
     # search, my_ads, favorites, profile) НЕ удалены и работают как fallback.
     keyboard = [
-        [_wbtn("Открыть Полку", "/")],
-        # Четыре понятных входа. Всё остальное живёт внутри приложения,
-        # поэтому меню больше не забито кнопками.
-        [_wbtn("Находки",      "/?tab=findings"),
-         _wbtn("Барахолка",    "/?tab=board")],
-        [_wbtn("Поиск лотов",  "/hunt")],
+        [_wbtn("Открыть Полку", "home")],
+        # Каждая кнопка ведёт в свой раздел приложения
+        [_wbtn("Находки",   "home"),
+         _wbtn("Барахолка", "market")],
+        [_wbtn("Поиск лотов", "searches"),
+         _wbtn("Избранное",   "favorites")],
+        [_wbtn("Мои объявления", "myads"),
+         _wbtn("Тарифы",         "tariffs")],
+        [_wbtn("Создать объявление", "post")],
     ]
 
     cursor = db.conn.cursor()
@@ -13726,7 +13736,7 @@ async def handle_moderation_reason(update: Update, context: ContextTypes.DEFAULT
                 text=f"{EM_FAIL} Ваше объявление отклонено\n\n{title}\n\nПричина: {reason}\n\nИсправьте и создайте заново — это займёт минуту.",
                 reply_markup=InlineKeyboardMarkup([
                     [InlineKeyboardButton(" Создать заново",
-                                          web_app=WebAppInfo(url=f"{_miniapp_url()}/?screen=create"))],
+                                          web_app=WebAppInfo(url=f"{_miniapp_url()}/?screen=post"))],
                 ]),
             )
         except Exception as e:

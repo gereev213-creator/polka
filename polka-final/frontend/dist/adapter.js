@@ -2116,3 +2116,72 @@ function paintEmpty(count) {
     setInterval(normalize, 800);
   } catch (e) { }
 })();
+
+/* ── Глубокие ссылки: кнопка в боте открывает нужный раздел ──────────────
+   Поддерживаем ?screen=favorites и ?tab=board, а также startapp-параметр
+   из Telegram (/?startapp=tariffs). Раньше всё открывалось на «Находках». */
+(function () {
+  try {
+    const MAP = {
+      '': 'home', '/': 'home', findings: 'home', home: 'home', находки: 'home',
+      board: 'market', market: 'market', барахолка: 'market',
+      favorites: 'favorites', saved: 'favorites', избранное: 'favorites',
+      searches: 'searches', criteria: 'searches', поиски: 'searches',
+      history: 'history', profile: 'profile', профиль: 'profile',
+      tariffs: 'tariffs', 'plus': 'tariffs', тарифы: 'tariffs',
+      myads: 'myads', post: 'post', create: 'post', создать: 'post',
+      referrals: 'referrals', рефералка: 'referrals',
+      admin: 'admin', moderation: 'moderation',
+    };
+
+    function normalize(value) {
+      let v = String(value || '').trim().toLowerCase();
+      v = v.replace(/^[?#]+/, '');
+      if (v.startsWith('screen=')) v = v.slice('screen='.length);
+      if (v.startsWith('tab=')) v = v.slice('tab='.length);
+      v = v.replace(/^\/+/, '').split('&')[0].split('?')[0];
+      return MAP[v] || '';
+    }
+
+    function target() {
+      let fromUrl = '';
+      try {
+        const p = new URLSearchParams(location.search);
+        fromUrl = p.get('screen') || p.get('tab') || '';
+      } catch (e) { }
+      let fromTg = '';
+      try {
+        fromTg = (window.Telegram && window.Telegram.WebApp
+          && window.Telegram.WebApp.initDataUnsafe
+          && window.Telegram.WebApp.initDataUnsafe.start_param) || '';
+      } catch (e) { }
+      return normalize(fromUrl) || normalize(fromTg) || '';
+    }
+
+    function jump() {
+      const screen = target();
+      if (!screen || typeof window.go !== 'function') return false;
+      const current = (document.querySelector('.screen.active') || {}).id;
+      if (current === 's-' + screen) return true;
+      try { window.go(screen, true); } catch (e) { }
+      // Страховка: если go не сработал, переключаем классы напрямую
+      setTimeout(() => {
+        const now = (document.querySelector('.screen.active') || {}).id;
+        if (now !== 's-' + screen) {
+          document.querySelectorAll('.screen').forEach((s) => {
+            s.classList.toggle('active', s.id === 's-' + screen);
+          });
+        }
+      }, 220);
+      return true;
+    }
+
+    let tries = 0;
+    const tick = setInterval(() => {
+      tries += 1;
+      if (jump() || tries > 40) clearInterval(tick);
+    }, 250);
+    document.addEventListener('DOMContentLoaded', () => setTimeout(jump, 120));
+    window.__polkaJump = jump;
+  } catch (e) { }
+})();
