@@ -23210,6 +23210,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'channel.fod_hour': ('str', None, None, '12', 'Час публикации находки дня (МСК)'),
     'channel.fod_last': ('str', None, None, '', 'Дата последней публикации находки дня'),
     'channel.fod_last_ad': ('str', None, None, '0', 'ID последней находки дня'),
+    'legal.refund_url': ('str', None, None, '',
+                         'Ссылка на условия оплаты и возврата'),
     'legal.consent_required': ('str', None, None, '1',
                                '1 — спрашивать согласие при первом входе в приложение'),
     # Оплата картой через CISPay. UUID мерчанта — только на сервере.
@@ -23263,6 +23265,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                         'Срок рассмотрения возврата, дней'),
     'pay.offer_url': ('str', None, None, '',
                       'Ссылка на оферту / условия пользования (https://…)'),
+    'pay.refund_url': ('str', None, None, '',
+                       'Ссылка на условия оплаты и возврата'),
     'pay.privacy_url': ('str', None, None, '',
                         'Ссылка на политику конфиденциальности (https://…)'),
     # Напоминания об оплате в ленте (этап R): тексты живут в настройках,
@@ -24099,6 +24103,7 @@ def legal_docs() -> Dict:
         # Свои документы лежат в dist/legal и раздаются тем же сервером
         'privacy_url': str(cfg_get('legal.privacy_url') or f'{base}/legal/privacy.html'),
         'terms_url': str(cfg_get('legal.terms_url') or f'{base}/legal/terms.html'),
+        'refund_url': str(cfg_get('legal.refund_url') or f'{base}/legal/refund.html'),
         'consent_required': str(cfg_get('legal.consent_required') or '1') == '1',
     }
 
@@ -25076,6 +25081,7 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         # видит пустые поля и отклоняет модерацию платёжной страницы.
         'offer_url': str(cfg_get('pay.offer_url') or legal_docs()['terms_url']),
         'privacy_url': str(cfg_get('pay.privacy_url') or legal_docs()['privacy_url']),
+        'refund_url': str(cfg_get('pay.refund_url') or legal_docs()['refund_url']),
     }
     viewer = _miniapp_viewer(request)
     user_plan = resolve_plan(viewer) if viewer else 'trial'
