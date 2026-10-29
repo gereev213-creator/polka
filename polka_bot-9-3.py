@@ -24907,6 +24907,10 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
         ('MNT_SIGNATURE', sign),
         ('MNT_SUCCESS_URL', f'{base_url}/pay/ok'),
         ('MNT_FAIL_URL', f'{base_url}/pay/fail'),
+        # Без MNT_CALLBACK_URL шлюз не присылает уведомление об оплате, и
+        # подписка не включается сама — человек платит и остаётся ни с чем.
+        ('MNT_CALLBACK_URL', f'{base_url}/api/pay/paw/notify'),
+        ('MNT_CALLBACK_METHOD', 'POST'),
     ]
     # quote импортируем здесь же: в проекте urllib.parse подключается
     # локально внутри функций, модульного псевдонима _up нет — из-за этого
@@ -25270,6 +25274,41 @@ async def api_pay_paw_status(request: aiohttp_web.Request) -> aiohttp_web.Respon
     return _miniapp_json({'ok': True, 'status': pay.get('status') or 'waiting',
                           'credited': credited, 'days': int(pay.get('days') or 0),
                           'provider': 'paw'})
+
+
+def _pay_result_page(title: str, text: str, ok: bool = True) -> aiohttp_web.Response:
+    """Простая страница после оплаты: шлюз возвращает человека сюда."""
+    color = '#3373FA' if ok else '#C0392B'
+    html = (
+        '<!doctype html><html lang="ru"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<title>{title}</title>'
+        '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;'
+        'justify-content:center;background:#EAF2FE;font-family:-apple-system,'
+        'Segoe UI,Roboto,sans-serif;color:#1F2A37;padding:24px}'
+        '.card{background:#fff;border-radius:26px;padding:26px 22px;max-width:360px;'
+        'width:100%;text-align:center;box-shadow:0 16px 40px rgba(21,63,146,.12)}'
+        f'h1{{margin:0 0 8px;font-size:20px;color:{color}}}'
+        'p{margin:0;font-size:13.5px;line-height:1.45;color:#5C6E86}'
+        '</style></head><body><div class="card">'
+        f'<h1>{title}</h1><p>{text}</p></div></body></html>'
+    )
+    return aiohttp_web.Response(text=html, content_type='text/html', charset='utf-8')
+
+
+async def api_pay_ok(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    return _pay_result_page(
+        'Оплата прошла',
+        'Плюс активирован. Вернитесь в приложение — доступ уже обновлён. '
+        'Если тариф не появился, откройте «Тарифы» через минуту.')
+
+
+async def api_pay_fail(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    return _pay_result_page(
+        'Оплата не прошла',
+        'Деньги не списаны. Вернитесь в приложение и попробуйте ещё раз '
+        'или напишите в поддержку @suppolka.',
+        ok=False)
 
 
 async def api_pay_paw_notify(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -34433,6 +34472,8 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/pay/paw/create', api_pay_paw_create)
     app.router.add_get('/api/pay/paw/status', api_pay_paw_status)
     app.router.add_post('/api/pay/paw/notify', api_pay_paw_notify)
+    app.router.add_get('/pay/ok', api_pay_ok)
+    app.router.add_get('/pay/fail', api_pay_fail)
     app.router.add_get('/api/pay/paw/notify', api_pay_paw_notify)
     app.router.add_get('/api/pay/promo-check', api_pay_promo_check)
     app.router.add_get('/api/pay/cispay/status', api_pay_status)
