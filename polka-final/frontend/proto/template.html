@@ -548,13 +548,9 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
   letter-spacing:.02em;white-space:nowrap;margin-left:8px}
 #planUntil.on{display:inline-flex}
 
-/* Бейдж-звезда у подписчиков: синий кружок справа сверху аватара */
-.avatar{position:relative}
-.avatar .avbadge{position:absolute;top:-4px;right:-10px;width:34px;height:34px;border-radius:50%;
-  background:var(--grad);color:#fff;display:none;place-items:center;border:3px solid var(--bg);
-  box-shadow:0 6px 16px rgba(51,115,250,.35);z-index:3}
-.avatar .avbadge.on{display:grid}
-.avatar .avbadge svg{width:18px;height:18px;fill:#fff}
+/* Бейдж на аватаре не используем */
+.avatar .avbadge{display:none!important}
+#plusStar{display:none!important}
 /* Плашка «до 01.01.2027» рядом с тарифом */
 #planUntil{display:none;align-items:center;justify-content:center;height:26px;padding:0 12px;
   border-radius:999px;background:var(--grad);color:#fff;font-size:10.5px;font-weight:800;
@@ -807,8 +803,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029151820"></script>
-<script src="adapter.js?v=20261029151820"></script><script src="payments.js?v=20261029151820"></script><script src="admin.js?v=20261029151820"></script><script src="keyboard.js?v=20261029151820"></script><script src="telegram-safe.js?v=20261029151820"></script><script>
+</script><script src="telegram-web-app.js?v=20261029152742"></script>
+<script src="adapter.js?v=20261029152742"></script><script src="payments.js?v=20261029152742"></script><script src="admin.js?v=20261029152742"></script><script src="keyboard.js?v=20261029152742"></script><script src="telegram-safe.js?v=20261029152742"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;

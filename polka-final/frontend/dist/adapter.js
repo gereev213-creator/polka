@@ -2336,35 +2336,17 @@ function paintEmpty(count) {
     let paidNow = false;
 
     function ensureStar() {
-      const circle = document.getElementById('avatarCircle');
-      if (!circle) return null;
-      const host = circle.parentElement;
-      if (!host) return null;
-      host.style.position = host.style.position || 'relative';
-      let star = document.getElementById('plusStar');
-      if (!star) {
-        star = document.createElement('span');
-        star.id = 'plusStar';
-        star.style.cssText = 'position:absolute;width:34px;height:34px;border-radius:50%;'
-          + 'background:var(--grad);color:#fff;display:none;place-items:center;'
-          + 'border:3px solid var(--bg);box-shadow:0 6px 16px rgba(51,115,250,.35);z-index:5';
-        star.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">'
-          + '<path d="M12 2l2.2 6.1L20.4 10l-6.2 1.9L12 18l-2.2-6.1L3.6 10l6.2-1.9L12 2Z"/></svg>';
-        host.appendChild(star);
-      }
-      // Ставим по геометрии аватара
-      const cr = circle.getBoundingClientRect();
-      const hr = host.getBoundingClientRect();
-      star.style.left = Math.round(cr.right - hr.left - 26) + 'px';
-      star.style.top = Math.round(cr.top - hr.top - 6) + 'px';
-      star.style.display = paidNow ? 'grid' : 'none';
-      return star;
+      // Звезду на аватаре убрали: осталась только плашка с датой у тарифов
+      const old = document.getElementById('plusStar');
+      if (old) old.remove();
+      const badge = document.querySelector('#avatarCircle .avbadge');
+      if (badge) badge.style.display = 'none';
     }
 
     function paint(user) {
       const plan = String((user && user.plan) || 'trial');
       paidNow = plan !== 'trial' && plan !== 'free' && !!plan;
-      ensureStar();
+      ensureStar();  // скрывает бейдж, если он остался от прошлой версии
       const until = document.getElementById('planUntil');
       if (until) {
         const raw = String((user && user.plan_until) || '');
