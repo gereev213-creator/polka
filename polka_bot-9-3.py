@@ -94,7 +94,7 @@ import html as _html
 from telegram import (
     Update, InlineKeyboardButton as _InlineKeyboardButton, InlineKeyboardMarkup,
     KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove,
-    InputMediaPhoto, BotCommand, Message, WebAppInfo, LabeledPrice
+    InputMediaPhoto, BotCommand, Message, WebAppInfo, LabeledPrice, MessageEntity
 )
 from telegram.ext import PicklePersistence
 try:
@@ -23188,6 +23188,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'legal.terms_url': ('str', None, None,
                         'https://telegra.ph/Politika-konfidencialnosti-07-20-93',
                         'Ссылка на условия пользования (замените на отдельную страницу)'),
+    # Премиум-эмодзи: карта «имя → custom_emoji_id|символ». Заполняется
+    # из бота: админ пересылает сообщение с эмодзи, бот выдаёт готовый JSON.
+    'emoji.map': ('str', None, None, '{}', 'JSON вида {"fire": {"id": "...", "char": "🔥"}}'),
     # Канал: ежедневная «находка дня». Объявления пользователей в канал
     # больше не публикуются — только этот дайджест.
     'channel.fod_enabled': ('str', None, None, '1', '1 — публиковать находку дня в канал'),
@@ -29052,6 +29055,114 @@ async def setup_scheduler(application: Application):
 
 
 
+
+# ── Премиум-эмодзи (custom emoji) ─────────────────────────────────────────
+def emoji_map() -> Dict:
+    """Карта премиум-эмодзи из настроек: {имя: {id, char}}."""
+    try:
+        raw = str(cfg_get('emoji.map') or '{}')
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def emoji_char(name: str, fallback: str = '') -> str:
+    """Обычный символ эмодзи — для кнопок и мест, где custom emoji нельзя."""
+    item = emoji_map().get(name) or {}
+    return str(item.get('char') or fallback)
+
+
+def render_emoji(text: str) -> tuple:
+    """Заменяет токены вида {fire} на премиум-эмодзи.
+
+    Возвращает (текст, entities). Если custom_emoji_id не задан — подставляет
+    обычный символ, чтобы сообщение не сломалось.
+    """
+    mapping = emoji_map()
+    if not mapping:
+        return text, []
+    out = ''
+    entities = []
+    i = 0
+    while i < len(text):
+        if text[i] == '{':
+            j = text.find('}', i)
+            if j > i:
+                name = text[i + 1:j]
+                item = mapping.get(name)
+                if item and item.get('char'):
+                    start = len(out)
+                    ch = str(item['char'])
+                    out += ch
+                    cid = str(item.get('id') or '')
+                    if cid:
+                        entities.append(MessageEntity(type=MessageEntity.CUSTOM_EMOJI,
+                                                      offset=start, length=len(ch),
+                                                      custom_emoji_id=cid))
+                    i = j + 1
+                    continue
+        out += text[i]
+        i += 1
+    return out, entities
+
+
+
+async def emoji_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показывает карту премиум-эмодзи и как её пополнить."""
+    try:
+        if not update.effective_user or not await is_admin(update.effective_user.id):
+            return
+        mapping = emoji_map()
+        if not mapping:
+            text = ("Премиум-эмодзи пока не заданы.\n\n"
+                    "Пришлите или перешлите сообщение с эмодзи — я соберу ID и сохраню карту.\n"
+                    "Потом в текстах можно писать токены: {fire}, {star}, {heart}.")
+        else:
+            rows = [f"{name}: {item.get('char','')} → {item.get('id','')}"
+                    for name, item in mapping.items()]
+            text = ("Сохранённые премиум-эмодзи:\n\n" + "\n".join(rows) +
+                    "\n\nВ текстах используйте {имя}. Пример: «{fire} Находка дня».")
+        await update.effective_message.reply_text(text)
+    except Exception as e:
+        logger.warning(f"emoji cmd: {e}")
+
+async def admin_emoji_collect(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Админ пересылает сообщение с премиум-эмодзи — бот собирает custom_emoji_id.
+
+    Возвращает готовый JSON для настройки emoji.map: вставляется в админке,
+    после чего в текстах можно писать {fire}, {star} и т.п.
+    """
+    try:
+        if not update.effective_user or not await is_admin(update.effective_user.id):
+            return
+        msg = update.effective_message
+        if not msg:
+            return
+        ents = list(msg.entities or []) + list(msg.caption_entities or [])
+        customs = [e for e in ents if getattr(e, 'type', '') == 'custom_emoji' and e.custom_emoji_id]
+        if not customs:
+            return
+        source = msg.text or msg.caption or ''
+        current = emoji_map()
+        names = ['fire', 'star', 'heart', 'check', 'money', 'gift', 'rocket', 'lock',
+                 'bell', 'search', 'tag', 'sparkle']
+        added = []
+        for idx, e in enumerate(customs):
+            ch = source[e.offset:e.offset + e.length] if source else ''
+            name = names[idx] if idx < len(names) else f'emoji{idx + 1}'
+            current[name] = {'id': str(e.custom_emoji_id), 'char': ch or '✨'}
+            added.append(f'{name}: {ch} → {e.custom_emoji_id}')
+        cfg_set('emoji.map', json.dumps(current, ensure_ascii=False), reason='сбор премиум-эмодзи')
+        payload = json.dumps(current, ensure_ascii=False)
+        await msg.reply_text(
+            "Собрал премиум-эмодзи:\n\n" + "\n".join(added) +
+            "\n\nКарта сохранена. Используйте в текстах токены вида {fire}." +
+            f"\n\n<code>{payload[:1200]}</code>",
+            parse_mode='HTML')
+    except Exception as e:
+        logger.warning(f"emoji collect: {e}")
+
 async def _fod_send_raw(photo: str, caption: str) -> Dict:
     """Отправка в канал напрямую через Bot API — не зависит от объекта бота."""
     import aiohttp as _ah
@@ -29124,25 +29235,29 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
         city = str(pick.get('city') or '')
         url = str(pick.get('source_url') or '')
         caption = (
-            "🔥 <b>Находка дня</b>\n\n"
+            "{fire} <b>Находка дня</b>\n\n"
+            f"<b>{str(pick.get('title') or '')[:120]}</b>\n"
             f"<b>{str(pick.get('title') or '')[:120]}</b>\n"
             f"{price:,} ₽".replace(',', ' ') + (f" · −{disc}% ниже рынка" if disc else '') +
             (f"\n{city}" if city else '') +
             (f"\n\n{url}" if url else '')
         )
 
+        caption, cap_entities = render_emoji(caption)
         sent_id = None
         if bot is not None:
             sent = None
             if photo:
                 try:
                     sent = await bot.send_photo(chat_id=ADMIN_CHANNEL_ID, photo=photo,
-                                                caption=caption, parse_mode='HTML')
+                                                caption=caption, parse_mode='HTML',
+                                                caption_entities=cap_entities or None)
                 except Exception as e:
                     logger.warning(f"fod photo failed: {e}")
             if sent is None:
                 sent = await bot.send_message(chat_id=ADMIN_CHANNEL_ID, text=caption,
-                                              parse_mode='HTML', disable_web_page_preview=False)
+                                              parse_mode='HTML', entities=cap_entities or None,
+                                              disable_web_page_preview=False)
             sent_id = getattr(sent, 'message_id', None)
         else:
             raw = await _fod_send_raw(photo, caption)
@@ -29202,6 +29317,7 @@ async def post_init(application: Application):
         BotCommand("city",   "Список городов России"),
         BotCommand("privacy", "Политика конфиденциальности"),
         BotCommand("terms",  "Условия пользования"),
+        BotCommand("emoji",  "Премиум-эмодзи сервиса"),
     ]
     await application.bot.set_my_commands(commands)
 
@@ -33956,6 +34072,7 @@ def main():
 
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
+    application.add_handler(CommandHandler("emoji", emoji_cmd))
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
@@ -34139,6 +34256,8 @@ def main():
     application.add_handler(MessageHandler(filters.PHOTO   & ~filters.COMMAND, dispatch_photo))
     # Видео идёт тем же диспетчером (поиск по фото, чаты, объявления)
     application.add_handler(MessageHandler(filters.VIDEO   & ~filters.COMMAND, dispatch_photo))
+    application.add_handler(MessageHandler(
+        (filters.TEXT | filters.PHOTO) & ~filters.COMMAND, admin_emoji_collect), group=-1)
     application.add_handler(MessageHandler(filters.TEXT    & ~filters.COMMAND, dispatch_text))
     # Обработчик контакта для верификации (Поделиться номером)
     # Верификация теперь через email+код (см. dispatch_text), а не через
