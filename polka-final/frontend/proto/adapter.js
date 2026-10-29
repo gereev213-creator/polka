@@ -552,13 +552,31 @@ function paintEmpty(count) {
       const minus = [...document.querySelectorAll('#searchForm input')]
         .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
         .filter(Boolean).join(',');
-      const ok = await window.PolkaAPI.createSearch({
-        query: q,
-        max_price: Number(raw) || 0,
-        requirements: chips.join(', '),
-        exclude: minus,
-      });
-      if (ok) { form.reset(); document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on')); if (typeof go === 'function') go('searches'); }
+      // Если человек вставил ссылку с Авито — идём точно по ней: там уже
+      // его фильтры, и сборщику не нужно перебирать всю категорию.
+      const linkEl = document.getElementById('avitoLink');
+      const link = linkEl ? String(linkEl.value || '').trim() : '';
+      let ok = false;
+      if (link) {
+        try {
+          const res = await window.PolkaAPI.api('/api/hunt/from-link', {
+            method: 'POST', body: JSON.stringify({ url: link }),
+          });
+          ok = !!(res && (res.ok !== false));
+        } catch (e) {
+          ok = false;
+          if (window.PolkaNotify) window.PolkaNotify('Ссылка не подошла — проверь, что это поиск Авито');
+        }
+      }
+      if (!ok && !link) {
+        ok = await window.PolkaAPI.createSearch({
+          query: q,
+          max_price: Number(raw) || 0,
+          requirements: chips.join(', '),
+          exclude: minus,
+        });
+      }
+      if (ok) { const lk = document.getElementById('avitoLink'); if (lk) lk.value = ''; form.reset(); document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on')); if (typeof go === 'function') go('searches'); }
     });
   }
 

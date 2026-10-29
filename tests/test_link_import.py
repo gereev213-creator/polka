@@ -79,14 +79,15 @@ import collect  # только стандартная библиотека
 crit = {'search_path': f'moskva/telefony/apple-{TOKEN}', 'filters': '&f=ASgBAQICAkS0wA3O&radius=50',
         'user': '1', 'search_q': 'iphone 14 pro', 'min_price': 0, 'max_price': 50000}
 u = collect.link_search_url(crit)
-check('сборщик: адрес без глубокого пути',
+check('сборщик: адрес без глубокого пути и без фильтров',
       u.startswith('https://www.avito.ru/moskva/telefony?')
-      and 'user=1' in u and 'f=ASgBAQICAkS0wA3O' in u
-      and 'radius=50' in u and 'pmax=50000' in u and 's=104' in u, u)
+      and 'f=' not in u and 'radius=' not in u and 'user=' not in u
+      and 'cd=1' not in u and 'pmax=50000' in u and 's=104' in u, u)
 check('сборщик: пустые pmin не попадают', 'pmin=' not in u, u)
 crit2 = dict(crit, search_q='', user='', filters='')
 u2 = collect.link_search_url(crit2)
-check('сборщик: без q и без продавца параметров q= и user= нет', 'q=' not in u2.replace('pmax=', '').split('?')[1].replace('&s=104', '') and 'user=' not in u2, u2)
+check('сборщик: без продавца и без пустого q',
+      'user=' not in u2 and 'q=&' not in u2 and not u2.endswith('q='), u2)
 for name, patch in {'чужой путь': {'search_path': '../etc/passwd'}, 'путь с точкой': {'search_path': 'a.b'},
                     'опасные фильтры': {'filters': '&f=a<script>'}, 'пустой путь': {'search_path': ''},
                     'фильтры без значения-имени': {'filters': 'f=abc'}}.items():

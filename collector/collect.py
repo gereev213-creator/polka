@@ -1485,11 +1485,17 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     user = str(crit.get('user') or '')
     if user not in ('', '1', '2'):
         user = ''
-    # q в адрес НЕ ставим: Авито блокирует поисковые адреса (429/439), а
-    # чистые разделы отдаёт. Слова из ссылки применяем сами, локально.
-    template = (f"https://www.avito.ru/{path}"
-                "?cd=1&localPriority=0&user={user}{filters}&s=104&pmin={pmin}&pmax={pmax}")
-    return search_url(template, '', '', pmin, pmax, filters=filters, user=user)
+    # Ссылку строим заново и «чисто»: cd/localPriority/user и f= Авито
+    # считает признаком бота и отвечает 439 даже через резидентский прокси.
+    # Оставляем путь раздела, слова запроса из ссылки, сортировку и цену.
+    query = " ".join(str(crit.get('search_q') or crit.get('query') or '').split())[:80]
+    template = "https://www.avito.ru/{path}?q={query}&s=104&pmin={pmin}&pmax={pmax}"
+    url = (template.replace('{path}', path)
+           .replace('{query}', quote_plus(query))
+           .replace('{pmin}', str(pmin) if pmin else '')
+           .replace('{pmax}', str(pmax) if pmax else ''))
+    url = re.sub(r'[?&](pmin|pmax|q)=(?=&|$)', '', url)
+    return url.replace('?&', '?').replace('&&', '&').rstrip('?&')
 
 
 def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
