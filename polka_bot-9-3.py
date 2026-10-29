@@ -20700,6 +20700,16 @@ async def _collector_inline_loop():
                     # Пауза короче: одиночные блоки по конкретным URL теперь
                     # не роняют проход, поэтому 90 минут простоя не нужны.
                     wait_min = 15 if not prev or prev < _time.time() else 45
+                    # Если блоки идут подряд, IP уже «замечен» — нужен
+                    # длинный отдых, иначе площадка держит блок сутками.
+                    try:
+                        streak = int(cfg_get('collector.blocks_streak') or 0) + 1
+                    except Exception:
+                        streak = 1
+                    _setting_set('collector.blocks_streak', str(streak))
+                    if streak >= 3:
+                        wait_min = 180
+                        logger.warning(f"Блоки подряд ({streak}) — отдыхаю {wait_min} мин")
                 except Exception:
                     wait_min = 45
                 _setting_set('collector.blocked_until_ts', str(int(_time.time() + wait_min * 60)))
@@ -20719,6 +20729,7 @@ async def _collector_inline_loop():
             except Exception:
                 pass
             _collector_inline_loop._last_blocked = False
+            _setting_set('collector.blocks_streak', '0')
             logger.info(f"Сбор находок: принято новых {sent}")
         except Exception as e:
             logger.warning(f"Сбор находок: ошибка {e}")
