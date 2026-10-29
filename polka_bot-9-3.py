@@ -20539,7 +20539,7 @@ COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '2')
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
 # Раз в 5 минут. Лот на Авито живёт минуты: перекуп должен успеть
 # позвонить первым, поэтому час ожидания бессмыслен.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '600'))
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '1800'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 
@@ -20651,6 +20651,25 @@ async def _collector_inline_loop():
                 logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
                 await asyncio.sleep(min(300, max(60, left * 60)))
                 continue
+            # Дневной лимит трафика: пробный прокси на 300 МБ, поэтому
+            # считаем расход и останавливаемся, когда дневная норма выбрана.
+            try:
+                _budget = float(cfg_get('collector.budget_mb_day') or 30)
+            except Exception:
+                _budget = 30.0
+            try:
+                _today_key = get_moscow_time().strftime('%Y-%m-%d')
+                if str(_setting_get('collector.used_day', '')) != _today_key:
+                    _setting_set('collector.used_day', _today_key)
+                    _setting_set('collector.used_mb', '0')
+                _used_mb = float(cfg_get('collector.used_mb') or 0)
+            except Exception:
+                _used_mb = 0.0
+            if _budget > 0 and _used_mb >= _budget:
+                logger.info(f"Сбор на паузе: дневной лимит трафика {_budget:.0f} МБ исчерпан")
+                await asyncio.sleep(1800)
+                continue
+
             # Прокси из настроек: без него Авито блокирует серверный IP
             try:
                 _proxy_val = str(_setting_get('collector.proxy', '') or '')
@@ -20680,7 +20699,8 @@ async def _collector_inline_loop():
             except Exception:
                 _pass_no = 1
             _setting_set('collector.pass_no', str(_pass_no))
-            _limit = 2
+            # 1 цель за проход: страница Авито тяжёлая, а прокси у нас на 300 МБ
+            _limit = int(os.environ.get('POLKA_PASS_TARGETS', '1') or 1)
             _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
                 crit_targets[:_pass_no % max(1, len(crit_targets))]
             cfg['targets'] = _rotated[:_limit] + base_targets[:1]
@@ -20737,7 +20757,18 @@ async def _collector_inline_loop():
                 pass
             _collector_inline_loop._last_blocked = False
             _setting_set('collector.blocks_streak', '0')
-            logger.info(f"Сбор находок: принято новых {sent}")
+            try:
+                _mb = collector.FETCH_BYTES[0] / (1024 * 1024)
+                collector.FETCH_BYTES[0] = 0
+                try:
+                    _prev = float(cfg_get('collector.used_mb') or 0)
+                except Exception:
+                    _prev = 0.0
+                _setting_set('collector.used_mb', f"{_prev + _mb:.2f}")
+                logger.info(f"Сбор находок: принято новых {sent}, скачано {_mb:.1f} МБ "
+                            f"(за сутки {_prev + _mb:.1f} из {_budget:.0f})")
+            except Exception:
+                logger.info(f"Сбор находок: принято новых {sent}")
         except Exception as e:
             logger.warning(f"Сбор находок: ошибка {e}")
         finally:

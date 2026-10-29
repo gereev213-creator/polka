@@ -191,6 +191,12 @@ def _session_for(profile: str):
             sess = _cffi.Session(impersonate=profile)
         except Exception:
             return None
+        # Просим сжатие: страница Авито весит 3,8 МБ, а с brotli приходит
+        # около 0,4 МБ. Прокси у нас лимитированный, поэтому это критично.
+        try:
+            sess.headers.update({'Accept-Encoding': 'br, gzip, deflate'})
+        except Exception:
+            pass
         saved = _cookies_load().get(profile) or {}
         for name, value in saved.items():
             try:
@@ -360,6 +366,10 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                 rotate_proxy_session()
                 proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
                 continue
+            try:
+                FETCH_BYTES[0] += int(r.headers.get('content-length') or len(r.content or b''))
+            except Exception:
+                pass
             if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
                 rotate_proxy_session()
@@ -411,6 +421,10 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
             if marker.lower() in low:
                 raise Blocked(f"похоже на блокировку (нашли «{marker}»)")
     return html
+
+
+# Сколько байт скачано за проход: прокси у нас лимитированный, трафик надо видеть
+FETCH_BYTES = [0]
 
 
 def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
