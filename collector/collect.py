@@ -1141,6 +1141,11 @@ BRAND_CATEGORY = {
 # Узкие подразделы Авито: если слово запроса известно, берём подкатегорию,
 # а не весь раздел. Карточек в разы меньше — модель проверяет меньше и
 # тратит меньше токенов. Путь проверен на живом сайте.
+# Внимание: узкие подразделы Авито отдают 439 (блок) с серверного IP —
+# проверено на живом сайте 29.10.2026: /all/odezhda_obuv_aksessuary работает,
+# а /all/odezhda_obuv_aksessuary/muzhskaya_odezhda/kurtki — уже блок. Поэтому
+# по умолчанию берём раздел целиком, а точность обеспечивает сервер
+# (слова в заголовке, категория, цена). Включается POLKA_NARROW=1.
 NARROW_PATHS = {
     'футболка': 'muzhskaya_odezhda/kofty_i_futbolki',
     'футболки': 'muzhskaya_odezhda/kofty_i_futbolki',
@@ -1511,12 +1516,14 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         if slug:
             # Раздел под блокировкой заменяем на соседний (noutbuki → компьютеры)
             slug = CATEGORY_SUBSTITUTE.get(slug, slug)
-            # Узкий подраздел вместо всего раздела: карточек меньше, модель
-            # проверяет меньше, токенов уходит меньше.
-            for word in words:
-                if word in NARROW_PATHS:
-                    slug = slug + '/' + NARROW_PATHS[word]
-                    break
+            # Узкий подраздел — только по явному включению: на серверном IP
+            # Авито отдаёт по ним 439, и сбор по критериям (одежда, обувь)
+            # не приносил вообще ничего, кроме телефонов.
+            if os.environ.get('POLKA_NARROW', '0') == '1':
+                for word in words:
+                    if word in NARROW_PATHS:
+                        slug = slug + '/' + NARROW_PATHS[word]
+                        break
         if not slug:
             # Категория не узнана: цель всё равно создаём (поиск по площадке),
             # но считаем такие критерии — по ним раздел не определён.
