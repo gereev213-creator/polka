@@ -1098,26 +1098,15 @@ function paintEmpty(count) {
       set('pMeta', [raw.city, when, raw.condition || ''].filter(Boolean).join(' · '));
       set('pDesc', raw.description || 'Описание на Авито — откройте объявление');
 
-      const photos = Array.isArray(raw.photos) ? raw.photos : [];
-      const ph = document.getElementById('photo');
-      const paintPhoto = () => {
-        if (!ph) return;
-        if (photos.length) {
-          ph.style.backgroundImage = `url('${photos[0]}')`;
-          ph.style.backgroundSize = 'cover';
-          ph.style.backgroundPosition = 'center';
-        }
-      };
-      paintPhoto();
-      setTimeout(paintPhoto, 60);
-      setTimeout(paintPhoto, 250);
+      // Фотографии: реальный список объявления (photo_urls приходит с сервера)
+      const photos = (Array.isArray(raw.photo_urls) && raw.photo_urls.length
+        ? raw.photo_urls
+        : (Array.isArray(raw.photos) ? raw.photos : [])).map(String).filter(Boolean);
+      if (window.__initGallery) {
+        window.__initGallery(photos);
+      }
       const noPhoto = document.getElementById('nophoto');
       if (noPhoto) noPhoto.style.display = photos.length ? 'none' : 'block';
-      const counter = document.getElementById('counter');
-      if (counter) counter.style.display = photos.length ? 'block' : 'none';
-      const dots = document.getElementById('dots');
-      if (dots) dots.style.display = photos.length ? 'flex' : 'none';
-
       // Ссылка на Авито
       let link = document.getElementById('lotOpen');
       if (link) link.remove();
@@ -2197,6 +2186,81 @@ function paintEmpty(count) {
       patch(); ensureHome();
       setTimeout(() => { patch(); ensureHome(); }, 300);
       setTimeout(() => { patch(); ensureHome(); }, 1200);
+    });
+  } catch (e) { }
+})();
+
+/* ── Галерея фото в карточке товара ─────────────────────────────────────
+   Раньше показывалось только первое фото, а точки и счётчик оставались
+   из макета (5 точек и «3 / 5»). Теперь листаем реальные фотографии. */
+(function () {
+  try {
+    let photos = [];
+    let idx = 0;
+
+    function paint() {
+      const ph = document.getElementById('photo');
+      if (!ph) return;
+      if (!photos.length) {
+        ph.style.backgroundImage = '';
+        return;
+      }
+      ph.style.backgroundImage = "url('" + photos[idx] + "')";
+      ph.style.backgroundSize = 'cover';
+      ph.style.backgroundPosition = 'center';
+      const counter = document.getElementById('counter');
+      if (counter) {
+        counter.textContent = (idx + 1) + ' / ' + photos.length;
+        counter.style.display = 'block';
+      }
+      const dots = document.getElementById('dots');
+      if (dots) {
+        dots.style.display = photos.length > 1 ? 'flex' : 'none';
+        dots.innerHTML = photos.map((_, i) =>
+          '<i class="' + (i === idx ? 'on' : '') + '"></i>').join('');
+      }
+    }
+
+    function next(step) {
+      if (!photos.length) return;
+      idx = (idx + step + photos.length) % photos.length;
+      paint();
+    }
+
+    window.__initGallery = function (list) {
+      photos = Array.isArray(list) ? list.slice() : [];
+      idx = 0;
+      paint();
+      setTimeout(paint, 60);
+      setTimeout(paint, 250);
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const ph = document.getElementById('photo');
+      if (!ph || ph.__gallery) return;
+      ph.__gallery = true;
+
+      // тап по правой половине — следующее фото, по левой — предыдущее
+      ph.addEventListener('click', (e) => {
+        if (!photos.length) return;
+        const r = ph.getBoundingClientRect();
+        next((e.clientX - r.left) > r.width / 2 ? 1 : -1);
+      });
+
+      // свайп
+      let startX = null;
+      ph.addEventListener('touchstart', (e) => {
+        startX = e.touches[0] ? e.touches[0].clientX : null;
+      }, { passive: true });
+      ph.addEventListener('touchend', (e) => {
+        if (startX === null) return;
+        const endX = (e.changedTouches[0] || {}).clientX;
+        if (typeof endX === 'number') {
+          const dx = endX - startX;
+          if (Math.abs(dx) > 30) next(dx < 0 ? 1 : -1);
+        }
+        startX = null;
+      }, { passive: true });
     });
   } catch (e) { }
 })();
