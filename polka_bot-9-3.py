@@ -29274,31 +29274,33 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
 
         caption, cap_entities = render_emoji(caption)
         sent_id = None
-        # Сначала пробуем прямую отправку через Bot API: она не зависит от
-        # кастомных классов кнопок и прав объекта bot в этом процессе.
-        raw = await _fod_send_raw(photo, caption)
-        if raw.get('ok'):
-            sent_id = raw.get('message_id')
-        elif bot is not None:
+        # Отправляем объектом бота: у него правильные права в канале.
+        # Премиум-эмодзи передаём entities только если они есть, и тогда
+        # не дублируем parse_mode — иначе Bot API отклоняет запрос.
+        if bot is not None:
             sent = None
+            keyboard = InlineKeyboardMarkup([[
+                _InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]])
+            kwargs = {'chat_id': ADMIN_CHANNEL_ID, 'reply_markup': keyboard}
+            if cap_entities:
+                kwargs['caption_entities'] = cap_entities
+                kwargs['text_entities'] = cap_entities
+            else:
+                kwargs['parse_mode'] = 'HTML'
             if photo:
                 try:
-                    sent = await bot.send_photo(
-                        chat_id=ADMIN_CHANNEL_ID, photo=photo, caption=caption,
-                        parse_mode='HTML', caption_entities=cap_entities or None,
-                        reply_markup=InlineKeyboardMarkup([[
-                            InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]]))
+                    sent = await bot.send_photo(photo=photo, caption=caption, **{k: v for k, v in kwargs.items() if k != 'text_entities'})
                 except Exception as e:
                     logger.warning(f"fod photo failed: {e}")
             if sent is None:
-                sent = await bot.send_message(
-                    chat_id=ADMIN_CHANNEL_ID, text=caption, parse_mode='HTML',
-                    entities=cap_entities or None, disable_web_page_preview=False,
-                    reply_markup=InlineKeyboardMarkup([[
-                        InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]]))
+                sent = await bot.send_message(text=caption, disable_web_page_preview=False,
+                                              **{k: v for k, v in kwargs.items() if k != 'caption_entities'})
             sent_id = getattr(sent, 'message_id', None)
         else:
-            return {'ok': False, 'error': raw.get('error') or 'send_failed'}
+            raw = await _fod_send_raw(photo, caption)
+            if not raw.get('ok'):
+                return {'ok': False, 'error': raw.get('error') or 'send_failed'}
+            sent_id = raw.get('message_id')
         try:
             cfg_set('channel.fod_last', today)
             cfg_set('channel.fod_last_ad', str(pick['id']))
