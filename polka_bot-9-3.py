@@ -20539,7 +20539,7 @@ COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '2')
 # а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
 # Раз в 5 минут. Лот на Авито живёт минуты: перекуп должен успеть
 # позвонить первым, поэтому час ожидания бессмыслен.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '300'))
+COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '600'))
 COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
 
 
@@ -20673,7 +20673,7 @@ async def _collector_inline_loop():
             except Exception:
                 _pass_no = 1
             _setting_set('collector.pass_no', str(_pass_no))
-            _limit = 3
+            _limit = 2
             _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
                 crit_targets[:_pass_no % max(1, len(crit_targets))]
             cfg['targets'] = _rotated[:_limit] + base_targets[:1]

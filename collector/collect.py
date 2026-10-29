@@ -1611,7 +1611,10 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # Три страницы: со скрапером блокировок нет, а 50 карточек раздела —
         # слишком узкая выборка, нужные лоты в неё не попадают.
         targets.append({'url': url, 'category': crit.get('category') or slug or '',
-                        'query': query, 'page': 1, 'pages': 3})
+                        # Одна страница на критерий: три страницы на цель
+                        # давали 15 запросов за проход и гарантированный 439.
+                        'query': query, 'page': 1,
+                        'pages': int(os.environ.get('POLKA_CRITERIA_PAGES', '1') or 1)})
         built += 1
     if built:
         mode = ("Авито ищет по тексту запроса (q=)" if SEARCH_BY_QUERY
