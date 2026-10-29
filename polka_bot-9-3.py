@@ -21531,6 +21531,27 @@ def _criterion_where(crit: Dict, active_only: bool = True):
         where.append("city = ?")
         params.append(crit['city'])
     _apply_criterion_filters(where, params, crit)
+    # Страховка от «модель сказала да»: если в тексте нет НИ ОДНОГО слова
+    # запроса, объявление не подходит, что бы ни ответила LLM. Раньше
+    # _llm_says_yes обходила проверку слов целиком, и по критерию «фен dyson»
+    # в находки попадали «Шапка ушанка» и «Бутсы adidas».
+    try:
+        _req_words_all = [w for w in _query_words_required(crit.get('query'))
+                          if not str(w).isdigit()]
+        if _req_words_all:
+            _hay_plain = re.sub(r"[’'`\u2019]", '', hay)
+            _any_word = False
+            for _w in _req_words_all:
+                _vars = query_word_variants(_w) or (_w,)
+                if any((v in hay) or (re.sub(r"[’'`\u2019]", '', v) in _hay_plain)
+                       for v in _vars):
+                    _any_word = True
+                    break
+            if not _any_word:
+                return no('title_words')
+    except Exception:
+        pass
+
     alts = _query_alt_numbers(crit.get('query'))
     if alts:
         parts = []
