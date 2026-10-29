@@ -29241,17 +29241,171 @@ async def _fod_send_raw(photo: str, caption: str) -> Dict:
         return {'ok': False, 'error': str(e)[:120]}
 
 
+
+# ── Напоминания о сроках подписки и пробного периода ─────────────────────
+def _notify_once(key: str, text: str) -> bool:
+    """Ставит отметку, что уведомление отправлено. True — если ещё не было."""
+    try:
+        if str(_setting_get(key, '')):
+            return False
+        _setting_set(key, get_moscow_time().isoformat())
+        return True
+    except Exception:
+        return False
+
+
+async def _send_plan_notice(bot, user_id: int, text: str, screen: str = 'tariffs') -> bool:
+    """Сообщение в личку с кнопкой открытия нужного раздела приложения."""
+    try:
+        url = f"{_miniapp_url()}/?screen={screen}"
+        keyboard = InlineKeyboardMarkup([[
+            _InlineKeyboardButton('Открыть ПОЛКУ', web_app=WebAppInfo(url=url))]])
+        await bot.send_message(chat_id=int(user_id), text=text, parse_mode='HTML',
+                               reply_markup=keyboard, disable_web_page_preview=True)
+        return True
+    except Exception as e:
+        logger.info(f"plan notice {user_id}: {e}")
+        return False
+
+
+async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
+    """Один проход напоминаний: пробный период и окончание «Плюса».
+
+    Ничего не отправляем повторно: у каждого события свой ключ в настройках.
+    """
+    out = {'trial_soon': [], 'trial_ended': [], 'plus_soon': [], 'plus_ended': []}
+    now = get_moscow_time()
+    cur = db.conn.cursor()
+
+    # Пробный период: напоминаем за 2 дня и в день окончания
+    try:
+        cur.execute("SELECT user_id, trial_started_at FROM users WHERE plan='trial'")
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            started = str(row['trial_started_at'] or '')
+            if not started:
+                continue
+            days = int(_hours_since(started) or 0) // 24
+            left = int(cfg_get('trial.days')) - days
+            if left == 2:
+                key = f'notify:trial2:{uid}'
+                if _notify_once(key, '') or dry_run:
+                    out['trial_soon'].append(uid)
+                    if not dry_run:
+                        await _send_plan_notice(
+                            bot, uid,
+                            '⏳ <b>Пробный период заканчивается через 2 дня</b>\n\n'
+                            'После него останется базовый доступ: меньше поисков и задержка '
+                            'в находках. Плюс сохраняет всё как сейчас.')
+    except Exception as e:
+        logger.warning(f"trial notice: {e}")
+
+    # Плюс заканчивается: за 3 дня и в последний день
+    try:
+        horizon = (now + timedelta(days=4)).isoformat()
+        cur.execute("SELECT user_id, expires_at FROM subscriptions "
+                    "WHERE expires_at > ? AND expires_at <= ? ORDER BY id DESC",
+                    (now.isoformat(), horizon))
+        seen = set()
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            if uid in seen:
+                continue
+            seen.add(uid)
+            exp = str(row['expires_at'] or '')
+            try:
+                left_days = (_dt.fromisoformat(exp) - now).days
+            except Exception:
+                left_days = None
+            if left_days is None:
+                continue
+            day = exp[:10]
+            key = f'notify:plus{left_days}:{uid}:{day}'
+            if left_days in (3, 1, 0) and (_notify_once(key, '') or dry_run):
+                out['plus_soon'].append(uid)
+                if not dry_run:
+                    nice = f"{exp[8:10]}.{exp[5:7]}.{exp[0:4]}"
+                    await _send_plan_notice(
+                        bot, uid,
+                        f'💎 <b>Подписка Плюс заканчивается</b>\n\n'
+                        f'Дата окончания: <b>{nice}</b>\n'
+                        'Продлите заранее, чтобы не потерять доступ к поискам '
+                        'и истории находок.')
+    except Exception as e:
+        logger.warning(f"plus notice: {e}")
+
+    # Плюс уже закончился — сообщаем один раз
+    try:
+        from datetime import timedelta as _td
+        past = (now - _td(days=2)).isoformat()
+        cur.execute("SELECT user_id, expires_at FROM subscriptions "
+                    "WHERE expires_at > ? AND expires_at <= ? ORDER BY id DESC",
+                    (past, now.isoformat()))
+        seen2 = set()
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            if uid in seen2:
+                continue
+            seen2.add(uid)
+            if _notify_once(f'notify:plusend:{uid}:{str(row["expires_at"])[:10]}', '') or dry_run:
+                out['plus_ended'].append(uid)
+                if not dry_run:
+                    await _send_plan_notice(
+                        bot, uid,
+                        '⌛ <b>Подписка Плюс закончилась</b>\n\n'
+                        'Базовый доступ остался, но часть поисков на паузе. '
+                        'Вернуть всё можно в разделе «Тарифы».')
+    except Exception as e:
+        logger.warning(f"plus ended notice: {e}")
+
+    # Пробный закончился — один раз
+    try:
+        from datetime import timedelta as _td2
+        cur.execute("SELECT user_id, trial_started_at FROM users WHERE plan='free'")
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            started = str(row['trial_started_at'] or '')
+            if not started:
+                continue
+            days = int(_hours_since(started) or 0) // 24
+            if days >= int(cfg_get('trial.days')) and _notify_once(f'notify:trialend:{uid}', '') or dry_run:
+                if uid not in out['trial_ended']:
+                    out['trial_ended'].append(uid)
+                    if not dry_run:
+                        await _send_plan_notice(
+                            bot, uid,
+                            'Пробный период закончился. Базовый доступ остался, '
+                            'но число поисков ограничено. Плюс возвращает полный набор.',
+                            screen='tariffs')
+    except Exception as e:
+        logger.warning(f"trial ended notice: {e}")
+
+    return out
+
+
+async def _plan_reminder_loop(bot):
+    """Раз в час проверяем сроки и напоминаем один раз на событие."""
+    await asyncio.sleep(75)
+    while True:
+        try:
+            res = await plan_notifications_pass(bot)
+            if any(res.values()):
+                logger.info(f"plan reminders: {res}")
+        except Exception as e:
+            logger.warning(f"plan reminder loop: {e}")
+        await asyncio.sleep(3600)
+
 async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
     """Публикует «находку дня» в основной канал.
 
     Берём самое выгодное объявление Авито по скидке к медиане, не повторяем
     вчерашнее. Объявления пользователей в канал не попадают — только это.
     """
-    from datetime import datetime as _dt
     try:
         if str(cfg_get('channel.fod_enabled') or '1') != '1' and not force:
             return {'ok': False, 'error': 'disabled'}
-        today = _dt.now().strftime('%Y-%m-%d')
+        # Время московское: на сервере в UTC час публикации съезжал на 3 часа
+        today = get_moscow_time().strftime('%Y-%m-%d')
         if not force and str(cfg_get('channel.fod_last') or '') == today:
             return {'ok': False, 'error': 'already_sent', 'date': today}
 
@@ -29339,12 +29493,11 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
 
 async def _finding_of_day_loop(bot):
     """Раз в 15 минут проверяем, не пора ли опубликовать находку дня."""
-    from datetime import datetime as _dt
     await asyncio.sleep(40)
     while True:
         try:
             hour = int(str(cfg_get('channel.fod_hour') or '12') or 12)
-            now = _dt.now()
+            now = get_moscow_time()
             if now.hour == hour and str(cfg_get('channel.fod_last') or '') != now.strftime('%Y-%m-%d'):
                 res = await post_finding_of_the_day(bot)
                 logger.info(f"finding of the day: {res}")
@@ -29359,6 +29512,11 @@ async def post_init(application: Application):
         globals()['_BOT_INSTANCE'] = application.bot
     except Exception:
         pass
+    try:
+        asyncio.create_task(_plan_reminder_loop(application.bot))
+        logger.info("plan reminders: планировщик запущен")
+    except Exception as _pe:
+        logger.warning(f"plan reminder task: {_pe}")
     try:
         asyncio.create_task(_finding_of_day_loop(application.bot))
         logger.info("finding of the day: планировщик запущен")
@@ -31132,6 +31290,18 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'plan_notify':
+        # Пробный проход напоминаний: показывает, кому и что уйдёт
+        try:
+            dry = bool((body or {}).get('dry'))
+            bot = globals().get('_BOT_INSTANCE')
+            if bot is None and not dry:
+                return _miniapp_json({'ok': False, 'error': 'bot_unavailable'}, status=503)
+            res = await plan_notifications_pass(bot, dry_run=dry)
+            return _miniapp_json({'ok': True, 'dry': dry, 'result': res})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=400)
 
     if action == 'channel_check':
         # Проверка канала: права бота и пробная отправка простого текста
