@@ -21,7 +21,7 @@ checks = [
     ("blob сохраняется в критерии", 'UPDATE hunt_criteria SET filter_blob=?' in SRC),
     ("сборщик получает filters", "row['filters'] = str(row.get('filter_blob')" in SRC),
     ("выборка отдаёт filter_blob", "COALESCE(filter_blob,'')" in SRC),
-    ("дубль не создаётся", 'AND filter_blob=?' in SRC),
+    ("дубль не создаётся", "filter_url=? OR (COALESCE(filter_url,'')=''" in SRC),
     # экран ссылки переехал из чата в отдельный компонент /hunt,
     # поэтому проверяем его по App.jsx, а не по HuntChat
     # Форму ссылки убрали с экрана: основной путь — слова. Код разбора ссылки
