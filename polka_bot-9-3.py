@@ -3614,7 +3614,7 @@ class Database:
                              price_min: int = 0, price_max: int = 0,
                              city: str = '', condition: str = '',
                              delivery: str = '', sort_by: str = 'date_desc',
-                             limit: int = 100) -> List[Dict]:
+                             limit: int = 100, with_photo: int = 0) -> List[Dict]:
         """Поиск с полными фильтрами (аналог Авито)"""
         query = (query or '').lower().strip()
         cursor = self.conn.cursor()
@@ -3648,6 +3648,8 @@ class Database:
                 params.extend(f"%{p}%" for p in cat_parts)
 
         # Диапазон цены
+        if with_photo:
+            conditions.append("COALESCE(photos, '') NOT IN ('', '[]', 'null')")
         if price_min > 0:
             conditions.append("CAST(price AS INTEGER) >= ?")
             params.append(price_min)
@@ -33138,6 +33140,7 @@ async def api_miniapp_ads_list(request: aiohttp_web.Request) -> aiohttp_web.Resp
             db.search_ads_filtered, query=q, category=category, price_min=price_min,
             price_max=price_max, city=city, condition=condition, delivery=delivery,
             sort_by=sort, limit=limit + offset + 1,
+            with_photo=with_photo,
         )
     except Exception as e:
         logger.error(f"miniapp ads_list: {e}")
