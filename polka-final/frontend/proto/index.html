@@ -151,7 +151,7 @@ background:linear-gradient(to bottom,rgba(231,239,246,0) 0%,rgba(231,239,246,.38
 /* tariffs */
 .trial{min-height:62px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:relative;overflow:hidden}
 .trial b{font-size:14px}.actv{background:var(--grad);color:#fff;font-size:10px;font-weight:870;padding:8px 13px;border-radius:999px;white-space:nowrap}
-.tbar{position:absolute;left:0;bottom:0;height:4px;width:73%;background:var(--grad)}
+
 .plus{margin-top:14px;height:202px;border-radius:26px;background:var(--grad);color:#fff;padding:18px;position:relative;box-shadow:var(--sh);z-index:2}
 .plus .top{display:flex;justify-content:space-between;align-items:center}.plus .name{font-size:15px;font-weight:760;text-transform:uppercase}
 .plus .chev{background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.35)}
@@ -574,6 +574,9 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #s-history .hrow:last-child{border-bottom:0}
 #s-history .hrow .chev{width:32px;height:32px;border:0;border-radius:50%;background:#E3EDFD;
   color:#3373FA;display:grid;place-items:center;flex:none}
+
+/* Плашка статуса на тарифах: ползунок убран, текст мелкий */
+#trialBadge{font-size:10.5px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -711,7 +714,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
 <div id="photoThumbs"></div>
-<div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно</span><span class="tbar" id="tbar"></span></div>
+<div class="card trial"><b id="trialTitle">Пробный на 24 часа</b><span class="actv" id="trialBadge">Активно</span></div>
 <div class="tarwrap" id="tarwrap"><div class="plus">
 <div class="top"><span class="name">Плюс</span><button class="chev" id="termsBtn"><svg width="15" height="15"><use href="#i-d"/></svg></button></div>
 <ul><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>10 критериев</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>Аналитика</li><li><span class="tick"><svg width="10" height="10"><use href="#i-check"/></svg></span>ИИ фильтрация</li></ul>
@@ -795,7 +798,7 @@ $('postForm').addEventListener('submit',e=>{e.preventDefault();const t=$('adTitl
 $('termsBtn').addEventListener('click',()=>{const w=$('tarwrap');w.classList.toggle('expanded');$('termsBtn').innerHTML=`<svg width="15" height="15"><use href="#i-${w.classList.contains('expanded')?'u':'d'}"/></svg>`});
 $('promoBtn').addEventListener('click',()=>{const f=$('promoform');f.classList.toggle('show');$('promoBtn').querySelector('.chev').innerHTML=`<svg width="15" height="15"><use href="#i-${f.classList.contains('show')?'u':'d'}"/></svg>`});
 function applyPromo(){const ok=$('code').value.trim().toUpperCase()==='POLKA';$('okic').style.visibility=ok?'visible':'hidden';$('off').textContent=ok?'-50%':'';$('pmsg').classList.toggle('show',!ok);$('priceNow').innerHTML=ok?'<s>149</s>74,9 <span>руб/мес</span>':'149 <span>руб/мес</span>';if(!ok){const f=$('promoform');f.classList.remove('shake');void f.offsetWidth;f.classList.add('shake')}else toast('Промокод применён')}
-function activatePlus(){if(subscribed){toast('ПЛЮС уже активен');return}subscribed=true;$('payBtn').textContent='Активно';$('trialTitle').textContent='ПЛЮС до 01.01.2027';$('trialBadge').textContent='Активно';$('tbar').style.width='100%';$('pluspill').style.display='inline-flex';$('datebadge').style.display='inline-flex';$('avbadge').style.display='grid';toast('ПЛЮС активирован')}
+function activatePlus(){if(subscribed){toast('ПЛЮС уже активен');return}subscribed=true;$('payBtn').textContent='Активно';$('trialTitle').textContent='ПЛЮС до 01.01.2027';$('trialBadge').textContent='Активно';$('pluspill').style.display='inline-flex';$('datebadge').style.display='inline-flex';$('avbadge').style.display='grid';toast('ПЛЮС активирован')}
 async function copyLink(){try{await navigator.clipboard.writeText('https://t.me/polkalotapp?startapp=ref89659599')}catch(e){}toast('Ссылка скопирована')}
 async function shareLink(){const d={title:'ПОЛКА',text:'Ищу выгодные лоты в ПОЛКЕ — присоединяйся',url:'https://t.me/polkalotapp?startapp=ref89659599'};if(navigator.share){try{await navigator.share(d)}catch(e){}}else copyLink()}
 function openSheet(n){$('ov-'+n).classList.add('show')}function closeSheets(){document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'))}
@@ -804,8 +807,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029152742"></script>
-<script src="adapter.js?v=20261029152742"></script><script src="payments.js?v=20261029152742"></script><script src="admin.js?v=20261029152742"></script><script src="keyboard.js?v=20261029152742"></script><script src="telegram-safe.js?v=20261029152742"></script><script>
+</script><script src="telegram-web-app.js?v=20261029160449"></script>
+<script src="adapter.js?v=20261029160449"></script><script src="payments.js?v=20261029160449"></script><script src="admin.js?v=20261029160449"></script><script src="keyboard.js?v=20261029160449"></script><script src="telegram-safe.js?v=20261029160449"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;

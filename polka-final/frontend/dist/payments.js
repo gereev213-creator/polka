@@ -102,9 +102,24 @@
         STATE.paid = true;
         paintPaid(0);
         const badge = document.getElementById('trialBadge');
-        if (badge) badge.textContent = 'Плюс активен';
+        if (badge) badge.textContent = 'Активно';
         const title = document.getElementById('trialTitle');
         if (title) title.textContent = 'Плюс активен';
+      } else if (STATE.plan === 'trial') {
+        // В пробном периоде показываем, сколько ещё действует доступ
+        try {
+          const plan = await window.PolkaAPI.api('/api/plan');
+          const left = Number(plan.trial_days_left || 0);
+          const badge = document.getElementById('trialBadge');
+          const title = document.getElementById('trialTitle');
+          var hours = left > 0 ? left * 24 : 24;
+          var word = 'часов';
+          var n10 = hours % 10, n100 = hours % 100;
+          if (n10 === 1 && n100 !== 11) word = 'час';
+          else if (n10 >= 2 && n10 <= 4 && (n100 < 12 || n100 > 14)) word = 'часа';
+          if (badge) badge.textContent = hours + ' ' + word;
+          if (title) title.textContent = 'Пробный период';
+        } catch (e) { }
       }
       wirePayButton();
       return STATE.plans;
