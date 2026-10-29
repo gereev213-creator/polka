@@ -20653,7 +20653,12 @@ async def _collector_inline_loop():
                 continue
             crit_targets = []
             try:
-                crit_targets = collector.targets_from_criteria(cfg['server'], cfg['token'])
+                # В отдельном потоке: функция ходит к нашему же API по HTTP,
+                # а в event loop такой запрос ждёт сам себя и отваливается по
+                # таймауту. Из-за этого критерии не превращались в цели, и
+                # сборщик обходил только общие категории (телефоны).
+                crit_targets = await asyncio.to_thread(
+                    collector.targets_from_criteria, cfg['server'], cfg['token'])
             except Exception as e:
                 logger.warning(f"цели по критериям: {e}")
             try:
@@ -31338,7 +31343,8 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             if path not in sys.path:
                 sys.path.insert(0, path)
             import collect as collector
-            crit = collector.targets_from_criteria(f"http://127.0.0.1:{WEBAPP_PORT}", token)
+            crit = await asyncio.to_thread(
+                collector.targets_from_criteria, f"http://127.0.0.1:{WEBAPP_PORT}", token)
             base = collector.default_targets()[:2]
             return _miniapp_json({'ok': True, 'criteria_targets': len(crit),
                                   'sample': [c.get('url') for c in crit[:5]],

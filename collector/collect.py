@@ -1081,7 +1081,7 @@ def push(server: str, token: str, source: str, items: list) -> dict:
 # Загрузка критериев у сервера. На старте он занят — считает медианы
 # и греет картинки, — и за 30 секунд не отвечал. Из-за этого сбор
 # шёл по общим страницам, а не по критериям.
-def fetch_json(url: str, token: str, timeout: int = 90) -> dict:
+def fetch_json(url: str, token: str, timeout: int = 20) -> dict:
     """GET с токеном. Идёт через curl_cffi: у системного Python на macOS
     нет корневых сертификатов, и любой https-запрос падал с
     CERTIFICATE_VERIFY_FAILED. curl_cffi проверяет сертификаты сам."""
