@@ -20651,6 +20651,13 @@ async def _collector_inline_loop():
                 logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
                 await asyncio.sleep(min(300, max(60, left * 60)))
                 continue
+            # Прокси из настроек: без него Авито блокирует серверный IP
+            try:
+                _proxy_val = str(_setting_get('collector.proxy', '') or '')
+                if _proxy_val:
+                    collector.PROXY = _proxy_val
+            except Exception:
+                pass
             crit_targets = []
             try:
                 # В отдельном потоке: функция ходит к нашему же API по HTTP,
@@ -31368,6 +31375,37 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action in ('proxy_set', 'proxy_off'):
+        # Прокси для сборщика. Хранится в настройках, чтобы переживать
+        # перезапуск, и не попадает в репозиторий.
+        try:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            import collect as collector
+            if action == 'proxy_off':
+                _setting_set('collector.proxy', '')
+                collector.PROXY = ''
+                return _miniapp_json({'ok': True, 'proxy': 'off'})
+            url = str((body or {}).get('url') or '').strip()
+            if not url.startswith(('socks5://', 'socks5h://', 'socks4://', 'http://', 'https://')):
+                return _miniapp_json({'ok': False, 'error': 'bad_scheme'})
+            _setting_set('collector.proxy', url)
+            collector.PROXY = url
+
+            def _test():
+                check = ('https://www.avito.ru/all/odezhda_obuv_aksessuary'
+                         '?q=%D0%BA%D1%83%D1%80%D1%82%D0%BA%D0%B0+nike&s=104&pmax=5000')
+                html = collector.fetch(check, timeout=60)
+                items = collector.parse_page(html)
+                return {'html_len': len(html), 'items': len(items),
+                        'sample': [str(i.get('title'))[:40] for i in items[:2]]}
+
+            res = await asyncio.to_thread(_test)
+            return _miniapp_json({'ok': True, 'proxy': 'on', 'test': res})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
     if action == 'collector_cooldown':
         # Осознанная пауза сбора: дать IP «остыть» после серии блокировок
         try:
@@ -31397,6 +31435,12 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                     sys.path.insert(0, path)
                 try:
                     import collect as collector
+                    try:
+                        _pv = str(_setting_get('collector.proxy', '') or '')
+                        if _pv:
+                            collector.PROXY = _pv
+                    except Exception:
+                        pass
                     cfg = {'server': f"http://127.0.0.1:{WEBAPP_PORT}", 'token': token}
                     crit = await asyncio.to_thread(
                         collector.targets_from_criteria, cfg['server'], cfg['token'])
