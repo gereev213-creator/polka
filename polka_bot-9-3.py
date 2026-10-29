@@ -21044,6 +21044,19 @@ def _query_alt_numbers(query: str) -> list:
     return nums
 
 
+def _title_matches_words(title: str, description: str, query: str) -> bool:
+    """Есть ли в тексте хотя бы одно значимое слово запроса (без LLM)."""
+    hay = f"{title} {description}".lower()
+    words = [w for w in _query_words_required(query) if not str(w).isdigit()]
+    if not words:
+        return True
+    for w in words:
+        for v in (query_word_variants(w) or (w,)):
+            if v and v in hay:
+                return True
+    return False
+
+
 def _query_words_required(query: str) -> list:
     """Какие слова запроса обязательны, а какие — просто уточнение.
 
@@ -31481,6 +31494,33 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'cleanup_bad_matches':
+        # Перепроверяем отправленные находки на слова запроса: LLM раньше
+        # подтверждала всё подряд, и в ленту попадали чужие вещи.
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT hm.id, hm.crit_id, a.title, a.description "
+                        "FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
+                        "WHERE hm.status IN ('sent','ready','sending','pending_details') "
+                        "LIMIT 5000")
+            rows = [dict(r) for r in cur.fetchall()]
+            fixed = 0
+            for row in rows:
+                cur.execute("SELECT query FROM hunt_criteria WHERE id=?", (row['crit_id'],))
+                cr = cur.fetchone()
+                if not cr:
+                    continue
+                if not _title_matches_words(str(row.get('title') or ''),
+                                            str(row.get('description') or ''),
+                                            str(cr['query'] or '')):
+                    cur.execute("UPDATE hunt_matches SET status='rejected', "
+                                "reject_reason='title_words' WHERE id=?", (row['id'],))
+                    fixed += 1
+            db.conn.commit()
+            return _miniapp_json({'ok': True, 'checked': len(rows), 'fixed': fixed})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
     if action in ('proxy_set', 'proxy_off'):
         # Прокси для сборщика. Хранится в настройках, чтобы переживать
