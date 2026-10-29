@@ -3624,7 +3624,9 @@ class Database:
         # Находки, собранные с Авито, живут отдельно (раздел «Находки»),
         # иначе они забивали доску и было непонятно, откуда объявления.
         conditions = ["status = 'active'",
-                      "(source IS NULL OR source = 'polka')"]
+                      # 'miniapp' — объявления из приложения: они тоже
+                      # пользовательские и должны быть на барахолке
+                      "(source IS NULL OR source IN ('polka', 'miniapp'))"]
         params = []
 
         # Текстовый поиск — используем общую нормализацию запроса
@@ -19068,7 +19070,8 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
         cur = db.conn.cursor()
         cur.execute("SELECT COUNT(*) AS n FROM ads WHERE source <> 'polka'")
         out['findings'] = _row_get(cur.fetchone(), 'n', 0)
-        cur.execute("SELECT COUNT(*) AS n FROM ads WHERE (source IS NULL OR source='polka')")
+        cur.execute("SELECT COUNT(*) AS n FROM ads "
+                    "WHERE (source IS NULL OR source IN ('polka', 'miniapp'))")
         out['board_ads'] = _row_get(cur.fetchone(), 'n', 0)
         cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE active=1")
         out['criteria'] = _row_get(cur.fetchone(), 'n', 0)
@@ -31065,7 +31068,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         except Exception as e:
             logger.warning(f'bind matches: {e}')
         try:
-            cur.execute("UPDATE ads SET user_id=? WHERE source='polka' AND user_id<>?",
+            cur.execute("UPDATE ads SET user_id=? WHERE source IN ('polka','miniapp') AND user_id<>?",
                         (to_id, to_id))
         except Exception:
             pass
@@ -31110,7 +31113,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             except Exception as e:
                 out[table] = f'err: {str(e)[:40]}'
         try:
-            cur.execute("DELETE FROM ads WHERE source='polka'")
+            cur.execute("DELETE FROM ads WHERE source IN ('polka', 'miniapp')")
             out['polka_ads'] = cur.rowcount
         except Exception:
             out['polka_ads'] = 0
