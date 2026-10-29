@@ -1083,6 +1083,20 @@ function paintEmpty(count) {
       set('pTag', '');
       const tagEl = document.getElementById('pTag');
       if (tagEl) tagEl.style.display = 'none';
+
+      // Скидка к рынку: в шаблоне был вшитый текст «−18%», и он висел на всех
+      // товарах. Показываем только реальный процент из данных.
+      const marketEl = document.getElementById('pMarket');
+      if (marketEl) {
+        const disc = Math.round(Number(raw.discount_percent || 0));
+        if (disc > 0) {
+          marketEl.textContent = '−' + disc + '% ниже рынка';
+          marketEl.style.display = '';
+        } else {
+          marketEl.textContent = '';
+          marketEl.style.display = 'none';
+        }
+      }
       // Дата в человеческом виде: сегодня/вчера + время
       let when = '';
       const stamp = raw.published_at || raw.created_at || '';
