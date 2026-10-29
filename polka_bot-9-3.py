@@ -30145,10 +30145,12 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
     # возвращал все критерии, и находки одного человека видели все.
     if not viewer_id:
         return _miniapp_err('unauthorized', 401)
+    # По умолчанию без отсечки по скидке: у находок с Авито медиана часто
+    # неизвестна (discount=0), и лента пустела, хотя бот эти лоты присылал.
     try:
-        min_discount = max(0, int(request.query.get('min_discount', 10) or 10))
+        min_discount = max(0, int(request.query.get('min_discount', 0) or 0))
     except ValueError:
-        min_discount = 10
+        min_discount = 0
     category = request.query.get('category', '')
     city = request.query.get('city', '')
     try:
