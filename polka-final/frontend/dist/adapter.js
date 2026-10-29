@@ -1110,6 +1110,32 @@ function paintEmpty(count) {
       }
       const noPhoto = document.getElementById('nophoto');
       if (noPhoto) noPhoto.style.display = photos.length ? 'none' : 'block';
+      // Кнопка «Написать»: открывает чат с продавцом по его юзернейму
+      const oldWrite = document.getElementById('lotWrite');
+      if (oldWrite) oldWrite.remove();
+      const sellerName = String(raw.username || '').replace(/^@/, '');
+      const isOwn = !!raw.is_owner;
+      if (sellerName && !isOwn) {
+        const holder = document.querySelector('#s-product .pbody') || document.querySelector('#s-product');
+        const wb = document.createElement('button');
+        wb.id = 'lotWrite';
+        wb.className = 'bigbtn';
+        wb.style.cssText = 'display:block;width:100%;margin:10px 0 0;height:52px;font-size:14px';
+        wb.textContent = 'Написать';
+        wb.dataset.user = sellerName;
+        wb.addEventListener('click', (e) => {
+          e.preventDefault();
+          const url = 'https://t.me/' + sellerName;
+          const TG = window.Telegram && window.Telegram.WebApp;
+          try { if (TG && TG.openTelegramLink) { TG.openTelegramLink(url); return; } } catch (err) { }
+          try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (err) { }
+          window.open(url, '_blank');
+        });
+        const avitoBtn = document.getElementById('lotOpen');
+        if (avitoBtn && avitoBtn.parentNode) avitoBtn.parentNode.insertBefore(wb, avitoBtn);
+        else holder.appendChild(wb);
+      }
+
       // Ссылка на Авито
       let link = document.getElementById('lotOpen');
       if (link) link.remove();
