@@ -29274,7 +29274,12 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
 
         caption, cap_entities = render_emoji(caption)
         sent_id = None
-        if bot is not None:
+        # Сначала пробуем прямую отправку через Bot API: она не зависит от
+        # кастомных классов кнопок и прав объекта bot в этом процессе.
+        raw = await _fod_send_raw(photo, caption)
+        if raw.get('ok'):
+            sent_id = raw.get('message_id')
+        elif bot is not None:
             sent = None
             if photo:
                 try:
@@ -29293,10 +29298,7 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
                         InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]]))
             sent_id = getattr(sent, 'message_id', None)
         else:
-            raw = await _fod_send_raw(photo, caption)
-            if not raw.get('ok'):
-                return {'ok': False, 'error': raw.get('error') or 'send_failed'}
-            sent_id = raw.get('message_id')
+            return {'ok': False, 'error': raw.get('error') or 'send_failed'}
         try:
             cfg_set('channel.fod_last', today)
             cfg_set('channel.fod_last_ad', str(pick['id']))
