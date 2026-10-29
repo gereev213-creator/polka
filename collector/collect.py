@@ -50,10 +50,11 @@ from html.parser import HTMLParser
 # Проверка формы ссылки:  python3 collect.py --check-query "iphone 13 pro"
 # С включённым скрапером поиск по тексту снова имеет смысл: он обходит
 # блокировку и отдаёт карточки. Без скрапера q= бесполезен — Авито даёт 0.
-SEARCH_BY_QUERY = os.environ.get(
-    'POLKA_SEARCH_BY_QUERY',
-    '1' if os.environ.get('SCRAPINGBEE_KEY') else '0'
-) != '0'
+# Поиск по тексту ВКЛЮЧЁН по умолчанию: проверено на живом сайте 29.10.2026 —
+# ссылка «раздел + q=» отдаёт полную выдачу (3,4 МБ карточек), в отличие от
+# «/all?q=» без раздела. Без q сборщик качал весь раздел и по критериям
+# «куртка nike» находок не было вовсе.
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")

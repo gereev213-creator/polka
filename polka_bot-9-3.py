@@ -31353,7 +31353,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                     return {'error': str(exc)[:180]}
                 items = []
                 try:
-                    items = collector.parse_page(html, url) or []
+                    items = collector.parse_page(html) or []
                 except Exception as exc:
                     return {'error': f'parse: {exc}'[:180], 'html_len': len(html or '')}
                 return {'html_len': len(html or ''), 'items': len(items),
