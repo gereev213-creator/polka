@@ -29254,6 +29254,23 @@ def _notify_once(key: str, text: str) -> bool:
         return False
 
 
+def _notified_or_mark(key: str, dry_run: bool) -> bool:
+    """True — событие ещё не отправляли.
+
+    В обычном режиме сразу ставит отметку; в dry-run только проверяет,
+    иначе тестовый прогон «съедал» бы настоящие напоминания.
+    """
+    try:
+        if str(_setting_get(key, '')):
+            return False
+        if dry_run:
+            return True
+        _setting_set(key, get_moscow_time().isoformat())
+        return True
+    except Exception:
+        return False
+
+
 async def _send_plan_notice(bot, user_id: int, text: str, screen: str = 'tariffs') -> bool:
     """Сообщение в личку с кнопкой открытия нужного раздела приложения."""
     try:
@@ -29289,7 +29306,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
             left = int(cfg_get('trial.days')) - days
             if left == 2:
                 key = f'notify:trial2:{uid}'
-                if _notify_once(key, '') or dry_run:
+                if _notified_or_mark(key, dry_run):
                     out['trial_soon'].append(uid)
                     if not dry_run:
                         await _send_plan_notice(
@@ -29321,7 +29338,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
                 continue
             day = exp[:10]
             key = f'notify:plus{left_days}:{uid}:{day}'
-            if left_days in (3, 1, 0) and (_notify_once(key, '') or dry_run):
+            if left_days in (3, 1, 0) and _notified_or_mark(key, dry_run):
                 out['plus_soon'].append(uid)
                 if not dry_run:
                     nice = f"{exp[8:10]}.{exp[5:7]}.{exp[0:4]}"
@@ -29347,7 +29364,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
             if uid in seen2:
                 continue
             seen2.add(uid)
-            if _notify_once(f'notify:plusend:{uid}:{str(row["expires_at"])[:10]}', '') or dry_run:
+            if _notified_or_mark(f'notify:plusend:{uid}:{str(row["expires_at"])[:10]}', dry_run):
                 out['plus_ended'].append(uid)
                 if not dry_run:
                     await _send_plan_notice(
@@ -29368,7 +29385,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
             if not started:
                 continue
             days = int(_hours_since(started) or 0) // 24
-            if days >= int(cfg_get('trial.days')) and _notify_once(f'notify:trialend:{uid}', '') or dry_run:
+            if days >= int(cfg_get('trial.days')) and _notified_or_mark(f'notify:trialend:{uid}', dry_run):
                 if uid not in out['trial_ended']:
                     out['trial_ended'].append(uid)
                     if not dry_run:
