@@ -896,11 +896,24 @@ function paintEmpty(count) {
     });
   }
 
-  async function uploadOne(blob, index, total) {
+  function fileToken(file, blob) {
+    // Имя + размер + время изменения: одинаковый кадр даёт одинаковый токен,
+    // поэтому сервер вернёт ту же ссылку и дубля не будет
+    const src = [file && file.name, file && file.size, file && file.lastModified,
+                 blob && blob.size].join(':');
+    let h = 0;
+    for (let i = 0; i < src.length; i += 1) {
+      h = (h * 31 + src.charCodeAt(i)) | 0;
+    }
+    return 'p' + Math.abs(h).toString(36);
+  }
+
+  async function uploadOne(blob, index, total, token) {
     for (let attempt = 1; attempt <= 2; attempt += 1) {
       try {
         const fd = new FormData();
         fd.append('photos', blob, 'photo_' + index + '.jpg');
+        if (token) fd.append('token', token);
         const headers = {};
         const init = window.PolkaAPI.initData();
         if (init) headers['X-Telegram-Init-Data'] = init;
@@ -929,16 +942,25 @@ function paintEmpty(count) {
 
     let done = 0;
     let failed = 0;
+    let skipped = 0;
+    const seen = new Set(state.urls);
     for (let i = 0; i < files.length; i += 1) {
       setNote(`Готовим фото ${i + 1} из ${files.length}…`, false);
       const blob = await compress(files[i]);
+      const token = fileToken(files[i], blob);
       setNote(`Загружаем ${i + 1} из ${files.length}…`, false);
       try {
-        const url = await uploadOne(blob, i, files.length);
+        const url = await uploadOne(blob, i, files.length, token);
         if (url) {
-          state.urls.push(url);
-          done += 1;
-          paint();
+          if (seen.has(url)) {
+            // Такой кадр уже есть в дорожке — не добавляем второй раз
+            skipped += 1;
+          } else {
+            seen.add(url);
+            state.urls.push(url);
+            done += 1;
+            paint();
+          }
         } else {
           failed += 1;
         }
@@ -949,7 +971,8 @@ function paintEmpty(count) {
     }
 
     if (failed === 0) {
-      setNote('Добавлено фото: ' + done, false);
+      const extra = skipped ? ` (${skipped} уже были)` : '';
+      setNote('Добавлено фото: ' + done + extra, false);
       setTimeout(() => setNote('', false), 2200);
     } else {
       setNote(`Загружено ${done}, не удалось ${failed}`, true);

@@ -33018,6 +33018,14 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
     except Exception:
         return _miniapp_err('bad_multipart', 400)
     files = form.getall('photos', [])
+    # Клиент присылает token — хеш содержимого файла. По нему имя файла
+    # становится детерминированным: повторная отправка (ретрай, двойной
+    # выбор) не создаёт дубль, а возвращает уже сохранённую ссылку.
+    client_tokens = []
+    try:
+        client_tokens = [str(x) for x in form.getall('token', [])]
+    except Exception:
+        client_tokens = []
     if not files:
         single = form.get('photo')
         files = [single] if single is not None else []
@@ -33081,8 +33089,18 @@ async def api_miniapp_photos_upload(request: aiohttp_web.Request) -> aiohttp_web
             # модуль времени доступен как _time. Раньше здесь стояло
             # time.time() — это падало с AttributeError на каждом фото,
             # и загрузка не работала вообще.
-            name = f"u{viewer_id}_{int(_time.time())}_{idx}.{ext}"
+            token = ''
+            if idx < len(client_tokens):
+                token = ''.join(ch for ch in client_tokens[idx] if ch.isalnum())[:40]
+            if not token:
+                import hashlib as _hashlib
+                token = _hashlib.sha1(data).hexdigest()[:24]
+            name = f"u{viewer_id}_{token}.{ext}"
             path = os.path.join(upload_dir, name)
+            if os.path.isfile(path):
+                # Такой файл уже загружали — ссылка та же, дубля не будет
+                urls.append(f"/api/ads/photos/{name}")
+                continue
             with open(path, 'wb') as fh:
                 fh.write(data)
             urls.append(f"/api/ads/photos/{name}")
