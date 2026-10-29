@@ -20691,6 +20691,7 @@ async def _collector_inline_loop():
             try:
                 sent = await asyncio.to_thread(collector.run_once, cfg)
             except SystemExit as _se:
+                _collector_inline_loop._last_blocked = True
                 # 439/429 — блокировка Авито. Раньше мы ждали обычные 5 минут
                 # и снова получали блок: сбор не работал часами. Теперь пауза
                 # растёт и сохраняется в настройке, чтобы перезапуск её не сбрасывал.
@@ -20717,12 +20718,33 @@ async def _collector_inline_loop():
                 gc.collect()
             except Exception:
                 pass
+            _collector_inline_loop._last_blocked = False
             logger.info(f"Сбор находок: принято новых {sent}")
         except Exception as e:
             logger.warning(f"Сбор находок: ошибка {e}")
         finally:
             _setting_set('collector_pass_running', '')
-        await asyncio.sleep(COLLECTOR_INTERVAL)
+        # Адаптивный темп без прокси: Авито блокирует по частоте запросов,
+        # поэтому после удачного прохода ускоряемся, после блока — замедляемся.
+        # Разброс в минус-плюс 20% сбивает ровный ритм, который площадка
+        # распознаёт как бота.
+        try:
+            cur = int(cfg_get('collector.interval_s') or 0) or COLLECTOR_INTERVAL
+        except Exception:
+            cur = COLLECTOR_INTERVAL
+        try:
+            blocked_now = getattr(_collector_inline_loop, '_last_blocked', False)
+        except Exception:
+            blocked_now = False
+        if blocked_now:
+            nxt = min(3600, max(600, int(cur * 1.7)))
+        else:
+            nxt = max(600, int(cur * 0.8))
+        _setting_set('collector.interval_s', str(nxt))
+        jitter = int(nxt * 0.2)
+        wait_s = nxt + int((_time.time() * 7) % max(1, jitter))
+        logger.info(f"Следующий проход сбора через {wait_s // 60} мин")
+        await asyncio.sleep(wait_s)
 
 
 async def _notify_admins_collector_blocked():
