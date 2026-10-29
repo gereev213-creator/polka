@@ -31328,6 +31328,25 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_targets':
+        # Диагностика: какие страницы Авито сборщик собрал бы прямо сейчас
+        try:
+            token = os.environ.get('INGEST_TOKEN', '')
+            if not token:
+                return _miniapp_json({'ok': False, 'error': 'no_ingest_token'})
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            import collect as collector
+            crit = collector.targets_from_criteria(f"http://127.0.0.1:{WEBAPP_PORT}", token)
+            base = collector.default_targets()[:2]
+            return _miniapp_json({'ok': True, 'criteria_targets': len(crit),
+                                  'sample': [c.get('url') for c in crit[:5]],
+                                  'base': [b.get('url') for b in base],
+                                  'token_len': len(token)})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
     if action == 'plan_notify':
         # Пробный проход напоминаний: показывает, кому и что уйдёт
         try:
