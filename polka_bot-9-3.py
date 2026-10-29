@@ -26564,8 +26564,13 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
 
     # Уже есть такой же критерий — не плодим дубль.
     cursor = db.conn.cursor()
-    cursor.execute("SELECT id FROM hunt_criteria WHERE user_id=? AND active=1 "
-                   "AND filter_blob=?", (int(viewer_id), str(parsed.get('filters') or '')))
+    # Дубли ищем по адресу: у ссылок без f= набор фильтров пустой, и раньше
+    # любая новая ссылка считалась «уже есть».
+    cursor.execute(
+        "SELECT id FROM hunt_criteria WHERE user_id=? AND active=1 AND ("
+        "filter_url=? OR (COALESCE(filter_url,'')='' AND filter_blob=?)) "
+        "ORDER BY id DESC LIMIT 1",
+        (int(viewer_id), url, str(parsed.get('filters') or '')))
     row = cursor.fetchone()
     if row:
         return _miniapp_json({'ok': True, 'id': int(row['id']), 'existing': True,
@@ -26588,6 +26593,18 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
         logger.warning(f"from-link create: {type(e).__name__}: {e} url={url[:120]}")
         return _miniapp_json({'ok': False, 'error': 'create_failed',
                               'detail': f'{type(e).__name__}: {e}'[:180]}, status=500)
+    if crit_id and crit_id != -1:
+        # Путь и текст запроса из адреса сохраняем отдельно: по ним сборщик
+        # строит ссылку на поиск, не открывая всю категорию.
+        try:
+            _path = urlparse(url).path.strip('/')
+            _q = str((parse_qs(urlparse(url).query).get('q') or [''])[0]).strip()
+            db.conn.execute(
+                "UPDATE hunt_criteria SET from_link=1, search_path=?, search_q=?, "
+                "search_user='1' WHERE id=?", (_path[:500], _q[:200], int(crit_id)))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"from-link path save: {_e}")
     if crit_id == -1:
         logger.info(f"from-link: отказ по лимиту критериев, url={url[:100]}")
         return _miniapp_json({'ok': False, 'error': 'limit',
