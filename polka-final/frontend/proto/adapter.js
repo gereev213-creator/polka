@@ -7,7 +7,7 @@ function paintEmpty(count) {
   const html = `<div class="card" style="padding:22px 18px;text-align:center;grid-column:1/-1">
     <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
     <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
-      Создайте поиск — и находки начнут приходить в течение часа.
+      Создайте поиск — и мы пришлём объявление, когда продавец разместит подходящее.
     </div>
     <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
             onclick="go('newsearch')">Создать поиск</button>
@@ -153,7 +153,12 @@ function paintEmpty(count) {
   async function createSearch(payload) {
     try {
       await api('/api/hunt', { method: 'POST', body: JSON.stringify(payload) });
-      if (TG && TG.showAlert) TG.showAlert('Поиск создан — находки придут в течение часа');
+      // Честно объясняем механику: находка приходит, когда продавец
+      // разместит подходящее объявление на Авито, а не «через час».
+      const okText = 'Поиск создан.\n\nНаходки придут, когда продавец разместит '
+        + 'на Авито объявление, которое подойдёт под ваш запрос. '
+        + 'Мы проверяем новые объявления автоматически.';
+      try { if (TG && TG.showAlert) TG.showAlert(okText); } catch (e) { }
       return true;
     } catch (e) {
       if (TG && TG.showAlert) TG.showAlert('Не удалось создать поиск');
@@ -252,7 +257,7 @@ function paintEmpty(count) {
       if (!box) return;
       if (!items.length) {
         box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
-          'Пока нет поисков. Создайте первый — находки придут в течение часа.</div>';
+          'Пока нет поисков. Создайте первый — пришлём объявление, как только продавец разместит подходящее.</div>';
         return;
       }
       box.innerHTML = items.map(critCard).join('');

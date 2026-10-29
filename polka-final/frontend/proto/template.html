@@ -615,7 +615,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <div class="field"><label>Цена до, ₽</label><input id="maxprice" placeholder="Например: 5000" inputmode="numeric"></div>
 <div class="field"><label>Критерии</label><div class="chips" style="margin-top:0"><button type="button" class="chip" data-req="только частные" onclick="this.classList.toggle('on')">только частные</button><button type="button" class="chip" data-req="оригинал" onclick="this.classList.toggle('on')">оригинал</button><button type="button" class="chip" data-req="без ремонта" onclick="this.classList.toggle('on')">без ремонта</button><button type="button" class="chip" data-req="полный комплект" onclick="this.classList.toggle('on')">комплект</button><button type="button" class="chip" data-req="с фото" onclick="this.classList.toggle('on')">с фото</button><button type="button" class="chip" data-req="новое" onclick="this.classList.toggle('on')">новое</button><button type="button" class="chip" data-req="торг" onclick="this.classList.toggle('on')">торг</button></div></div>
 <div class="field"><label>Минус-слова</label><input placeholder="запчасти, битый"></div>
-<div class="forecast">Находки придут в течение часа после запуска</div>
+<div class="forecast">Пришлём, когда продавец разместит подходящее объявление</div>
 </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
 
 <!-- history -->
@@ -759,8 +759,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029122040"></script>
-<script src="adapter.js?v=20261029122040"></script><script src="payments.js?v=20261029122040"></script><script src="admin.js?v=20261029122040"></script><script src="keyboard.js?v=20261029122040"></script><script src="telegram-safe.js?v=20261029122040"></script><script>
+</script><script src="telegram-web-app.js?v=20261029122923"></script>
+<script src="adapter.js?v=20261029122923"></script><script src="payments.js?v=20261029122923"></script><script src="admin.js?v=20261029122923"></script><script src="keyboard.js?v=20261029122923"></script><script src="telegram-safe.js?v=20261029122923"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
