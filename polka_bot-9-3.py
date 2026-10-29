@@ -31333,6 +31333,35 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_probe':
+        # Проба одной страницы Авито: сколько карточек разобрал парсер
+        try:
+            url = str((body or {}).get('url') or '')
+            if not url:
+                return _miniapp_json({'ok': False, 'error': 'url_required'})
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            import collect as collector
+
+            def _probe():
+                try:
+                    html = collector.fetch(url)
+                except Exception as exc:
+                    return {'error': str(exc)[:180]}
+                items = []
+                try:
+                    items = collector.parse_page(html, url) or []
+                except Exception as exc:
+                    return {'error': f'parse: {exc}'[:180], 'html_len': len(html or '')}
+                return {'html_len': len(html or ''), 'items': len(items),
+                        'sample': [str(i.get('title'))[:40] for i in items[:3]]}
+
+            res = await asyncio.to_thread(_probe)
+            return _miniapp_json({'ok': True, 'url': url, 'result': res})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
     if action == 'collector_targets':
         # Диагностика: какие страницы Авито сборщик собрал бы прямо сейчас
         try:
