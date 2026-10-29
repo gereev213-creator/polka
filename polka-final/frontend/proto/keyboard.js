@@ -20,6 +20,10 @@
     // Сдвиг страницы, если система уже прокрутила документ
     var top = (vv && vv.offsetTop) ? vv.offsetTop : 0;
     wrap.style.top = top + 'px';
+    // Клавиатура открыта — прячем нижнее меню, иначе оно закрывает поле
+    var keyboardOpen = (vv && window.innerHeight - vv.height > 120);
+    if (keyboardOpen) document.body.classList.add('kbd-open');
+    else if (!document.querySelector('input:focus, textarea:focus')) document.body.classList.remove('kbd-open');
   }
 
   function scrollFieldIntoView(el) {
@@ -41,17 +45,39 @@
 
   document.addEventListener('focusin', function (e) {
     if (isField(e.target)) {
+      document.body.classList.add('kbd-open');
       apply();
       scrollFieldIntoView(e.target);
+      // Поле могло оказаться под фиксированной кнопкой — поднимаем выше
+      setTimeout(function () {
+        try {
+          var rect = e.target.getBoundingClientRect();
+          if (rect.bottom > (vv ? vv.height : window.innerHeight) - 40) {
+            e.target.scrollIntoView({ block: 'center' });
+          }
+        } catch (err) { }
+      }, 380);
     }
   }, true);
 
   document.addEventListener('focusout', function () {
-    setTimeout(apply, 120);
+    setTimeout(function () {
+      document.body.classList.remove('kbd-open');
+      apply();
+    }, 160);
   }, true);
 
+  function refocusField() {
+    var el = document.activeElement;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+      try {
+        el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      } catch (e) { }
+    }
+  }
+
   if (vv) {
-    vv.addEventListener('resize', apply);
+    vv.addEventListener('resize', function () { apply(); setTimeout(refocusField, 120); });
     vv.addEventListener('scroll', apply);
   }
   window.addEventListener('resize', apply);
