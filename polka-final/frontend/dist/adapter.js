@@ -544,38 +544,77 @@ function paintEmpty(count) {
   async function loadMyAds() {
     const box = $('myList');
     if (!box) return;
+    const STATUS = {
+      sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
+      checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено',
+      active: 'Активно', withdrawn: 'Снято',
+    };
+    const photoOf = (a) => {
+      const list = (Array.isArray(a.photo_urls) && a.photo_urls.length)
+        ? a.photo_urls
+        : (Array.isArray(a.photos) ? a.photos : []);
+      return typeof list[0] === 'string' ? list[0] : '';
+    };
     try {
       const data = await window.PolkaAPI.api('/api/my-ads');
       const items = data.items || [];
       if (!items.length) {
-        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
-          'Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
+        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">'
+          + 'Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
         return;
       }
-      const statusMap = { sold: 'Продано', draft: 'Черновик', moderation: 'На модерации',
-                          checking: 'На проверке', review: 'На модерации', rejected: 'Отклонено' };
       box.innerHTML = items.map((a) => {
-        let ph = '';
-        const raw = a.photos;
-        if (Array.isArray(raw)) ph = raw[0] || '';
-        else if (typeof raw === 'string' && raw.trim()) {
-          try {
-            const arr = JSON.parse(raw.replace(/'/g, '"'));
-            ph = Array.isArray(arr) ? (arr[0] || '') : '';
-          } catch (e) { ph = raw.startsWith('http') ? raw : ''; }
-        }
+        const ph = photoOf(a);
         const bg = ph ? `style="background-image:url('${ph}')"` : '';
+        const canRemove = String(a.status || '') === 'active';
+        const btn = canRemove
+          ? `<button class="trash" data-remove="${a.id}" title="Снять с барахолки">`
+            + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3373FA" '
+            + 'stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2"/>'
+            + '<path d="M6 7l1 13h10l1-13"/></svg></button>'
+          : '';
         return `<article class="card fav" data-myad="${a.id}">
           <span class="th" ${bg}>${ph ? '' : 'нет фото'}</span>
           <span class="favtext">
             <h3>${(a.title || '').slice(0, 40)}</h3>
             <span class="pricepill">${fmt(a.price)}</span>
-            <span class="status">${statusMap[a.status] || 'Активно'}</span>
+            <span class="status">${STATUS[a.status] || 'Активно'}</span>
           </span>
+          ${btn}
         </article>`;
       }).join('');
+
+      box.querySelectorAll('[data-remove]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const id = btn.getAttribute('data-remove');
+          const TG = window.Telegram && window.Telegram.WebApp;
+          let ok = true;
+          if (TG && TG.showConfirm) {
+            ok = await new Promise((res) => {
+              try { TG.showConfirm('Снять объявление с барахолки?', res); } catch (err) { res(false); }
+            });
+          } else if (typeof window.confirm === 'function') {
+            ok = window.confirm('Снять объявление с барахолки?');
+          }
+          if (!ok) return;
+          btn.disabled = true;
+          try {
+            await window.PolkaAPI.api('/api/ads/' + id, { method: 'DELETE' });
+            await loadMyAds();
+            if (window.PolkaBoard) { try { window.PolkaBoard(); } catch (e2) { } }
+          } catch (err) {
+            btn.disabled = false;
+            const msg = String((err && err.message) || err);
+            if (TG && TG.showAlert) { try { TG.showAlert('Не удалось снять: ' + msg); } catch (e3) { } }
+          }
+        });
+      });
     } catch (e) { }
   }
+
+  window.PolkaLoadMyAds = loadMyAds;
 
   // Избранное — ровно как в референсе: фото, название, цена, корзина
   async function loadFavs() {
@@ -1492,17 +1531,7 @@ function paintEmpty(count) {
     </article>`;
   }
 
-  async function loadMyAds() {
-    const box = $('myList');
-    if (!box) return;
-    try {
-      const data = await window.PolkaAPI.api('/api/my-ads');
-      const items = data.items || [];
-      box.innerHTML = items.length
-        ? items.map((a) => card(a, STATUS[a.status] || 'Активно')).join('')
-        : '<div class="card" style="padding:18px;text-align:center">Своих объявлений пока нет. Нажмите «+», чтобы выставить лот.</div>';
-    } catch (e) { }
-  }
+  // (дубль loadMyAds удалён: без фото и без снятия лота)
 
   async function loadReferrals() {
     try {
@@ -1660,7 +1689,7 @@ function paintEmpty(count) {
     const orig = window.go;
     const wrapped = function (name) {
       const r = orig.apply(this, arguments);
-      if (name === 'myads') loadMyAds();
+      if (name === 'myads' && window.PolkaLoadMyAds) window.PolkaLoadMyAds();
       if (name === 'favorites' && typeof loadFavs === 'function') loadFavs();
       if (name === 'post' && window.wirePost) window.wirePost();
       if (name === 'referrals') loadReferrals();
@@ -1672,7 +1701,6 @@ function paintEmpty(count) {
   document.addEventListener('DOMContentLoaded', () => { wrap(); wirePost(); });
   setTimeout(wrap, 800);
   window.PolkaPost = wirePost;
-  window.PolkaLoadMyAds = loadMyAds;
   window.PolkaLoadReferrals = loadReferrals;
   window.wirePost = wirePost;
 })();
@@ -2370,5 +2398,59 @@ function paintEmpty(count) {
     };
     setTimeout(wrap, 800);
     setInterval(() => { if (paidNow) ensureStar(); }, 1200);
+  } catch (e) { }
+})();
+
+/* ── Снятие лота с барахолки: делегированный обработчик ──────────────────
+   Кнопка внутри перерисовываемого списка, поэтому ловим клик на документе —
+   так обработчик не теряется после обновления разметки. */
+(function () {
+  try {
+    document.addEventListener('click', async (e) => {
+      const btn = e.target.closest && e.target.closest('[data-remove]');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (btn.disabled) return;
+      const id = btn.getAttribute('data-remove');
+      const TG = window.Telegram && window.Telegram.WebApp;
+      // Свой диалог подтверждения: TG.showConfirm в WebView не всегда
+      // вызывает колбэк, и снятие «зависало» без реакции.
+      const ok = await new Promise((resolve) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-items:center;'
+          + 'background:rgba(20,40,70,.45);padding:24px';
+        wrap.innerHTML = '<div style="background:#fff;border-radius:22px;padding:18px;max-width:320px;'
+          + 'width:100%;text-align:center;font:15px system-ui;color:#1F2A37">'
+          + '<div style="font-weight:800;margin-bottom:6px">Снять объявление?</div>'
+          + '<div style="font-size:12.5px;color:#5C6E86;margin-bottom:14px">'
+          + 'Оно исчезнет с барахолки. Вернуть можно, создав заново.</div>'
+          + '<div style="display:flex;gap:8px">'
+          + '<button id="rcNo" style="flex:1;height:44px;border:0;border-radius:14px;'
+          + 'background:#E7EFF6;color:#2C6CDF;font-weight:800">Отмена</button>'
+          + '<button id="rcYes" style="flex:1;height:44px;border:0;border-radius:14px;'
+          + 'background:linear-gradient(100deg,#4780FB,#6B98F5);color:#fff;font-weight:800">'
+          + 'Снять</button></div></div>';
+        document.body.appendChild(wrap);
+        const done = (val) => { wrap.remove(); resolve(val); };
+        wrap.addEventListener('click', (ev) => { if (ev.target === wrap) done(false); });
+        const yes = wrap.querySelector('#rcYes');
+        const no = wrap.querySelector('#rcNo');
+        if (yes) yes.addEventListener('click', () => done(true));
+        if (no) no.addEventListener('click', () => done(false));
+      });
+      if (!ok) return;
+      btn.disabled = true;
+      try {
+        await window.PolkaAPI.api('/api/ads/' + id, { method: 'DELETE' });
+        if (window.PolkaLoadMyAds) await window.PolkaLoadMyAds();
+        if (window.PolkaBoard) { try { window.PolkaBoard(); } catch (e2) { } }
+        if (TG && TG.showAlert) { try { TG.showAlert('Объявление снято с барахолки'); } catch (e3) { } }
+      } catch (err) {
+        btn.disabled = false;
+        const msg = String((err && err.message) || err);
+        if (TG && TG.showAlert) { try { TG.showAlert('Не удалось снять: ' + msg); } catch (e4) { } }
+      }
+    }, true);
   } catch (e) { }
 })();
