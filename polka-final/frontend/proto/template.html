@@ -576,6 +576,10 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 
 /* Плашка статуса на тарифах: ползунок убран, текст мелкий */
 #trialBadge{font-size:10.5px}
+
+/* Поле промокода: подсказка мельче и не обрезается */
+#code::placeholder{font-size:12px;letter-spacing:.04em;font-weight:700;color:#8A9AB0}
+#code{font-size:14px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -720,7 +724,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <div class="payrow"><button class="pay" id="payBtn" onclick="activatePlus()">Оплатить</button><span class="price" id="priceNow">149 <span>руб/мес</span></span></div></div>
 <div class="card benefits"><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span>10 критериев</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span>Проверка каждые 5 минут</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span>Аналитика</div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-spark"/></svg></span>ИИ фильтрация</div></div></div>
 <button class="card acc" id="promoBtn"><b>Введи промокод</b><span class="chev"><svg width="15" height="15"><use href="#i-d"/></svg></span></button>
-<div class="promoform" id="promoform"><span class="codebox"><span class="okic" id="okic"><svg width="11" height="11"><use href="#i-check"/></svg></span><input id="code" value="POLKA"><span class="off" id="off"></span></span><button class="apply" onclick="applyPromo()">Применить</button></div>
+<div class="promoform" id="promoform"><span class="codebox"><span class="okic" id="okic"><svg width="11" height="11"><use href="#i-check"/></svg></span><input id="code" placeholder="Промокод" autocomplete="off"><span class="off" id="off"></span></span><button class="apply" onclick="applyPromo()">Применить</button></div>
 <p class="pmsg" id="pmsg">Промокод не найден</p>
 </div></section>
 
@@ -796,7 +800,7 @@ $('delivery').addEventListener('click',e=>e.currentTarget.classList.toggle('on')
 $('postForm').addEventListener('submit',e=>{e.preventDefault();const t=$('adTitle').value.trim(),n=parseInt(($('adPrice').value||'').replace(/\D/g,''),10);if(!t||!n){toast('Укажи название и цену');return}const city=$('adCity').value.trim()||'Москва',desc=$('adDesc').value.trim()||'Состояние хорошее.',id=Math.max(...LOTS.map(x=>x.id))+1;LOTS.unshift({id,title:t,full:t,price:n,img:adPhoto,fav:false,tag:chosen('cond')||chosen('cat'),market:'',meta:city+' · только что',desc});renderGrids();renderFavs();$('myList').insertAdjacentHTML('afterbegin',`<article class="card fav" data-open="${id}"><span class="th" ${adPhoto?`style="background-image:var(--${adPhoto})"`:''}>${adPhoto?'':'нет фото'}</span><span><h3>${t}</h3><span class="pricepill">${fmt(n)}</span><br><span class="status">Модерация</span></span></article>`);go('myads',true);toast('Отправлено на модерацию')});
 $('termsBtn').addEventListener('click',()=>{const w=$('tarwrap');w.classList.toggle('expanded');$('termsBtn').innerHTML=`<svg width="15" height="15"><use href="#i-${w.classList.contains('expanded')?'u':'d'}"/></svg>`});
 $('promoBtn').addEventListener('click',()=>{const f=$('promoform');f.classList.toggle('show');$('promoBtn').querySelector('.chev').innerHTML=`<svg width="15" height="15"><use href="#i-${f.classList.contains('show')?'u':'d'}"/></svg>`});
-function applyPromo(){const ok=$('code').value.trim().toUpperCase()==='POLKA';$('okic').style.visibility=ok?'visible':'hidden';$('off').textContent=ok?'-50%':'';$('pmsg').classList.toggle('show',!ok);$('priceNow').innerHTML=ok?'<s>149</s>74,9 <span>руб/мес</span>':'149 <span>руб/мес</span>';if(!ok){const f=$('promoform');f.classList.remove('shake');void f.offsetWidth;f.classList.add('shake')}else toast('Промокод применён')}
+/* демо-промокод POLKA удалён: работает настоящая проверка через API */
 function activatePlus(){if(subscribed){toast('ПЛЮС уже активен');return}subscribed=true;$('payBtn').textContent='Активно';$('trialTitle').textContent='ПЛЮС до 01.01.2027';$('trialBadge').textContent='Активно';$('pluspill').style.display='inline-flex';$('datebadge').style.display='inline-flex';$('avbadge').style.display='grid';toast('ПЛЮС активирован')}
 async function copyLink(){try{await navigator.clipboard.writeText('https://t.me/polkalotapp?startapp=ref89659599')}catch(e){}toast('Ссылка скопирована')}
 async function shareLink(){const d={title:'ПОЛКА',text:'Ищу выгодные лоты в ПОЛКЕ — присоединяйся',url:'https://t.me/polkalotapp?startapp=ref89659599'};if(navigator.share){try{await navigator.share(d)}catch(e){}}else copyLink()}
@@ -806,8 +810,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029160449"></script>
-<script src="adapter.js?v=20261029160449"></script><script src="payments.js?v=20261029160449"></script><script src="admin.js?v=20261029160449"></script><script src="keyboard.js?v=20261029160449"></script><script src="telegram-safe.js?v=20261029160449"></script><script>
+</script><script src="telegram-web-app.js?v=20261029165100"></script>
+<script src="adapter.js?v=20261029165100"></script><script src="payments.js?v=20261029165100"></script><script src="admin.js?v=20261029165100"></script><script src="keyboard.js?v=20261029165100"></script><script src="telegram-safe.js?v=20261029165100"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
