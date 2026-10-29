@@ -30035,8 +30035,12 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     else:
         where = ["(hm.user_id = ? OR hm.crit_id IN "
                  "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
-                 statuses, "a.status='active'"]
-        params: List = [int(viewer_id), int(viewer_id)]
+                 statuses, "a.status='active'",
+                 # Критерий на паузе не должен приносить находки в ленту —
+                 # в боте уведомления уже останавливаются, а лента показывала
+                 "EXISTS (SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id "
+                 "AND hc.user_id = ? AND hc.active = 1)"]
+        params: List = [int(viewer_id), int(viewer_id), int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")
         params.append(int(min_discount))
