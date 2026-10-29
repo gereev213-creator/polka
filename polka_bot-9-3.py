@@ -32889,7 +32889,12 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     # Лимит лотов: пробный 24 часа — 1 лот, «Плюс» — 10 в месяц,
     # без подписки — нельзя. Так человек видит смысл купить Плюс.
     try:
-        _plan = str((db.get_user(viewer_id) or {}).get('plan') or 'trial')
+        # План берём через resolve_plan: он учитывает активную подписку,
+        # а не только поле users.plan. Иначе оплативший видел лимит trial.
+        try:
+            _plan = str(resolve_plan(viewer_id) or 'trial')
+        except Exception:
+            _plan = str((db.get_user(viewer_id) or {}).get('plan') or 'trial')
         _cur = db.conn.cursor()
         _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status IN "
                      "('active','moderation','checking','review')", (viewer_id,))
