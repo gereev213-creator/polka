@@ -26568,9 +26568,9 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
     # любая новая ссылка считалась «уже есть».
     cursor.execute(
         "SELECT id FROM hunt_criteria WHERE user_id=? AND active=1 AND ("
-        "filter_url=? OR (COALESCE(filter_url,'')='' AND filter_blob=?)) "
+        "filter_url=? OR (COALESCE(filter_url,'')='' AND lower(query)=lower(?))) "
         "ORDER BY id DESC LIMIT 1",
-        (int(viewer_id), url, str(parsed.get('filters') or '')))
+        (int(viewer_id), url, query))
     row = cursor.fetchone()
     if row:
         return _miniapp_json({'ok': True, 'id': int(row['id']), 'existing': True,
