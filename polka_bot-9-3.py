@@ -24910,7 +24910,6 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
         # Без MNT_CALLBACK_URL шлюз не присылает уведомление об оплате, и
         # подписка не включается сама — человек платит и остаётся ни с чем.
         ('MNT_CALLBACK_URL', f'{base_url}/api/pay/paw/notify'),
-        ('MNT_CALLBACK_METHOD', 'POST'),
     ]
     # quote импортируем здесь же: в проекте urllib.parse подключается
     # локально внутри функций, модульного псевдонима _up нет — из-за этого
@@ -34471,7 +34470,10 @@ def create_api_app() -> aiohttp_web.Application:
     # PayAnyWay: карты, СБП, SberPay
     app.router.add_post('/api/pay/paw/create', api_pay_paw_create)
     app.router.add_get('/api/pay/paw/status', api_pay_paw_status)
+    # PayAnyWay уведомляет и GET, и POST — принимаем оба, иначе оплата
+    # может остаться без подтверждения.
     app.router.add_post('/api/pay/paw/notify', api_pay_paw_notify)
+    app.router.add_get('/api/pay/paw/notify', api_pay_paw_notify)
     app.router.add_get('/pay/ok', api_pay_ok)
     app.router.add_get('/pay/fail', api_pay_fail)
     app.router.add_get('/api/pay/paw/notify', api_pay_paw_notify)
