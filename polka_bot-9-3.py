@@ -25339,6 +25339,15 @@ def _user_plan(user_id: int) -> Dict:
     user = db.get_user(int(user_id)) or {}
     plan = str(user.get('plan') or '')
     now = get_moscow_time()
+    # Активная подписка важнее поля users.plan: после оплаты оно может
+    # остаться 'trial', и человек получал лимиты пробного вместо Плюса.
+    _sub_active = _plus_subscription(int(user_id))
+    if _sub_active is True and plan != 'plus':
+        plan = 'plus'
+        try:
+            db.update_user(int(user_id), plan='plus')
+        except Exception:
+            pass
     # Купленная подписка: кончилась — снимаем «Плюс» и приостанавливаем лишнее
     if plan == 'plus':
         active = _plus_subscription(int(user_id))
