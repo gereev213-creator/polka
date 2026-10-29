@@ -2109,6 +2109,7 @@ function paintEmpty(count) {
       favorites: 'favorites', saved: 'favorites', избранное: 'favorites',
       searches: 'searches', criteria: 'searches', поиски: 'searches',
       history: 'history', profile: 'profile', профиль: 'profile',
+      newsearch: 'newsearch', новыйпоиск: 'newsearch',
       tariffs: 'tariffs', 'plus': 'tariffs', тарифы: 'tariffs',
       myads: 'myads', post: 'post', create: 'post', создать: 'post',
       referrals: 'referrals', рефералка: 'referrals',
