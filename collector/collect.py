@@ -2004,19 +2004,34 @@ def run_once(cfg: dict) -> int:
             # Своё состояние на каждую страницу: чужие карточки сюда не
             # попадут ни при ошибке загрузки, ни при пустом разборе.
             items = []
+            _tried_plain = False
             print(f"\n→ {source}: {url}")
             try:
                 html = fetch(url, prefer_scraper=('q=' in url))
             except Blocked as exc:
-                blocked_streak += 1
-                print(f"  ⛔ {exc} — пропускаю эту страницу (блок {blocked_streak})")
-                # Собираем, что успели: отправка идёт постранично.
-                save_targets_state(state)
-                if blocked_streak >= 2:
-                    # Два блока подряд — похоже на блокировку по IP. Уходим
-                    # на паузу, но только теперь, а не после первого 439.
-                    raise SystemExit(3)
-                continue
+                # Поиск по словам Авито отдаёт неохотно. Прежде чем уходить,
+                # пробуем ту же страницу без q=: раздел отдаётся чаще, а слова
+                # критерия отсеиваются уже на сервере.
+                html = None
+                if 'q=' in url and not _tried_plain:
+                    _tried_plain = True
+                    plain = re.sub(r'[?&]q=[^&]*', '', url)
+                    plain = plain.replace('?&', '?').replace('&&', '&').rstrip('?&')
+                    print(f"  ↻ поиск с q= закрыт — пробую раздел без q: {plain[:70]}")
+                    try:
+                        html = fetch(plain, prefer_scraper=False)
+                        print("  ✓ раздел без q отдан")
+                    except Exception as exc2:
+                        print(f"  ⛔ {str(exc2)[:80]}")
+                if html is None:
+                    blocked_streak += 1
+                    # Собираем, что успели: отправка идёт постранично.
+                    save_targets_state(state)
+                    print(f"  ⛔ {exc} — пропускаю страницу (блок {blocked_streak})")
+                    if blocked_streak >= 2:
+                        # Два блока подряд — блокировка по IP: уходим на паузу.
+                        raise SystemExit(3)
+                    continue
             except (urllib.error.URLError, TimeoutError) as exc:
                 # Сеть отвалилась на этой странице — идём к следующей.
                 # items остаётся пустым: к предыдущей цели не обращаемся.
