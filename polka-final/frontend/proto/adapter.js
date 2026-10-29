@@ -1113,7 +1113,10 @@ function paintEmpty(count) {
       // Кнопка «Написать»: открывает чат с продавцом по его юзернейму
       const oldWrite = document.getElementById('lotWrite');
       if (oldWrite) oldWrite.remove();
-      const sellerName = String(raw.username || '').replace(/^@/, '');
+      // Юзернейм лежит внутри seller (или приходит в username у части ответов)
+      const sellerName = String(
+        raw.username || (raw.seller && raw.seller.username) || ''
+      ).replace(/^@/, '');
       const isOwn = !!raw.is_owner;
       if (sellerName && !isOwn) {
         const holder = document.querySelector('#s-product .pbody') || document.querySelector('#s-product');
