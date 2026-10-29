@@ -250,8 +250,12 @@ function paintEmpty(count) {
       const box = $('searchList');
       if (!box) return;
       if (!items.length) {
-        box.innerHTML = '<div class="card" style="padding:18px;text-align:center">' +
-          'Пока нет поисков. Создайте первый — пришлём объявление, как только продавец разместит подходящее.</div>';
+        box.innerHTML = '<div class="card" style="padding:18px 16px;text-align:center">'
+          + '<div style="font-size:12.5px;line-height:1.45;color:#5C6E86;font-weight:600">'
+          + 'Пока нет поисков. Создайте первый — пришлём объявление, когда продавец '
+          + 'разместит подходящее.</div>'
+          + '<button class="bigbtn" style="height:42px;font-size:12px;max-width:220px;'
+          + 'margin:12px auto 0" onclick="go(\'newsearch\')">Создать поиск</button></div>';
         return;
       }
       box.innerHTML = items.map(critCard).join('');
