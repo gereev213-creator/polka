@@ -31357,6 +31357,31 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_now':
+        # Ручной проход сбора: снять паузу и попробовать прямо сейчас
+        try:
+            token = os.environ.get('INGEST_TOKEN', '')
+            if not token:
+                return _miniapp_json({'ok': False, 'error': 'no_ingest_token'})
+            _setting_set('collector.blocked_until_ts', '0')
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            import collect as collector
+            cfg = {'server': f"http://127.0.0.1:{WEBAPP_PORT}", 'token': token}
+            crit = await asyncio.to_thread(
+                collector.targets_from_criteria, cfg['server'], cfg['token'])
+            cfg['targets'] = crit[:2]
+            try:
+                sent = await asyncio.to_thread(collector.run_once, cfg)
+            except SystemExit as exc:
+                return _miniapp_json({'ok': True, 'blocked': True, 'code': exc.code,
+                                      'targets': [c.get('url') for c in cfg['targets']]})
+            return _miniapp_json({'ok': True, 'sent': sent,
+                                  'targets': [c.get('url') for c in cfg['targets']]})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
     if action == 'collector_probe':
         # Проба одной страницы Авито: сколько карточек разобрал парсер
         try:
