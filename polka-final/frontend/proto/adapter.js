@@ -176,7 +176,7 @@ function paintEmpty(count) {
   }
 
   async function loadLots() {
-    showLoading(document.getElementById('homeGrid'), 4);
+    (window.PolkaLoading && window.PolkaLoading(document.getElementById('homeGrid'), 4));
     try {
       const data = await api('/api/findings?limit=40');
       const rawItems = data.items || [];
@@ -298,7 +298,7 @@ function paintEmpty(count) {
   }
 
   async function loadSearches() {
-    showLoading(document.getElementById('searchList'), 2);
+    (window.PolkaLoading && window.PolkaLoading(document.getElementById('searchList'), 2));
     try {
       const data = await window.PolkaAPI.api('/api/hunt');
       const items = data.items || [];
@@ -499,7 +499,7 @@ function paintEmpty(count) {
 
   // История: находки, сгруппированные по критериям
   async function loadHistory() {
-    showLoading(document.getElementById('histList'), 3);
+    (window.PolkaLoading && window.PolkaLoading(document.getElementById('histList'), 3));
     const box = document.getElementById('histList') || document.querySelector('#s-history .scroll');
     if (!box) return;
     try {
@@ -604,7 +604,7 @@ function paintEmpty(count) {
   const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
 
   async function loadMyAds() {
-    showLoading(document.getElementById('myList'), 2);
+    (window.PolkaLoading && window.PolkaLoading(document.getElementById('myList'), 2));
     const box = $('myList');
     if (!box) return;
     const STATUS = {
@@ -681,7 +681,7 @@ function paintEmpty(count) {
 
   // Избранное — ровно как в референсе: фото, название, цена, корзина
   async function loadFavs() {
-    showLoading(document.getElementById('favList'), 2);
+    (window.PolkaLoading && window.PolkaLoading(document.getElementById('favList'), 2));
     const box = document.getElementById('favList');
     const empty = document.getElementById('favEmpty');
     if (!box) return;
@@ -1786,12 +1786,14 @@ function paintEmpty(count) {
       return '';
     }
 
-    async function loadBoard() {
-      showLoading(document.getElementById('marketGrid'), 4);
+    async function loadBoard(extraQuery) {
+      (window.PolkaLoading && window.PolkaLoading(document.getElementById('marketGrid'), 4));
       const box = document.getElementById('marketGrid');
       if (!box) return;
+      const qs = (typeof extraQuery === 'string') ? extraQuery
+        : (window.__boardFilter || '');
       try {
-        const data = await window.PolkaAPI.api('/api/ads?limit=40');
+        const data = await window.PolkaAPI.api('/api/ads?limit=40' + (qs ? '&' + qs : ''));
         const items = data.items || [];
         if (!items.length) {
           // Пусто — только текст, без плашки
@@ -2706,5 +2708,100 @@ function paintEmpty(count) {
         if (item && window.PolkaProductData) window.PolkaProductData(item);
       }
     }, true);
+  } catch (e) { }
+})();
+
+/* ── Фильтры барахолки: ручные поля вместо трёх пресетов ─────────────────
+   Цена от/до, город, категория, состояние и «только с фото» — всё уходит
+   параметрами в /api/ads, результат перерисовывает доску. */
+(function () {
+  try {
+    const state = { category: '', condition: '', photo: false };
+
+    function q(id) { return document.getElementById(id); }
+    function num(id) {
+      const el = q(id);
+      return el ? String(el.value || '').replace(/[^0-9]/g, '') : '';
+    }
+
+    function paintChips() {
+      const cats = window.__filterCats || [];
+      const box = q('fCats');
+      if (!box) return;
+      box.innerHTML = cats.map((c) => {
+        const name = typeof c === 'string' ? c : (c.name || c.title || '');
+        if (!name) return '';
+        const on = state.category === name ? ' on' : '';
+        return `<button class="chip${on}" data-cat="${name}">${name}</button>`;
+      }).join('');
+      box.querySelectorAll('[data-cat]').forEach((b) => {
+        b.addEventListener('click', () => {
+          const name = b.getAttribute('data-cat');
+          state.category = state.category === name ? '' : name;
+          paintChips();
+        });
+      });
+      const cond = q('fCond');
+      if (cond) {
+        cond.querySelectorAll('[data-cond]').forEach((b) => {
+          b.classList.toggle('on', state.condition === b.getAttribute('data-cond'));
+          b.onclick = () => {
+            const name = b.getAttribute('data-cond');
+            state.condition = state.condition === name ? '' : name;
+            paintChips();
+          };
+        });
+      }
+      const ph = q('fPhoto');
+      if (ph) {
+        ph.classList.toggle('on', !!state.photo);
+        ph.onclick = () => { state.photo = !state.photo; paintChips(); };
+      }
+    }
+
+    async function loadCats() {
+      if (window.__filterCats) return;
+      try {
+        const d = await window.PolkaAPI.api('/api/filters');
+        window.__filterCats = (d.categories || []).slice(0, 12);
+        paintChips();
+      } catch (e) { }
+    }
+
+    window.applyFilters = async function () {
+      const params = new URLSearchParams();
+      const pmin = num('fPriceMin');
+      const pmax = num('fPriceMax');
+      const city = (q('fCity') || {}).value || '';
+      if (pmin) params.set('price_min', pmin);
+      if (pmax) params.set('price_max', pmax);
+      if (city.trim()) params.set('city', city.trim());
+      if (state.category) params.set('category', state.category);
+      if (state.condition) params.set('condition', state.condition);
+      if (state.photo) params.set('with_photo', '1');
+      const qs = params.toString();
+      window.__boardFilter = qs;
+      try {
+        if (typeof closeSheets === 'function') closeSheets();
+      } catch (e) { }
+      if (window.PolkaBoard) await window.PolkaBoard(qs);
+      else {
+        const box = document.getElementById('marketGrid');
+        if (box) box.innerHTML = '<div class="emptyState">Пока пусто</div>';
+      }
+    };
+
+    window.resetFilters = function () {
+      state.category = '';
+      state.condition = '';
+      state.photo = false;
+      ['fPriceMin', 'fPriceMax', 'fCity'].forEach((id) => { const el = q(id); if (el) el.value = ''; });
+      paintChips();
+      window.__boardFilter = '';
+      if (window.PolkaBoard) window.PolkaBoard('');
+    };
+
+    document.addEventListener('DOMContentLoaded', () => { loadCats(); paintChips(); });
+    setTimeout(() => { loadCats(); paintChips(); }, 1500);
   } catch (e) { }
 })();

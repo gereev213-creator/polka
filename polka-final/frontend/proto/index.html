@@ -608,6 +608,20 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 body.kbd-open #nav{display:none!important}
 /* И поднимаем контент, чтобы поле не прятал низ экрана */
 body.kbd-open #stage{padding-bottom:0!important}
+
+/* Ручные фильтры барахолки */
+.filterGrid{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.fLabel{font-size:10.5px;font-weight:800;color:#5C6E86;letter-spacing:.04em;
+  text-transform:uppercase;margin-top:6px}
+.fRow{display:flex;gap:8px}
+.fInput{flex:1;height:44px;border:0;border-radius:14px;background:#EFF4FC;
+  padding:0 14px;font-size:14px;font-weight:700;color:#1F2A37;min-width:0}
+.fInput::placeholder{color:#8A9AB0;font-weight:700}
+#fCats .chip,#fCond .chip,#fPhoto .chip{flex:0 0 auto}
+.fActions{display:flex;gap:10px;align-items:center}
+.fReset{flex:0 0 auto;height:48px;padding:0 18px;border:0;border-radius:999px;
+  background:#E7EFF6;color:#2C6CDF;font-size:12.5px;font-weight:800}
+.fApply{flex:1}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -789,8 +803,34 @@ body.kbd-open #stage{padding-bottom:0!important}
 
 <!-- sheets -->
 <div class="overlay" id="ov-filters" onclick="if(event.target===this)closeSheets()"><div class="sheet"><div class="grab"></div><h3>Фильтры</h3>
-<div class="chips" style="margin:0 0 18px"><button class="chip" data-f="5000">до 5 000 ₽</button><button class="chip" data-f="15000">до 15 000 ₽</button><button class="chip" data-f="photo">только с фото</button></div>
-<button class="bigbtn" onclick="closeSheets();renderMarket()">Показать</button></div></div>
+<div class="filterGrid">
+      <label class="fLabel">Цена, ₽</label>
+      <div class="fRow">
+        <input id="fPriceMin" class="fInput" inputmode="numeric" placeholder="от">
+        <input id="fPriceMax" class="fInput" inputmode="numeric" placeholder="до">
+      </div>
+
+      <label class="fLabel">Город</label>
+      <input id="fCity" class="fInput" placeholder="Любой город" autocomplete="off">
+
+      <label class="fLabel">Категория</label>
+      <div class="chips" id="fCats" style="margin:0 0 12px"></div>
+
+      <label class="fLabel">Состояние</label>
+      <div class="chips" id="fCond" style="margin:0 0 12px">
+        <button class="chip" data-cond="Отличное">Отличное</button>
+        <button class="chip" data-cond="Хорошее">Хорошее</button>
+        <button class="chip" data-cond="Есть нюансы">Есть нюансы</button>
+      </div>
+
+      <div class="chips" style="margin:0 0 14px">
+        <button class="chip" id="fPhoto" data-photo="1">Только с фото</button>
+      </div>
+    </div>
+    <div class="fActions">
+      <button class="fReset" onclick="resetFilters()">Сбросить</button>
+      <button class="bigbtn fApply" onclick="applyFilters()">Показать</button>
+    </div></div></div>
 
 <div id="toast"></div>
 </div></div></main>
@@ -838,8 +878,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029204725"></script>
-<script src="adapter.js?v=20261029204725"></script><script src="payments.js?v=20261029204725"></script><script src="admin.js?v=20261029204725"></script><script src="keyboard.js?v=20261029204725"></script><script src="telegram-safe.js?v=20261029204725"></script><script>
+</script><script src="telegram-web-app.js?v=20261029212553"></script>
+<script src="adapter.js?v=20261029212553"></script><script src="payments.js?v=20261029212553"></script><script src="admin.js?v=20261029212553"></script><script src="keyboard.js?v=20261029212553"></script><script src="telegram-safe.js?v=20261029212553"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
