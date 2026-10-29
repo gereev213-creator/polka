@@ -735,7 +735,7 @@ body.kbd-open #stage{padding-bottom:0!important}
 <button class="mrow" onclick="go('tariffs')"><span class="grow">Тарифы</span><span id="planUntil"></span><span class="datebadge" id="datebadge"></span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('post')"><span class="grow">Разместить объявление</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('referrals')"><span class="grow">Реферальная программа</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
-<button class="mrow" data-admin="1" id="modRow" style="display:none" onclick="go('moderation')"><span class="grow">Модерация <span id="modCount"></span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" data-admin="1" id="adminRow" style="display:none" onclick="go('admin')"><span class="grow">Админка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" id="supportRow" onclick="openSupport()"><span class="grow">Поддержка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="openLegal('terms')"><span class="grow">Пользовательское соглашение</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="openLegal('refund')"><span class="grow">Оплата и возврат</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" data-admin="1" id="modRow" style="display:none" onclick="go('moderation')"><span class="grow">Модерация <span id="modCount"></span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" data-admin="1" id="adminRow" style="display:none" onclick="go('admin')"><span class="grow">Админка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" id="supportRow" onclick="openSupport()"><span class="grow">Поддержка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="openLegal('terms')"><span class="grow">Пользовательское соглашение</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="openLegal('privacy')"><span class="grow">Политика конфиденциальности</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 
 
@@ -877,8 +877,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029212553"></script>
-<script src="adapter.js?v=20261029212553"></script><script src="payments.js?v=20261029212553"></script><script src="admin.js?v=20261029212553"></script><script src="keyboard.js?v=20261029212553"></script><script src="telegram-safe.js?v=20261029212553"></script><script>
+</script><script src="telegram-web-app.js?v=20261029213320"></script>
+<script src="adapter.js?v=20261029213320"></script><script src="payments.js?v=20261029213320"></script><script src="admin.js?v=20261029213320"></script><script src="keyboard.js?v=20261029213320"></script><script src="telegram-safe.js?v=20261029213320"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
