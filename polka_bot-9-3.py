@@ -31358,27 +31358,39 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
     if action == 'collector_now':
-        # Ручной проход сбора: снять паузу и попробовать прямо сейчас
+        # Ручной проход в ФОНЕ: сбор двух страниц идёт дольше, чем живёт
+        # HTTP-ответ за прокси Amvera, поэтому сразу отвечаем, а результат
+        # кладём в настройку — его видно следующим запросом.
         try:
             token = os.environ.get('INGEST_TOKEN', '')
             if not token:
                 return _miniapp_json({'ok': False, 'error': 'no_ingest_token'})
             _setting_set('collector.blocked_until_ts', '0')
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if path not in sys.path:
-                sys.path.insert(0, path)
-            import collect as collector
-            cfg = {'server': f"http://127.0.0.1:{WEBAPP_PORT}", 'token': token}
-            crit = await asyncio.to_thread(
-                collector.targets_from_criteria, cfg['server'], cfg['token'])
-            cfg['targets'] = crit[:2]
-            try:
-                sent = await asyncio.to_thread(collector.run_once, cfg)
-            except SystemExit as exc:
-                return _miniapp_json({'ok': True, 'blocked': True, 'code': exc.code,
-                                      'targets': [c.get('url') for c in cfg['targets']]})
-            return _miniapp_json({'ok': True, 'sent': sent,
-                                  'targets': [c.get('url') for c in cfg['targets']]})
+            _setting_set('collector.manual_result', 'запущен ' + get_moscow_time().isoformat())
+
+            async def _manual_pass():
+                path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+                if path not in sys.path:
+                    sys.path.insert(0, path)
+                try:
+                    import collect as collector
+                    cfg = {'server': f"http://127.0.0.1:{WEBAPP_PORT}", 'token': token}
+                    crit = await asyncio.to_thread(
+                        collector.targets_from_criteria, cfg['server'], cfg['token'])
+                    cfg['targets'] = crit[:2]
+                    try:
+                        sent = await asyncio.to_thread(collector.run_once, cfg)
+                        _setting_set('collector.manual_result',
+                                     f"готово: отправлено {sent}, целей {len(cfg['targets'])}")
+                    except SystemExit as exc:
+                        _setting_set('collector.manual_result',
+                                     f"блок Авито (код {exc.code})")
+                except Exception as exc:
+                    _setting_set('collector.manual_result', f"ошибка: {str(exc)[:120]}")
+
+            asyncio.create_task(_manual_pass())
+            return _miniapp_json({'ok': True, 'started': True,
+                                  'hint': 'результат в settings: collector.manual_result'})
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
