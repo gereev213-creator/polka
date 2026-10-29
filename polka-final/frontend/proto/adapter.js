@@ -22,8 +22,42 @@ function paintEmpty(count) {
     return (TG && TG.initData) || '';
   }
 
+  // Счётчик активных запросов: пока он больше нуля, показываем полоску сверху
+  let _apiActive = 0;
+  let _apiTimer = null;
+
+  let _loadShownAt = 0;
+
+  function _loadStart() {
+    _apiActive += 1;
+    if (_apiTimer) return;
+    // Показываем сразу: задержка не нужна, а мигание гасим минимальной
+    // длительностью показа ниже
+    let bar = document.getElementById('polkaLoad');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'polkaLoad';
+      bar.innerHTML = '<i></i>';
+      document.body.appendChild(bar);
+    }
+    bar.classList.add('on');
+    _loadShownAt = Date.now();
+  }
+
+  function _loadEnd() {
+    _apiActive = Math.max(0, _apiActive - 1);
+    if (_apiActive > 0) return;
+    const bar = document.getElementById('polkaLoad');
+    if (!bar) return;
+    const shown = Date.now() - _loadShownAt;
+    const hide = () => bar.classList.remove('on');
+    if (shown < 320) setTimeout(hide, 320 - shown);
+    else hide();
+  }
+
   async function api(path, opts) {
     opts = opts || {};
+    _loadStart();
     const headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
     const d = initData();
     if (d) headers['X-Telegram-Init-Data'] = d;
@@ -31,18 +65,23 @@ function paintEmpty(count) {
     try {
       res = await fetch(path, Object.assign({}, opts, { headers }));
     } catch (netErr) {
+      _loadEnd();
       const e = new Error('network');
       e.status = 0;
       throw e;
     }
     if (!res.ok) {
+      _loadEnd();
       const err = new Error('HTTP ' + res.status);
       err.status = res.status;
       throw err;
     }
     try {
-      return await res.json();
+      const data = await res.json();
+      _loadEnd();
+      return data;
     } catch (parseErr) {
+      _loadEnd();
       const e = new Error('bad_json');
       e.status = res.status;
       throw e;
@@ -70,6 +109,20 @@ function paintEmpty(count) {
 
 
   // Отрисовка ленты ровно по макету: .lot > .lotimg + h3 + .pricepill
+  // Пока данные едут — показываем скелетон, а не пустой экран
+  function showLoading(el, rows) {
+    if (!el) return;
+    const n = rows || 3;
+    let html = '<div class="skelWrap">';
+    for (let i = 0; i < n; i += 1) {
+      html += '<div class="skelRow"><span class="skelImg"></span>'
+        + '<span class="skelLines"><i></i><i></i></span></div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+  window.PolkaLoading = showLoading;
+
   function renderLotsManual(items, rawItems) {
     const src = (rawItems && rawItems.length === items.length) ? rawItems : items;
     const html = items.map((l, i) => {
@@ -123,6 +176,7 @@ function paintEmpty(count) {
   }
 
   async function loadLots() {
+    showLoading(document.getElementById('homeGrid'), 4);
     try {
       const data = await api('/api/findings?limit=40');
       const rawItems = data.items || [];
@@ -244,6 +298,7 @@ function paintEmpty(count) {
   }
 
   async function loadSearches() {
+    showLoading(document.getElementById('searchList'), 2);
     try {
       const data = await window.PolkaAPI.api('/api/hunt');
       const items = data.items || [];
@@ -444,6 +499,7 @@ function paintEmpty(count) {
 
   // История: находки, сгруппированные по критериям
   async function loadHistory() {
+    showLoading(document.getElementById('histList'), 3);
     const box = document.getElementById('histList') || document.querySelector('#s-history .scroll');
     if (!box) return;
     try {
@@ -548,6 +604,7 @@ function paintEmpty(count) {
   const fmt = (n) => (n || 0).toLocaleString('ru-RU') + ' \u20BD';
 
   async function loadMyAds() {
+    showLoading(document.getElementById('myList'), 2);
     const box = $('myList');
     if (!box) return;
     const STATUS = {
@@ -624,6 +681,7 @@ function paintEmpty(count) {
 
   // Избранное — ровно как в референсе: фото, название, цена, корзина
   async function loadFavs() {
+    showLoading(document.getElementById('favList'), 2);
     const box = document.getElementById('favList');
     const empty = document.getElementById('favEmpty');
     if (!box) return;
@@ -1729,6 +1787,7 @@ function paintEmpty(count) {
     }
 
     async function loadBoard() {
+      showLoading(document.getElementById('marketGrid'), 4);
       const box = document.getElementById('marketGrid');
       if (!box) return;
       try {
