@@ -312,6 +312,10 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
         'User-Agent': USER_AGENT,
         'Accept': 'text/html,application/xhtml+xml',
         'Accept-Language': 'ru-RU,ru;q=0.9',
+        # Без Referer Авито чаще отвечает 429: запрос выглядит как прямой
+        # заход в поиск без browsing-контекста.
+        'Referer': 'https://www.avito.ru/',
+        'Upgrade-Insecure-Requests': '1',
     })
     # Основной путь: перебираем отпечатки, пока какой-нибудь не пройдёт
     if _cffi is not None:
