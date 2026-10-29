@@ -31368,6 +31368,18 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_cooldown':
+        # Осознанная пауза сбора: дать IP «остыть» после серии блокировок
+        try:
+            minutes = int((body or {}).get('minutes') or 120)
+            minutes = max(5, min(24 * 60, minutes))
+            _setting_set('collector.blocked_until_ts', str(int(_time.time() + minutes * 60)))
+            _setting_set('collector.interval_s', '1800' if minutes >= 60 else '900')
+            _setting_set('collector.blocks_streak', '2')
+            return _miniapp_json({'ok': True, 'pause_minutes': minutes})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
     if action == 'collector_now':
         # Ручной проход в ФОНЕ: сбор двух страниц идёт дольше, чем живёт
         # HTTP-ответ за прокси Amvera, поэтому сразу отвечаем, а результат
