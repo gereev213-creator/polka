@@ -117,26 +117,34 @@ assert PUSHED[0] == ['лот-стр1'] and PUSHED[1] == ['лот-стр2'], PUSH
 assert sent == 2, sent
 print('в) цель на две страницы — отправка для обеих страниц')
 
-# ── г) блокировка: выход с кодом 3, собранное отправлено
+# ── г) один блок не обрывает проход, два подряд — выход с кодом 3
 reset()
-step = {'n': 0}
-
-
-def fetch_blocked_on_second_page(url, **kw):
-    step['n'] += 1
-    if step['n'] == 1:
-        return 'страница-до-блока'
-    raise collect.Blocked('HTTP 439 — доступ ограничен по IP')
-
-
-collect.fetch = fetch_blocked_on_second_page
+collect.fetch = lambda url, **kw: (_ for _ in ()).throw(
+    collect.Blocked('HTTP 439 — доступ ограничен по IP'))
 try:
-    collect.run_once(cfg_with([{'url': T1['url'], 'city': 'Ижевск', 'pages': 2}]))
-    raise AssertionError('ожидали выход с кодом 3')
+    collect.run_once(cfg_with([{'url': T1['url'], 'city': 'Ижевск', 'pages': 3}]))
+    raise AssertionError('ожидали выход с кодом 3 после двух блоков')
 except SystemExit as exc:
     assert exc.code == 3, exc.code
-assert PUSHED and PUSHED[0] == ['лот-страница-до-блока'], PUSHED
-print('г) Blocked — выход с кодом 3, уже собранное отправлено')
+print('г) два блока подряд — выход с кодом 3')
+
+# ── д) один блок при нескольких целях: проход продолжается
+reset()
+step2 = {'n': 0}
+
+
+def fetch_first_blocked(url, **kw):
+    step2['n'] += 1
+    if step2['n'] == 1:
+        raise collect.Blocked('HTTP 439 — доступ ограничен по IP')
+    return 'страница-после-блока'
+
+
+collect.fetch = fetch_first_blocked
+sent = collect.run_once(cfg_with([T1, T2]))
+assert sent == 1, sent
+assert PUSHED and PUSHED[0] == ['лот-страница-после-блока'], PUSHED
+print('д) блок на одной странице — остальные цели собираются')
 
 # ── д) ограничение целей за проход и ротация очереди
 reset()
