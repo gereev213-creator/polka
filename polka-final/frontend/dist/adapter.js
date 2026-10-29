@@ -2455,10 +2455,9 @@ function paintEmpty(count) {
   } catch (e) { }
 })();
 
-/* ── «Поиск лотов»: постоянная кнопка создания и остаток поисков ──────────
-   Кнопка «Новый поиск» лежала вне секции и скрывалась правилом «CTA виден
-   только на своём экране». Теперь кнопка живёт внутри экрана, показывает
-   остаток по тарифу и ведёт на тарифы, если лимит исчерпан. */
+/* ── «Поиск лотов»: создание поиска в шапке и остаток лимита ────────────
+   Две крупные плашки внизу (кнопка + меню) выглядели тяжело, поэтому
+   создание поиска уехало компактной пилюлей в строку переключателей. */
 (function () {
   try {
     let planState = { used: 0, limit: 0, plan: 'trial' };
@@ -2466,22 +2465,25 @@ function paintEmpty(count) {
     function ensure() {
       const screen = document.getElementById('s-searches');
       if (!screen) return;
-      // Убираем старую кнопку-сироту вне секции
-      document.querySelectorAll('body > .bottomCta, #stage > .bottomCta').forEach((el) => {
-        if (!el.closest('.screen')) el.style.display = 'none';
-      });
-      let bar = document.getElementById('searchCta');
-      if (!bar) {
-        bar = document.createElement('div');
-        bar.id = 'searchCta';
-        bar.style.cssText = 'flex:none;padding:8px 14px max(10px,env(safe-area-inset-bottom));'
-          + 'background:var(--bg)';
-        bar.innerHTML = '<div id="searchLeft" style="font-size:11px;font-weight:700;color:#5C6E86;'
-          + 'text-align:center;margin-bottom:6px;display:none"></div>'
-          + '<button class="bigbtn" id="searchAdd" style="width:100%;height:50px;font-size:14px">'
-          + 'Создать поиск</button>';
-        screen.appendChild(bar);
-        bar.querySelector('#searchAdd').addEventListener('click', () => {
+      // Убираем прежнюю нижнюю плашку
+      const oldBar = document.getElementById('searchCta');
+      if (oldBar) oldBar.remove();
+
+      const seg = screen.querySelector('.seg');
+      if (!seg) return;
+      seg.style.display = 'flex';
+      seg.style.alignItems = 'center';
+      seg.style.gap = '6px';
+
+      let btn = document.getElementById('searchAdd');
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.id = 'searchAdd';
+        btn.style.cssText = 'margin-left:auto;height:32px;padding:0 14px;border:0;'
+          + 'border-radius:999px;background:var(--grad);color:#fff;font-size:11px;'
+          + 'font-weight:800;white-space:nowrap;box-shadow:0 4px 12px rgba(51,115,250,.25)';
+        btn.textContent = '+ Поиск';
+        btn.addEventListener('click', () => {
           const left = planState.limit - planState.used;
           if (planState.limit > 0 && left <= 0) {
             const TG = window.Telegram && window.Telegram.WebApp;
@@ -2494,6 +2496,16 @@ function paintEmpty(count) {
           }
           try { if (typeof window.go === 'function') window.go('newsearch'); } catch (e) { }
         });
+        seg.appendChild(btn);
+      }
+
+      let left = document.getElementById('searchLeft');
+      if (!left) {
+        left = document.createElement('div');
+        left.id = 'searchLeft';
+        left.style.cssText = 'font-size:10.5px;font-weight:700;color:#5C6E86;'
+          + 'text-align:right;margin:2px 2px 6px;display:none';
+        seg.parentElement.insertBefore(left, seg.nextSibling);
       }
       paint();
     }
@@ -2504,8 +2516,7 @@ function paintEmpty(count) {
       const limit = Number(planState.limit || 0);
       const used = Number(planState.used || 0);
       if (planState.plan === 'plus' && limit > 0) {
-        const rest = Math.max(0, limit - used);
-        left.textContent = 'Осталось поисков: ' + rest + ' из ' + limit;
+        left.textContent = 'Осталось поисков: ' + Math.max(0, limit - used) + ' из ' + limit;
         left.style.display = 'block';
       } else {
         left.style.display = 'none';
@@ -2528,7 +2539,7 @@ function paintEmpty(count) {
       const orig = window.go;
       const wrapped = function (name) {
         const r = orig.apply(this, arguments);
-        if (name === 'searches') { setTimeout(ensure, 60); setTimeout(loadPlan, 200); }
+        if (name === 'searches') { setTimeout(ensure, 60); setTimeout(loadPlan, 220); }
         return r;
       };
       wrapped.__searchcta = true;
