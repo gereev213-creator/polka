@@ -29182,6 +29182,11 @@ async def admin_emoji_collect(update: Update, context: ContextTypes.DEFAULT_TYPE
     except Exception as e:
         logger.warning(f"emoji collect: {e}")
 
+def miniapp_link() -> str:
+    """Прямая ссылка на мини-приложение с открытием «Находок»."""
+    return os.environ.get('MINIAPP_LINK', 'https://t.me/polkalotapp?startapp=home')
+
+
 async def _fod_send_raw(photo: str, caption: str) -> Dict:
     """Отправка в канал напрямую через Bot API — не зависит от объекта бота."""
     import aiohttp as _ah
@@ -29193,12 +29198,17 @@ async def _fod_send_raw(photo: str, caption: str) -> Dict:
                 data.add_field('chat_id', str(ADMIN_CHANNEL_ID))
                 data.add_field('caption', caption)
                 data.add_field('parse_mode', 'HTML')
+                data.add_field('reply_markup', json.dumps(
+                    {'inline_keyboard': [[{'text': 'Открыть ПОЛКУ', 'url': miniapp_link()}]]},
+                    ensure_ascii=False))
                 data.add_field('photo', photo)
                 async with sess.post(base + '/sendPhoto', data=data) as r:
                     j = await r.json(content_type=None)
                     if j.get('ok'):
                         return {'ok': True, 'message_id': j['result']['message_id']}
-            payload = {'chat_id': ADMIN_CHANNEL_ID, 'text': caption, 'parse_mode': 'HTML'}
+            payload = {'chat_id': ADMIN_CHANNEL_ID, 'text': caption, 'parse_mode': 'HTML',
+                       'reply_markup': {'inline_keyboard': [
+                           [{'text': 'Открыть ПОЛКУ', 'url': miniapp_link()}]]}}
             async with sess.post(base + '/sendMessage', json=payload) as r:
                 j = await r.json(content_type=None)
                 return {'ok': bool(j.get('ok')), 'message_id': (j.get('result') or {}).get('message_id'),
@@ -29268,15 +29278,19 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
             sent = None
             if photo:
                 try:
-                    sent = await bot.send_photo(chat_id=ADMIN_CHANNEL_ID, photo=photo,
-                                                caption=caption, parse_mode='HTML',
-                                                caption_entities=cap_entities or None)
+                    sent = await bot.send_photo(
+                        chat_id=ADMIN_CHANNEL_ID, photo=photo, caption=caption,
+                        parse_mode='HTML', caption_entities=cap_entities or None,
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]]))
                 except Exception as e:
                     logger.warning(f"fod photo failed: {e}")
             if sent is None:
-                sent = await bot.send_message(chat_id=ADMIN_CHANNEL_ID, text=caption,
-                                              parse_mode='HTML', entities=cap_entities or None,
-                                              disable_web_page_preview=False)
+                sent = await bot.send_message(
+                    chat_id=ADMIN_CHANNEL_ID, text=caption, parse_mode='HTML',
+                    entities=cap_entities or None, disable_web_page_preview=False,
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton('Открыть ПОЛКУ', url=miniapp_link())]]))
             sent_id = getattr(sent, 'message_id', None)
         else:
             raw = await _fod_send_raw(photo, caption)
