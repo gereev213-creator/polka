@@ -571,6 +571,13 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 #s-searches{display:flex;flex-direction:column}
 #s-searches .scroll{flex:1 1 auto;min-height:0;overflow-y:auto;padding-bottom:8px!important}
 
+
+/* История: строка и стрелка аналитики */
+#s-history .hrow{cursor:pointer;align-items:center;gap:10px;display:flex;padding:8px 0;
+  border-bottom:1px solid #EDF3FB}
+#s-history .hrow:last-child{border-bottom:0}
+#s-history .hrow .chev{width:32px;height:32px;border:0;border-radius:50%;background:#E3EDFD;
+  color:#3373FA;display:grid;place-items:center;flex:none}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -801,8 +808,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029150643"></script>
-<script src="adapter.js?v=20261029150643"></script><script src="payments.js?v=20261029150643"></script><script src="admin.js?v=20261029150643"></script><script src="keyboard.js?v=20261029150643"></script><script src="telegram-safe.js?v=20261029150643"></script><script>
+</script><script src="telegram-web-app.js?v=20261029151820"></script>
+<script src="adapter.js?v=20261029151820"></script><script src="payments.js?v=20261029151820"></script><script src="admin.js?v=20261029151820"></script><script src="keyboard.js?v=20261029151820"></script><script src="telegram-safe.js?v=20261029151820"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;

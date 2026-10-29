@@ -457,16 +457,22 @@ function paintEmpty(count) {
           'Пока нет находок. Как только появятся — будут здесь.</div>';
         return;
       }
+      // Строка открывает объявление на Авито, стрелка — аналитику
       const rows = items.map((a) => {
-        const ph = a.photos ? String(a.photos).split(',')[0] : '';
-        const bg = ph && ph.startsWith('http') ? `style="background-image:url('${ph}')"` : '';
-        return `<button class="hrow" data-open="${a.id}">
+        const photos = Array.isArray(a.photo_urls) ? a.photo_urls : (Array.isArray(a.photos) ? a.photos : []);
+        const ph = photos[0] || '';
+        const bg = ph ? `style="background-image:url('${ph}')"` : '';
+        const url = String(a.url || a.source_url || '');
+        return `<div class="hrow" data-hist-open="${a.id}" data-url="${url}">
           <span class="hth" ${bg}>${ph ? '' : 'нет фото'}</span>
           <span class="who"><b>${(a.title || '').slice(0, 34)}</b>
           <span class="hp">${fmt(a.price)}</span></span>
-          <span class="chev"><svg width="12" height="12"><use href="#i-d"/></svg></span>
-        </button>`;
+          <button class="chev" data-analyze="${a.id}" aria-label="Аналитика">
+            <svg width="12" height="12"><use href="#i-d"/></svg>
+          </button>
+        </div>`;
       }).join('');
+      window.__histItems = items;
       const c = (crits.items || [])[0];
       box.innerHTML = `<div class="card group">
         <div class="ghead"><h3>${c ? (c.query || 'находки') : 'находки'}</h3>
@@ -2547,5 +2553,117 @@ function paintEmpty(count) {
     };
     setTimeout(wrap, 900);
     setInterval(ensure, 1500);
+  } catch (e) { }
+})();
+
+/* ── История: переход в объявление и аналитика по лоту ───────────────────
+   Тап по строке открывает объявление на Авито, тап по стрелке — разбор:
+   насколько цена ниже рынка, сколько висит, сколько просмотров и в избранном. */
+(function () {
+  try {
+    function openUrl(url) {
+      if (!url) return;
+      const TG = window.Telegram && window.Telegram.WebApp;
+      try { if (TG && TG.openLink) { TG.openLink(url); return; } } catch (e) { }
+      try {
+        // Надёжнее window.open: не блокируется как всплывающее окно
+        const a = document.createElement('a');
+        a.href = url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        return;
+      } catch (e) { }
+      window.location.href = url;
+    }
+
+    function money(n) {
+      return Number(n || 0).toLocaleString('ru-RU') + ' \u20BD';
+    }
+
+    function daysAgo(stamp) {
+      if (!stamp) return null;
+      const d = new Date(String(stamp));
+      if (isNaN(d.getTime())) return null;
+      const diff = Math.floor((Date.now() - d.getTime()) / 86400000);
+      return diff < 0 ? 0 : diff;
+    }
+
+    function sheet(item) {
+      const price = Number(item.price || 0);
+      const median = Number(item.market_median || 0);
+      const disc = Number(item.discount_percent || 0);
+      const days = daysAgo(item.published_at || item.created_at);
+      const views = Number(item.views || 0);
+      const favs = Number(item.favorites_count || 0);
+      const seller = item.seller || {};
+      const rows = [];
+      rows.push(['Цена', money(price)]);
+      if (median > 0) rows.push(['Медиана рынка', money(median)]);
+      if (disc > 0) rows.push(['Выгода', '−' + disc + '% · ' + money(Math.max(0, median - price))]);
+      if (days !== null) rows.push(['Опубликовано', days === 0 ? 'сегодня' : days + ' дн. назад']);
+      if (item.city) rows.push(['Город', String(item.city)]);
+      if (item.condition) rows.push(['Состояние', String(item.condition)]);
+      if (seller.name || seller.type) {
+        rows.push(['Продавец', (seller.type === 'company' ? 'Магазин' : 'Частное лицо')
+          + (seller.name ? ' · ' + seller.name : '')]);
+      }
+      rows.push(['Просмотров в ПОЛКЕ', String(views)]);
+      rows.push(['В избранном', String(favs)]);
+
+      let verdict = 'Цена в рынке — можно смотреть спокойно.';
+      if (disc >= 20) verdict = 'Цена заметно ниже рынка — стоит писать продавцу сразу.';
+      else if (disc >= 10) verdict = 'Хорошая выгода: ниже рынка на ' + disc + '%.';
+      else if (disc > 0) verdict = 'Небольшая выгода — торг уместен.';
+      else if (median > 0 && price > median) verdict = 'Дороже медианы — торгуйтесь или ищите дальше.';
+
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;background:rgba(20,40,70,.45);'
+        + 'display:flex;align-items:flex-end';
+      wrap.innerHTML = '<div style="background:#fff;width:100%;max-height:82vh;overflow:auto;'
+        + 'border-radius:24px 24px 0 0;padding:18px 16px 26px;font:15px system-ui;color:#1F2A37">'
+        + '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+        + '<b style="font-size:15px">Аналитика лота</b>'
+        + '<button id="aClose" style="width:32px;height:32px;border:0;border-radius:50%;'
+        + 'background:#E3EDFD;color:#3373FA;font-size:15px">✕</button></div>'
+        + '<div style="font-weight:800;font-size:14px;margin-bottom:10px">'
+        + String(item.title || '').slice(0, 60) + '</div>'
+        + rows.map((r) => `<div style="display:flex;justify-content:space-between;gap:12px;`
+          + `padding:8px 0;border-bottom:1px solid #EDF3FB;font-size:13px">`
+          + `<span style="color:#5C6E86">${r[0]}</span>`
+          + `<span style="font-weight:800;text-align:right">${r[1]}</span></div>`).join('')
+        + `<div style="margin-top:14px;padding:12px;border-radius:14px;background:#EAF1FE;`
+        + `font-size:12.5px;line-height:1.4;color:#20509B;font-weight:700">${verdict}</div>`
+        + '</div>';
+      document.body.appendChild(wrap);
+      wrap.addEventListener('click', (e) => { if (e.target === wrap) wrap.remove(); });
+      const close = wrap.querySelector('#aClose');
+      if (close) close.addEventListener('click', () => wrap.remove());
+    }
+
+    document.addEventListener('click', (e) => {
+      const analyze = e.target.closest && e.target.closest('[data-analyze]');
+      if (analyze) {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = analyze.getAttribute('data-analyze');
+        const items = window.__histItems || [];
+        const item = items.find((x) => String(x.id) === String(id));
+        if (item) sheet(item);
+        return;
+      }
+      const row = e.target.closest && e.target.closest('[data-hist-open]');
+      if (row) {
+        e.preventDefault();
+        const id = row.getAttribute('data-hist-open');
+        const url = row.getAttribute('data-url') || '';
+        if (url) { openUrl(url); return; }
+        const items = window.__histItems || [];
+        const item = items.find((x) => String(x.id) === String(id));
+        if (item && window.PolkaProductData) window.PolkaProductData(item);
+      }
+    }, true);
   } catch (e) { }
 })();
