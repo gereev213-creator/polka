@@ -80,7 +80,7 @@ crit = {'search_path': f'moskva/telefony/apple-{TOKEN}', 'filters': '&f=ASgBAQIC
         'user': '1', 'search_q': 'iphone 14 pro', 'min_price': 0, 'max_price': 50000}
 u = collect.link_search_url(crit)
 check('сборщик: адрес без глубокого пути и без фильтров',
-      u.startswith('https://www.avito.ru/moskva/telefony?')
+      u.startswith('https://www.avito.ru/all/telefony?')
       and 'f=' not in u and 'radius=' not in u and 'user=' not in u
       and 'cd=1' not in u and 'pmax=50000' in u and 's=104' in u, u)
 check('сборщик: пустые pmin не попадают', 'pmin=' not in u, u)
