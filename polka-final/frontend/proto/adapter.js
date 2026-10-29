@@ -724,22 +724,9 @@ function paintEmpty(count) {
     }
   }
 
-  // Жёсткая проверка: любая попытка уйти с экрана входа без авторизации
-  // возвращает обратно на приветствие.
-  const wrapGoGate = () => {
-    if (typeof window.go !== 'function' || window.go.__gate) return;
-    const orig = window.go;
-    const wrapped = function (name) {
-      if (!authorized && !['welcome', 'telegram', 'email', 'code', 'done'].includes(name)) {
-        return orig.call(this, 'welcome');
-      }
-      return orig.apply(this, arguments);
-    };
-    wrapped.__gate = true;
-    window.go = wrapped;
-  };
-  document.addEventListener('DOMContentLoaded', wrapGoGate);
-  setTimeout(wrapGoGate, 600);
+  // Экран приветствия и входа больше не используется: в мини-приложении
+  // сессия Telegram приходит сама, а гейт перехватывал переходы и показывал
+  // «Добро пожаловать!» вместо нужного раздела (в том числе по deep link).
   window.PolkaGate = gate;
 
   // Вход через Telegram: внутри мини-приложения сессия уже есть — идём дальше
@@ -2183,5 +2170,33 @@ function paintEmpty(count) {
     }, 250);
     document.addEventListener('DOMContentLoaded', () => setTimeout(jump, 120));
     window.__polkaJump = jump;
+  } catch (e) { }
+})();
+
+/* ── Приветственный экран и вход убраны из потока ──────────────────────── */
+(function () {
+  try {
+    const HIDE = ['welcome', 'telegram', 'email', 'code', 'done', 'loading'];
+    const patch = () => {
+      if (typeof window.show !== 'function' || window.show.__noWelcome) return;
+      const orig = window.show;
+      const wrapped = function (id) {
+        const target = HIDE.includes(String(id)) ? 'home' : id;
+        return orig.call(this, target);
+      };
+      wrapped.__noWelcome = true;
+      window.show = wrapped;
+    };
+    const ensureHome = () => {
+      const active = (document.querySelector('.screen.active') || {}).id || '';
+      if (['s-welcome', 's-telegram', 's-email', 's-code', 's-done', 's-loading'].includes(active)) {
+        try { if (typeof window.go === 'function') window.go('home', true); } catch (e) { }
+      }
+    };
+    document.addEventListener('DOMContentLoaded', () => {
+      patch(); ensureHome();
+      setTimeout(() => { patch(); ensureHome(); }, 300);
+      setTimeout(() => { patch(); ensureHome(); }, 1200);
+    });
   } catch (e) { }
 })();
