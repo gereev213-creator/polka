@@ -4,14 +4,8 @@
 
 // Пустая лента не должна оставлять голый экран
 function paintEmpty(count) {
-  const html = `<div class="card" style="padding:22px 18px;text-align:center;grid-column:1/-1">
-    <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
-    <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
-      Создайте поиск — и мы пришлём объявление, когда продавец разместит подходящее.
-    </div>
-    <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
-            onclick="go('newsearch')">Создать поиск</button>
-  </div>`;
+  // Пусто — просто текст, без плашки и кнопки
+  const html = '<div class="emptyState">Пока пусто</div>';
   if (count) return;
   ['homeGrid'].forEach((id) => {
     const el = document.getElementById(id);
@@ -1674,12 +1668,8 @@ function paintEmpty(count) {
         const data = await window.PolkaAPI.api('/api/ads?limit=40');
         const items = data.items || [];
         if (!items.length) {
-          box.innerHTML = `<div class="card" style="padding:22px;text-align:center;grid-column:1/-1">
-            <div style="font-size:14px;font-weight:870;margin-bottom:6px">Пока пусто</div>
-            <div style="font-size:11px;color:#7A8CA3;line-height:1.4;margin-bottom:14px">
-              Здесь появятся объявления людей после модерации.</div>
-            <button class="bigbtn" style="height:44px;font-size:12px;max-width:220px;margin:0 auto"
-                    onclick="go('post')">Разместить объявление</button></div>`;
+          // Пусто — только текст, без плашки
+          box.innerHTML = '<div class="emptyState">Пока пусто</div>';
           return;
         }
         box.innerHTML = items.map((a) => {
