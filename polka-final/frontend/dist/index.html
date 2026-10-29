@@ -535,6 +535,32 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 /* Пусто в ленте и барахолке: просто текст, без карточки */
 .emptyState{grid-column:1/-1;text-align:center;color:var(--mut);
   font-size:14px;font-weight:800;padding:28px 12px}
+
+/* Звезда на аватаре для подписчиков Плюс */
+#avatarStar{position:absolute;top:-6px;right:-10px;width:34px;height:34px;border-radius:50%;
+  background:var(--grad);color:#fff;display:none;place-items:center;
+  box-shadow:0 6px 16px rgba(51,115,250,.35);border:3px solid var(--bg);z-index:3}
+#avatarStar.on{display:grid}
+#avatarStar svg{width:18px;height:18px;fill:#fff}
+#avatarCircle{position:relative}
+/* Плашка «до 01.01.2027» рядом с тарифом */
+#planUntil{display:none;align-items:center;justify-content:center;height:26px;padding:0 12px;
+  border-radius:999px;background:var(--grad);color:#fff;font-size:10.5px;font-weight:800;
+  letter-spacing:.02em;white-space:nowrap;margin-left:8px}
+#planUntil.on{display:inline-flex}
+
+/* Бейдж-звезда у подписчиков: синий кружок справа сверху аватара */
+.avatar{position:relative}
+.avatar .avbadge{position:absolute;top:-4px;right:-10px;width:34px;height:34px;border-radius:50%;
+  background:var(--grad);color:#fff;display:none;place-items:center;border:3px solid var(--bg);
+  box-shadow:0 6px 16px rgba(51,115,250,.35);z-index:3}
+.avatar .avbadge.on{display:grid}
+.avatar .avbadge svg{width:18px;height:18px;fill:#fff}
+/* Плашка «до 01.01.2027» рядом с тарифом */
+#planUntil{display:none;align-items:center;justify-content:center;height:26px;padding:0 12px;
+  border-radius:999px;background:var(--grad);color:#fff;font-size:10.5px;font-weight:800;
+  letter-spacing:.02em;white-space:nowrap;margin-left:8px}
+#planUntil.on{display:inline-flex}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -646,7 +672,7 @@ html,body{overflow:hidden!important;height:100%!important;position:fixed!importa
 <div class="card menu">
 <button class="mrow" onclick="go('myads')"><span class="grow">Мои объявления</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('favorites')"><span class="grow">Избранное</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
-<button class="mrow" onclick="go('tariffs')"><span class="grow">Тарифы</span><span class="datebadge" id="datebadge"></span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
+<button class="mrow" onclick="go('tariffs')"><span class="grow">Тарифы</span><span id="planUntil"></span><span class="datebadge" id="datebadge"></span><span class="grow"></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('post')"><span class="grow">Разместить объявление</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('referrals')"><span class="grow">Реферальная программа</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" data-admin="1" id="modRow" style="display:none" onclick="go('moderation')"><span class="grow">Модерация <span id="modCount"></span></span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" data-admin="1" id="adminRow" style="display:none" onclick="go('admin')"><span class="grow">Админка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" id="supportRow" onclick="openSupport()"><span class="grow">Поддержка</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="openLegal('terms')"><span class="grow">Пользовательское соглашение</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button><button class="mrow" onclick="openLegal('refund')"><span class="grow">Оплата и возврат</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
@@ -765,8 +791,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261029132718"></script>
-<script src="adapter.js?v=20261029132718"></script><script src="payments.js?v=20261029132718"></script><script src="admin.js?v=20261029132718"></script><script src="keyboard.js?v=20261029132718"></script><script src="telegram-safe.js?v=20261029132718"></script><script>
+</script><script src="telegram-web-app.js?v=20261029133936"></script>
+<script src="adapter.js?v=20261029133936"></script><script src="payments.js?v=20261029133936"></script><script src="admin.js?v=20261029133936"></script><script src="keyboard.js?v=20261029133936"></script><script src="telegram-safe.js?v=20261029133936"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;

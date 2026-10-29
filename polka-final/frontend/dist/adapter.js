@@ -2264,3 +2264,82 @@ function paintEmpty(count) {
     });
   } catch (e) { }
 })();
+
+/* ── Оформление подписки: звезда на аватаре и дата рядом с тарифами ──────
+   Аватар перезаписывается вёрсткой профиля (внутрь ставится буква), поэтому
+   звезду держим отдельным элементом поверх круга. */
+(function () {
+  try {
+    let paidNow = false;
+
+    function ensureStar() {
+      const circle = document.getElementById('avatarCircle');
+      if (!circle) return null;
+      const host = circle.parentElement;
+      if (!host) return null;
+      host.style.position = host.style.position || 'relative';
+      let star = document.getElementById('plusStar');
+      if (!star) {
+        star = document.createElement('span');
+        star.id = 'plusStar';
+        star.style.cssText = 'position:absolute;width:34px;height:34px;border-radius:50%;'
+          + 'background:var(--grad);color:#fff;display:none;place-items:center;'
+          + 'border:3px solid var(--bg);box-shadow:0 6px 16px rgba(51,115,250,.35);z-index:5';
+        star.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="#fff">'
+          + '<path d="M12 2l2.2 6.1L20.4 10l-6.2 1.9L12 18l-2.2-6.1L3.6 10l6.2-1.9L12 2Z"/></svg>';
+        host.appendChild(star);
+      }
+      // Ставим по геометрии аватара
+      const cr = circle.getBoundingClientRect();
+      const hr = host.getBoundingClientRect();
+      star.style.left = Math.round(cr.right - hr.left - 26) + 'px';
+      star.style.top = Math.round(cr.top - hr.top - 6) + 'px';
+      star.style.display = paidNow ? 'grid' : 'none';
+      return star;
+    }
+
+    function paint(user) {
+      const plan = String((user && user.plan) || 'trial');
+      paidNow = plan !== 'trial' && plan !== 'free' && !!plan;
+      ensureStar();
+      const until = document.getElementById('planUntil');
+      if (until) {
+        const raw = String((user && user.plan_until) || '');
+        let label = '';
+        if (paidNow && raw) {
+          const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+          if (m) label = 'до ' + m[3] + '.' + m[2] + '.' + m[1];
+        }
+        until.textContent = label;
+        until.classList.toggle('on', !!label);
+      }
+    }
+
+    const load = async () => {
+      try {
+        const data = await window.PolkaAPI.api('/api/me');
+        paint(data && data.user);
+      } catch (e) { }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => setTimeout(load, 700));
+    setTimeout(load, 1600);
+    window.addEventListener('resize', ensureStar);
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__pluslook) return;
+      const orig = window.go;
+      const wrapped = function (name) {
+        const r = orig.apply(this, arguments);
+        if (name === 'profile' || name === 'tariffs') {
+          setTimeout(load, 150);
+          setTimeout(ensureStar, 400);
+        }
+        return r;
+      };
+      wrapped.__pluslook = true;
+      window.go = wrapped;
+    };
+    setTimeout(wrap, 800);
+    setInterval(() => { if (paidNow) ensureStar(); }, 1200);
+  } catch (e) { }
+})();

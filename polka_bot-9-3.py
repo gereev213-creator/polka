@@ -32303,6 +32303,24 @@ def _miniapp_parse_price(value) -> int:
 
 
 
+def plan_expires_at(user_id: int) -> str:
+    """Дата окончания подписки (ISO) — для плашки «до 01.01.2027»."""
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT expires_at FROM subscriptions WHERE user_id=? "
+                    "ORDER BY id DESC LIMIT 1", (int(user_id),))
+        row = cur.fetchone()
+        if row and row['expires_at']:
+            return str(row['expires_at'])
+    except Exception:
+        pass
+    try:
+        user = db.get_user(int(user_id)) or {}
+        return str(user.get('subscription_until') or user.get('plan_until') or '')
+    except Exception:
+        return ''
+
+
 def resolve_plan(user_id: int) -> str:
     """Актуальный план: активная подписка важнее поля users.plan.
 
@@ -33805,6 +33823,7 @@ async def api_miniapp_me(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'since': (user.get('registration_date') or '')[:10] if user else '',
         # Админка и аватар в приложении
         'plan': resolve_plan(viewer_id),
+        'plan_until': plan_expires_at(viewer_id),
         'is_admin': (viewer_id in ADMIN_USER_IDS
                      or _tg_username_from_init(init_data) in ADMIN_USERNAMES),
         'photo_url': _tg_photo_from_init(init_data) if init_data else '',
