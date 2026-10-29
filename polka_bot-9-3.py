@@ -30020,11 +30020,14 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     человек должен видеть, почему лот не ушёл в чат, а не гадать.
     """
     cursor = db.conn.cursor()
-    statuses = ("hm.status IN ('ready','sent','sending','pending_details','send_failed') "
-                "OR hm.reject_reason = 'price_below_floor'")
+    # В ленте только реальные находки: то, что бот отправил или готов отправить.
+    # Отклонённые сюда не попадают — иначе лента заполнялась чехлами и
+    # лотами, которые отбор не прошли.
+    statuses = "hm.status IN ('ready','sent','sending','pending_details','send_failed')"
     if show_suspect:
-        # Показать подозрительно дешёвые (этап D3) — по запросу ?show_suspect=1
-        statuses = f"({statuses} OR hm.reject_reason = 'price_suspect')"
+        # По запросу ?show_suspect=1 добавляем подозрительно дешёвые
+        statuses = (f"({statuses} OR hm.reject_reason IN "
+                    "('price_suspect','price_below_floor'))")
     # Матч принадлежит пользователю ИЛИ его критерию: после смены аккаунта
     # id в матчах и в критериях может разойтись, и лента оставалась пустой,
     # хотя бот уже прислал находки в чат.
