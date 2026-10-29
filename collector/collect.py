@@ -161,6 +161,26 @@ def _cookies_save() -> None:
         pass
 
 
+def rotate_proxy_session() -> str:
+    """Меняет сессию резидентского прокси (новый IP) и возвращает адрес.
+
+    Провайдеры дают «липкую» сессию параметром _hardsession-XXXX: пока он
+    один и тот же, IP не меняется, и Авито быстро помечает его. Подставляем
+    случайный — следующая попытка идёт уже с другого адреса.
+    """
+    global PROXY
+    import secrets as _secrets
+    cur = str(PROXY or '')
+    if not cur:
+        return ''
+    m = re.search(r'(hardsession-)([^_@/?&]+)', cur)
+    if not m:
+        return cur
+    new_id = _secrets.token_urlsafe(8).replace('-', '').replace('_', '')[:10]
+    PROXY = cur[:m.start(2)] + new_id + cur[m.end(2):]
+    return PROXY
+
+
 def _session_for(profile: str):
     """Сессия для отпечатка: держит cookies между запросами и проходами."""
     if _cffi is None:
@@ -337,9 +357,13 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                     r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
             except Exception as exc:
                 last_error = f"{profile}: {str(exc)[:70]}"
+                rotate_proxy_session()
+                proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
                 continue
             if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
+                rotate_proxy_session()
+                proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
                 # Блокировка: старые cookies могли «запомнить» нас как проблемного
                 # посетителя — сбрасываем и в следующий раз приходим заново.
                 if r.status_code in (403, 429) and sess is not None:
