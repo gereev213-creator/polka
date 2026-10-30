@@ -2840,3 +2840,67 @@ function paintEmpty(count) {
     setTimeout(() => { loadCats(); paintChips(); }, 1500);
   } catch (e) { }
 })();
+
+/* ── Тарифы: «Что даёт Плюс» открывается по стрелке ──────────────────────
+   Раньше подробности лежали прямо под карточкой и растягивали экран.
+   Теперь они живут в шторке: нажал круглую стрелку — открылось. */
+(function () {
+  try {
+    function ensureSheet() {
+      let ov = document.getElementById('plusInfo');
+      if (ov) return ov;
+      ov = document.createElement('div');
+      ov.id = 'plusInfo';
+      ov.className = 'ov';
+      ov.innerHTML = '<div class="sheet plusSheet">'
+        + '<div class="grab"></div>'
+        + '<div class="piHead"><b>Что даёт Плюс</b>'
+        + '<button class="piClose" aria-label="Закрыть">✕</button></div>'
+        + '<div class="piBody"></div></div>';
+      document.body.appendChild(ov);
+      const close = () => ov.classList.remove('show');
+      ov.addEventListener('click', (e) => { if (e.target === ov) close(); });
+      const btn = ov.querySelector('.piClose');
+      if (btn) btn.addEventListener('click', close);
+      return ov;
+    }
+
+    function fill(ov) {
+      const body = ov.querySelector('.piBody');
+      if (!body) return;
+      const src = document.querySelector('#s-tariffs .benefits');
+      if (src) {
+        // Клонируем содержимое и оборачиваем в тот же класс карточки —
+        // иначе стили строк и иконок не применяются и текст слипается.
+        const clone = src.cloneNode(true);
+        const title = clone.querySelector('.bTitle');
+        if (title) title.remove();
+        clone.style.display = 'block';
+        clone.classList.add('card');
+        body.innerHTML = '';
+        body.appendChild(clone);
+        src.style.display = 'none';   // на странице больше не показываем
+      }
+    }
+
+    function open() {
+      const ov = ensureSheet();
+      fill(ov);
+      ov.classList.add('show');
+    }
+
+    document.addEventListener('click', (e) => {
+      const chev = e.target.closest && e.target.closest('#s-tariffs .plus .chev, #termsBtn');
+      if (chev) {
+        e.preventDefault();
+        e.stopPropagation();
+        open();
+      }
+    }, true);
+
+    document.addEventListener('DOMContentLoaded', () => { setTimeout(() => {
+      const src = document.querySelector('#s-tariffs .benefits');
+      if (src) src.style.display = 'none';
+    }, 800); });
+  } catch (e) { }
+})();

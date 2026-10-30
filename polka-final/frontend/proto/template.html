@@ -652,6 +652,23 @@ body.kbd-open #stage{padding-bottom:0!important}
 #s-tariffs .plus .payrow{margin-top:auto;display:flex;align-items:center;
   justify-content:space-between;gap:10px}
 #s-tariffs .plusHint{margin:0!important}
+
+/* Шторка «Что даёт Плюс» */
+#plusInfo{position:fixed;inset:0;z-index:10000;background:rgba(20,40,70,.45);
+  display:none;align-items:flex-end}
+#plusInfo.show{display:flex}
+#plusInfo .plusSheet{background:#fff;width:100%;max-height:82vh;overflow-y:auto;
+  border-radius:26px 26px 0 0;padding:10px 18px 26px;-webkit-overflow-scrolling:touch}
+#plusInfo .piHead{display:flex;align-items:center;justify-content:space-between;margin:6px 0 10px}
+#plusInfo .piHead b{font-size:14px;font-weight:800;color:#5C6E86;letter-spacing:.04em;
+  text-transform:uppercase}
+#plusInfo .piClose{width:32px;height:32px;border:0;border-radius:50%;background:#E3EDFD;
+  color:#3373FA;font-size:14px;font-weight:800}
+#s-tariffs .benefits{display:none!important}
+
+/* В шторке карточка без внешней тени и отступов */
+#plusInfo .piBody .card.benefits{box-shadow:none;padding:0;border-radius:0;
+  background:transparent;margin:0}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -908,8 +925,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261030133008"></script>
-<script src="adapter.js?v=20261030133008"></script><script src="payments.js?v=20261030133008"></script><script src="admin.js?v=20261030133008"></script><script src="keyboard.js?v=20261030133008"></script><script src="telegram-safe.js?v=20261030133008"></script><script>
+</script><script src="telegram-web-app.js?v=20261030133527"></script>
+<script src="adapter.js?v=20261030133527"></script><script src="payments.js?v=20261030133527"></script><script src="admin.js?v=20261030133527"></script><script src="keyboard.js?v=20261030133527"></script><script src="telegram-safe.js?v=20261030133527"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
