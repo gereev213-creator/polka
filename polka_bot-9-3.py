@@ -21130,6 +21130,38 @@ def _title_matches_words(title: str, description: str, query: str) -> bool:
     return False
 
 
+
+# ── Тип товара: шорты не должны находить куртку ─────────────────────────
+# Когда в запросе есть латинский бренд, обязательным словом становился он,
+# а слово-тип («шорты») терялось — и по запросу «шорты carhartt» проходила
+# куртка того же бренда. Здесь сравниваем типы товара.
+HUNT_TYPE_ROOTS = (
+    'шорт', 'куртк', 'пуховик', 'пальто', 'плащ', 'футболк', 'кофт', 'худи',
+    'свитшот', 'рубашк', 'брюк', 'джинс', 'юбк', 'плать', 'комбинезон',
+    'кроссовк', 'ботинк', 'сапог', 'туфл', 'сандал', 'тапочк', 'кед',
+    'фен', 'пылесос', 'утюг', 'телефон', 'смартфон', 'ноутбук', 'планшет',
+    'наушник', 'колонк', 'чехол', 'стекло', 'кабель', 'зарядк', 'монитор',
+    'клавиатур', 'мышь', 'мышк', 'приставк', 'телевизор', 'часы', 'рюкзак',
+)
+
+
+def hunt_type_roots(text: str) -> set:
+    """Какие типы товара упомянуты в тексте."""
+    low = str(text or '').lower().replace('ё', 'е')
+    return {r for r in HUNT_TYPE_ROOTS if r in low}
+
+
+def hunt_type_conflict(query: str, title: str) -> str:
+    """Возвращает тип из заголовка, если он противоречит запросу."""
+    q = hunt_type_roots(query)
+    if not q:
+        return ''
+    t = hunt_type_roots(title)
+    if t and not (t & q):
+        return ','.join(sorted(t))
+    return ''
+
+
 def _query_words_required(query: str) -> list:
     """Какие слова запроса обязательны, а какие — просто уточнение.
 
@@ -22305,6 +22337,15 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # Точность модели для техники: «iPhone 15 Pro» не находит «15 Pro Max»
     # (это другая модель и другая цена), но «найк» по-прежнему находит
     # «Nike Air Max» — уточнители проверяем только в технике.
+    # Тип товара: по запросу «шорты carhartt» не должно приходить «куртка
+    # carhartt». Проверяем ДО аксессуаров: это тоже про подмену товара.
+    try:
+        _tconf = hunt_type_conflict(str(crit.get('query') or ''), title)
+        if _tconf:
+            return no('type_mismatch')
+    except Exception:
+        pass
+
     # Аксессуар вместо товара: «Чехлы на айфон 14 про макс» — не находка
     try:
         if 'ad_is_accessory' in globals() and ad_is_accessory(ad, crit.get('query')):
