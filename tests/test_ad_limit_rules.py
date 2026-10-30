@@ -4,7 +4,8 @@ import os, sys
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC = open(os.path.join(ROOT, 'polka_bot-9-3.py'), encoding='utf-8').read()
 
-i = SRC.index('Лимит лотов') if 'Лимит лотов' in SRC else SRC.index('Без подписки — только одно')
+i = SRC.index('_is_plus = _plan in')
+i = SRC.rfind('\n', 0, i)
 j = SRC.index('photos = body.get', i)
 body = SRC[i:j]
 
