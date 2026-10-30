@@ -33720,19 +33720,18 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
             _plan = str((db.get_user(viewer_id) or {}).get('plan') or 'trial')
         _is_plus = _plan in ('plus', 'pro') or bool(int(cfg_get('ads.free_unlimited') or 0))
         if not _is_plus:
-            _day_start = get_moscow_time().replace(hour=0, minute=0, second=0,
-                                                   microsecond=0).isoformat()
+            # Без подписки — только одно объявление за всё время, «Плюс» —
+            # без ограничений. Считаем ВСЕ объявления пользователя, включая
+            # проданные и снятые: право даётся один раз.
             _cur = db.conn.cursor()
-            _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? "
-                         "AND COALESCE(created_at,'') >= ?", (viewer_id, _day_start))
+            _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=?", (viewer_id,))
             _used = int((_cur.fetchone() or {'c': 0})['c'] or 0)
             if _used >= 1:
                 return _miniapp_json({
                     'ok': False, 'error': 'ad_limit',
-                    'detail': 'Бесплатно можно разместить 1 объявление в сутки. '
+                    'detail': 'Бесплатно можно разместить только одно объявление. '
                               'С «Плюсом» — без ограничений.',
                     'used': _used, 'limit': 1, 'plan': _plan,
-                    'next_day': True,
                 }, status=402)
     except Exception as e:
         logger.warning(f'ad limit check: {e}')

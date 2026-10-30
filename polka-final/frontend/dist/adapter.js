@@ -1788,7 +1788,7 @@ function paintEmpty(count) {
       if (code === '402' || code === '403') {
         // Показываем текст сервера («1 объявление в сутки…») и ведём на тарифы
         const detail = (window.__lastPostError && window.__lastPostError.detail)
-          || 'Бесплатно можно разместить 1 объявление в сутки. С «Плюсом» — без ограничений.';
+          || 'Бесплатно можно разместить только одно объявление. С «Плюсом» — без ограничений.';
         const wrap = document.createElement('div');
         wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-items:center;'
           + 'background:rgba(20,40,70,.45);padding:24px';
