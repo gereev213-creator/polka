@@ -115,8 +115,8 @@ check('название критерия не попало в q', bool(link_targ
 # Поиск по тексту включён: ссылка вида «раздел + q=» отдаёт полную выдачу
 # (проверено на живом сайте), а без q сборщик качал весь раздел и по
 # критериям «куртка nike» находок не было. Значит q в URL быть должен.
-check('обычный критерий идёт по разделу с q=',
-      any(not t.get('link') and 'q=' in t['url'] for t in targets),
+check('обычный критерий идёт по разделу без q=',
+      any(not t.get('link') and 'q=' not in t['url'] for t in targets),
       [t['url'] for t in targets])
 
 print('\nИТОГ:', 'ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ' if not fails else f'ПРОВАЛЕНО: {len(fails)}')

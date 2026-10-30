@@ -54,7 +54,10 @@ from html.parser import HTMLParser
 # ссылка «раздел + q=» отдаёт полную выдачу (3,4 МБ карточек), в отличие от
 # «/all?q=» без раздела. Без q сборщик качал весь раздел и по критериям
 # «куртка nike» находок не было вовсе.
-SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '1') != '0'
+# Поиск по словам (q=) Авито закрывает почти всегда (439) — проверено
+# 30.10.2026 на трёх IP. Поэтому по умолчанию идём по РАЗДЕЛУ, а слова
+# критерия отсеиваются на сервере. Так работает то, что площадка отдаёт.
+SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') != '0'
 
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
@@ -1668,7 +1671,11 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     # считает признаком бота и отвечает 439 даже через резидентский прокси.
     # Оставляем путь раздела, слова запроса из ссылки, сортировку и цену.
     query = " ".join(str(crit.get('search_q') or crit.get('query') or '').split())[:80]
-    template = "https://www.avito.ru/{path}?q={query}&s=104&pmin={pmin}&pmax={pmax}"
+    # С q= Авито отвечает 439 почти всегда, поэтому по умолчанию открываем
+    # раздел. Слова применяет сервер при отборе.
+    template = ("https://www.avito.ru/{path}?q={query}&s=104&pmin={pmin}&pmax={pmax}"
+                if SEARCH_BY_QUERY else
+                "https://www.avito.ru/{path}?s=104&pmin={pmin}&pmax={pmax}")
     url = (template.replace('{path}', path)
            .replace('{query}', quote_plus(query))
            .replace('{pmin}', str(pmin) if pmin else '')

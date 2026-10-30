@@ -73,8 +73,8 @@ u = collect.link_search_url({'search_path': 'moskva/telefony/apple/iphone_15_pro
                              'max_price': 50000, 'min_price': 0})
 check('цель: глубокий путь обрезан до раздела, город заменён на all',
       '/all/telefony?' in u, u)
-check('цель: q в адрес попадает, служебных параметров нет',
-      'q=iphone' in u and 'cd=1' not in u and 'localPriority' not in u
+check('цель: адрес без служебных параметров',
+      'q=' not in u and 'cd=1' not in u and 'localPriority' not in u
       and 'user=' not in u and 'f=' not in u, u)
 check('цель: цена в адресе', 'pmax=50000' in u, u)
 check('цель: опасный путь отклоняется', collect.link_search_url({'search_path': '../etc/passwd'}) == '')
