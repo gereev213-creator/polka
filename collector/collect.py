@@ -587,8 +587,11 @@ def proxy_exit_ip() -> str:
     proxies = {'http': PROXY, 'https': PROXY}
     try:
         if _cffi is not None:
+            # Профиль берём из рабочего пула: 'safari' как имя отпечатка
+            # curl_cffi не знает и падает с ошибкой.
+            _profile = IMPERSONATE if IMPERSONATE in IMPERSONATE_POOL else IMPERSONATE_POOL[1]
             r = _cffi.get('https://api.ipify.org', proxies=proxies,
-                          impersonate=IMPERSONATE, timeout=25)
+                          impersonate=_profile, timeout=25)
             return (r.text or '').strip()
         return ''
     except Exception as exc:
