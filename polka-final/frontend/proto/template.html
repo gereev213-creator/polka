@@ -685,6 +685,12 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 .scacts{display:flex;align-items:center;gap:6px}
 .delcrit{width:34px;height:34px;border:0;border-radius:50%;background:#FDECEA;
   display:grid;place-items:center}
+
+/* Форма нового поиска: чипы не должны наезжать на подсказку */
+#searchForm .field{margin-bottom:12px}
+#searchForm .field:last-of-type{margin-bottom:16px}
+#searchForm .forecast{margin-top:6px}
+#searchForm .chips{display:flex;flex-wrap:wrap;gap:6px;row-gap:8px}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -810,8 +816,11 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
               <button type="button" class="chip" data-disc="30">30%</button>
             </div>
           </div>
-          <div class="chips" style="margin:2px 0 0">
-            <button type="button" class="chip" id="photoChip" data-photo="1">Только с фото</button>
+          <div class="field">
+            <label>Фото</label>
+            <div class="chips" style="margin-top:0">
+              <button type="button" class="chip" id="photoChip" data-photo="1">Только с фото</button>
+            </div>
           </div>
           <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.
             <span class="forecast-note">Сборщик может ошибаться из-за блокировки трафика Авито —
@@ -986,8 +995,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261030235720"></script>
-<script src="adapter.js?v=20261030235720"></script><script src="payments.js?v=20261030235720"></script><script src="admin.js?v=20261030235720"></script><script src="keyboard.js?v=20261030235720"></script><script src="telegram-safe.js?v=20261030235720"></script><script>
+</script><script src="telegram-web-app.js?v=20261031000401"></script>
+<script src="adapter.js?v=20261031000401"></script><script src="payments.js?v=20261031000401"></script><script src="admin.js?v=20261031000401"></script><script src="keyboard.js?v=20261031000401"></script><script src="telegram-safe.js?v=20261031000401"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
