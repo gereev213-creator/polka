@@ -27187,7 +27187,12 @@ def cleanup_findings() -> Dict:
                 break
             time.sleep(0.05)
     except Exception as e:
-        logger.warning(f"cleanup findings: {e}")
+        # «not an error» — обычная ситуация, когда чистить нечего.
+        _msg = str(e)
+        if 'not an error' in _msg:
+            logger.debug(f"cleanup findings: {_msg}")
+        else:
+            logger.warning(f"cleanup findings: {_msg}")
     if removed:
         logger.info(f"Чистка базы: удалено старых находок {removed} (старше {HUNT_KEEP_DAYS} дн.)")
         # K4: пересчёт — фоновой задачей, а не в этом вызове
@@ -33615,6 +33620,10 @@ async def api_miniapp_ads_list(request: aiohttp_web.Request) -> aiohttp_web.Resp
     condition = request.query.get('condition', '')
     delivery = request.query.get('delivery', '')
     sort = request.query.get('sort', 'date_desc')
+    # «Только с фото» из фильтров барахолки. Переменная терялась при
+    # переносе кода — /api/ads падал с «name 'with_photo' is not defined»,
+    # и барахолка показывала пустоту.
+    with_photo = 1 if str(request.query.get('with_photo') or '') in ('1', 'true', 'yes') else 0
     try:
         limit = min(max(int(request.query.get('limit', 20) or 20), 1), 100)
     except ValueError:
