@@ -31682,6 +31682,19 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_stats':
+        # Сколько проходов сбора реально получили страницу, а сколько
+        # упёрлись в блокировку. Нужно, чтобы решить вопрос с прокси по факту.
+        try:
+            _ok = int(cfg_get('collector.pass_ok') or 0)
+            _bl = int(cfg_get('collector.pass_blocked') or 0)
+            _total = _ok + _bl
+            return _miniapp_json({'ok': True, 'passes_ok': _ok, 'passes_blocked': _bl,
+                                  'share_ok': round(100.0 * _ok / _total, 1) if _total else 0.0,
+                                  'used_mb': str(cfg_get('collector.used_mb') or '0')})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
     if action == 'cleanup_bad_matches':
         # Перепроверяем отправленные находки на слова запроса: LLM раньше
         # подтверждала всё подряд, и в ленту попадали чужие вещи.
@@ -31730,12 +31743,6 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 _setting_set('proxy.api_key', key)
                 collector.PROXY_API_KEY = key
                 return _miniapp_json({'ok': True, 'saved': True, 'has_proxy': bool(_pv)})
-
-            if action == 'collector_stats':
-                return _miniapp_json({'ok': True,
-                                      'ok': int(cfg_get('collector.pass_ok') or 0),
-                                      'blocked': int(cfg_get('collector.pass_blocked') or 0),
-                                      'used_mb': str(cfg_get('collector.used_mb') or '0')})
 
             if action == 'proxy_rotate':
                 before = await asyncio.to_thread(collector.proxy_exit_ip)
