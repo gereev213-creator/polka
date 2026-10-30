@@ -20651,6 +20651,22 @@ async def _collector_inline_loop():
                 logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
                 await asyncio.sleep(min(300, max(60, left * 60)))
                 continue
+            # Часовая квота запросов к Авито: чаще — гарантированный 429.
+            # Считаем по окну в 60 минут и храним в настройках.
+            try:
+                _hour_key = get_moscow_time().strftime('%Y-%m-%dT%H')
+                if str(_setting_get('collector.req_hour', '')) != _hour_key:
+                    _setting_set('collector.req_hour', _hour_key)
+                    _setting_set('collector.req_count', '0')
+                _req_count = int(cfg_get('collector.req_count') or 0)
+            except Exception:
+                _req_count = 0
+            _req_cap = int(cfg_get('collector.req_cap') or 4)
+            if _req_count >= _req_cap:
+                logger.info(f"Сбор ждёт: исчерпана часовая квота {_req_cap} запросов к Авито")
+                await asyncio.sleep(600)
+                continue
+
             # Дневной лимит трафика: пробный прокси на 300 МБ, поэтому
             # считаем расход и останавливаемся, когда дневная норма выбрана.
             try:
@@ -20726,7 +20742,7 @@ async def _collector_inline_loop():
                     prev = int(cfg_get('collector.blocked_until_ts') or 0)
                     # Пауза короче: одиночные блоки по конкретным URL теперь
                     # не роняют проход, поэтому 90 минут простоя не нужны.
-                    wait_min = 15 if not prev or prev < _time.time() else 45
+                    wait_min = 30 if not prev or prev < _time.time() else 90
                     # Если блоки идут подряд, IP уже «замечен» — нужен
                     # длинный отдых, иначе площадка держит блок сутками.
                     try:
@@ -20757,6 +20773,10 @@ async def _collector_inline_loop():
                 pass
             _collector_inline_loop._last_blocked = False
             _setting_set('collector.blocks_streak', '0')
+            try:
+                _setting_set('collector.req_count', str(int(cfg_get('collector.req_count') or 0) + 1))
+            except Exception:
+                pass
             try:
                 _mb = collector.FETCH_BYTES[0] / (1024 * 1024)
                 collector.FETCH_BYTES[0] = 0

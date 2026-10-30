@@ -6,8 +6,8 @@ SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'polka
 
 checks = [
     ("пауза сохраняется в настройке", 'collector.blocked_until_ts' in SRC),
-    ("15 минут при первом блоке", 'wait_min = 15' in SRC),
-    ("45 минут при повторном блоке", 'wait_min = 45' in SRC),
+    ("30 минут при первом блоке", 'wait_min = 30' in SRC),
+    ("90 минут при повторном блоке", 'else 90' in SRC),
     ("проход проверяет паузу", 'Сбор на паузе после блокировки Авито' in SRC),
 ]
 ok = True

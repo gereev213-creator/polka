@@ -353,9 +353,15 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
             order.remove(_WORKING_PROFILE)
             order.insert(0, _WORKING_PROFILE)
         last_error = 'ни один отпечаток не прошёл'
+        # Блок означает «не сейчас»: перебирать четыре отпечатка — это
+        # четыре лишних запроса и более длинный бан. При 429/439 выходим
+        # сразу, максимум одна повторная попытка со сменой IP.
+        max_attempts = int(os.environ.get('POLKA_MAX_ATTEMPTS', '1') or 1)
+        order = order[:max(1, max_attempts)]
         for profile in order:
             # Сессия нужна, чтобы cookies жили между запросами и проходами
             sess = _session_for(profile)
+            _mark_request()
             try:
                 if sess is not None:
                     r = sess.get(url, timeout=timeout, proxies=proxies)
@@ -425,6 +431,29 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
 
 # Сколько байт скачано за проход: прокси у нас лимитированный, трафик надо видеть
 FETCH_BYTES = [0]
+# Минимальный интервал между ЛЮБЫМИ запросами к Авито: два подряд — уже
+# повод для 429. Значение настраивается, по умолчанию 90 секунд.
+MIN_REQUEST_GAP = int(os.environ.get('POLKA_REQUEST_GAP', '90'))
+_LAST_REQUEST_TS = [0.0]
+
+
+def _respect_rate_limit() -> None:
+    """Держит паузу между запросами к Авито внутри процесса."""
+    try:
+        if MIN_REQUEST_GAP <= 0:
+            return
+        gap = time.time() - _LAST_REQUEST_TS[0]
+        if _LAST_REQUEST_TS[0] and gap < MIN_REQUEST_GAP:
+            time.sleep(MIN_REQUEST_GAP - gap)
+    except Exception:
+        pass
+
+
+def _mark_request() -> None:
+    try:
+        _LAST_REQUEST_TS[0] = time.time()
+    except Exception:
+        pass
 
 
 def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
@@ -446,6 +475,8 @@ def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
                 # чтобы дальше не тратить по минуте на каждую страницу.
                 _SCRAPER_BROKEN.append(True)
                 print("  скрапер отключён до конца прохода (401)")
+    if 'avito.ru' in url:
+        _respect_rate_limit()
     if AVITO_PROFILE and 'avito.ru' in url:
         try:
             return _fetch_via_profile(url, timeout=max(timeout, 120))
