@@ -383,6 +383,11 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                 pass
             if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
+                # Сначала официальный способ: сменить IP по API провайдера.
+                if PROXY and not _ROTATED_BY_API[0] and apply_rotation():
+                    _ROTATED_BY_API[0] = True
+                    _resources_reset()
+                    continue
                 rotate_proxy_session()
                 proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
                 # Блокировка: старые cookies могли «запомнить» нас как проблемного
@@ -465,6 +470,108 @@ def _mark_request() -> None:
         _LAST_REQUEST_TS[0] = time.time()
     except Exception:
         pass
+
+
+
+# ── API прокси-провайдера: смена IP по официальному эндпоинту ────────────
+PROXY_API_BASE = os.environ.get('PROXY_API_BASE',
+                                'https://public-api.proxxxymiron.com/v1')
+PROXY_API_KEY = os.environ.get('PROXY_API_KEY', '')
+_PENDING_ROTATION = {'url': '', 'expires': ''}
+# Один раз за проход пробуем сменить IP через API, чтобы не спамить
+_ROTATED_BY_API = [False]
+
+
+def _resources_reset() -> None:
+    """После смены IP старые сессии бесполезны — начинаем заново."""
+    try:
+        _SESSIONS.clear()
+    except Exception:
+        pass
+
+
+def proxy_credentials() -> tuple:
+    """Достаёт логин и пароль из адреса прокси."""
+    try:
+        from urllib.parse import urlsplit, unquote
+        sp = urlsplit(str(PROXY or ''))
+        return unquote(sp.username or ''), unquote(sp.password or '')
+    except Exception:
+        return '', ''
+
+
+def proxy_product() -> str:
+    """Код продукта для API: rp — резидентские, mp — мобильные."""
+    host = str(PROXY or '').lower()
+    if 'mobile' in host or '_mp' in host:
+        return 'mp'
+    if 'pr.' in host or 'pro.' in host:
+        return 'pr'
+    if 'dc' in host:
+        return 'dcp'
+    return 'rp'
+
+
+def create_rotation_link(api_key: str = '') -> str:
+    """Просит у провайдера ссылку смены IP и возвращает её."""
+    key = str(api_key or PROXY_API_KEY or '').strip()
+    if not key:
+        return ''
+    user, pwd = proxy_credentials()
+    if not user or not pwd:
+        return ''
+    payload = {'proxies': [{'product': proxy_product(),
+                            'username': user, 'password': pwd}]}
+    try:
+        req = urllib.request.Request(
+            f'{PROXY_API_BASE}/rotation-links',
+            data=json.dumps(payload).encode('utf-8'),
+            headers={'Content-Type': 'application/json', 'X-API-Key': key},
+            method='POST')
+        with _opener().open(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode('utf-8', 'ignore'))
+        results = ((data or {}).get('data') or {}).get('results') or []
+        for item in results:
+            if item.get('status') == 'created' and item.get('rotationUrl'):
+                _PENDING_ROTATION['url'] = str(item['rotationUrl'])
+                _PENDING_ROTATION['expires'] = str(item.get('expiresAt') or '')
+                print('  ↻ получена ссылка смены IP')
+                return _PENDING_ROTATION['url']
+        err = results[0].get('error') if results else None
+        print(f"  API ротации: {err or data}")
+    except Exception as exc:
+        print(f"  API ротации не ответил: {str(exc)[:80]}")
+    return ''
+
+
+def apply_rotation(api_key: str = '') -> bool:
+    """Открывает ссылку смены IP. True — IP сменён."""
+    url = _PENDING_ROTATION.get('url') or create_rotation_link(api_key)
+    if not url:
+        return False
+    try:
+        req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+        with _opener().open(req, timeout=25) as resp:
+            resp.read()
+        _PENDING_ROTATION['url'] = ''
+        print('  ↻ IP прокси сменён через API')
+        return True
+    except Exception as exc:
+        print(f"  смена IP не удалась: {str(exc)[:70]}")
+        return False
+
+
+def proxy_exit_ip() -> str:
+    """Текущий внешний IP через прокси — для проверки."""
+    try:
+        req = urllib.request.Request('https://api.ipify.org',
+                                     headers={'User-Agent': USER_AGENT})
+        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies or {}))
+        with opener.open(req, timeout=20) as resp:
+            return resp.read().decode('utf-8', 'ignore').strip()
+    except Exception:
+        return ''
 
 
 def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
