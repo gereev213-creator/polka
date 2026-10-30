@@ -2042,7 +2042,9 @@ def run_once(cfg: dict) -> int:
     # остальные попадут в следующий проход.
     day = _today()
     state = load_targets_state()
-    limit = int(cfg.get('max_targets') or MAX_TARGETS)
+    # По умолчанию одна цель за проход: страница Авито весит ~3,5 МБ, а
+    # лимиты площадки срабатывают уже на втором запросе подряд.
+    limit = int(cfg.get('max_targets') or 1)
     picked = order_targets(targets, state, day, limit)
     picked_urls = {str(t.get('url') or '') for t in picked}
     n_today = 0

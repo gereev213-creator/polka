@@ -28,5 +28,7 @@
     "odezhda_obuv_aksessuary": "&f=ASgBAgICA0TeAtgL4ALeC~K8DfDRNA",
     "telefony": "&f=ASgBAQECAkS0wA3OqzmwwQ2I_DcBQIKhEhUZ0L3QtSDQstGB0LrRgNGL0LLQsNC70YHRjwFFgu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ"
   },
-  "_фильтры_через_переменную": "Панель Амверы не принимает кавычки, поэтому переменная задаётся без них: POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgBAgICA0TeAtgL4ALeC~K8DfDRNA;telefony=&f=ASgBAQECAkS0wA3OqzmwwQ2I_DcBQIKhEhUZ0L3QtSDQstGB0LrRgNGL0LLQsNC70YHRjwFFgu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ"
+  "_фильтры_через_переменную": "Панель Амверы не принимает кавычки, поэтому переменная задаётся без них: POLKA_FILTERS_BY_CATEGORY=odezhda_obuv_aksessuary=&f=ASgBAgICA0TeAtgL4ALeC~K8DfDRNA;telefony=&f=ASgBAQECAkS0wA3OqzmwwQ2I_DcBQIKhEhUZ0L3QtSDQstGB0LrRgNGL0LLQsNC70YHRjwFFgu4OFXsiZnJvbSI6ODAsInRvIjpudWxsfQ",
+  "max_targets": 1,
+  "_max_targets": "Сколько страниц Авито открывать за проход. 1 — безопасно для лимитов."
 }
