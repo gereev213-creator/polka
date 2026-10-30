@@ -18656,7 +18656,9 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
     limit = _criteria_limit(viewer_id)
     try:
         cur = db.conn.cursor()
-        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=? AND active=1",
+        # Пауза НЕ освобождает место: поиск остаётся в списке и занимает слот.
+        # Освобождает только удаление.
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=?",
                     (int(viewer_id),))
         used = int(cur.fetchone()['n'] or 0)
     except Exception:
@@ -26530,7 +26532,9 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     try:
         _lim = _criteria_limit(user_id)
         _chk = db.conn.cursor()
-        _chk.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=? AND active=1",
+        # Считаем ВСЕ поиски, включая поставленные на паузу: слот освобождает
+        # только удаление.
+        _chk.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=?",
                      (int(user_id),))
         if int(_chk.fetchone()['n'] or 0) >= _lim:
             _plan_event(int(user_id), 'limit_hit', {'limit': _lim})

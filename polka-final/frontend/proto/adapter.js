@@ -303,9 +303,17 @@ function paintEmpty(count) {
     }
     return `<article class="card scard" data-crit="${c.id}" data-go="history">
       <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
-      <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}">
-        <svg width="15" height="15"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>
-      </button></div>
+      <span class="scacts">
+        <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}"
+                aria-label="${paused ? 'Возобновить' : 'Пауза'}">
+          <svg width="15" height="15"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>
+        </button>
+        <button class="delcrit" data-delcrit="${c.id}" aria-label="Удалить поиск">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#C0392B"
+               stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2"/>
+            <path d="M6 7l1 13h10l1-13"/></svg>
+        </button>
+      </span></div>
       ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
       <div class="sfoot">
         <span class="newpill">${fresh ? '+' + fresh + ' новых' : (paused ? 'на паузе' : 'активен')}</span>
@@ -331,6 +339,43 @@ function paintEmpty(count) {
         return;
       }
       box.innerHTML = items.map(critCard).join('');
+      box.querySelectorAll('[data-delcrit]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const id = btn.getAttribute('data-delcrit');
+          const crit = items.find((x) => String(x.id) === String(id));
+          const name = crit ? String(crit.query || '') : '';
+          const ok = await new Promise((resolve) => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;'
+              + 'place-items:center;background:rgba(20,40,70,.45);padding:24px';
+            wrap.innerHTML = '<div style="background:#fff;border-radius:22px;padding:18px;'
+              + 'max-width:320px;width:100%;text-align:center;font:15px system-ui;color:#1F2A37">'
+              + '<div style="font-weight:800;margin-bottom:6px">Удалить поиск?</div>'
+              + '<div style="font-size:12.5px;color:#5C6E86;margin-bottom:14px">'
+              + (name ? '«' + name.slice(0, 40) + '» ' : '')
+              + 'исчезнет, и место освободится для нового.</div>'
+              + '<div style="display:flex;gap:8px">'
+              + '<button id="dcNo" style="flex:1;height:44px;border:0;border-radius:14px;'
+              + 'background:#E7EFF6;color:#2C6CDF;font-weight:800">Отмена</button>'
+              + '<button id="dcYes" style="flex:1;height:44px;border:0;border-radius:14px;'
+              + 'background:#E2493C;color:#fff;font-weight:800">Удалить</button></div></div>';
+            document.body.appendChild(wrap);
+            const done = (v) => { wrap.remove(); resolve(v); };
+            wrap.addEventListener('click', (ev) => { if (ev.target === wrap) done(false); });
+            wrap.querySelector('#dcYes').addEventListener('click', () => done(true));
+            wrap.querySelector('#dcNo').addEventListener('click', () => done(false));
+          });
+          if (!ok) return;
+          try {
+            await window.PolkaAPI.api('/api/hunt?id=' + id, { method: 'DELETE' });
+            await loadSearches();
+            if (window.PolkaLoadPlan) window.PolkaLoadPlan();
+          } catch (err) { }
+        });
+      });
+
       box.querySelectorAll('[data-toggle]').forEach((btn) => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
