@@ -1767,6 +1767,9 @@ function paintEmpty(count) {
     } catch (err) {
       const msg = String((err && err.message) || err);
       const code = (msg.match(/\b(4\d\d|5\d\d)\b/) || [])[1] || '';
+      // Сохраняем ответ сервера целиком: оттуда берём человеческий текст
+      // («1 объявление в сутки»), а не только код ошибки.
+      window.__lastPostError = (err && (err.body || err.data)) || null;
       const reasons = {
         missing_contact_info: 'не указан контакт для связи',
         missing_city: 'не указан город',
@@ -1782,9 +1785,33 @@ function paintEmpty(count) {
       Object.keys(reasons).forEach((k) => { if (msg.includes(k)) reason = reasons[k]; });
       const text = 'Не удалось опубликовать: ' + (reason || ('код ' + (code || '?')));
       say(text, true);
-      alertSafe(code === '402' || code === '403'
-        ? 'Лимит объявлений исчерпан. Оформите подписку Плюс.'
-        : text);
+      if (code === '402' || code === '403') {
+        // Показываем текст сервера («1 объявление в сутки…») и ведём на тарифы
+        const detail = (window.__lastPostError && window.__lastPostError.detail)
+          || 'Бесплатно можно разместить 1 объявление в сутки. С «Плюсом» — без ограничений.';
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;place-items:center;'
+          + 'background:rgba(20,40,70,.45);padding:24px';
+        wrap.innerHTML = '<div style="background:#fff;border-radius:22px;padding:18px;max-width:330px;'
+          + 'width:100%;text-align:center;font:15px system-ui;color:#1F2A37">'
+          + '<div style="font-weight:800;margin-bottom:8px">Лимит публикаций</div>'
+          + '<div style="font-size:12.5px;line-height:1.45;color:#5C6E86;margin-bottom:14px">'
+          + detail + '</div>'
+          + '<button id="plGo" style="width:100%;height:46px;border:0;border-radius:14px;'
+          + 'background:linear-gradient(100deg,#4780FB,#6B98F5);color:#fff;font-weight:800;'
+          + 'font-size:13px;margin-bottom:8px">Оформить Плюс</button>'
+          + '<button id="plNo" style="width:100%;height:44px;border:0;border-radius:14px;'
+          + 'background:#E7EFF6;color:#2C6CDF;font-weight:800;font-size:13px">Позже</button></div>';
+        document.body.appendChild(wrap);
+        const close = () => wrap.remove();
+        wrap.querySelector('#plNo').addEventListener('click', close);
+        wrap.querySelector('#plGo').addEventListener('click', () => {
+          close();
+          try { if (typeof window.go === 'function') window.go('tariffs'); } catch (e) { }
+        });
+      } else {
+        alertSafe(text);
+      }
       window.__posting = false;
       if (btn) { btn.disabled = false; btn.style.opacity = ''; }
       return;

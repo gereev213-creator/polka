@@ -33606,32 +33606,33 @@ async def api_miniapp_ads_create(request: aiohttp_web.Request) -> aiohttp_web.Re
     title = str(body.get('title', '')).strip()
     if not (3 <= len(title) <= 200):
         return _miniapp_err('bad_title', 400)
-    # Лимит лотов: пробный 24 часа — 1 лот, «Плюс» — 10 в месяц,
-    # без подписки — нельзя. Так человек видит смысл купить Плюс.
+    # Правило для всех: 1 объявление в сутки бесплатно, с «Плюсом» — без
+    # ограничений. Считаем календарные сутки по Москве, а не «за всё время»:
+    # раньше лимит считал активные лоты, и человек не мог выставить второй
+    # даже спустя неделю.
     try:
         # План берём через resolve_plan: он учитывает активную подписку,
-        # а не только поле users.plan. Иначе оплативший видел лимит trial.
+        # а не только поле users.plan.
         try:
             _plan = str(resolve_plan(viewer_id) or 'trial')
         except Exception:
             _plan = str((db.get_user(viewer_id) or {}).get('plan') or 'trial')
-        _cur = db.conn.cursor()
-        _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? AND status IN "
-                     "('active','moderation','checking','review')", (viewer_id,))
-        _used = int((_cur.fetchone() or {'c': 0})['c'] or 0)
-        _limits = {'trial': 1, 'plus': 10, 'pro': 30}
-        _lim = _limits.get(_plan, 0)
-        if _lim == 0:
-            return _miniapp_json({'ok': False, 'error': 'no_plan',
-                                  'detail': 'Создание объявлений доступно на пробном периоде '
-                                            'или с подпиской Плюс'}, status=403)
-        if _used >= _lim:
-            return _miniapp_json({'ok': False, 'error': 'ad_limit',
-                                  'detail': f'Достигнут лимит: {_lim} '
-                                            + ('лот на пробном периоде' if _plan == 'trial'
-                                               else 'лотов в месяц в Плюсе'),
-                                  'used': _used, 'limit': _lim, 'plan': _plan},
-                                 status=402)
+        _is_plus = _plan in ('plus', 'pro') or bool(int(cfg_get('ads.free_unlimited') or 0))
+        if not _is_plus:
+            _day_start = get_moscow_time().replace(hour=0, minute=0, second=0,
+                                                   microsecond=0).isoformat()
+            _cur = db.conn.cursor()
+            _cur.execute("SELECT COUNT(*) AS c FROM ads WHERE user_id=? "
+                         "AND COALESCE(created_at,'') >= ?", (viewer_id, _day_start))
+            _used = int((_cur.fetchone() or {'c': 0})['c'] or 0)
+            if _used >= 1:
+                return _miniapp_json({
+                    'ok': False, 'error': 'ad_limit',
+                    'detail': 'Бесплатно можно разместить 1 объявление в сутки. '
+                              'С «Плюсом» — без ограничений.',
+                    'used': _used, 'limit': 1, 'plan': _plan,
+                    'next_day': True,
+                }, status=402)
     except Exception as e:
         logger.warning(f'ad limit check: {e}')
 
