@@ -480,6 +480,8 @@ PROXY_API_KEY = os.environ.get('PROXY_API_KEY', '')
 _PENDING_ROTATION = {'url': '', 'expires': ''}
 # Один раз за проход пробуем сменить IP через API, чтобы не спамить
 _ROTATED_BY_API = [False]
+# Последняя ошибка API провайдера — показываем в диагностике
+PROXY_API_ERROR = ['']
 
 
 def _resources_reset() -> None:
@@ -530,6 +532,7 @@ def create_rotation_link(api_key: str = '') -> str:
             method='POST')
         with _opener().open(req, timeout=25) as resp:
             data = json.loads(resp.read().decode('utf-8', 'ignore'))
+        PROXY_API_ERROR[0] = ''
         results = ((data or {}).get('data') or {}).get('results') or []
         for item in results:
             if item.get('status') == 'created' and item.get('rotationUrl'):
@@ -538,8 +541,13 @@ def create_rotation_link(api_key: str = '') -> str:
                 print('  ↻ получена ссылка смены IP')
                 return _PENDING_ROTATION['url']
         err = results[0].get('error') if results else None
+        if err:
+            PROXY_API_ERROR[0] = str(err.get('code') or '') + ': ' + str(err.get('message') or '')
+        else:
+            PROXY_API_ERROR[0] = str((data or {}).get('error') or 'нет ссылки в ответе')[:200]
         print(f"  API ротации: {err or data}")
     except Exception as exc:
+        PROXY_API_ERROR[0] = str(exc)[:200]
         print(f"  API ротации не ответил: {str(exc)[:80]}")
     return ''
 

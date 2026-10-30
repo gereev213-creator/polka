@@ -31647,7 +31647,8 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 after = await asyncio.to_thread(collector.proxy_exit_ip)
                 return _miniapp_json({'ok': True, 'changed': bool(changed),
                                       'ip_before': before, 'ip_after': after,
-                                      'has_api_key': bool(collector.PROXY_API_KEY)})
+                                      'has_api_key': bool(collector.PROXY_API_KEY),
+                                      'api_error': str((getattr(collector, 'PROXY_API_ERROR', ['']) or [''])[0])[:200]})
 
             ip = await asyncio.to_thread(collector.proxy_exit_ip)
             return _miniapp_json({'ok': True, 'ip': ip, 'has_proxy': bool(_pv),
