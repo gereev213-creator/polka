@@ -26412,6 +26412,19 @@ def ensure_filter_blob_column() -> None:
 # Человек выставляет фильтры на Авито и вставляет ссылку; мы разбираем её в поля
 # критерия и храним ПУТЬ и ФИЛЬТРЫ, чтобы сборщик искал ровно так же. Сервер по
 # ссылке сам никуда не ходит: из неё берутся только проверенные части.
+
+# Человеческие названия регионов Авито: в ссылке они латиницей
+# (izhevsk), а пользователю показываем «Ижевск».
+AVITO_REGION_TITLES = {
+    'moskva': 'Москва', 'sankt-peterburg': 'Санкт-Петербург', 'spb': 'Санкт-Петербург',
+    'izhevsk': 'Ижевск', 'ekaterinburg': 'Екатеринбург', 'novosibirsk': 'Новосибирск',
+    'kazan': 'Казань', 'nizhniy_novgorod': 'Нижний Новгород', 'chelyabinsk': 'Челябинск',
+    'samara': 'Самара', 'omsk': 'Омск', 'rostov-na-donu': 'Ростов-на-Дону',
+    'ufa': 'Уфа', 'krasnoyarsk': 'Красноярск', 'perm': 'Пермь', 'voronezh': 'Воронеж',
+    'volgograd': 'Волгоград', 'krasnodar': 'Краснодар', 'saratov': 'Саратов',
+    'tyumen': 'Тюмень', 'izh': 'Ижевск', 'all': 'Россия',
+}
+
 AVITO_LINK_HOSTS = ('avito.ru', 'www.avito.ru', 'm.avito.ru')
 AVITO_LINK_BAD_FIRST = {'profile', 'items', 'brands', 'user', 'favorites', 'account', 'js',
                         'web', 'safety', 'help', 'support', 'orders', 'messenger', 'delivery',
@@ -34588,6 +34601,27 @@ def create_api_app() -> aiohttp_web.Application:
                         and not re.match(r'^(all|rossiya)$', seg)):
                     model = seg.replace('_', ' ')
                     break
+            # Цена часто лежит не в pmax, а внутри f= (base64 JSON):
+            # {"from":0,"to":50000}. Достаём её, иначе плашки «до …» нет.
+            try:
+                import base64 as _b64, json as _json
+                _fb = ''
+                _flt = str(link.get('filters') or '')
+                for _part in _flt.split('&'):
+                    if _part.startswith('f='):
+                        _fb = _part[2:]
+                        break
+                if _fb:
+                    _pad = '=' * (-len(_fb) % 4)
+                    _raw = _b64.urlsafe_b64decode(_fb + _pad)
+                    _obj = _json.loads(_raw.decode('utf-8', 'ignore'))
+                    if isinstance(_obj, dict):
+                        if not link.get('max_price') and _obj.get('to'):
+                            link['max_price'] = int(_obj['to'])
+                        if not link.get('min_price') and _obj.get('from'):
+                            link['min_price'] = int(_obj['from'])
+            except Exception:
+                pass
             facts = avito_blob_facts(link.get('filters') or '')
             labels = [str(x) for x in (facts.get('labels') or [])]
             if link.get('max_price'):
@@ -34598,7 +34632,9 @@ def create_api_app() -> aiohttp_web.Application:
                 money = f"от {int(link['min_price']):,}".replace(',', ' ') + " \u20bd"
                 if money not in labels:
                     labels.append(money)
-            region = str(link.get('region') or '').replace('-', ' ').title()
+            _reg_raw = str(link.get('region') or '').strip().lower()
+            region = (AVITO_REGION_TITLES.get(_reg_raw)
+                      or str(link.get('region') or '').replace('-', ' ').title())
             if region and region.lower() not in ('all', 'rossiya'):
                 labels.append(region)
             query = (str(link.get('q') or '') or model
