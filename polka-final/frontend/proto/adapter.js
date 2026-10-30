@@ -562,7 +562,11 @@ function paintEmpty(count) {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
-      if (q.length < 2) return;
+      const _linkEl = document.getElementById('avitoLink');
+      const _linkNow = _linkEl ? String(_linkEl.value || '').trim() : '';
+      // Раньше требовался текст запроса. Теперь основной путь — ссылка,
+      // поэтому без неё и без короткого запроса выходим.
+      if (!_linkNow && q.length < 2) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
         .map((b) => (b.getAttribute('data-req') || b.textContent || '').trim()).filter(Boolean);
@@ -2937,5 +2941,68 @@ function paintEmpty(count) {
       window.go = wrapped;
     };
     setTimeout(wrap, 700);
+  } catch (e) { }
+})();
+
+/* ── Новый поиск: только ссылка + плашки разбора ─────────────────────────
+   Человек вставляет адрес Авито, мы показываем, что из него поняли:
+   категорию, модель, цену, город. Это наглядная проверка до создания. */
+(function () {
+  try {
+    let timer = null;
+    let lastUrl = '';
+
+    function chipsBox() { return document.getElementById('linkChips'); }
+
+    function paint(data) {
+      const box = chipsBox();
+      if (!box) return;
+      const labels = (data && data.labels) || [];
+      const extra = [];
+      if (data && data.category_title) extra.push(data.category_title);
+      if (data && data.model) extra.push(data.model);
+      const all = extra.concat(labels).filter(Boolean);
+      if (!all.length) {
+        box.style.display = 'none';
+        box.innerHTML = '';
+        return;
+      }
+      box.style.display = 'flex';
+      box.style.flexWrap = 'wrap';
+      box.style.gap = '6px';
+      box.innerHTML = all.slice(0, 7).map((x) =>
+        `<span class="lchip">${String(x).replace(/</g, '')}</span>`).join('');
+    }
+
+    async function parse(link) {
+      if (!link || link === lastUrl) return;
+      lastUrl = link;
+      const box = chipsBox();
+      if (box && link.length < 12) { box.style.display = 'none'; return; }
+      try {
+        const res = await window.PolkaAPI.api('/api/hunt/parse-link', {
+          method: 'POST', body: JSON.stringify({ url: link }),
+        });
+        paint(res && res.ok ? res : null);
+      } catch (e) {
+        paint(null);
+      }
+    }
+
+    document.addEventListener('input', (e) => {
+      if (!e.target || e.target.id !== 'avitoLink') return;
+      const link = String(e.target.value || '').trim();
+      if (timer) clearTimeout(timer);
+      if (!link) { paint(null); lastUrl = ''; return; }
+      timer = setTimeout(() => parse(link), 350);
+    }, true);
+
+    document.addEventListener('paste', (e) => {
+      if (!e.target || e.target.id !== 'avitoLink') return;
+      setTimeout(() => {
+        const link = String(e.target.value || '').trim();
+        if (link) parse(link);
+      }, 80);
+    }, true);
   } catch (e) { }
 })();

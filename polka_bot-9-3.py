@@ -26630,6 +26630,66 @@ def remove_criterion(user_id: int, crit_id: int) -> bool:
     return cursor.rowcount > 0
 
 
+async def api_hunt_parse_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/hunt/parse-link — что человек выбрал в ссылке Авито.
+
+    Нужно для наглядности: под полем показываем плашки «Телефоны»,
+    «до 35 000 ₽», «АКБ от 80 %» и город, чтобы было видно, что поиск
+    понят правильно, ещё до создания критерия.
+    """
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    url = str((body or {}).get('url') or '').strip().replace('\n', '').replace(' ', '')
+    if url and not url.lower().startswith('http'):
+        if 'avito.ru' in url.lower():
+            url = 'https://' + url.lstrip('/')
+        else:
+            return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
+    if not url:
+        return _miniapp_json({'ok': False, 'error': 'empty_url'}, status=400)
+    parsed = parse_avito_filter_url(url)
+    if parsed.get('error') == 'bad_url':
+        return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
+    from urllib.parse import urlparse, parse_qs, unquote
+    q = parse_qs(urlparse(url).query)
+    query = str((q.get('q') or [''])[0]).strip()
+    slug = str(parsed.get('slug') or '')
+    title_from_path = str(parsed.get('title_from_path') or '')
+    model_from_path = ''
+    try:
+        segs = [unquote(s) for s in urlparse(url).path.strip('/').split('/') if s]
+        # последний «человеческий» сегмент до фильтра — обычно модель
+        for seg in reversed(segs):
+            if seg and not re.match(r'^[a-z]{2,4}\d+-[A-Za-z0-9_-]+$', seg) and not seg.isdigit():
+                if seg not in (slug, 'all'):
+                    model_from_path = seg.replace('_', ' ')
+                    break
+    except Exception:
+        pass
+    facts = avito_blob_facts(parsed.get('filters') or '')
+    labels = list(facts.get('labels') or [])
+    category_title = HUNT_SLUG_TITLES.get(slug, '') or title_from_path
+    city = str(parsed.get('city') or '').replace('-', ' ').title()
+    if city:
+        labels.append(city)
+    return _miniapp_json({
+        'ok': True,
+        'query': query or model_from_path or category_title or 'товар',
+        'category': normalize_category(query or model_from_path or category_title or ''),
+        'category_title': category_title,
+        'model': model_from_path,
+        'city': city,
+        'price_to': int(facts.get('price_to') or 0),
+        'price_from': int(facts.get('price_from') or 0),
+        'labels': labels[:6],
+    })
+
+
 async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/hunt/from-link — критерий из ссылки Авито.
 
@@ -34536,6 +34596,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_post('/api/admin/sql', api_admin_sql)
     app.router.add_post('/api/hunt/from-link', api_hunt_from_link)
+    app.router.add_post('/api/hunt/parse-link', api_hunt_parse_link)
     app.router.add_post('/api/admin/maintenance', api_admin_maintenance)
     app.router.add_post('/api/admin/import-users', api_admin_import_users)
     app.router.add_get('/api/views_diag', api_views_diag)
