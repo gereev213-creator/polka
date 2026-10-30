@@ -6176,7 +6176,11 @@ async def notify_admin_new_ad(ad_id: int, context: ContextTypes.DEFAULT_TYPE):
                                                  reply_markup=InlineKeyboardMarkup(keyboard))
                 logger.info(f"Уведомление отправлено администратору {admin_id}")
             except Exception as e:
-                logger.error(f"Не удалось уведомить администратора {admin_id}: {e}")
+                _msg = str(e)
+                if 'blocked by the user' in _msg or 'chat not found' in _msg:
+                    logger.warning(f"Админ {admin_id} заблокировал бота — пропускаю")
+                else:
+                    logger.error(f"Не удалось уведомить администратора {admin_id}: {e}")
     except Exception as e:
         logger.error(f"Ошибка в notify_admin_new_ad для объявления {ad_id}: {e}")
 
@@ -14773,6 +14777,29 @@ async def admin_back(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     error_msg = str(context.error)
     if 'rate_limited' in error_msg or 'rate limit' in error_msg.lower():
+        return
+    # Человек заблокировал бота — это не наша ошибка, и слать ему ничего
+    # нельзя. Помечаем в базе, чтобы больше не пытаться, и пишем в warning.
+    _blocked = ('bot was blocked by the user' in error_msg
+                or 'user is deactivated' in error_msg
+                or 'chat not found' in error_msg)
+    if _blocked:
+        try:
+            _uid = 0
+            if update and getattr(update, 'effective_user', None):
+                _uid = int(update.effective_user.id)
+            elif update and getattr(update, 'effective_chat', None):
+                _uid = int(update.effective_chat.id)
+            if _uid:
+                db.conn.execute(
+                    "CREATE TABLE IF NOT EXISTS notify_blocked (user_id INTEGER PRIMARY KEY,"
+                    " blocked_at TEXT)")
+                db.conn.execute("INSERT OR REPLACE INTO notify_blocked(user_id, blocked_at)"
+                                " VALUES(?, ?)", (_uid, get_moscow_time().isoformat()))
+                db.conn.commit()
+                logger.warning(f"Пользователь {_uid} заблокировал бота — уведомления отключены")
+        except Exception as _e:
+            logger.warning(f"не смог записать блокировку: {_e}")
         return
     logger.error(f"Ошибка: {context.error}", exc_info=context.error)
     import traceback as _tb
