@@ -113,12 +113,29 @@ function paintEmpty(count) {
   function showLoading(el, rows) {
     if (!el) return;
     const n = rows || 3;
-    let html = '<div class="skelWrap">';
-    for (let i = 0; i < n; i += 1) {
-      html += '<div class="skelRow"><span class="skelImg"></span>'
-        + '<span class="skelLines"><i></i><i></i></span></div>';
+    // Скелетон повторяет РАЗМЕТКУ настоящей карточки: сетка находок —
+    // плитка с фото 118 px, списки (избранное, история, мои) — строка
+    // с миниатюрой 96×88. Тогда при загрузке карточки не «прыгают».
+    const gridIds = ['homeGrid', 'marketGrid'];
+    const isGrid = gridIds.indexOf(el.id) >= 0
+      || (el.parentElement && el.parentElement.classList.contains('grid'));
+    let html = '';
+    if (isGrid) {
+      // Сам контейнер уже grid с двумя колонками — плитки кладём прямо
+      // в него, иначе они сжимаются вдвое (вложенная сетка в ячейке).
+      html = '';
+      for (let i = 0; i < n; i += 1) {
+        html += '<div class="skelLot"><span class="ph"></span>'
+          + '<i class="l1"></i><i class="l2"></i></div>';
+      }
+    } else {
+      html = '<div class="skelWrap">';
+      for (let i = 0; i < n; i += 1) {
+        html += '<div class="skelRow"><span class="skelImg"></span>'
+          + '<span class="skelLines"><i></i><i></i></span></div>';
+      }
+      html += '</div>';
     }
-    html += '</div>';
     el.innerHTML = html;
   }
   window.PolkaLoading = showLoading;
