@@ -20838,6 +20838,16 @@ async def _collector_inline_loop():
                 except Exception:
                     _prev = 0.0
                 _setting_set('collector.used_mb', f"{_prev + _mb:.2f}")
+                # Статистика: сколько проходов реально получили страницу.
+                try:
+                    if int(sent or 0) > 0 or _mb > 0.05:
+                        _setting_set('collector.pass_ok',
+                                     str(int(cfg_get('collector.pass_ok') or 0) + 1))
+                    else:
+                        _setting_set('collector.pass_blocked',
+                                     str(int(cfg_get('collector.pass_blocked') or 0) + 1))
+                except Exception:
+                    pass
                 logger.info(f"Сбор находок: принято новых {sent}, скачано {_mb:.1f} МБ "
                             f"(за сутки {_prev + _mb:.1f} из {_budget:.0f})")
             except Exception:
@@ -31720,6 +31730,12 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 _setting_set('proxy.api_key', key)
                 collector.PROXY_API_KEY = key
                 return _miniapp_json({'ok': True, 'saved': True, 'has_proxy': bool(_pv)})
+
+            if action == 'collector_stats':
+                return _miniapp_json({'ok': True,
+                                      'ok': int(cfg_get('collector.pass_ok') or 0),
+                                      'blocked': int(cfg_get('collector.pass_blocked') or 0),
+                                      'used_mb': str(cfg_get('collector.used_mb') or '0')})
 
             if action == 'proxy_rotate':
                 before = await asyncio.to_thread(collector.proxy_exit_ip)
