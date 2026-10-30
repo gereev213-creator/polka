@@ -31592,6 +31592,42 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
+    if action in ('proxy_api_set', 'proxy_rotate', 'proxy_check'):
+        # API прокси-провайдера: ключ, смена IP, проверка текущего адреса
+        try:
+            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if path not in sys.path:
+                sys.path.insert(0, path)
+            import collect as collector
+            _pv = str(_setting_get('collector.proxy', '') or '')
+            if _pv:
+                collector.PROXY = _pv
+            _key = str(_setting_get('proxy.api_key', '') or '')
+            if _key:
+                collector.PROXY_API_KEY = _key
+
+            if action == 'proxy_api_set':
+                key = str((body or {}).get('key') or '').strip()
+                if not key:
+                    return _miniapp_json({'ok': False, 'error': 'empty_key'})
+                _setting_set('proxy.api_key', key)
+                collector.PROXY_API_KEY = key
+                return _miniapp_json({'ok': True, 'saved': True, 'has_proxy': bool(_pv)})
+
+            if action == 'proxy_rotate':
+                before = await asyncio.to_thread(collector.proxy_exit_ip)
+                changed = await asyncio.to_thread(collector.apply_rotation)
+                after = await asyncio.to_thread(collector.proxy_exit_ip)
+                return _miniapp_json({'ok': True, 'changed': bool(changed),
+                                      'ip_before': before, 'ip_after': after,
+                                      'has_api_key': bool(collector.PROXY_API_KEY)})
+
+            ip = await asyncio.to_thread(collector.proxy_exit_ip)
+            return _miniapp_json({'ok': True, 'ip': ip, 'has_proxy': bool(_pv),
+                                  'has_api_key': bool(collector.PROXY_API_KEY)})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:180]})
+
     if action in ('proxy_set', 'proxy_off'):
         # Прокси для сборщика. Хранится в настройках, чтобы переживать
         # перезапуск, и не попадает в репозиторий.
