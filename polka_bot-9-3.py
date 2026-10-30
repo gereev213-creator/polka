@@ -17955,6 +17955,12 @@ def ensure_verdict_column():
         pass  # колонка уже есть
 
     # Продавец со страницы: тип (Компания/Частник), ник, число объявлений.
+    try:
+        db.conn.execute("ALTER TABLE ads ADD COLUMN params_json TEXT DEFAULT ''")
+        db.conn.commit()
+    except Exception:
+        pass
+
     for _col, _decl in (('seller_type', "TEXT DEFAULT ''"),
                         ('seller_name', "TEXT DEFAULT ''"),
                         ('seller_ads', 'INTEGER DEFAULT 0')):
@@ -26309,15 +26315,28 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                     pass
                 failed += 1
                 continue
+            # Характеристики из карточки (состояние, память, размер и т.п.)
+            # пишем в поле параметров — их видно в карточке товара и они
+            # участвуют в отборе по требованиям.
+            params = raw.get('params') or {}
+            params_json = ''
+            if isinstance(params, dict) and params:
+                try:
+                    params_json = json.dumps({str(k)[:40]: str(v)[:60]
+                                              for k, v in list(params.items())[:20]},
+                                             ensure_ascii=False)
+                except Exception:
+                    params_json = ''
             cursor.execute(
                 "UPDATE ads SET description=?, description_lower=?, seller_type=?, "
                 "seller_name=?, seller_ads=?, "
+                "params_json=COALESCE(NULLIF(?,''), params_json), "
                 "desc_state='ok', desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
                 "WHERE id=?",
                 (description, description.lower(),
                  str(raw.get('seller_type') or '')[:20],
                  str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
-                 now, ad_id))
+                 params_json, now, ad_id))
             updated += 1
             touched.append(ad_id)
         except Exception as e:

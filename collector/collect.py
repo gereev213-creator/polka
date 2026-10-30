@@ -2172,8 +2172,15 @@ def collect_details(server: str, token: str, source: str, items: list,
             print(f"  ⚠ описание пустое ({url[-32:]})")
             out.append({'external_id': ext, 'state': 'failed'})
         else:
+            # Характеристики (состояние, память, размер) — из блока
+            # параметров карточки. Раньше их достали, но не передавали.
+            try:
+                params = parse_item_params(html)
+            except Exception:
+                params = {}
             out.append({'external_id': ext, 'state': 'ok',
                         'description': data['description'],
+                        'params': params,
                         'seller_type': data['seller_type'],
                         'seller_name': data['seller_name'],
                         'seller_ads': int(data['seller_ads'] or 0)})
@@ -2245,6 +2252,9 @@ TARGET_PAUSE = int(os.environ.get('POLKA_TARGET_PAUSE', '20'))
 CHECK_INTERVAL_MIN = int(os.environ.get('POLKA_CHECK_INTERVAL_MIN', '60'))
 # Как часто «прогреваться» на главной Авито (в проходах)
 WARM_UP_EVERY = int(os.environ.get('POLKA_WARM_UP_EVERY', '5'))
+# Сколько карточек открывать за проход ради описания и продавца.
+# Каждая карточка — отдельный запрос, поэтому немного.
+DETAILS_PER_PASS = int(os.environ.get('POLKA_DETAILS_PER_PASS', '3'))
 TARGETS_STATE_FILE = os.environ.get('POLKA_TARGETS_STATE', 'targets_state.json')
 
 
@@ -2505,9 +2515,11 @@ def run_once(cfg: dict) -> int:
                 # Сервер отвечает, по каким карточкам нужно описание: отбор
                 # по требованиям словами без него работает вслепую (этап A3)
                 need = stats.get('need_details') or []
-                if need:
-                    print(f"  описаний нужно: {len(need)} — открываю карточки")
-                    collect_details(server, token, source, need)
+                details_left = int(cfg.get('details_per_pass') or DETAILS_PER_PASS)
+                if need and details_left > 0:
+                    _slice = need[:details_left]
+                    print(f"  карточек на разбор: {len(_slice)} из {len(need)}")
+                    collect_details(server, token, source, _slice)
             except Exception as exc:
                 print(f"  ✖ сервер не принял: {exc}")
             # Пауза подлиннее: Авито ограничивает при частых запросах, а лишний
