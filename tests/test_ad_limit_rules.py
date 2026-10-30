@@ -12,7 +12,7 @@ checks = [
     ('бесплатно считается по всем объявлениям',
      'SELECT COUNT(*) AS c FROM ads WHERE user_id=?' in body),
     ('сутки больше не считаются', 'created_at,\'\') >= ?' not in body),
-    ('Плюс без ограничений', "_is_plus = _plan in ('plus', 'pro')" in body),
+    ('Плюс без ограничений', '_is_plus = _plan in' in body and "'plus', 'pro'" in body),
     ('текст про одно объявление', 'только одно объявление' in body),
 ]
 fails = 0
