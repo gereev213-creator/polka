@@ -6151,7 +6151,9 @@ async def notify_admin_new_ad(ad_id: int, context: ContextTypes.DEFAULT_TYPE):
         
         for admin_id in ADMIN_USER_IDS:
             try:
-                if ad.get('photos') and len(ad['photos']) > 0:
+                _has_base = bool((os.environ.get('SERVER_URL') or os.environ.get('MINIAPP_URL')
+                                  or os.environ.get('WEBAPP_URL') or '').strip())
+                if ad.get('photos') and len(ad['photos']) > 0 and _has_base:
                     resolved_photos = [await resolve_ad_photo(p) for p in ad['photos'][:10]]
                     resolved_photos = [p for p in resolved_photos if p is not None]
                     if not resolved_photos:
@@ -8657,6 +8659,11 @@ async def compute_photo_hash(bot, file_id: str) -> Optional[str]:
     """
     if not IMAGEHASH_AVAILABLE:
         return None
+    # Работаем только с настоящими файлами Telegram. Локальный путь
+    # или ссылка — это не file_id, и get_file падал «Invalid file_id».
+    if not isinstance(file_id, str) or not file_id or '/' in file_id \
+            or file_id.startswith('http'):
+        return None
     try:
         tg_file = await bot.get_file(file_id)
         buf = _io.BytesIO()
@@ -8679,6 +8686,11 @@ async def compute_photo_hashes_multi(bot, file_id: str) -> dict:
     Возвращает {'phash': str, 'ahash': str, 'dhash': str} или {}.
     """
     if not IMAGEHASH_AVAILABLE:
+        return {}
+    # Работаем только с настоящими файлами Telegram. Локальный путь
+    # или ссылка — это не file_id, и get_file падал «Invalid file_id».
+    if not isinstance(file_id, str) or not file_id or '/' in file_id \
+            or file_id.startswith('http'):
         return {}
     try:
         tg_file = await bot.get_file(file_id)
@@ -8706,6 +8718,11 @@ async def extract_photo_tags_hf(bot, file_id: str) -> list:
         logger.info("GROQ_API_KEY не задан — теги недоступны")
         return []
     logger.info(f"extract_photo_tags Groq Vision: file_id={file_id[:20]}")
+    # Работаем только с настоящими файлами Telegram. Локальный путь
+    # или ссылка — это не file_id, и get_file падал «Invalid file_id».
+    if not isinstance(file_id, str) or not file_id or '/' in file_id \
+            or file_id.startswith('http'):
+        return []
     try:
         tg_file = await bot.get_file(file_id)
         buf = _io.BytesIO()
@@ -30485,6 +30502,16 @@ def set_max_bot_module(module):
 async def resolve_ad_photo(photo_ref: str):
     """Возвращает объект, пригодный для photo=/InputMediaPhoto() в PTB:
     исходную строку (обычный TG file_id/URL) или BytesIO с байтами фото."""
+    # Локальный путь вида /api/ads/photos/… Telegram не примет: ему нужен
+    # полный адрес. Раньше уходило «Invalid file http url specified:
+    # url host is empty» — в логе это была именно эта ошибка.
+    if isinstance(photo_ref, str) and photo_ref.startswith('/'):
+        base = (os.environ.get('SERVER_URL') or os.environ.get('MINIAPP_URL')
+                or os.environ.get('WEBAPP_URL') or '').rstrip('/')
+        if not base:
+            return None
+        return base + photo_ref
+
     if not photo_ref or not isinstance(photo_ref, str) or not photo_ref.startswith("{"):
         return photo_ref  # обычный TG file_id — как есть
 
