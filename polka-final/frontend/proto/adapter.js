@@ -3073,3 +3073,29 @@ function paintEmpty(count) {
     }, true);
   } catch (e) { }
 })();
+
+/* ── Поддержка: кнопка в профиле ────────────────────────────────────────
+   В разметке вызывался openSupport(), но самой функции не было — тап
+   по «Поддержка» ничего не делал. Открываем чат с @suppolka. */
+(function () {
+  try {
+    const SUPPORT = 'suppolka';
+    window.openSupport = function () {
+      const url = 'https://t.me/' + SUPPORT;
+      const TG = window.Telegram && window.Telegram.WebApp;
+      try {
+        if (TG && typeof TG.openTelegramLink === 'function') { TG.openTelegramLink(url); return; }
+      } catch (e) { }
+      try {
+        if (TG && typeof TG.openLink === 'function') { TG.openLink(url); return; }
+      } catch (e) { }
+      try {
+        const a = document.createElement('a');
+        a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        document.body.appendChild(a); a.click(); a.remove();
+        return;
+      } catch (e) { }
+      window.location.href = url;
+    };
+  } catch (e) { }
+})();
