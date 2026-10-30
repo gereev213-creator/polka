@@ -1684,6 +1684,79 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     return url.replace('?&', '?').replace('&&', '&').rstrip('?&')
 
 
+def user_targets(server: str, token: str, cfg: dict = None) -> dict:
+    """Цели по критериям, сгруппированные по ПОЛЬЗОВАТЕЛЮ.
+
+    Зачем: лоты должны приносить пользу конкретному человеку. Если взять
+    просто «все критерии подряд», один активный пользователь занимает
+    очередь, а остальные ждут. Здесь каждый получает свою долю проходов.
+    """
+    try:
+        data = fetch_json(f"{server.rstrip('/')}/api/hunt?for_collector=1", token)
+    except Exception as exc:
+        print(f"  ⚠ критерии не получены: {exc}")
+        return {}
+    grouped: dict = {}
+    # Ограничение: не душим площадку — берём по 1 цели на пользователя
+    per_user = int(os.environ.get('POLKA_TARGETS_PER_USER', '1') or 1)
+    for crit in (data.get('items') or []):
+        uid = str(crit.get('user_id') or '')
+        query = " ".join(str(crit.get('query') or '').split())[:80]
+        if not query or not uid:
+            continue
+        words = [w for w in re.split(r'[^\w]+', query.lower()) if w]
+        slug = None
+        for word in words:
+            if word in CATEGORY_BY_WORD:
+                slug = CATEGORY_BY_WORD[word]
+                break
+        if not slug:
+            for word in words:
+                if word in RU_CATEGORY_WORDS:
+                    slug = RU_CATEGORY_WORDS[word]
+                    break
+        if not slug:
+            for word in words:
+                if word in BRAND_CATEGORY:
+                    slug = BRAND_CATEGORY[word]
+                    break
+        if not slug:
+            continue
+        slug = CATEGORY_SUBSTITUTE.get(slug, slug)
+        try:
+            pmin = int(crit.get('min_price') or 0)
+            pmax = int(crit.get('max_price') or 0)
+        except Exception:
+            pmin, pmax = 0, 0
+        url = (f"https://www.avito.ru/all/{slug}"
+               + (f"?pmax={pmax}&s=104" if pmax else "?s=104"))
+        grouped.setdefault(uid, []).append({
+            'url': url, 'city': '', 'category': query,
+            'query': query, 'crit_id': crit.get('id'),
+        })
+    return {u: v[:per_user] for u, v in grouped.items()}
+
+
+def rotation_batch(server: str, token: str, pass_no: int, limit: int,
+                   cfg: dict = None) -> list:
+    """Кого проверяем в этом проходе: пользователи идут по кругу.
+
+    pass_no растёт на каждой попытке, поэтому очередь сама переходит от
+    одного пользователя к другому — без ручного управления.
+    """
+    grouped = user_targets(server, token, cfg)
+    if not grouped:
+        return []
+    users = sorted(grouped)
+    picked = []
+    for i in range(min(limit, len(users))):
+        user = users[(pass_no + i) % len(users)]
+        picked.extend(grouped[user])
+        print(f"  → проверяю поиск пользователя {user[:6]}…: "
+              f"{grouped[user][0].get('query', '')[:30]}")
+    return picked
+
+
 def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     """Строит страницы поиска из критериев, которые задали пользователи.
 

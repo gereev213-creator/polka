@@ -20741,12 +20741,13 @@ async def _collector_inline_loop():
                 pass
             crit_targets = []
             try:
-                # В отдельном потоке: функция ходит к нашему же API по HTTP,
-                # а в event loop такой запрос ждёт сам себя и отваливается по
-                # таймауту. Из-за этого критерии не превращались в цели, и
-                # сборщик обходил только общие категории (телефоны).
+                # Ротация по пользователям: каждый проход проверяет ОДИН
+                # поиск одного человека, и очередь сама переходит дальше.
+                # Так при любом числе пользователей каждый получает свою
+                # долю внимания, а не только самый активный.
                 crit_targets = await asyncio.to_thread(
-                    collector.targets_from_criteria, cfg['server'], cfg['token'])
+                    collector.rotation_batch, cfg['server'], cfg['token'],
+                    int(_setting_get('collector.pass_no') or 0), 1)
             except Exception as e:
                 logger.warning(f"цели по критериям: {e}")
             try:
@@ -27000,7 +27001,7 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         cursor = db.conn.cursor()
         # Отдаём сборщику цену и свежесть: без них он не может попросить
         # Авито отфильтровать выдачу, и качает всё подряд.
-        cursor.execute("SELECT query, category, city, """
+        cursor.execute("SELECT id, user_id, query, category, city, """
                        "COALESCE(min_price,0) AS min_price, "
                        "COALESCE(max_price,0) AS max_price, "
                        "COALESCE(max_hours,0) AS max_hours, "
