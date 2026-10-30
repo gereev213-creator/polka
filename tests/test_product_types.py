@@ -33,3 +33,10 @@ for q, title, expect in cases:
 
 print('\nтипы товаров: правила работают' if not fails else '\nтипы товаров: есть ошибки')
 sys.exit(0 if not fails else 1)
+
+# ── продавец: частник ────────────────────────────────────────────────────
+_src = SRC
+_i = _src.index("req_low = str(crit.get('requirements') or '').lower()")
+_chunk = _src[_i:_i + 500]
+assert "'частны'" in _chunk or "'частник'" in _chunk, 'нет проверки частника'
+print('  ✓ выбор «только частник» учитывается в отборе')

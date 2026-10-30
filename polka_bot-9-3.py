@@ -22436,7 +22436,10 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 return no('replica')
             return no('requirement:' + str(phrase))
     req_low = str(crit.get('requirements') or '').lower()
-    if any(w in req_low for w in ('не магазин', 'с рук', 'частник', 'не компания')):
+    # Ловим все формы: «частник», «частные», «с рук» — иначе выбор
+    # «Только частник» в приложении не срабатывал.
+    if any(w in req_low for w in ('не магазин', 'с рук', 'частник', 'частны',
+                                  'не компания', 'только частные')):
         if str(ad.get('seller_type') or '') == 'company':
             return no('shop')
         if hunt_shop_in_name(str(ad.get('seller_name') or '')):
