@@ -452,8 +452,13 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
 FETCH_BYTES = [0]
 # Минимальный интервал между ЛЮБЫМИ запросами к Авито: два подряд — уже
 # повод для 429. Значение настраивается, по умолчанию 90 секунд.
+# Пауза между запросами: случайная в диапазоне, чтобы не выглядеть
+# роботом с ровным шагом.
 MIN_REQUEST_GAP = int(os.environ.get('POLKA_REQUEST_GAP', '90'))
+MAX_REQUEST_GAP = int(os.environ.get('POLKA_REQUEST_GAP_MAX', '240'))
 _LAST_REQUEST_TS = [0.0]
+# Сколько блокировок подряд: увеличивает паузу, успех — сбрасывает
+_BLOCK_BACKOFF = [0]
 
 
 def _respect_rate_limit() -> None:
@@ -462,8 +467,12 @@ def _respect_rate_limit() -> None:
         if MIN_REQUEST_GAP <= 0:
             return
         gap = time.time() - _LAST_REQUEST_TS[0]
-        if _LAST_REQUEST_TS[0] and gap < MIN_REQUEST_GAP:
-            time.sleep(MIN_REQUEST_GAP - gap)
+        # Растущая пауза после блокировок: чем чаще нас режут, тем медленнее
+        # идём. Сбрасывается при успешной странице.
+        need = random.randint(MIN_REQUEST_GAP, max(MIN_REQUEST_GAP, MAX_REQUEST_GAP))
+        need += min(600, _BLOCK_BACKOFF[0] * 60)
+        if _LAST_REQUEST_TS[0] and gap < need:
+            time.sleep(need - gap)
     except Exception:
         pass
 
@@ -600,6 +609,29 @@ def proxy_exit_ip() -> str:
     except Exception as exc:
         PROXY_API_ERROR[0] = str(exc)[:160]
         return ''
+
+
+def warm_up() -> bool:
+    """«Прогрев»: открываем главную Авито, чтобы получить штатные cookies.
+
+    Человек сначала заходит на сайт, потом в раздел. Запрос сразу в выдачу
+    без cookies выглядит как бот и чаще ловит 429.
+    """
+    try:
+        sess = _session_for(IMPERSONATE_POOL[1])
+        if sess is None:
+            return False
+        _mark_request()
+        r = sess.get('https://www.avito.ru/', timeout=25,
+                     proxies={'http': PROXY, 'https': PROXY} if PROXY else None)
+        ok = r.status_code == 200
+        if ok:
+            _cookies_remember(IMPERSONATE_POOL[1], sess)
+            print('  прогрев: cookies получены')
+        return ok
+    except Exception as exc:
+        print(f'  прогрев не удался: {str(exc)[:60]}')
+        return False
 
 
 def fetch(url: str, timeout: int = 25, prefer_scraper: bool = False) -> str:
@@ -2211,6 +2243,8 @@ MAX_TARGETS = int(os.environ.get('POLKA_MAX_TARGETS', '40'))
 TARGET_PAUSE = int(os.environ.get('POLKA_TARGET_PAUSE', '20'))
 # Как часто можно проверять ОДИН поиск: по умолчанию раз в час
 CHECK_INTERVAL_MIN = int(os.environ.get('POLKA_CHECK_INTERVAL_MIN', '60'))
+# Как часто «прогреваться» на главной Авито (в проходах)
+WARM_UP_EVERY = int(os.environ.get('POLKA_WARM_UP_EVERY', '5'))
 TARGETS_STATE_FILE = os.environ.get('POLKA_TARGETS_STATE', 'targets_state.json')
 
 
@@ -2341,6 +2375,16 @@ def run_once(cfg: dict) -> int:
     # этом спокойно отдать соседний раздел. Раньше первый же блок убивал
     # проход целиком, и сбор часами не работал.
     blocked_streak = 0
+    # Раз в 5 проходов «прогреваемся» — как человек, который сначала
+    # заходит на сайт, а потом в раздел.
+    try:
+        if int(cfg.get('warm_up_every') or WARM_UP_EVERY) > 0:
+            _pn = int(os.environ.get('POLKA_PASS_N', '0') or 0)
+            if _pn % int(cfg.get('warm_up_every') or WARM_UP_EVERY) == 0:
+                warm_up()
+    except Exception:
+        pass
+
     first_target = [True]
     for target in picked:
         # Между целями — пауза: два запроса подряд с одного IP Авито
@@ -2412,12 +2456,14 @@ def run_once(cfg: dict) -> int:
             # вхолостую. Теперь уходим на паузу.
             if not items and 'data-marker="item"' not in (html or ''):
                 blocked_streak += 1
+                _BLOCK_BACKOFF[0] = min(10, _BLOCK_BACKOFF[0] + 1)
                 print(f"  ⛔ страница без объявлений — считаю блоком ({blocked_streak})")
                 if blocked_streak >= 2:
                     save_targets_state(state)
                     raise SystemExit(3)
                 continue
             blocked_streak = 0
+            _BLOCK_BACKOFF[0] = 0
             first_page_dated = date_sorted_first_page(url)
             for item in items:
                 item['category'] = item.get('category') or target.get('category', '')

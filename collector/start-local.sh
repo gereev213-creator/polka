@@ -68,5 +68,9 @@ echo
 echo "Шаг 2 из 2. Авито доступен. Запускаю сбор каждые 15 минут."
 echo "Окно должно оставаться открытым. Остановить — Ctrl+C."
 echo
+# Обходы лимитов: пауза между запросами случайная (90–240 с) и растёт,
+# если Авито режет; раз в 5 проходов «прогрев» главной для cookies.
+# Запуск раз в 20 минут, а не в 15: реже — меньше поводов для 429.
+POLKA_REQUEST_GAP=90 POLKA_REQUEST_GAP_MAX=240 \
 POLKA_SERVER="$SERVER" POLKA_INGEST_TOKEN="$TOKEN" \
-  exec "$PY" collect.py --loop --every 900
+  exec "$PY" collect.py --loop --every 1200
