@@ -26630,10 +26630,14 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
     cursor = db.conn.cursor()
     # Сравниваем в Python: LOWER() в SQLite не понимает кириллицу, из-за чего
     # «Пуховик» и «пуховик» считались разными критериями.
-    cursor.execute("SELECT query, COALESCE(city,'') AS city FROM hunt_criteria "
+    cursor.execute("SELECT query, COALESCE(city,'') AS city, "
+                   "COALESCE(requirements,'') AS requirements FROM hunt_criteria "
                    "WHERE user_id=? AND active=1", (user_id,))
     for row in cursor.fetchall():
-        if str(row['query'] or '').lower() == query.lower() and row['city'] == (city or ''):
+        if (str(row['query'] or '').lower() == query.lower()
+                and row['city'] == (city or '')
+                and str(row['requirements'] or '').strip().lower()
+                == str(requirements or '').strip().lower()):
             return None
     # Этап F4: структурные требования; если их не передали — разбираем текст
     if isinstance(requirements_json, dict):
