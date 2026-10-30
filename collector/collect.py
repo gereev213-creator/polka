@@ -386,6 +386,12 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                     _cookies_drop(profile)
                 time.sleep(random.uniform(2.0, 5.0))
                 continue
+            # Короткая страница без разметки выдачи — заглушка антибота,
+            # а не пустой результат. Уходим на паузу, а не долбим площадку
+            # каждые полчаса и не тратим трафик.
+            if len(r.text or '') < 200_000:
+                raise Blocked(f'{profile}: заглушка вместо выдачи '
+                              f'({len(r.text or "")} байт)')
             if sess is not None:
                 _cookies_remember(profile, sess)
             _WORKING_PROFILE = profile
