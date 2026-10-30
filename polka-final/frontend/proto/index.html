@@ -674,6 +674,13 @@ body.kbd-open #stage{padding-bottom:0!important}
 /* На «Тарифах» нижнего меню нет — оно мешало вводить промокод */
 body.nav-off #nav{display:none!important}
 body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
+
+/* Новый поиск: одна ссылка + плашки разбора */
+.newHint{font-size:10.5px;color:#5C8AC9;font-weight:600;margin-top:4px;line-height:1.3}
+.lchip{display:inline-flex;align-items:center;padding:6px 10px;border-radius:999px;
+  background:#E7EFF8;color:#2C6CDF;font-size:11px;font-weight:800;line-height:1;
+  white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+#linkChips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 0}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -755,12 +762,17 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <!-- new search -->
 <section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
 <div class="scroll"><form class="card form" id="searchForm">
-<div class="field"><label>Что ищем</label><input id="q" placeholder="Например: джинсы levis" required></div>
-<div class="field"><label>Ссылка с Авито (необязательно)</label><input id="avitoLink" placeholder="Вставь ссылку из поиска Авито" autocomplete="off" inputmode="url"><div style="font-size:10.5px;color:#5C8AC9;font-weight:600;margin-top:4px;line-height:1.3">Открой Авито, настрой фильтры и вставь адрес — сборщик пойдёт точно по нему</div></div><div class="field"><label>Цена до, ₽</label><input id="maxprice" placeholder="Например: 5000" inputmode="numeric"></div>
-<div class="field"><label>Критерии</label><div class="chips" style="margin-top:0"><button type="button" class="chip" data-req="только частные" onclick="this.classList.toggle('on')">только частные</button><button type="button" class="chip" data-req="оригинал" onclick="this.classList.toggle('on')">оригинал</button><button type="button" class="chip" data-req="без ремонта" onclick="this.classList.toggle('on')">без ремонта</button><button type="button" class="chip" data-req="полный комплект" onclick="this.classList.toggle('on')">комплект</button><button type="button" class="chip" data-req="с фото" onclick="this.classList.toggle('on')">с фото</button><button type="button" class="chip" data-req="новое" onclick="this.classList.toggle('on')">новое</button><button type="button" class="chip" data-req="торг" onclick="this.classList.toggle('on')">торг</button></div></div>
-<div class="field"><label>Минус-слова</label><input placeholder="запчасти, битый"></div>
-<div class="forecast">Пришлём, когда продавец разместит подходящее объявление.<span class="forecast-note">Сборщик может ошибаться из-за блокировки трафика Авито — если находка не подошла, отметьте её в списке.</span></div>
-</form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
+          <div class="field">
+            <label>Ссылка с Авито</label>
+            <input id="avitoLink" placeholder="Вставь ссылку из поиска Авито"
+                   autocomplete="off" inputmode="url">
+            <div class="newHint">Открой Авито, настрой фильтры и вставь адрес — сборщик пойдёт точно по нему</div>
+          </div>
+          <div class="chips" id="linkChips" style="display:none"></div>
+          <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.
+            <span class="forecast-note">Сборщик может ошибаться из-за блокировки трафика Авито —
+            если находка не подошла, отметьте её в списке.</span></div>
+        </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
 
 <!-- history -->
 <section class="screen" id="s-history"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">История</span></div>
@@ -930,8 +942,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261030134032"></script>
-<script src="adapter.js?v=20261030134032"></script><script src="payments.js?v=20261030134032"></script><script src="admin.js?v=20261030134032"></script><script src="keyboard.js?v=20261030134032"></script><script src="telegram-safe.js?v=20261030134032"></script><script>
+</script><script src="telegram-web-app.js?v=20261030141441"></script>
+<script src="adapter.js?v=20261030141441"></script><script src="payments.js?v=20261030141441"></script><script src="admin.js?v=20261030141441"></script><script src="keyboard.js?v=20261030141441"></script><script src="telegram-safe.js?v=20261030141441"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;

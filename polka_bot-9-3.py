@@ -34553,7 +34553,12 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/ingest/status', api_ingest_status)
     app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
     async def api_hunt_parse_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
-        """POST /api/hunt/parse-link — что поняли из ссылки, ничего не сохраняя."""
+        """POST /api/hunt/parse-link — что поняли из ссылки, ничего не сохраняя.
+
+        Возвращает человеческие плашки: раздел, модель, цену, город. Нужно,
+        чтобы человек видел, правильно ли поняли его фильтры, ещё до создания
+        поиска.
+        """
         viewer_id = _miniapp_viewer(request)
         if not viewer_id:
             return _miniapp_err('unauthorized', 401)
@@ -34565,6 +34570,48 @@ def create_api_app() -> aiohttp_web.Application:
         if not link.get('ok'):
             return _miniapp_json({'ok': False, 'error': 'bad_link',
                                   'detail': link.get('error') or 'Ссылка не подошла'})
+        # Плашки для наглядности
+        try:
+            from urllib.parse import unquote
+            segs = [unquote(s) for s in str(link.get('path') or '').split('/') if s]
+            slug = ''
+            for seg in reversed(segs):
+                if seg in CATEGORY_BY_WORD.values():
+                    slug = seg
+                    break
+            if not slug and len(segs) >= 2:
+                slug = segs[1]
+            model = ''
+            for seg in reversed(segs):
+                if (seg and seg != slug and not seg.isdigit()
+                        and not re.match(r'^[a-z]{2,4}\d+-[A-Za-z0-9_-]+$', seg)
+                        and not re.match(r'^(all|rossiya)$', seg)):
+                    model = seg.replace('_', ' ')
+                    break
+            facts = avito_blob_facts(link.get('filters') or '')
+            labels = [str(x) for x in (facts.get('labels') or [])]
+            if link.get('max_price'):
+                money = f"до {int(link['max_price']):,}".replace(',', ' ') + " \u20bd"
+                if money not in labels:
+                    labels.append(money)
+            if link.get('min_price'):
+                money = f"от {int(link['min_price']):,}".replace(',', ' ') + " \u20bd"
+                if money not in labels:
+                    labels.append(money)
+            region = str(link.get('region') or '').replace('-', ' ').title()
+            if region and region.lower() not in ('all', 'rossiya'):
+                labels.append(region)
+            query = (str(link.get('q') or '') or model
+                     or HUNT_SLUG_TITLES.get(slug, '') or 'товар')
+            link.update({
+                'category_title': HUNT_SLUG_TITLES.get(slug, '') or model or '',
+                'model': model,
+                'city': region,
+                'labels': labels[:6],
+                'query_human': query,
+            })
+        except Exception as _e:
+            logger.debug(f"parse-link labels: {_e}")
         return _miniapp_json(link)
 
     app.router.add_route('POST', '/api/hunt/parse-link', api_hunt_parse_link)

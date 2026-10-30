@@ -562,7 +562,10 @@ function paintEmpty(count) {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
-      if (q.length < 2) return;
+      const _linkEl = document.getElementById('avitoLink');
+      const _linkNow = _linkEl ? String(_linkEl.value || '').trim() : '';
+      // Основной путь теперь — ссылка: без неё и без короткого запроса выходим.
+      if (!_linkNow && q.length < 2) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
         .map((b) => (b.getAttribute('data-req') || b.textContent || '').trim()).filter(Boolean);
@@ -2937,5 +2940,64 @@ function paintEmpty(count) {
       window.go = wrapped;
     };
     setTimeout(wrap, 700);
+  } catch (e) { }
+})();
+
+/* ── Новый поиск: плашки разбора ссылки ─────────────────────────────────
+   Вставил ссылку — показываем, что из неё поняли: раздел, модель, цену,
+   город. Так видно, что фильтры прочитаны верно, ещё до создания поиска. */
+(function () {
+  try {
+    let timer = null;
+    let lastUrl = '';
+
+    function box() { return document.getElementById('linkChips'); }
+
+    function clear() {
+      const b = box();
+      if (b) { b.style.display = 'none'; b.innerHTML = ''; }
+      lastUrl = '';
+    }
+
+    function paint(data) {
+      const b = box();
+      if (!b) return;
+      const all = [];
+      if (data && data.category_title) all.push(data.category_title);
+      if (data && data.model) all.push(data.model);
+      ((data && data.labels) || []).forEach((x) => { if (x && all.indexOf(x) < 0) all.push(x); });
+      if (!all.length) { b.style.display = 'none'; b.innerHTML = ''; return; }
+      b.style.display = 'flex';
+      b.innerHTML = all.slice(0, 7).map((x) =>
+        '<span class="lchip">' + String(x).replace(/</g, '') + '</span>').join('');
+    }
+
+    async function parse(link) {
+      if (!link || link === lastUrl) return;
+      lastUrl = link;
+      if (link.length < 12) { paint(null); return; }
+      try {
+        const res = await window.PolkaAPI.api('/api/hunt/parse-link', {
+          method: 'POST', body: JSON.stringify({ url: link }),
+        });
+        paint(res && res.ok ? res : null);
+      } catch (e) { paint(null); }
+    }
+
+    document.addEventListener('input', (e) => {
+      if (!e.target || e.target.id !== 'avitoLink') return;
+      const link = String(e.target.value || '').trim();
+      if (timer) clearTimeout(timer);
+      if (!link) { clear(); return; }
+      timer = setTimeout(() => parse(link), 350);
+    }, true);
+
+    document.addEventListener('paste', (e) => {
+      if (!e.target || e.target.id !== 'avitoLink') return;
+      setTimeout(() => {
+        const v = String(e.target.value || '').trim();
+        if (v) parse(v);
+      }, 90);
+    }, true);
   } catch (e) { }
 })();
