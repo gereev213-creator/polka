@@ -525,13 +525,21 @@ def create_rotation_link(api_key: str = '') -> str:
     payload = {'proxies': [{'product': proxy_product(),
                             'username': user, 'password': pwd}]}
     try:
-        req = urllib.request.Request(
-            f'{PROXY_API_BASE}/rotation-links',
-            data=json.dumps(payload).encode('utf-8'),
-            headers={'Content-Type': 'application/json', 'X-API-Key': key},
-            method='POST')
-        with _opener().open(req, timeout=25) as resp:
-            data = json.loads(resp.read().decode('utf-8', 'ignore'))
+        # curl_cffi надёжнее системного urllib: у него свои корневые
+        # сертификаты и современный TLS. С urllib сервер провайдера
+        # закрывал соединение («Remote end closed connection»).
+        if _cffi is not None:
+            r = _cffi.post(f'{PROXY_API_BASE}/rotation-links', json=payload,
+                           headers={'X-API-Key': key}, timeout=25)
+            data = r.json()
+        else:
+            req = urllib.request.Request(
+                f'{PROXY_API_BASE}/rotation-links',
+                data=json.dumps(payload).encode('utf-8'),
+                headers={'Content-Type': 'application/json', 'X-API-Key': key},
+                method='POST')
+            with _opener().open(req, timeout=25) as resp:
+                data = json.loads(resp.read().decode('utf-8', 'ignore'))
         PROXY_API_ERROR[0] = ''
         results = ((data or {}).get('data') or {}).get('results') or []
         for item in results:
@@ -558,9 +566,12 @@ def apply_rotation(api_key: str = '') -> bool:
     if not url:
         return False
     try:
-        req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
-        with _opener().open(req, timeout=25) as resp:
-            resp.read()
+        if _cffi is not None:
+            _cffi.get(url, headers={'User-Agent': USER_AGENT}, timeout=25)
+        else:
+            req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+            with _opener().open(req, timeout=25) as resp:
+                resp.read()
         _PENDING_ROTATION['url'] = ''
         print('  ↻ IP прокси сменён через API')
         return True
