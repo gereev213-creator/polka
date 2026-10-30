@@ -1,4 +1,9 @@
-"""Критерий из ссылки доверяет Авито: наши проверки по словам не применяются."""
+"""Критерий из ссылки проверяет слова запроса так же, как обычный.
+
+Раньше ссылка давала полное доверие: любой лот из открытой страницы
+считался находкой. Когда Авито блокирует поиск по q=, сборщик откатывается
+на весь раздел — и в находки шёл мусор («Платье вечернее» по «фен dyson»).
+"""
 import os, sys
 
 SRC = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'polka_bot-9-3.py'),
@@ -9,18 +14,17 @@ j = SRC.index('\ndef ', i + 10)
 body = SRC[i:j]
 
 checks = [
-    ("ранний выход по filter_url", "if str(crit.get('filter_url') or '').startswith('http')" in body),
-    ("решение помечено direct_link", "'direct_link'" in body),
-    ("подпись «по фильтрам Авито»", "'по фильтрам Авито'" in body),
-    # цена и фото проверяются ДО выхода — значит мусор по цене всё равно отсечётся
-    # теперь доверие ссылке стоит в начале, а цена проверяется внутри него
-    ("доверие в начале проверки",
-     body.index("filter_url") < body.index("category_mismatch") if "category_mismatch" in body else True),
-    ("фото проверяется внутри выхода", "return no('no_photo')" in body[body.index("filter_url"):]),
+    ("нет безусловного доверия по filter_url",
+     "if str(crit.get('filter_url') or '').startswith('http')" not in body),
+    ("нет раннего решения direct_link",
+     "return Decision(True, 'direct_link'" not in body),
+    ("слова берём из search_q", "crit.get('search_q')" in body),
+    ("проверка слов осталась", "_query_words_required" in body),
+    ("страховка «ни одного слова» на месте", "нет ни одного" in body.lower() or "_any_word" in body),
 ]
 ok = True
 for name, res in checks:
     print(f"  {'✓' if res else '✗'} {name}")
     ok = ok and res
-print('\nдоверие ссылке: правила на месте' if ok else '\nдоверие ссылке: есть пропуски')
+print('\nссылка проверяется словами: на месте' if ok else '\nссылка проверяется словами: есть пропуски')
 sys.exit(0 if ok else 1)

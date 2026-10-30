@@ -42,8 +42,8 @@ assert facts['battery_from'] == 80, facts
 i = SRC.index('def evaluate_ad(')
 j = SRC.index('\ndef ', i + 10)
 eval_src = SRC[i:j]
-print('3) ранний выход для критерия из ссылки:', "filter_url" in eval_src)
-assert "filter_url" in eval_src
-assert "'direct_link'" in eval_src
+print('3) ссылка не отменяет проверку слов:', "filter_url" not in eval_src)
+assert "if str(crit.get('filter_url')" not in eval_src
+assert "search_q" in eval_src
 
 print('\nживая ссылка: разбор, цена, АКБ и доверие фильтрам — всё сходится')

@@ -22103,8 +22103,10 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # и сборщик открывает именно его. Старый filter_url такого пути не даёт,
     # а правило по нему принимало ВСЁ подряд — так по критерию «iphone 17 pro»
     # в ленту ушли рубашки и джинсы.
-    if str(crit.get('search_path') or '').strip():
-        return Decision(True, 'direct_link', 'по фильтрам Авито')
+    # Критерий из ссылки больше НЕ проходит без проверки слов: когда Авито
+    # блокирует поиск по q=, сборщик откатывается на весь раздел, и в
+    # находки шло всё подряд («Платье вечернее» по критерию «фен dyson»).
+    # Слова проверяем как обычно; если слов в критерии нет — пропускаем.
 
     require_description=True — окончательное решение: если критерий опирается
     на описание, а описания нет, объявление НЕ считается подходящим (статус
@@ -22143,17 +22145,18 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
         return no('city_mismatch')
 
+    # Для критериев из ссылки слова берём из search_q: query там может быть
+    # названием раздела («Красота и здоровье»), а не товаром.
+    _crit_query = str(crit.get('search_q') or '').strip() or str(crit.get('query') or '')
+    if _crit_query != str(crit.get('query') or ''):
+        crit = dict(crit)
+        crit['query'] = _crit_query
     title = str(ad.get('title') or '').lower()
     # Критерий создан из ссылки человека: отбор уже сделал Авито своим
     # набором фильтров. Наши проверки по словам заголовка здесь только
     # вредят: они выкидывали подходящие объявления. Доверяем площадке,
     # оставляя проверки цены, фото и города.
-    if str(crit.get('filter_url') or '').startswith('http'):
-        if int(crit.get('with_photo') or 0):
-            photos = str(ad.get('photos') or '')
-            if photos in ('', '[]', 'null'):
-                return no('no_photo')
-        return Decision(True, 'direct_link', 'по фильтрам Авито')
+    # (ссылка больше не отменяет проверку слов — см. выше)
 
     # Где искать слова критерия. По умолчанию и в описании: важное часто
     # написано не в заголовке («АКБ 100 %», «без сколов», «полный комплект»).
@@ -22181,6 +22184,27 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     hay = ' '.join([title, _desc_text] + _extra_parts).strip() or title
     if not _condition_ok(crit.get('condition'), title):
         return no('condition_new_used')
+    # Страховка от «модель сказала да»: если в тексте нет НИ ОДНОГО слова
+    # запроса, объявление не подходит, что бы ни ответила LLM. Раньше
+    # LLM обходила проверку слов, и по критерию «фен dyson» в находки шли
+    # «Шапка ушанка» и «Платье вечернее».
+    try:
+        _req_words_all = [w for w in _query_words_required(crit.get('query'))
+                          if not str(w).isdigit()]
+        if _req_words_all:
+            _hay_plain = re.sub(r"[’'`\u2019]", '', hay)
+            _any_word = False
+            for _w in _req_words_all:
+                _vars = query_word_variants(_w) or (_w,)
+                if any((v in hay) or (re.sub(r"[’'`\u2019]", '', v) in _hay_plain)
+                       for v in _vars):
+                    _any_word = True
+                    break
+            if not _any_word:
+                return no('title_words')
+    except Exception:
+        pass
+
     alts = _query_alt_numbers(crit.get('query'))
     if alts and not any(re.search(r'(?<![0-9])' + re.escape(n) + r'(?![0-9])', hay) for n in alts):
         if (globals().get('_llm_says_yes') and _llm_says_yes(ad, crit)):

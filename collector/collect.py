@@ -1953,6 +1953,8 @@ def date_sorted_first_page(url: str) -> bool:
 # обойти все разом нельзя: Авито ограничивает частоту, а проход становится
 # бесконечным. Остальные подхватит следующий проход — очередь вращается.
 MAX_TARGETS = int(os.environ.get('POLKA_MAX_TARGETS', '40'))
+# Пауза между страницами разных критериев: меньше блокировок
+TARGET_PAUSE = int(os.environ.get('POLKA_TARGET_PAUSE', '20'))
 TARGETS_STATE_FILE = os.environ.get('POLKA_TARGETS_STATE', 'targets_state.json')
 
 
@@ -2055,7 +2057,18 @@ def run_once(cfg: dict) -> int:
     # этом спокойно отдать соседний раздел. Раньше первый же блок убивал
     # проход целиком, и сбор часами не работал.
     blocked_streak = 0
+    first_target = [True]
     for target in picked:
+        # Между целями — пауза: два запроса подряд с одного IP Авито
+        # воспринимает как бота и отвечает 429/439.
+        if not first_target[0]:
+            try:
+                import random as _rnd
+                _pause = int(cfg.get('target_pause') or TARGET_PAUSE)
+                time.sleep(_pause + _rnd.randint(0, 5))
+            except Exception:
+                pass
+        first_target[0] = False
         source = target.get('source', 'avito')
         city = target.get('city', '')
         tkey = str(target.get('url') or '')
@@ -2075,8 +2088,19 @@ def run_once(cfg: dict) -> int:
                 html = None
                 if 'q=' in url and not _tried_plain:
                     _tried_plain = True
-                    plain = re.sub(r'[?&]q=[^&]*', '', url)
-                    plain = plain.replace('?&', '?').replace('&&', '&').rstrip('?&')
+                    # Пересобираем адрес нормально: вырезание регуляркой
+                    # оставляло «?» потерянным, и получался невалидный
+                    # «/all/…&s=104» вместо «/all/…?s=104».
+                    try:
+                        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+                        sp = urlsplit(url)
+                        keep = [(k, v) for k, v in parse_qsl(sp.query, keep_blank_values=True)
+                                if k != 'q']
+                        plain = urlunsplit((sp.scheme, sp.netloc, sp.path,
+                                            urlencode(keep), ''))
+                    except Exception:
+                        plain = re.sub(r'[?&]q=[^&]*', '', url)
+                        plain = plain.replace('?&', '?').replace('&&', '&').rstrip('?&')
                     print(f"  ↻ поиск с q= закрыт — пробую раздел без q: {plain[:70]}")
                     try:
                         html = fetch(plain, prefer_scraper=False)
