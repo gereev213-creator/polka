@@ -2193,8 +2193,19 @@ def run_once(cfg: dict) -> int:
                 # items остаётся пустым: к предыдущей цели не обращаемся.
                 print(f"  ✖ не открылось: {exc}")
                 continue
-            blocked_streak = 0
             items = parse_page(html)
+            # Страница без единой карточки — это не «пустая выдача», а
+            # антибот-заглушка: Авито так отвечает на частые запросы.
+            # Раньше такой проход считался успешным, и мы тратили трафик
+            # вхолостую. Теперь уходим на паузу.
+            if not items and 'data-marker="item"' not in (html or ''):
+                blocked_streak += 1
+                print(f"  ⛔ страница без объявлений — считаю блоком ({blocked_streak})")
+                if blocked_streak >= 2:
+                    save_targets_state(state)
+                    raise SystemExit(3)
+                continue
+            blocked_streak = 0
             first_page_dated = date_sorted_first_page(url)
             for item in items:
                 item['category'] = item.get('category') or target.get('category', '')
