@@ -612,8 +612,11 @@ function paintEmpty(count) {
       // Основной путь теперь — ссылка: без неё и без короткого запроса выходим.
       if (!_linkNow && q.length < 2) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
+      const sellerEl = document.querySelector('#sellerChips [data-seller].on');
+      const seller = sellerEl ? String(sellerEl.getAttribute('data-seller') || 'any') : 'any';
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
-        .map((b) => (b.getAttribute('data-req') || b.textContent || '').trim()).filter(Boolean);
+        .map((b) => (b.getAttribute('data-req') || '').trim()).filter(Boolean);
+      if (seller === 'private') chips.push('только частник');
       const minus = [...document.querySelectorAll('#searchForm input')]
         .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
         .filter(Boolean).join(',');
@@ -3055,6 +3058,15 @@ function paintEmpty(count) {
         paint(res && res.ok ? res : null);
       } catch (e) { paint(null); }
     }
+
+    // Выбор продавца: активен ровно один чип
+    document.addEventListener('click', (e) => {
+      const chip = e.target.closest && e.target.closest('#sellerChips [data-seller]');
+      if (!chip) return;
+      e.preventDefault();
+      document.querySelectorAll('#sellerChips [data-seller]').forEach((c) => c.classList.remove('on'));
+      chip.classList.add('on');
+    }, true);
 
     document.addEventListener('input', (e) => {
       if (!e.target || e.target.id !== 'avitoLink') return;
