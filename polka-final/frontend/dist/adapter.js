@@ -2904,3 +2904,38 @@ function paintEmpty(count) {
     }, 800); });
   } catch (e) { }
 })();
+
+/* ── Тарифы: прячем нижнее меню ─────────────────────────────────────────
+   На этом экране формы (промокод, оплата) стоят внизу, и плашка меню
+   перекрывала поле — вписать код было невозможно. Прячем меню только
+   здесь, на остальных экранах оно остаётся. */
+(function () {
+  try {
+    const SCREENS_WITHOUT_NAV = ['s-tariffs'];
+
+    function sync() {
+      const active = document.querySelector('.screen.active');
+      const id = active ? active.id : '';
+      const hide = SCREENS_WITHOUT_NAV.indexOf(id) >= 0;
+      document.body.classList.toggle('nav-off', hide);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { sync(); setTimeout(sync, 400); });
+    setTimeout(sync, 1200);
+    setInterval(sync, 800);
+
+    // Реагируем и на программные переходы
+    const wrap = () => {
+      if (typeof window.go !== 'function' || window.go.__navoff) return;
+      const orig = window.go;
+      const wrapped = function () {
+        const r = orig.apply(this, arguments);
+        setTimeout(sync, 60);
+        return r;
+      };
+      wrapped.__navoff = true;
+      window.go = wrapped;
+    };
+    setTimeout(wrap, 700);
+  } catch (e) { }
+})();

@@ -669,6 +669,10 @@ body.kbd-open #stage{padding-bottom:0!important}
 /* В шторке карточка без внешней тени и отступов */
 #plusInfo .piBody .card.benefits{box-shadow:none;padding:0;border-radius:0;
   background:transparent;margin:0}
+
+/* На «Тарифах» нижнего меню нет — оно мешало вводить промокод */
+body.nav-off #nav{display:none!important}
+body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -925,8 +929,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261030133527"></script>
-<script src="adapter.js?v=20261030133527"></script><script src="payments.js?v=20261030133527"></script><script src="admin.js?v=20261030133527"></script><script src="keyboard.js?v=20261030133527"></script><script src="telegram-safe.js?v=20261030133527"></script><script>
+</script><script src="telegram-web-app.js?v=20261030134032"></script>
+<script src="adapter.js?v=20261030134032"></script><script src="payments.js?v=20261030134032"></script><script src="admin.js?v=20261030134032"></script><script src="keyboard.js?v=20261030134032"></script><script src="telegram-safe.js?v=20261030134032"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
