@@ -20717,6 +20717,13 @@ async def _collector_inline_loop():
             _setting_set('collector.pass_no', str(_pass_no))
             # 1 цель за проход: страница Авито тяжёлая, а прокси у нас на 300 МБ
             _limit = int(os.environ.get('POLKA_PASS_TARGETS', '1') or 1)
+            # Частота проверки одного поиска (минуты). Держим в настройках,
+            # чтобы менять без релиза: больше частота — больше трафика.
+            try:
+                _check_every = int(cfg_get('hunt.check_interval_min') or 60)
+            except Exception:
+                _check_every = 60
+            cfg['check_interval_min'] = max(5, _check_every)
             _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
                 crit_targets[:_pass_no % max(1, len(crit_targets))]
             cfg['targets'] = _rotated[:_limit] + base_targets[:1]
@@ -23341,6 +23348,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'ab.share_percent': ('int', 0, 100, 50, 'A/B: доля людей на альтернативе, %'),
     'hunt.fresh_hours': ('int', 1, 8760, HUNT_FRESH_HOURS, 'Свежесть находки, часов'),
     'hunt.min_discount': ('int', 0, 100, HUNT_MIN_DISCOUNT, 'Мин. скидка для находки, %'),
+    'hunt.check_interval_min': ('int', 5, 720, 60,
+                               'Как часто проверять один поиск, минут'),
     'hunt.min_price_share': ('float', 0.0, 1.0, HUNT_MIN_PRICE_SHARE,
                              'Мин. доля цены от медианы (0.15 = 15%)'),
     # константа объявлена ниже по файлу — читаем то же значение из окружения

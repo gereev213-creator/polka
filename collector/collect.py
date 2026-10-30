@@ -362,11 +362,16 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
             # Сессия нужна, чтобы cookies жили между запросами и проходами
             sess = _session_for(profile)
             _mark_request()
+            # Сжатие просим в самом запросе: страница Авито весит 3,5 МБ
+            # без него и ~0,4 МБ с brotli. Прокси считает мегабайты, так что
+            # это главная экономия.
+            _hdrs = {'Accept-Encoding': 'br, gzip, deflate'}
             try:
                 if sess is not None:
-                    r = sess.get(url, timeout=timeout, proxies=proxies)
+                    r = sess.get(url, timeout=timeout, proxies=proxies, headers=_hdrs)
                 else:
-                    r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+                    r = _cffi.get(url, impersonate=profile, timeout=timeout,
+                                  proxies=proxies, headers=_hdrs)
             except Exception as exc:
                 last_error = f"{profile}: {str(exc)[:70]}"
                 rotate_proxy_session()
@@ -1992,6 +1997,8 @@ def date_sorted_first_page(url: str) -> bool:
 MAX_TARGETS = int(os.environ.get('POLKA_MAX_TARGETS', '40'))
 # Пауза между страницами разных критериев: меньше блокировок
 TARGET_PAUSE = int(os.environ.get('POLKA_TARGET_PAUSE', '20'))
+# Как часто можно проверять ОДИН поиск: по умолчанию раз в час
+CHECK_INTERVAL_MIN = int(os.environ.get('POLKA_CHECK_INTERVAL_MIN', '60'))
 TARGETS_STATE_FILE = os.environ.get('POLKA_TARGETS_STATE', 'targets_state.json')
 
 
@@ -2082,6 +2089,32 @@ def run_once(cfg: dict) -> int:
     # По умолчанию одна цель за проход: страница Авито весит ~3,5 МБ, а
     # лимиты площадки срабатывают уже на втором запросе подряд.
     limit = int(cfg.get('max_targets') or 1)
+    # Не долбим одну и ту же страницу: цель, которую проверяли недавно,
+    # уступает место другим. Так каждый поиск проверяется по кругу, а не
+    # каждые несколько минут.
+    try:
+        _min_interval = int(cfg.get('check_interval_min') or CHECK_INTERVAL_MIN)
+    except Exception:
+        _min_interval = CHECK_INTERVAL_MIN
+    if _min_interval > 0:
+        now_ts = time.time()
+        fresh_enough = []
+        for t in targets:
+            st = state.get(str(t.get('url') or '')) or {}
+            last = str(st.get('last_run') or '')
+            if not last:
+                fresh_enough.append(t)
+                continue
+            try:
+                last_ts = time.mktime(time.strptime(last[:19], '%Y-%m-%dT%H:%M:%S'))
+            except Exception:
+                fresh_enough.append(t)
+                continue
+            if (now_ts - last_ts) >= _min_interval * 60:
+                fresh_enough.append(t)
+        if fresh_enough:
+            targets = fresh_enough
+
     picked = order_targets(targets, state, day, limit)
     picked_urls = {str(t.get('url') or '') for t in picked}
     n_today = 0

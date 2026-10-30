@@ -26,6 +26,10 @@ checks = [
     ('длинный отдых после серии', 'wait_min = 180' in BOT),
     # лимит трафика
     ('дневной лимит трафика', 'collector.budget_mb_day' in BOT),
+    # экономия: сжатие и круговой обход поисков
+    ('сжатие запрашивается в запросе', "Accept-Encoding': 'br, gzip" in COL),
+    ('один поиск проверяется не чаще часа', 'CHECK_INTERVAL_MIN' in COL),
+    ('частота настраивается из админки', 'hunt.check_interval_min' in BOT),
 ]
 fails = 0
 for name, ok in checks:
