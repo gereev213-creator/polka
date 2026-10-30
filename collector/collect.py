@@ -581,15 +581,18 @@ def apply_rotation(api_key: str = '') -> bool:
 
 
 def proxy_exit_ip() -> str:
-    """Текущий внешний IP через прокси — для проверки."""
+    """Внешний IP через прокси. Только curl_cffi: urllib не умеет SOCKS."""
+    if not PROXY:
+        return ''
+    proxies = {'http': PROXY, 'https': PROXY}
     try:
-        req = urllib.request.Request('https://api.ipify.org',
-                                     headers={'User-Agent': USER_AGENT})
-        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies or {}))
-        with opener.open(req, timeout=20) as resp:
-            return resp.read().decode('utf-8', 'ignore').strip()
-    except Exception:
+        if _cffi is not None:
+            r = _cffi.get('https://api.ipify.org', proxies=proxies,
+                          impersonate=IMPERSONATE, timeout=25)
+            return (r.text or '').strip()
+        return ''
+    except Exception as exc:
+        PROXY_API_ERROR[0] = str(exc)[:160]
         return ''
 
 
