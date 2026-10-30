@@ -607,10 +607,8 @@ function paintEmpty(count) {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
-      const _linkEl = document.getElementById('avitoLink');
-      const _linkNow = _linkEl ? String(_linkEl.value || '').trim() : '';
-      // Основной путь теперь — ссылка: без неё и без короткого запроса выходим.
-      if (!_linkNow && q.length < 2) return;
+      // Ссылки в форме больше нет: ищем по словам.
+      if (q.length < 2) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
       const sellerEl = document.querySelector('#sellerChips [data-seller].on');
       const seller = sellerEl ? String(sellerEl.getAttribute('data-seller') || 'any') : 'any';

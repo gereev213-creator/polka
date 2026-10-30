@@ -776,19 +776,12 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
             <input id="maxprice" placeholder="Например: 5000" inputmode="numeric">
           </div>
           <div class="field">
-            <label>Ссылка с Авито (необязательно)</label>
-            <input id="avitoLink" placeholder="Можно вставить ссылку из поиска Авито"
-                   autocomplete="off" inputmode="url">
-            <div class="newHint">Если вставишь ссылку — возьмём фильтры из неё</div>
-          </div>
-          <div class="field">
             <label>Продавец</label>
             <div class="chips" id="sellerChips" style="margin-top:0">
               <button type="button" class="chip on" data-seller="any">Любой</button>
               <button type="button" class="chip" data-seller="private">Только частник</button>
             </div>
           </div>
-          <div class="chips" id="linkChips" style="display:none"></div>
           <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.
             <span class="forecast-note">Сборщик может ошибаться из-за блокировки трафика Авито —
             если находка не подошла, отметьте её в списке.</span></div>
@@ -962,8 +955,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261030224001"></script>
-<script src="adapter.js?v=20261030224001"></script><script src="payments.js?v=20261030224001"></script><script src="admin.js?v=20261030224001"></script><script src="keyboard.js?v=20261030224001"></script><script src="telegram-safe.js?v=20261030224001"></script><script>
+</script><script src="telegram-web-app.js?v=20261030225734"></script>
+<script src="adapter.js?v=20261030225734"></script><script src="payments.js?v=20261030225734"></script><script src="admin.js?v=20261030225734"></script><script src="keyboard.js?v=20261030225734"></script><script src="telegram-safe.js?v=20261030225734"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
