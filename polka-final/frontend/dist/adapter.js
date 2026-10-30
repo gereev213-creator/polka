@@ -152,7 +152,7 @@ function paintEmpty(count) {
       const bg = ph ? `style="background-image:url('${ph}')"` : '';
       const liked = l.fav ? ' on' : '';
       return `<article class="lot" data-open="${l.id}">
-        <div class="lotimg" ${bg}>${ph ? '' : 'Нет фото'}
+        <div class="lotimg" ${bg}>${''}
           <button class="heart${liked}" data-fav="${l.id}">
             <svg width="13" height="13"><use href="#i-heart"/></svg>
           </button>
@@ -1933,7 +1933,7 @@ function paintEmpty(count) {
           const ph = photoOf(a);
           const bg = ph ? `style="background-image:url('${ph}')"` : '';
           return `<article class="lot" data-open="${a.id}">
-            <div class="lotimg" ${bg}>${ph ? '' : 'Нет фото'}
+            <div class="lotimg" ${bg}>${''}
               <button class="heart" data-fav="${a.id}">
                 <svg width="13" height="13"><use href="#i-heart"/></svg>
               </button>
@@ -2455,9 +2455,21 @@ function paintEmpty(count) {
       const ph = document.getElementById('photo');
       if (!ph) return;
       if (!photos.length) {
+        // Нет фото: наша голубая градиентная заливка, без надписей
+        // «НЕТ ФОТО» и без счётчика «1 / 1» — раньше в кружке оставался
+        // номер от макета.
         ph.style.backgroundImage = '';
+        ph.removeAttribute('style');
+        ph.classList.add('noPhotoFill');
+        const np = document.getElementById('nophoto');
+        if (np) np.style.display = 'none';   // без надписи «Нет фото»
+        const c0 = document.getElementById('counter');
+        if (c0) { c0.textContent = ''; c0.style.display = 'none'; }
+        const d0 = document.getElementById('dots');
+        if (d0) d0.style.display = 'none';
         return;
       }
+      ph.classList.remove('noPhotoFill');
       ph.style.backgroundImage = "url('" + photos[idx] + "')";
       ph.style.backgroundSize = 'cover';
       ph.style.backgroundPosition = 'center';
