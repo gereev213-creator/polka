@@ -26972,12 +26972,34 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             req_json['private_only'] = 1
         if 'комплект' in low:
             req_json['full_set'] = 1
+        # Новые условия поиска: цена от, город, состояние, только с фото,
+        # минус-слова и минимальная скидка к рынку.
+        try:
+            min_price = int(str(b.get('min_price') or 0).replace(' ', '') or 0)
+        except Exception:
+            min_price = 0
+        # Совместимость: старый клиент присылал только «до».
+        if min_price and max_price and min_price > max_price:
+            min_price, max_price = max_price, min_price
+        city = str(b.get('city') or '').strip()[:60]
+        condition = str(b.get('condition') or '').strip()[:30]
+        with_photo = 1 if int(b.get('with_photo') or 0) else 0
+        exclude = str(b.get('exclude') or '')[:200]
+        try:
+            min_discount = int(b.get('min_discount') or 10)
+        except Exception:
+            min_discount = 10
+        min_discount = max(0, min(90, min_discount))
+        # Состояние — отдельным требованием: без него не отсеять «на запчасти».
+        if condition and condition != 'any':
+            req = (req + ', состояние: ' + condition)[:200]
+            req_json = dict(req_json)
+            req_json['condition_min'] = condition
         crit_id = add_criterion(
-            int(viewer_id), q, str(b.get('category') or ''), str(b.get('city') or ''),
-            max_price, 10, 0, 0,
-            1 if int(b.get('with_photo') or 0) else 0,
+            int(viewer_id), q, str(b.get('category') or ''), city,
+            max_price, min_discount, min_price, 0, with_photo,
             'any', req, req_json or None,
-            str(b.get('exclude') or '')[:200], 0, '', '', '')
+            exclude, 0, '', '', '')
         if crit_id == -1:
             return _miniapp_json({'ok': False, 'error': 'limit',
                                   'detail': 'На бесплатном тарифе один критерий'}, status=402)

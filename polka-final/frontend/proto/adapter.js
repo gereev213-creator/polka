@@ -615,6 +615,19 @@ function paintEmpty(count) {
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
         .map((b) => (b.getAttribute('data-req') || '').trim()).filter(Boolean);
       if (seller === 'private') chips.push('только частник');
+
+      // Новые условия поиска
+      const condEl = document.querySelector('#condChips [data-cond].on');
+      const condition = condEl ? String(condEl.getAttribute('data-cond') || 'any') : 'any';
+      const discEl = document.querySelector('#discChips [data-disc].on');
+      const minDiscount = discEl ? Number(discEl.getAttribute('data-disc') || 0) : 0;
+      const photoEl = document.getElementById('photoChip');
+      const withPhoto = !!(photoEl && photoEl.classList.contains('on'));
+      const minRaw = (($('minprice') && $('minprice').value) || '').replace(/[^0-9]/g, '');
+      const cityEl = $('city');
+      const city = cityEl ? String(cityEl.value || '').trim() : '';
+      const exclEl = $('exclude');
+      const exclude = exclEl ? String(exclEl.value || '').trim().slice(0, 200) : '';
       const minus = [...document.querySelectorAll('#searchForm input')]
         .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
         .filter(Boolean).join(',');
@@ -638,8 +651,13 @@ function paintEmpty(count) {
         ok = await window.PolkaAPI.createSearch({
           query: q,
           max_price: Number(raw) || 0,
+          min_price: Number(minRaw) || 0,
+          city: city,
+          condition: condition,
+          with_photo: withPhoto ? 1 : 0,
+          min_discount: minDiscount,
           requirements: chips.join(', '),
-          exclude: minus,
+          exclude: exclude || minus,
         });
       }
       if (ok) { const lk = document.getElementById('avitoLink'); if (lk) lk.value = ''; form.reset(); document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on')); if (typeof go === 'function') go('searches'); }
@@ -3058,6 +3076,24 @@ function paintEmpty(count) {
     }
 
     // Выбор продавца: активен ровно один чип
+    // Чипы «один активный»: состояние, скидка, продавец
+    ['#condChips [data-cond]', '#discChips [data-disc]'].forEach((sel) => {
+      document.addEventListener('click', (e) => {
+        const chip = e.target.closest && e.target.closest(sel);
+        if (!chip) return;
+        e.preventDefault();
+        document.querySelectorAll(sel).forEach((c) => c.classList.remove('on'));
+        chip.classList.add('on');
+      }, true);
+    });
+    // «Только с фото» — переключатель
+    document.addEventListener('click', (e) => {
+      const chip = e.target.closest && e.target.closest('#photoChip');
+      if (!chip) return;
+      e.preventDefault();
+      chip.classList.toggle('on');
+    }, true);
+
     document.addEventListener('click', (e) => {
       const chip = e.target.closest && e.target.closest('#sellerChips [data-seller]');
       if (!chip) return;
