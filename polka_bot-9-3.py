@@ -31724,6 +31724,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'collector_reset':
+        # Снимаем предохранитель «проход завис» и паузу сбора.
+        # Нужно, если контейнер перезапустился во время сбора.
+        try:
+            _setting_set('collector_pass_running', '')
+            _setting_set('collector.blocked_until_ts', '0')
+            _setting_set('collector.blocks_streak', '0')
+            return _miniapp_json({'ok': True, 'reset': True})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
     if action == 'collector_stats':
         # Сколько проходов сбора реально получили страницу, а сколько
         # упёрлись в блокировку. Нужно, чтобы решить вопрос с прокси по факту.
