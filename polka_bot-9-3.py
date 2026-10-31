@@ -301,7 +301,7 @@ SMTP_PASS = os.environ.get("SMTP_PASS", "")
 VERIFY_FROM_EMAIL = os.environ.get("VERIFY_FROM_EMAIL", SMTP_USER)
 
 # Ссылки на основные каналы — для футера письма и т.п.
-EMAIL_TG_CHANNEL_URL  = os.environ.get("TG_CHANNEL_URL", "https://t.me/polkaudm")
+EMAIL_TG_CHANNEL_URL  = os.environ.get("TG_CHANNEL_URL", "https://t.me/polkalot")
 EMAIL_MAX_CHANNEL_URL = os.environ.get("MAX_CHANNEL_URL", "https://max.ru/se13354909_biz")
 
 SUBSCRIPTION_PRICE = 199
@@ -13334,7 +13334,7 @@ async def admin_republish_callback(update: Update, context: ContextTypes.DEFAULT
     context.user_data['republish_step'] = 'forward'
     await safe_edit_message(query,
         "↻ <b>Перевыгрузка в MAX</b>\n\n"
-        "Перешлите пост из канала <b><a href=\"https://t.me/polkaudm\">Основного канала</a></b>, который не попал в MAX.\n"
+        "Перешлите пост из канала <b><a href=\"https://t.me/polkalot\">Основного канала</a></b>, который не попал в MAX.\n"
         "Или просто напишите ID объявления числом.",
         [[InlineKeyboardButton(EM_FAIL + " Отмена", callback_data="admin_back")]],
         parse_mode=ParseMode.HTML
@@ -15806,7 +15806,7 @@ _TG_WEB_FAIL_BACKOFF = 90     # сек не пробуем после сетев
 _TG_VIEWS_CACHE_TTL = 600     # секунд: держим просмотры в памяти 10 минут
 # Публичный username TG-канала (для чтения просмотров через веб-страницу t.me —
 # без MTProto, поэтому работает на любом хостинге, в т.ч. Amvera).
-TG_CHANNEL_USERNAME = os.environ.get("TG_CHANNEL_USERNAME", "polkaudm").lstrip("@")
+TG_CHANNEL_USERNAME = os.environ.get("TG_CHANNEL_USERNAME", "polkalot").lstrip("@")
 
 
 async def _get_tg_views_web(ad: dict) -> Optional[int]:
@@ -28951,7 +28951,7 @@ async def admin_prices(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = (
         f"<b> Цены на услуги</b>\n\n"
-        f"<b><a href=\"https://t.me/polkaudm\">Основной канал — вся Россия</a>:</b>\n"
+        f"<b><a href=\"https://t.me/polkalot\">Основной канал — вся Россия</a>:</b>\n"
         f" • 24 часа — <b>{rf_price} ₽</b>\n"
         f" • 3 дня — {rf_3d} ₽\n"
         f" • 7 дней — {rf_7d} ₽\n\n"
@@ -29404,7 +29404,7 @@ async def setup_scheduler(application: Application):
                     text=(
                         f"{EM_DIAMOND} Закрепление истекло\n\n"
                         f"<b>{ad['title']}</b>\n"
-                        f"Канал: <a href=\"https://t.me/polkaudm\">Основной канал (вся Россия)</a>\n\n"
+                        f"Канал: <a href=\"https://t.me/polkalot\">Основной канал (вся Россия)</a>\n\n"
                         f"Хотите закрепить снова?"
                     ),
                     parse_mode="HTML",
@@ -31742,6 +31742,24 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'sub_check':
+        # Проверка условия «подписка на канал»: что именно видит бот.
+        try:
+            uid = int((body or {}).get('user_id') or 0)
+            if not uid:
+                return _miniapp_json({'ok': False, 'error': 'user_id_required'})
+            app = _get_bot_app()
+            if not app:
+                return _miniapp_json({'ok': False, 'error': 'bot_not_ready'})
+            chat_id = main_channel_id()
+            member = await app.bot.get_chat_member(chat_id, uid)
+            return _miniapp_json({'ok': True, 'chat_id': chat_id, 'user_id': uid,
+                                  'status': str(getattr(member, 'status', '')),
+                                  'subscribed': str(getattr(member, 'status', '')) in
+                                  ('member', 'administrator', 'creator')})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
     if action == 'channel_resolve':
         # Канал могли пересоздать под новым аккаунтом — ID меняется.
