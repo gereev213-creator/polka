@@ -2,7 +2,7 @@
 # Запуск сборщика на Android (внутри Debian через proot-distro).
 # Использование: bash android/start.sh
 set -u
-cd "$(dirname "$0")/.." || exit 1
+cd "$(dirname "$0")" || exit 1
 
 PY=python3
 command -v "$PY" >/dev/null 2>&1 || PY=python
