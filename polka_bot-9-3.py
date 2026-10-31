@@ -20769,7 +20769,7 @@ async def _collector_inline_loop():
                 _pass_no = 1
             _setting_set('collector.pass_no', str(_pass_no))
             # 1 цель за проход: страница Авито тяжёлая, а прокси у нас на 300 МБ
-            _limit = int(os.environ.get('POLKA_PASS_TARGETS', '1') or 1)
+            _limit = int(os.environ.get('POLKA_PASS_TARGETS', '2') or 2)
             # Частота проверки одного поиска (минуты). Держим в настройках,
             # чтобы менять без релиза: больше частота — больше трафика.
             try:
