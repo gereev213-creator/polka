@@ -168,7 +168,25 @@ def _is_admin_request(request) -> bool:
 BOT_USERNAME = os.environ.get("BOT_USERNAME", "polkaudmbot")
 BOT_VPN = os.environ.get("BOT_VPN", "polka_robot")
 # Каналы
-ADMIN_CHANNEL_ID = os.environ.get("MAIN_CHANNEL", "-1003994334268")
+_ENV_MAIN_CHANNEL = os.environ.get("MAIN_CHANNEL", "-1003994334268")
+
+
+def main_channel_id():
+    """Актуальный ID основного канала.
+
+    Канал могли пересоздать под другим аккаунтом — тогда env устарел.
+    Настройка main_channel_id (из channel_resolve) важнее.
+    """
+    try:
+        saved = _setting_get('main_channel_id', '')
+        if saved:
+            return saved
+    except Exception:
+        pass
+    return _ENV_MAIN_CHANNEL
+
+
+ADMIN_CHANNEL_ID = _ENV_MAIN_CHANNEL
 
 
 # ── Crypto Bot (pay.crypt.bot) ────────────────────────────────────────────────
@@ -454,7 +472,7 @@ RATE_LIMIT_CALLBACKS = int(os.environ.get("RATE_LIMIT_CB",   "60"))  # callback 
 # ═══════════════════════════════════════════════════════════════════════
 
 # Настройки бота (обратная совместимость)
-ADMIN_CHANNEL_ID = os.environ.get("MAIN_CHANNEL", "-1003994334268")
+ADMIN_CHANNEL_ID = main_channel_id()
 
 # ── Города России ─────────────────────────────────────────────
 ALLOWED_CITIES = {
@@ -31724,6 +31742,32 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'channel_resolve':
+        # Канал могли пересоздать под новым аккаунтом — ID меняется.
+        # Тут узнаём актуальный ID по юзернейму и проверяем права бота.
+        try:
+            username = str((body or {}).get('username') or 'polkalot').lstrip('@')
+            app = _get_bot_app()
+            if not app:
+                return _miniapp_json({'ok': False, 'error': 'bot_not_ready'})
+            chat = await app.bot.get_chat('@' + username)
+            chat_id = str(chat.id)
+            me = await app.bot.get_me()
+            member = await app.bot.get_chat_member(chat_id, me.id)
+            rights = {
+                'status': str(getattr(member, 'status', '')),
+                'can_post_messages': bool(getattr(member, 'can_post_messages', False)),
+                'can_edit_messages': bool(getattr(member, 'can_edit_messages', False)),
+            }
+            _setting_set('main_channel_id', chat_id)
+            global ADMIN_CHANNEL_ID
+            ADMIN_CHANNEL_ID = chat_id
+            return _miniapp_json({'ok': True, 'username': username, 'chat_id': chat_id,
+                                  'title': str(getattr(chat, 'title', '') or ''),
+                                  'saved_to': 'main_channel_id', 'rights': rights})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
     if action == 'collector_reset':
         # Снимаем предохранитель «проход завис» и паузу сбора.
