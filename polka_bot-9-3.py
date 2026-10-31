@@ -31907,6 +31907,27 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
+    if action == 'contest_test':
+        # Проверка доставки: шлём администратору помеченное сообщение,
+        # чтобы 30 ноября не оказалось, что бот не может написать.
+        try:
+            app = _get_bot_app()
+            if not app:
+                return _miniapp_json({'ok': False, 'error': 'bot_not_ready'})
+            text = ("<b>Проверка конкурса</b>\n\n"
+                    "Связь работает. Итоги придут 30.11 в 23:00 МСК.\n\n"
+                    + contest_message())
+            delivered = []
+            for admin_id in ADMIN_USER_IDS:
+                try:
+                    await app.bot.send_message(chat_id=admin_id, text=text, parse_mode='HTML')
+                    delivered.append(admin_id)
+                except Exception as exc:
+                    logger.warning(f"конкурс тест: {admin_id}: {exc}")
+            return _miniapp_json({'ok': bool(delivered), 'delivered': delivered})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
     if action == 'contest_preview':
         try:
             return _miniapp_json({'ok': True, 'text': contest_message()})
