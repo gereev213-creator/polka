@@ -1,32 +1,42 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
 set PYTHONUTF8=1
 
-rem --- Профиль браузера: здесь запоминается решённая проверка Авито ---
-set AVITO_PROFILE=%~dp0profile
+rem --- Browser profile: solved Avito check is stored here ---
+set "AVITO_PROFILE=%~dp0profile"
 
-rem --- Искать по тексту запроса (q=), а не листать раздел ---
-set POLKA_SEARCH_BY_QUERY=1
+rem --- Search by text query (q=) instead of browsing a section ---
+set "POLKA_SEARCH_BY_QUERY=1"
 
-rem --- Браузер сам медленный; лишние минуты ожидания между страницами не нужны ---
-set POLKA_REQUEST_GAP=15
-set POLKA_REQUEST_GAP_MAX=30
+rem --- Pacing between pages, browser is slow by itself ---
+set "POLKA_REQUEST_GAP=15"
+set "POLKA_REQUEST_GAP_MAX=30"
 
-rem --- Сколько ждать, пока вы решите проверку в окне браузера ---
-set POLKA_MANUAL_WAIT=600
+rem --- How long to wait for manual Avito check in browser window ---
+set "POLKA_MANUAL_WAIT=600"
 
 if not exist logs mkdir logs
 if not exist config.json (
-  echo Нет config.json — скопируйте его из папки collector на другом компьютере.
+  echo config.json not found. Copy it from the other computer into this folder.
   pause
   exit /b 1
 )
 
-echo === %date% %time% запуск сборщика === >> logs\collector.log
+where python >nul 2>&1
+if errorlevel 1 (
+  echo Python not found in PATH.
+  echo Install Python 3.12 from python.org and check "Add python.exe to PATH".
+  pause
+  exit /b 1
+)
+
+echo Starting collector. Chromium window will open - do not close it.
+echo.
 
 :loop
-python collect.py --loop --every 1200 >> logs\collector.log 2>&1
-echo === %date% %time% сборщик завершился, перезапуск через 20 с === >> logs\collector.log
+python -u collect.py --loop --every 1200
+echo.
+echo Collector stopped, restart in 20 seconds (Ctrl+C to exit).
 timeout /t 20 /nobreak >nul
 goto loop

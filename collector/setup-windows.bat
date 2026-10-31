@@ -1,20 +1,37 @@
 @echo off
-chcp 65001 >nul
+setlocal
 cd /d "%~dp0"
-echo === Установка зависимостей сборщика ===
+
+echo === Installing collector dependencies ===
 echo.
+
 where python >nul 2>&1
 if errorlevel 1 (
-  echo Python не найден в PATH.
-  echo Поставьте Python 3.12 с python.org и при установке отметьте "Add python.exe to PATH".
+  echo Python not found in PATH.
+  echo Install Python 3.12 from python.org and check "Add python.exe to PATH".
   pause
   exit /b 1
 )
+
 python -m pip install --upgrade pip
 python -m pip install curl_cffi playwright
+if errorlevel 1 (
+  echo.
+  echo Dependency install failed. Check internet connection and try again.
+  pause
+  exit /b 1
+)
+
 echo.
-echo === Скачиваю Chromium для браузерного режима (около 150 МБ) ===
+echo === Downloading Chromium for browser mode (about 150 MB) ===
 python -m playwright install chromium
+if errorlevel 1 (
+  echo.
+  echo Chromium download failed. Check internet connection and try again.
+  pause
+  exit /b 1
+)
+
 echo.
-echo Готово. Дальше: 1) положите config.json рядом, 2) запустите start-windows.bat
+echo Done. Now run start-windows.bat
 pause
