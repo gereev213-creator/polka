@@ -637,6 +637,8 @@ function paintEmpty(count) {
       const photoEl = document.getElementById('photoChip');
       const withPhoto = !!(photoEl && photoEl.classList.contains('on'));
       const minRaw = (($('minprice') && $('minprice').value) || '').replace(/[^0-9]/g, '');
+      // Полей «город», «минус-слова», «состояние» может не быть — берём пусто.
+
       const cityEl = $('city');
       const city = cityEl ? String(cityEl.value || '').trim() : '';
       const exclEl = $('exclude');
