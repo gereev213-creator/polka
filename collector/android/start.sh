@@ -14,10 +14,28 @@ if ! "$PY" -c "import curl_cffi" >/dev/null 2>&1; then
 fi
 
 if [ ! -f config.json ]; then
-  cp config.example.json config.json
-  echo "Создан config.json — впишите token (INGEST_TOKEN из Amvera) и запустите снова."
+  echo "Нет файла config.json рядом со скриптом."
+  echo "Он лежит в архиве polka-collector-android.zip — распакуйте его в эту папку."
+  echo "Текущая папка: $(pwd)"
+  ls -la
   exit 1
 fi
+
+# Проверяем, что токен действительно вписан: без него сервер не примет находки.
+TOKEN_LEN=$("$PY" - <<'PYEOF'
+import json
+try:
+    print(len(str(json.load(open('config.json')).get('token') or '')))
+except Exception:
+    print(0)
+PYEOF
+)
+if [ "${TOKEN_LEN:-0}" -lt 10 ]; then
+  echo "В config.json не вписан токен (INGEST_TOKEN из Amvera)."
+  echo "Откройте файл: nano config.json  и заполните поле \"token\"."
+  exit 1
+fi
+echo "Токен на месте (${TOKEN_LEN} символов)." 
 
 mkdir -p logs
 echo "Проверяю доступ к Авито…"
