@@ -2739,6 +2739,14 @@ def run_once(cfg: dict) -> int:
         _min_interval = int(cfg.get('check_interval_min') or CHECK_INTERVAL_MIN)
     except Exception:
         _min_interval = CHECK_INTERVAL_MIN
+    # Браузерный режим: страница открывается 20–40 с, критериев у людей
+    # немного, и каждый поиск должен проверяться в КАЖДОМ проходе — иначе
+    # человек создал критерий и ждёт его час-два, а «находки» приходят
+    # с опозданием. Поэтому в браузере обходим все цели и снимаем часовую
+    # отсечку: 17 запросов за ~15 минут для живого браузера — нормальный темп.
+    if AVITO_PROFILE:
+        limit = max(limit, len(targets))
+        _min_interval = 0
     if _min_interval > 0:
         now_ts = time.time()
         fresh_enough = []
