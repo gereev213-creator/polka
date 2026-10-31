@@ -20812,7 +20812,8 @@ async def _collector_inline_loop():
                 _pass_no = 1
             _setting_set('collector.pass_no', str(_pass_no))
             # 1 цель за проход: страница Авито тяжёлая, а прокси у нас на 300 МБ
-            _limit = int(os.environ.get('POLKA_PASS_TARGETS', '2') or 2)
+            _limit = int(cfg_get('collector.targets') or 0) or int(
+    os.environ.get('POLKA_PASS_TARGETS', '2') or 2)
             # Частота проверки одного поиска (минуты). Держим в настройках,
             # чтобы менять без релиза: больше частота — больше трафика.
             try:
@@ -23529,6 +23530,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
+    'collector.targets': ('int', 1, 5, 1, 'Целей за проход сборщика'),
     'contest.max_tickets': ('int', 1, 20, 5, 'Максимум билетов с человека'),
     'contest.fixed': ('str', 0, 0, '', 'Известные места (JSON, скрыто)'),
     'contest.sent': ('str', 0, 0, '', 'Итоги конкурса отправлены'),
@@ -32261,6 +32263,21 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             _setting_set('collector.interval_s', '1800' if minutes >= 60 else '900')
             _setting_set('collector.blocks_streak', '2')
             return _miniapp_json({'ok': True, 'pause_minutes': minutes})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
+    if action == 'collector_tune':
+        # Ручная настройка ритма сбора без перезапуска контейнера.
+        try:
+            b2 = body or {}
+            if b2.get('interval_s') is not None:
+                val = max(300, min(7200, int(b2['interval_s'])))
+                _setting_set('collector.interval_s', str(val))
+            if b2.get('targets') is not None:
+                _setting_set('collector.targets', str(max(1, min(5, int(b2['targets'])))))
+            return _miniapp_json({'ok': True,
+                                  'interval_s': int(cfg_get('collector.interval_s') or 0),
+                                  'targets': int(cfg_get('collector.targets') or 1)})
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:160]})
 
