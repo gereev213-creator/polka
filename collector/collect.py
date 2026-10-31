@@ -388,7 +388,12 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                 FETCH_BYTES[0] += int(r.headers.get('content-length') or len(r.content or b''))
             except Exception:
                 pass
-            if r.status_code in (403, 429) or 'data-marker="item"' not in r.text:
+            # 439 — самый частый ответ Авито при блокировке. Именно 439 не
+            # было в этом списке, поэтому сброс cookies не срабатывал: сессия
+            # оставалась помеченной, файл cookies переживал перезапуски, и
+            # КАЖДЫЙ следующий проход снова получал 439 — сбор стоял намертво,
+            # хотя с чистого листа та же страница отдаётся нормально.
+            if r.status_code in (403, 429, 439) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
                 # Сначала официальный способ: сменить IP по API провайдера.
                 if PROXY and not _ROTATED_BY_API[0] and apply_rotation():
@@ -399,7 +404,7 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                 proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
                 # Блокировка: старые cookies могли «запомнить» нас как проблемного
                 # посетителя — сбрасываем и в следующий раз приходим заново.
-                if r.status_code in (403, 429) and sess is not None:
+                if r.status_code in (403, 429, 439) and sess is not None:
                     _cookies_drop(profile)
                 time.sleep(random.uniform(2.0, 5.0))
                 continue
@@ -422,7 +427,7 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
                 print(f"  (сработал отпечаток {profile})")
             return r.text
         raise Blocked(last_error)
-        if r.status_code in (403, 429):
+        if r.status_code in (403, 429, 439):
             raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
         html_cffi = r.text
         # Признаки блокировки проверяем ТОЛЬКО если карточек нет: слово
@@ -446,7 +451,7 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
         # без этой ветки сборщик счёл бы её временной и пошёл долбить дальше,
         # закрепляя блокировку. Проверено: наш IP получает 429 с текстом
         # «Доступ ограничен: проблема с IP» на первом же запросе.
-        if exc.code in (403, 429):
+        if exc.code in (403, 429, 439):
             raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
         raise
     html = raw.decode('utf-8', errors='replace')
@@ -467,6 +472,14 @@ FETCH_BYTES = [0]
 MIN_REQUEST_GAP = int(os.environ.get('POLKA_REQUEST_GAP', '90'))
 MAX_REQUEST_GAP = int(os.environ.get('POLKA_REQUEST_GAP_MAX', '240'))
 _LAST_REQUEST_TS = [0.0]
+# Пауза между страницами ОБЪЯВЛЕНИЙ (описания и проверка «продано»).
+# Отдельная и намеренно медленная: раньше эти запросы шли пачкой с паузами
+# 2–9 секунд и обходили общий лимитер вообще — ровно такой поток Авито
+# читает как бота и наказывает весь IP: после пачек описаний переставал
+# открываться даже обычный поиск, и находки не приходили вовсе.
+ITEM_REQUEST_GAP = int(os.environ.get('POLKA_ITEM_GAP', '45'))
+ITEM_REQUEST_GAP_MAX = int(os.environ.get('POLKA_ITEM_GAP_MAX', '90'))
+_LAST_ITEM_TS = [0.0]
 # Сколько блокировок подряд: увеличивает паузу, успех — сбрасывает
 _BLOCK_BACKOFF = [0]
 
@@ -514,6 +527,34 @@ def _respect_rate_limit() -> None:
 def _mark_request() -> None:
     try:
         _LAST_REQUEST_TS[0] = time.time()
+    except Exception:
+        pass
+
+
+def _respect_item_rate_limit() -> None:
+    """Пауза между страницами объявлений — своя, отдельная от поиска.
+
+    Смысл: страницы лотов открываются пачками (описания и проверка «продано»).
+    Пока пауза была 2–9 секунд, это был ровный поток запросов — Авито считает
+    его ботом и блокирует IP целиком, после чего перестаёт открываться и
+    выдача. Поэтому здесь те же правила, что и для поиска, только мягче.
+    """
+    try:
+        if ITEM_REQUEST_GAP <= 0:
+            return
+        gap = time.time() - _LAST_ITEM_TS[0]
+        need = random.randint(ITEM_REQUEST_GAP,
+                              max(ITEM_REQUEST_GAP, ITEM_REQUEST_GAP_MAX))
+        need += min(300, _BLOCK_BACKOFF[0] * 30)
+        if _LAST_ITEM_TS[0] and gap < need:
+            time.sleep(need - gap)
+    except Exception:
+        pass
+
+
+def _mark_item_request() -> None:
+    try:
+        _LAST_ITEM_TS[0] = time.time()
     except Exception:
         pass
 
@@ -719,6 +760,8 @@ def fetch_item(url: str, timeout: int = 20) -> str:
     первым из пула), таймаут 20 с. Блокировка = статус 403/429/439 или
     маркеры капчи на короткой странице.
     """
+    _respect_item_rate_limit()
+    _mark_item_request()
     if _cffi is not None:
         global _WORKING_PROFILE
         profile = _WORKING_PROFILE or IMPERSONATE_POOL[0]
@@ -798,6 +841,8 @@ def fetch_item_state(url: str, timeout: int = 20) -> str:
     При блокировке по IP и заданном SCRAPINGBEE_KEY страница берётся через
     скрапер: он ходит со своего адреса и блокировку обходит.
     """
+    _respect_item_rate_limit()
+    _mark_item_request()
     if _cffi is not None:
         profile = _WORKING_PROFILE or IMPERSONATE_POOL[0]
         proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
@@ -2081,7 +2126,7 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
     return targets
 
 
-def check_listings(server: str, token: str, limit: int = 30) -> int:
+def check_listings(server: str, token: str, limit: int = 8) -> int:
     """Перепроверяет лоты: продано, снято или ещё висит.
 
     Это и даёт «ушло за 3 часа» — главный ориентир цены для перекупа.
@@ -2117,7 +2162,10 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
         if state == 'gone':
             gone += 1
         report.append({'external_id': ext, 'state': state})
-        time.sleep(random.uniform(2.0, 4.0))
+        # Паузу между лотами держит fetch_item_state() через
+        # _respect_item_rate_limit(). Раньше здесь было 2–4 секунды, и пачка
+        # из 25 лотов шла ровным потоком — Авито считал это ботом, блокировал
+        # IP, и после такой пачки переставал открываться даже поиск.
     if report:
         try:
             res = post_json(f"{server.rstrip('/')}/api/ingest/status", token,
@@ -2926,7 +2974,7 @@ def main() -> int:
 
     if args.check:
         print("Проверяем, что уже продано…")
-        check_listings(cfg['server'], cfg['token'], limit=args.every if False else 30)
+        check_listings(cfg['server'], cfg['token'], limit=8)
         return 0
 
     while True:
@@ -2941,7 +2989,7 @@ def main() -> int:
         print(f"\nПроход завершён, принято новых: {sent}")
         # Раз в проход смотрим, что уже ушло — так копится статистика
         # «за сколько часов уходит такая цена»
-        check_listings(cfg['server'], cfg['token'], limit=25)
+        check_listings(cfg['server'], cfg['token'], limit=8)
         if not args.loop:
             return 0
         wait = max(30, args.every - int(time.time() - started))
