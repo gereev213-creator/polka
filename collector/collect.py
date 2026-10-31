@@ -420,11 +420,24 @@ def _browser_ctx():
 
 
 def _page_blocked(html: str) -> bool:
-    """Страница проверки Авито, а не выдача."""
-    low = (html or '').lower()
-    if 'доступ ограничен' in low or 'firewall' in low:
+    """Страница проверки Авито, а не выдача.
+
+    Проверять надо аккуратно: слово «firewall» встречается и в обычном коде
+    Авито, поэтому раньше ЛЮБАЯ страница считалась проверкой — сборщик ждал
+    человека 10 минут на нормальной выдаче и уходил в HTTP-фолбэк (439).
+    Выдача Авито весит мегабайты, страница проверки — десятки килобайт,
+    поэтому маркеры ищем только на коротких страницах.
+    """
+    text = html or ''
+    low = text.lower()
+    if 'доступ ограничен' in low:
         return True
-    return 'captcha' in low and len(html or '') < 60_000
+    if 'проверка безопасности' in low:
+        return True
+    if len(text) < 60_000 and ('firewall' in low or 'captcha' in low
+                               or 'подтвердите, что вы не робот' in low):
+        return True
+    return False
 
 
 def _browser_page_html(url: str, timeout: int = 90) -> str:
