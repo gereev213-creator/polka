@@ -37,3 +37,8 @@ collector/cookies.json
 # поэтому dist нужен в git (в .dockerignore он тоже разрешён).
 !polka-final/frontend/dist/
 !polka-final/frontend/dist/**
+
+# Локальные настройки сборщика: пути, браузерный профиль, прокси
+collector/browser.env
+collector/*.env
+collector/profile/

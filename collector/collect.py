@@ -115,6 +115,12 @@ _SCRAPER_BROKEN = []   # заполняется, если скрапер отв�
 SCRAPER_PAGES_PER_RUN = int(os.environ.get('SCRAPER_PAGES_PER_RUN', '4'))
 _SCRAPER_USED = []
 PROXY = os.environ.get('POLKA_PROXY', '')
+# Ротация IP по прямой ссылке провайдера (мобильные прокси): GET отдаёт
+# {"modem_switch":"success"}, модем получает новый IP за 10–20 секунд.
+# Нужна потому, что мобильный IP Авито пускает ровно на один-два запроса,
+# а потом отвечает 439 — свежий IP дешевле, чем часовое ожидание.
+ROTATE_URL = os.environ.get('POLKA_ROTATE_URL', '')
+ROTATE_WAIT = int(os.environ.get('POLKA_ROTATE_WAIT', '15'))
 _OPENER = None
 
 # ── Главное открытие ────────────────────────────────────────────────────────
@@ -186,6 +192,47 @@ def rotate_proxy_session() -> str:
     new_id = _secrets.token_urlsafe(8).replace('-', '').replace('_', '')[:10]
     PROXY = cur[:m.start(2)] + new_id + cur[m.end(2):]
     return PROXY
+
+
+def rotate_via_url() -> bool:
+    """Смена IP прямой ссылкой провайдера. Запрос идёт НАПРЯМУЮ.
+
+    Через прокси звать нельзя: просим сменить тот IP, через который идём.
+    Провайдер отвечает 200 и телом вроде {"modem_switch":"success"}.
+    """
+    if not ROTATE_URL:
+        return False
+    def _call() -> tuple:
+        try:
+            with urllib.request.urlopen(ROTATE_URL, timeout=30) as resp:
+                return int(getattr(resp, 'status', 200) or 200), resp.read().decode('utf-8', 'ignore')
+        except urllib.error.HTTPError as exc:
+            try:
+                return int(exc.code), exc.read().decode('utf-8', 'ignore')
+            except Exception:
+                return int(exc.code), ''
+        except Exception as exc:
+            return 0, str(exc)[:120]
+
+    code, body = _call()
+    # Провайдер просит подождать между сменами: ждём и пробуем ещё раз.
+    if code == 400 and 'wait' in body:
+        time.sleep(12)
+        code, body = _call()
+    if code != 200 or 'success' not in body:
+        print(f"  ↻ смена IP: {code} {body[:70]}")
+        return False
+    if code != 200 or 'success' not in body:
+        print(f"  ↻ смена IP: {code} {body[:70]}")
+        return False
+    print(f"  ↻ сменили IP, ждём {ROTATE_WAIT} с")
+    try:
+        _SESSIONS.clear()
+    except Exception:
+        pass
+    if ROTATE_WAIT > 0:
+        time.sleep(ROTATE_WAIT)
+    return True
 
 
 def _session_for(profile: str):
@@ -319,24 +366,139 @@ def _fetch_via_scraper(url: str, timeout: int = 60) -> str:
 # страницы берём настоящим Chromium с этим профилем: только так Авито пускает
 # (headless он блокирует, прямые запросы — тоже).
 AVITO_PROFILE = os.environ.get('AVITO_PROFILE', '')
-AVITO_PARSER_DIR = os.environ.get(
-    'AVITO_PARSER_DIR',
-    '/Users/nikitagereev/Documents/deepseek-harness/default-workspace/avito-parser 2')
+# ── Браузерный режим ────────────────────────────────────────────────────────
+# Авито блокирует HTTP-запросы (429/439) и headless-браузер (firewall), но
+# пускает настоящий Chromium с видимым окном. Поэтому браузер — не «для
+# проверки»: это и есть загрузчик страниц. Профиль постоянный, чтобы решённая
+# один раз проверка запоминалась cookies и не спрашивалась снова.
+# Код свой, без внешней библиотеки: на втором компьютере (Windows) лишняя
+# зависимость — это лишний шаг установки.
+_BROWSER = {'pw': None, 'ctx': None}
 
-_avito_fetcher = None
+
+def _browser_ctx():
+    """Запускает (или возвращает) Chromium с постоянным профилем."""
+    if _BROWSER['ctx'] is not None:
+        return _BROWSER['ctx']
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as exc:
+        raise RuntimeError(
+            'нужен playwright: pip install playwright && playwright install chromium'
+        ) from exc
+    headless = str(os.environ.get('POLKA_HEADLESS', '0')) == '1'
+    profile = AVITO_PROFILE or os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'profile')
+    os.makedirs(profile, exist_ok=True)
+    pw = sync_playwright().start()
+    ctx = pw.chromium.launch_persistent_context(
+        profile,
+        headless=headless,
+        args=[
+            '--disable-blink-features=AutomationControlled',
+            '--disable-features=IsolateOrigins,site-per-process',
+            '--no-first-run',
+        ],
+        locale='ru-RU',
+        timezone_id='Europe/Samara',
+        viewport={'width': 1440, 'height': 900},
+        extra_http_headers={
+            'Accept-Language': 'ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+    )
+    ctx.add_init_script("""
+      Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+      Object.defineProperty(navigator, 'languages',
+        {get: () => ['ru-RU','ru','en-US','en']});
+      window.chrome = window.chrome || {runtime: {}};
+    """)
+    _BROWSER['pw'] = pw
+    _BROWSER['ctx'] = ctx
+    print('  🌐 Chromium запущен, профиль: ' + profile
+          + (' (без окна)' if headless else ''))
+    return ctx
+
+
+def _page_blocked(html: str) -> bool:
+    """Страница проверки Авито, а не выдача."""
+    low = (html or '').lower()
+    if 'доступ ограничен' in low or 'firewall' in low:
+        return True
+    return 'captcha' in low and len(html or '') < 60_000
+
+
+def _browser_page_html(url: str, timeout: int = 90) -> str:
+    """Страница через Chromium. Проверку проходит человек в окне браузера."""
+    try:
+        ctx = _browser_ctx()
+    except Exception as exc:
+        raise Blocked(f'браузер не запустился: {str(exc)[:90]}') from exc
+    page = None
+    try:
+        page = ctx.new_page()
+        page.goto(url, wait_until='domcontentloaded', timeout=int(timeout) * 1000)
+        try:
+            page.mouse.move(400, 300, steps=6)
+            page.wait_for_timeout(600)
+            page.evaluate('window.scrollBy(0, 400)')
+            page.wait_for_timeout(400)
+        except Exception:
+            pass
+        html = page.content()
+        if not _page_blocked(html):
+            return html
+        # «Продолжить» на странице проверки — иногда этого достаточно
+        for sel in ('.js-firewall-form button[type=submit]',
+                    'button[name=submit]',
+                    '.firewall-container button'):
+            try:
+                btn = page.query_selector(sel)
+                if btn:
+                    btn.click(timeout=3000)
+                    page.wait_for_timeout(4000)
+                    html = page.content()
+                    break
+            except Exception:
+                continue
+        if not _page_blocked(html):
+            print('  ✓ проверка Авито пройдена кнопкой «Продолжить»')
+            return html
+        if str(os.environ.get('POLKA_HEADLESS', '0')) == '1':
+            raise Blocked('Авито требует проверку — нужен видимый браузер')
+        wait_s = int(os.environ.get('POLKA_MANUAL_WAIT', '600'))
+        print(f'  🛑 Авито показал проверку. Решите её в окне браузера — ждём {wait_s} с')
+        waited = 0
+        while waited < wait_s:
+            page.wait_for_timeout(3000)
+            waited += 3
+            try:
+                html = page.content()
+            except Exception:
+                html = ''
+            if html and not _page_blocked(html):
+                print('  ✓ проверка пройдена')
+                return html
+        raise Blocked('проверка Авито не пройдена за отведённое время')
+    except Blocked:
+        raise
+    except Exception as exc:
+        msg = str(exc)
+        if 'closed' in msg.lower():
+            # Окно закрыли — в следующий раз поднимем браузер заново
+            _BROWSER['ctx'] = None
+            _BROWSER['pw'] = None
+        raise Blocked(f'браузер: {msg[:90]}') from exc
+    finally:
+        try:
+            if page is not None:
+                page.close()
+        except Exception:
+            pass
 
 
 def _fetch_via_profile(url: str, timeout: int = 120) -> str:
-    """Страница через Chromium с сохранённым профилем (проверка уже пройдена)."""
-    global _avito_fetcher
-    if AVITO_PARSER_DIR not in sys.path:
-        sys.path.insert(0, AVITO_PARSER_DIR)
-    from avitoparser.fetch import FetchConfig, PlaywrightFetcher
-    if _avito_fetcher is None:
-        _avito_fetcher = PlaywrightFetcher(FetchConfig(
-            headless=False, user_data_dir=AVITO_PROFILE, timeout=timeout, delay=0))
-    res = _avito_fetcher.get(url)
-    return getattr(res, 'text', '') or ''
+    """Страница через Chromium с сохранённым профилем."""
+    return _browser_page_html(url, timeout=max(timeout, 90))
 
 
 def _fetch_direct_body(url: str, timeout: int = 25) -> str:
@@ -395,7 +557,12 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
             # хотя с чистого листа та же страница отдаётся нормально.
             if r.status_code in (403, 429, 439) or 'data-marker="item"' not in r.text:
                 last_error = f"{profile}: HTTP {r.status_code}"
-                # Сначала официальный способ: сменить IP по API провайдера.
+                # Мобильный прокси: меняем IP по ссылке провайдера. Дешевле,
+                # чем ждать, когда Avito отпустит помеченный адрес.
+                if PROXY and rotate_via_url():
+                    _resources_reset()
+                    continue
+                # Затем официальный способ: сменить IP по API провайдера.
                 if PROXY and not _ROTATED_BY_API[0] and apply_rotation():
                     _ROTATED_BY_API[0] = True
                     _resources_reset()
@@ -760,6 +927,16 @@ def fetch_item(url: str, timeout: int = 20) -> str:
     первым из пула), таймаут 20 с. Блокировка = статус 403/429/439 или
     маркеры капчи на короткой странице.
     """
+    # Браузер с профилем проходит там, где HTTP-запросы Авито режет: он умеет
+    # страницу проверки и настоящий JS. Для страниц объявлений это важно
+    # вдвойне: именно с них берутся описания и проверка «продано».
+    if AVITO_PROFILE:
+        try:
+            html = _fetch_via_profile(url, timeout=max(timeout, 90))
+            if html and any(m in html for m in ITEM_MARKERS):
+                return html
+        except Exception as exc:
+            print(f"  ⚠ браузер не открыл лот: {str(exc)[:80]}")
     _respect_item_rate_limit()
     _mark_item_request()
     if _cffi is not None:
@@ -841,6 +1018,13 @@ def fetch_item_state(url: str, timeout: int = 20) -> str:
     При блокировке по IP и заданном SCRAPINGBEE_KEY страница берётся через
     скрапер: он ходит со своего адреса и блокировку обходит.
     """
+    if AVITO_PROFILE:
+        try:
+            html = _fetch_via_profile(url, timeout=max(timeout, 90))
+            if html:
+                return listing_state_from_page(html)
+        except Exception as exc:
+            print(f"  ⚠ браузер не открыл лот: {str(exc)[:80]}")
     _respect_item_rate_limit()
     _mark_item_request()
     if _cffi is not None:
@@ -1822,6 +2006,14 @@ LINK_FILTERS_RE = re.compile(r'^(?:&[A-Za-z0-9_\[\]]+=[A-Za-z0-9_%.,:+\-]*)*$')
 def link_search_url(crit: dict, cfg: dict = None) -> str:
     """Ссылка поиска для критерия, созданного из ссылки Авито. Пусто, если данные
     не проходят проверку (тогда цель не создаётся: лучше пропустить, чем искать не то)."""
+    # Браузерный режим умеет то, чего не умеют HTTP-запросы: он открывает
+    # ссылку человека ЦЕЛИКОМ — с подразделом, фильтрами f= и городом.
+    # Поэтому здесь возвращаем исходный адрес, а не собираем «чистую» ссылку:
+    # именно за это человек и заплатил, когда копировал свою выдачу.
+    if AVITO_PROFILE:
+        original = str(crit.get('filter_url') or '').strip()
+        if original.startswith('http') and 'avito.ru' in original:
+            return original
     path = str(crit.get('search_path') or '').strip().strip('/')
     if not LINK_PATH_RE.match(path):
         return ''
