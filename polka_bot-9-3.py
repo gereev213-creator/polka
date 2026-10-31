@@ -27266,12 +27266,15 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                                   'detail': link.get('error') or 'Ссылка не подошла'},
                                  status=400)
         q = str(link.get('q') or '').strip()[:100]
+        # Сохраняем ИСХОДНУЮ ссылку: в браузерном режиме сборщик открывает
+        # её целиком (подраздел, фильтры f=, город), а не пересобирает заново.
+        raw_link = str((body or {}).get('search_link') or '').strip()[:2000]
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), q,
             str((body or {}).get('category') or ''), str((body or {}).get('city') or ''),
             int(link.get('max_price') or 0), 0, int(link.get('min_price') or 0), 0, 0,
             'private' if str(link.get('user') or '') == '1' else 'any', '', None, '', 0,
-            '', '', '', link)
+            '', raw_link, '', link)
         if crit_id == -1:
             return _miniapp_json({'ok': False, 'error': 'limit'}, status=402)
         if not crit_id:
@@ -30666,21 +30669,28 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
     # Отклонённые сюда не попадают — иначе лента заполнялась чехлами и
     # лотами, которые отбор не прошли.
     statuses = "hm.status IN ('ready','sent','sending','pending_details','send_failed')"
+    # Только положительные решения. Иначе в ленту попадали строки, которые
+    # бот когда-то пометил «отправлено» через устаревшую отметку: у них
+    # status='sent', а reason='title_words' — то есть лот отвергнут по словам.
+    ok_reasons = "hm.reason IN ('ok','ok_discount','desc_needed','date_estimated'," \
+                 "'date_unknown_ok','price_drop')"
     if show_suspect:
         # По запросу ?show_suspect=1 добавляем подозрительно дешёвые
         statuses = (f"({statuses} OR hm.reject_reason IN "
                     "('price_suspect','price_below_floor'))")
+        ok_reasons = (f"({ok_reasons} OR hm.reason IN "
+                      "('price_suspect','price_below_floor'))")
     # Матч принадлежит пользователю ИЛИ его критерию: после смены аккаунта
     # id в матчах и в критериях может разойтись, и лента оставалась пустой,
     # хотя бот уже прислал находки в чат.
     if open_feed:
         # Открытая лента: показываем последние находки системы, без привязки
-        where = ["1=1", statuses, "a.status='active'"]
+        where = ["1=1", statuses, ok_reasons, "a.status='active'"]
         params: List = []
     else:
         where = ["(hm.user_id = ? OR hm.crit_id IN "
                  "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
-                 statuses, "a.status='active'",
+                 statuses, ok_reasons, "a.status='active'",
                  # Критерий на паузе не должен приносить находки в ленту —
                  # в боте уведомления уже останавливаются, а лента показывала
                  "EXISTS (SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id "
@@ -30789,13 +30799,15 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         return _miniapp_err('unauthorized', 401)
     # По умолчанию без отсечки по скидке: у находок с Авито медиана часто
     # неизвестна (discount=0), и лента пустела, хотя бот эти лоты присылал.
-    # По умолчанию в ленте только то, что реально дешевле медианы. Раньше
-    # порог был 0, и в «находки» попадали лоты с discount=0 — монеты за 5 ₽
-    # и голова куклы, которые просто когда-то были отправлены.
+    # Порог по умолчанию 0: лента обязана показывать РОВНО то, что бот уже
+    # отправил в чат. Бот шлёт и лоты с discount=0 (медиана по критерию ещё
+    # не набралась), и с порогом 15 лента оставалась пустой, хотя сообщения
+    # приходили. Мусор отсекается не порогом, а списком причин ниже:
+    # «title_words» и прочие отказы в ленту не попадают никогда.
     try:
-        min_discount = max(0, int(request.query.get('min_discount', 15) or 15))
+        min_discount = max(0, int(request.query.get('min_discount', 0) or 0))
     except ValueError:
-        min_discount = 15
+        min_discount = 0
     category = request.query.get('category', '')
     city = request.query.get('city', '')
     try:
