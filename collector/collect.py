@@ -467,6 +467,30 @@ _LAST_REQUEST_TS = [0.0]
 _BLOCK_BACKOFF = [0]
 
 
+def block_cool_down(base_min: int = 45) -> None:
+    """Отдых после блокировки: растёт с каждым блоком, но не бесконечно.
+
+    Авито снимает метку за 30–120 минут. Спим порциями по 5 минут, чтобы
+    процесс можно было остановить, и печатаем остаток — видно, что работаем,
+    а не висим.
+    """
+    import random as _rnd
+    try:
+        mins = min(180, max(20, base_min + _BLOCK_BACKOFF[0] * 20))
+        mins += _rnd.randint(0, 10)
+    except Exception:
+        mins = base_min
+    print(f"  😴 отдых {mins} мин после блокировки (шаг {_BLOCK_BACKOFF[0]})")
+    left = mins * 60
+    while left > 0:
+        chunk = min(300, left)
+        time.sleep(chunk)
+        left -= chunk
+        if left:
+            print(f"     ещё {left // 60} мин…")
+    _BLOCK_BACKOFF[0] = 0
+
+
 def _respect_rate_limit() -> None:
     """Держит паузу между запросами к Авито внутри процесса."""
     try:
@@ -2489,8 +2513,10 @@ def run_once(cfg: dict) -> int:
                     save_targets_state(state)
                     print(f"  ⛔ {exc} — пропускаю страницу (блок {blocked_streak})")
                     if blocked_streak >= 2:
-                        # Два блока подряд — блокировка по IP: уходим на паузу.
-                        raise SystemExit(3)
+                        # Два блока подряд: отдыхаем и продолжаем сами.
+                        # Раньше цикл завершался и стоял до ручного запуска.
+                        block_cool_down()
+                        blocked_streak = 0
                     continue
             except (urllib.error.URLError, TimeoutError) as exc:
                 # Сеть отвалилась на этой странице — идём к следующей.
@@ -2508,7 +2534,8 @@ def run_once(cfg: dict) -> int:
                 print(f"  ⛔ страница без объявлений — считаю блоком ({blocked_streak})")
                 if blocked_streak >= 2:
                     save_targets_state(state)
-                    raise SystemExit(3)
+                    block_cool_down()
+                    blocked_streak = 0
                 continue
             blocked_streak = 0
             _BLOCK_BACKOFF[0] = 0
