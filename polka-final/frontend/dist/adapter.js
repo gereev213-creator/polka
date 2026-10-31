@@ -8,7 +8,6 @@ function paintEmpty(count) {
   // Раньше на экране было просто «Пока пусто», и было непонятно, что делать.
   const html = (window.__polkaHasSearches === false)
     ? '<div class="emptyState emptyFirst">'
-      + '<div class="emptyArrow">↑</div>'
       + '<b>Нажми на баннер «Поиск лотов» сверху</b>'
       + '<span>Напиши, что ищешь и до какой цены — дальше всё сделаем сами</span>'
       + '<button class="bigbtn emptyGo" onclick="go(\'searches\')">Создать поиск</button>'
