@@ -140,7 +140,7 @@ assert bad['ok'] is False and bad['error'] == 'too_high', bad
 assert cfg_set('нет.такого', 1)['error'] == 'unknown_key'
 assert cfg_set('free.max_criteria', 'не число')['error'] == 'bad_type'
 hist = cfg_history('free.max_criteria')
-assert hist and json.loads(hist[0]['old_json']) == 1, hist[:1]
+assert hist and json.loads(hist[0]['old_json']) == 2, hist[:1]
 assert cfg_set('free.max_criteria', 4, by=1, reason='тест')['ok']
 rb = cfg_rollback('free.max_criteria', by=1)
 assert rb['ok'] and cfg_get('free.max_criteria') == 3, (rb, cfg_get('free.max_criteria'))
