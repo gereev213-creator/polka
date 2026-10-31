@@ -25740,11 +25740,13 @@ def contest_message() -> str:
 
 
 def contest_deadline():
+    # datetime импортирован как класс (from datetime import datetime),
+    # поэтому datetime.datetime здесь не работает.
     raw = str(cfg_get('contest.deadline') or CONTEST_DEFAULT_DEADLINE)
     try:
-        return datetime.datetime.fromisoformat(raw)
+        return datetime.fromisoformat(raw)
     except Exception:
-        return datetime.datetime.fromisoformat(CONTEST_DEFAULT_DEADLINE)
+        return datetime.fromisoformat(CONTEST_DEFAULT_DEADLINE)
 
 
 async def _contest_loop():
