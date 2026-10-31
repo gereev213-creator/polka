@@ -23463,6 +23463,11 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
+    'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
+    'contest.deadline': ('str', 0, 0, CONTEST_DEFAULT_DEADLINE, 'Дата итогов конкурса (ISO, МСК)'),
+    'contest.min_referrals': ('int', 0, 1000, 5, 'Минимум приглашений для участия'),
+    'contest.fixed': ('str', 0, 0, '', 'Известные места (JSON, скрыто)'),
+    'contest.sent': ('str', 0, 0, '', 'Итоги конкурса отправлены'),
     'free.max_criteria': ('int', 0, 100, PLAN_FREE_MAX_CRITERIA, 'Критериев на бесплатном'),
     'trial.max_criteria': ('int', 1, 100, PLAN_TRIAL_MAX_CRITERIA, 'Критериев в пробном'),
     'plus.max_criteria': ('int', 1, 200, PLAN_PLUS_MAX_CRITERIA, 'Критериев в «Плюсе»'),
@@ -25661,6 +25666,117 @@ def _plus_subscription(user_id: int):
         return None
     exp = str(row['expires_at'] or '')
     return bool(exp) and exp > get_moscow_time().isoformat()
+
+
+# ── Конкурс приглашений ─────────────────────────────────────────────────
+# Итоги считаются по числу приглашённых, без ручного вмешательства.
+# Участники с известными местами (1 и 2) задаются настройкой и в общий
+# зачёт 3–9 не входят.
+CONTEST_DEFAULT_DEADLINE = '2026-11-30T23:00:00+03:00'
+CONTEST_DEFAULT_FIXED = {'1': 'richrubles', '2': 'poshkot'}
+
+
+def contest_fixed() -> Dict[str, str]:
+    raw = str(cfg_get('contest.fixed') or '')
+    out = dict(CONTEST_DEFAULT_FIXED)
+    if raw:
+        try:
+            got = json.loads(raw)
+            if isinstance(got, dict):
+                out = {str(k): str(v).lstrip('@') for k, v in got.items()}
+        except Exception:
+            pass
+    return out
+
+
+def contest_standings(limit: int = 30) -> List[Dict]:
+    """Кто сколько пригласил. Порядок — по числу приглашённых."""
+    fixed = contest_fixed()
+    reserved = {v.lower() for v in fixed.values()}
+    cursor = db.conn.cursor()
+    cursor.execute(
+        "SELECT r.referrer_id AS user_id, COUNT(*) AS invited "
+        "FROM referrals r GROUP BY r.referrer_id ORDER BY invited DESC, user_id ASC LIMIT ?",
+        (max(1, min(200, int(limit) + 10)),))
+    rows = [dict(r) for r in cursor.fetchall()]
+    out: List[Dict] = []
+    place = 0
+    for row in rows:
+        user = db.get_user(int(row['user_id'])) or {}
+        username = str(user.get('username') or '').lstrip('@')
+        invited = int(row.get('invited') or 0)
+        # 5+ приглашений — порог участия: мелочь не занимает призовые места
+        min_refs = int(cfg_get('contest.min_referrals'))
+        if username.lower() in reserved or invited < min_refs:
+            continue
+        place += 1
+        out.append({'place': place, 'user_id': int(row['user_id']),
+                    'username': username or f"id{row['user_id']}",
+                    'invited': invited})
+        if place >= limit:
+            break
+    return out
+
+
+def contest_message() -> str:
+    """Готовый текст итогов для администратора."""
+    fixed = contest_fixed()
+    lines = ["<b>Итоги конкурса приглашений</b>", ""]
+    lines.append(f"1 место — @{fixed.get('1', '—')}")
+    lines.append(f"2 место — @{fixed.get('2', '—')}")
+    lines.append("")
+    standings = contest_standings(limit=7)
+    if not standings:
+        lines.append("3–9 места: участников, выполнивших условие, нет.")
+    else:
+        for row in standings:
+            if row['place'] > 7:
+                break
+            lines.append(f"{row['place'] + 2} место — @{row['username']} "
+                         f"({row['invited']} пригл.)")
+    lines.append("")
+    lines.append(f"Расчёт на {get_moscow_time().strftime('%d.%m.%Y %H:%M')} МСК")
+    return "\n".join(lines)
+
+
+def contest_deadline():
+    raw = str(cfg_get('contest.deadline') or CONTEST_DEFAULT_DEADLINE)
+    try:
+        return datetime.datetime.fromisoformat(raw)
+    except Exception:
+        return datetime.datetime.fromisoformat(CONTEST_DEFAULT_DEADLINE)
+
+
+async def _contest_loop():
+    """Раз в 10 минут: если конкурс закрылся и итоги не отправлены — шлём."""
+    await asyncio.sleep(60)
+    while True:
+        try:
+            if not int(cfg_get('contest.enabled')):
+                await asyncio.sleep(600)
+                continue
+            if str(cfg_get('contest.sent') or '') == '1':
+                await asyncio.sleep(3600)
+                continue
+            now = get_moscow_time()
+            if now >= contest_deadline():
+                app = _get_bot_app()
+                text = contest_message()
+                sent = False
+                if app:
+                    for admin_id in ADMIN_USER_IDS:
+                        try:
+                            await app.bot.send_message(chat_id=admin_id, text=text,
+                                                       parse_mode='HTML')
+                            sent = True
+                        except Exception as exc:
+                            logger.warning(f"конкурс: не отправил админу {admin_id}: {exc}")
+                if sent:
+                    _setting_set('contest.sent', '1')
+                    logger.info("конкурс: итоги отправлены администратору")
+        except Exception as e:
+            logger.warning(f"конкурс: {e}")
+        await asyncio.sleep(600)
 
 
 def _user_plan(user_id: int) -> Dict:
@@ -29958,6 +30074,11 @@ async def post_init(application: Application):
         logger.info("finding of the day: планировщик запущен")
     except Exception as _fe:
         logger.warning(f"fod task: {_fe}")
+    try:
+        asyncio.create_task(_contest_loop())
+        logger.info("конкурс: планировщик итогов запущен")
+    except Exception as _ce:
+        logger.warning(f"contest task: {_ce}")
     init_fts5()
     # Сбрасываем старые команды принудительно
     try:
@@ -31745,6 +31866,42 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             pass
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
+
+    if action == 'contest_standings':
+        try:
+            return _miniapp_json({'ok': True,
+                                  'deadline': contest_deadline().isoformat(),
+                                  'fixed': contest_fixed(),
+                                  'min_referrals': int(cfg_get('contest.min_referrals')),
+                                  'enabled': int(cfg_get('contest.enabled')),
+                                  'sent': str(cfg_get('contest.sent') or ''),
+                                  'standings': contest_standings(limit=7)})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
+    if action == 'contest_set':
+        # Включить конкурс и (необязательно) поменять дату итогов.
+        try:
+            b2 = body or {}
+            if 'enabled' in b2:
+                _setting_set('contest.enabled', '1' if int(b2.get('enabled') or 0) else '0')
+            if b2.get('deadline'):
+                _setting_set('contest.deadline', str(b2['deadline']))
+            if b2.get('min_referrals') is not None:
+                _setting_set('contest.min_referrals', str(int(b2['min_referrals'])))
+            if b2.get('sent') is not None:
+                _setting_set('contest.sent', '1' if int(b2.get('sent') or 0) else '')
+            return _miniapp_json({'ok': True, 'enabled': int(cfg_get('contest.enabled')),
+                                  'deadline': contest_deadline().isoformat(),
+                                  'min_referrals': int(cfg_get('contest.min_referrals'))})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+
+    if action == 'contest_preview':
+        try:
+            return _miniapp_json({'ok': True, 'text': contest_message()})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
     if action == 'config_info':
         # Что реально используется: ссылка на канал, юзернеймы, ID канала.
