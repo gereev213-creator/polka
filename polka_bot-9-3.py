@@ -26848,6 +26848,20 @@ def parse_avito_search_link(url: Any) -> Dict[str, Any]:
     user = user if user in ('1', '2') else ''
     pairs = []
     fblob = first('f')
+    # Цена из набора фильтров f=. В ссылках с фильтрами pmin/pmax в адресе
+    # НЕТ — границы цены лежат внутри blob закодированным JSON:
+    # хвост декодируется в {"from":0,"to":50000}. Раньше цену брали только
+    # из pmin/pmax, поэтому критерий из ссылки с фильтром «до 50 000»
+    # создавался вообще без верхней цены и тянул в находки всё подряд.
+    if fblob and not (pmin or pmax):
+        try:
+            _raw = fblob.replace('~', '/').replace('-', '+')
+            _txt = _base64.b64decode(_raw + '=' * (-len(_raw) % 4)).decode('latin-1', 'ignore')
+            _m = re.search(r'"from"\s*:\s*(\d{1,9}).{0,60}?"to"\s*:\s*(\d{1,9})', _txt)
+            if _m:
+                pmin, pmax = int(_m.group(1)), int(_m.group(2))
+        except Exception:
+            pass
     if fblob and re.fullmatch(r'[A-Za-z0-9_\-]{4,800}', fblob):
         pairs.append(('f', fblob))
     with_photo = 0
