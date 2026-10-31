@@ -23482,7 +23482,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
-    'contest.min_referrals': ('int', 0, 1000, 5, 'Минимум приглашений для участия'),
+    'contest.max_tickets': ('int', 1, 20, 5, 'Максимум билетов с человека'),
     'contest.fixed': ('str', 0, 0, '', 'Известные места (JSON, скрыто)'),
     'contest.sent': ('str', 0, 0, '', 'Итоги конкурса отправлены'),
     'free.max_criteria': ('int', 0, 100, PLAN_FREE_MAX_CRITERIA, 'Критериев на бесплатном'),
@@ -25685,12 +25685,14 @@ def _plus_subscription(user_id: int):
     return bool(exp) and exp > get_moscow_time().isoformat()
 
 
-# ── Конкурс приглашений ─────────────────────────────────────────────────
-# Итоги считаются по числу приглашённых, без ручного вмешательства.
-# Участники с известными местами (1 и 2) задаются настройкой и в общий
-# зачёт 3–9 не входят.
+# ── Конкурс поисков ─────────────────────────────────────────────────────
+# Билеты: один созданный поиск = один билет, максимум 5 билетов.
+# 30 ноября бот случайно выбирает победителей на места 3–9.
+# Места 1 и 2 закреплены за конкретными людьми и в розыгрыш не входят.
 CONTEST_DEFAULT_DEADLINE = '2026-11-30T23:00:00+03:00'
 CONTEST_DEFAULT_FIXED = {'1': 'richrubles', '2': 'poshkot'}
+CONTEST_MAX_TICKETS = 5
+CONTEST_WINNERS = 7          # места 3,4,5,6,7,8,9
 
 
 def contest_fixed() -> Dict[str, str]:
@@ -25706,59 +25708,82 @@ def contest_fixed() -> Dict[str, str]:
     return out
 
 
-def contest_standings(limit: int = 30) -> List[Dict]:
-    """Кто сколько пригласил. Порядок — по числу приглашённых."""
+def contest_participants(limit: int = 500) -> List[Dict]:
+    """Участники и их билеты: созданный поиск = билет, максимум 5."""
     fixed = contest_fixed()
     reserved = {v.lower() for v in fixed.values()}
     cursor = db.conn.cursor()
     cursor.execute(
-        "SELECT r.referrer_id AS user_id, COUNT(*) AS invited "
-        "FROM referrals r GROUP BY r.referrer_id ORDER BY invited DESC, user_id ASC LIMIT ?",
-        (max(1, min(200, int(limit) + 10)),))
-    rows = [dict(r) for r in cursor.fetchall()]
+        "SELECT hc.user_id AS user_id, COUNT(*) AS searches "
+        "FROM hunt_criteria hc GROUP BY hc.user_id ORDER BY searches DESC LIMIT ?",
+        (max(1, min(2000, int(limit))),))
     out: List[Dict] = []
-    place = 0
-    for row in rows:
+    for row in cursor.fetchall():
         user = db.get_user(int(row['user_id'])) or {}
         username = str(user.get('username') or '').lstrip('@')
-        invited = int(row.get('invited') or 0)
-        # 5+ приглашений — порог участия: мелочь не занимает призовые места
-        min_refs = int(cfg_get('contest.min_referrals'))
-        if username.lower() in reserved or invited < min_refs:
+        if not username or username.lower() in reserved:
             continue
-        place += 1
-        out.append({'place': place, 'user_id': int(row['user_id']),
-                    'username': username or f"id{row['user_id']}",
-                    'invited': invited})
-        if place >= limit:
-            break
+        searches = int(row.get('searches') or 0)
+        tickets = min(CONTEST_MAX_TICKETS, searches)
+        if tickets <= 0:
+            continue
+        out.append({'user_id': int(row['user_id']), 'username': username,
+                    'searches': searches, 'tickets': tickets})
     return out
+
+
+def contest_draw(seed: Optional[int] = None) -> List[Dict]:
+    """Случайный розыгрыш мест 3–9 по билетам.
+
+    Билеты кладутся в общий мешок: у кого больше поисков, у того больше
+    шансов. Один человек выигрывает не больше одного места.
+    """
+    import random as _rnd
+    participants = contest_participants()
+    if not participants:
+        return []
+    rng = _rnd.Random(seed) if seed is not None else _rnd.SystemRandom()
+    bag: List[Dict] = []
+    for p in participants:
+        bag.extend([p] * int(p['tickets']))
+    winners: List[Dict] = []
+    used = set()
+    tries = 0
+    while len(winners) < CONTEST_WINNERS and bag and tries < 5000:
+        tries += 1
+        pick = rng.choice(bag)
+        if pick['username'].lower() in used:
+            continue
+        used.add(pick['username'].lower())
+        winners.append(dict(pick))
+    for i, w in enumerate(winners):
+        w['place'] = 3 + i
+    return winners
 
 
 def contest_message() -> str:
     """Готовый текст итогов для администратора."""
     fixed = contest_fixed()
-    lines = ["<b>Итоги конкурса приглашений</b>", ""]
+    lines = ["<b>Итоги конкурса поисков</b>", ""]
     lines.append(f"1 место — @{fixed.get('1', '—')}")
     lines.append(f"2 место — @{fixed.get('2', '—')}")
     lines.append("")
-    standings = contest_standings(limit=7)
-    if not standings:
-        lines.append("3–9 места: участников, выполнивших условие, нет.")
+    winners = contest_draw()
+    if not winners:
+        lines.append("3–9 места: участников с поисками нет.")
     else:
-        for row in standings:
-            if row['place'] > 7:
-                break
-            lines.append(f"{row['place'] + 2} место — @{row['username']} "
-                         f"({row['invited']} пригл.)")
+        for row in winners:
+            lines.append(f"{row['place']} место — @{row['username']} "
+                         f"({row['tickets']} бил.)")
+    participants = contest_participants()
+    total_tickets = sum(p['tickets'] for p in participants)
     lines.append("")
-    lines.append(f"Расчёт на {get_moscow_time().strftime('%d.%m.%Y %H:%M')} МСК")
+    lines.append(f"Участников: {len(participants)}, билетов: {total_tickets}")
+    lines.append(f"Розыгрыш на {get_moscow_time().strftime('%d.%m.%Y %H:%M')} МСК")
     return "\n".join(lines)
 
 
 def contest_deadline():
-    # datetime импортирован как класс (from datetime import datetime),
-    # поэтому datetime.datetime здесь не работает.
     raw = str(cfg_get('contest.deadline') or CONTEST_DEFAULT_DEADLINE)
     try:
         return datetime.fromisoformat(raw)
@@ -31937,13 +31962,16 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
 
     if action == 'contest_standings':
         try:
+            parts = contest_participants()
             return _miniapp_json({'ok': True,
                                   'deadline': contest_deadline().isoformat(),
                                   'fixed': contest_fixed(),
-                                  'min_referrals': int(cfg_get('contest.min_referrals')),
                                   'enabled': int(cfg_get('contest.enabled')),
                                   'sent': str(cfg_get('contest.sent') or ''),
-                                  'standings': contest_standings(limit=7)})
+                                  'max_tickets': CONTEST_MAX_TICKETS,
+                                  'participants': parts,
+                                  'tickets_total': sum(p['tickets'] for p in parts),
+                                  'draw': contest_draw(seed=20261130)})
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
@@ -31955,13 +31983,13 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 _setting_set('contest.enabled', '1' if int(b2.get('enabled') or 0) else '0')
             if b2.get('deadline'):
                 _setting_set('contest.deadline', str(b2['deadline']))
-            if b2.get('min_referrals') is not None:
-                _setting_set('contest.min_referrals', str(int(b2['min_referrals'])))
+            if b2.get('max_tickets') is not None:
+                globals()['CONTEST_MAX_TICKETS'] = max(1, min(20, int(b2['max_tickets'])))
             if b2.get('sent') is not None:
                 _setting_set('contest.sent', '1' if int(b2.get('sent') or 0) else '')
             return _miniapp_json({'ok': True, 'enabled': int(cfg_get('contest.enabled')),
                                   'deadline': contest_deadline().isoformat(),
-                                  'min_referrals': int(cfg_get('contest.min_referrals'))})
+                                  'max_tickets': CONTEST_MAX_TICKETS})
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
