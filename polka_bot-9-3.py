@@ -23435,8 +23435,9 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
 # ── ЭТАП H: монетизация (значения в переменных окружения, не в коде) ──────────
 PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '1'))
 PLAN_FREE_DELAY_MIN = int(os.environ.get('FREE_DELAY_MIN', '10'))
-PLAN_TRIAL_DAYS = int(os.environ.get('TRIAL_DAYS', '7'))
-PLAN_TRIAL_MAX_CRITERIA = int(os.environ.get('TRIAL_MAX_CRITERIA', '5'))
+# Тестовый период — 24 часа и один поиск: короткая проба, дальше тариф.
+PLAN_TRIAL_DAYS = int(os.environ.get('TRIAL_DAYS', '1'))
+PLAN_TRIAL_MAX_CRITERIA = int(os.environ.get('TRIAL_MAX_CRITERIA', '1'))
 PLAN_PLUS_PRICE = int(os.environ.get('PLUS_PRICE', '99'))
 PLAN_PLUS_SHOW_PRICE = int(os.environ.get('PLUS_SHOW_PRICE', '149'))
 PLAN_PLUS_MAX_CRITERIA = int(os.environ.get('PLUS_MAX_CRITERIA', '10'))
@@ -25703,8 +25704,8 @@ def _user_plan(user_id: int) -> Dict:
     trial_days = int(cfg_get('trial.days'))
     if plan == 'trial':
         hours = int(_hours_since(trial_started) or 0)
-        days_left = max(0, trial_days - hours // 24)
-        if days_left <= 0:
+        trial_hours = trial_days * 24
+        if hours >= trial_hours:
             # Пробный период закончился: переводим на free и приостанавливаем лишнее
             plan = 'free'
             try:
@@ -25713,7 +25714,9 @@ def _user_plan(user_id: int) -> Dict:
                 pass
             _pause_extra_criteria(int(user_id), int(cfg_get('free.max_criteria')))
         else:
-            return {'name': 'trial', 'trial_days_left': days_left,
+            hours_left = trial_hours - hours
+            return {'name': 'trial', 'trial_days_left': max(1, (hours_left + 23) // 24),
+                    'trial_hours_left': hours_left,
                     'criteria_limit': int(cfg_get('trial.max_criteria')), 'delay_min': 0,
                     'deep_check': True, 'price': 0,
                     'show_price': int(cfg_get('plus.price_display_old'))}
