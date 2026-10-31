@@ -23509,6 +23509,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                               'Скидка «подозрительно дёшево», %'),
     'hunt.digest_after': ('int', 0, 1000, HUNT_DIGEST_AFTER, 'Сколько находок копить перед дайджестом'),
     'banner.enabled': ('bool', None, None, 0, 'Показывать баннер в ленте'),
+    'backup.enabled': ('bool', None, None, 0,
+                       'Ежедневный бэкап базы файлом в Telegram владельцу'),
     'banner.title': ('str', None, None, '', 'Заголовок баннера'),
     'banner.urls': ('str', None, None, '',
                     'Ссылки на картинки бота, JSON: {"welcome": "https://…"}'),
