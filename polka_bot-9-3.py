@@ -23464,7 +23464,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
-    'contest.deadline': ('str', 0, 0, CONTEST_DEFAULT_DEADLINE, 'Дата итогов конкурса (ISO, МСК)'),
+    'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
     'contest.min_referrals': ('int', 0, 1000, 5, 'Минимум приглашений для участия'),
     'contest.fixed': ('str', 0, 0, '', 'Известные места (JSON, скрыто)'),
     'contest.sent': ('str', 0, 0, '', 'Итоги конкурса отправлены'),
