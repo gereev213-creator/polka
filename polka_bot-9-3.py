@@ -20637,7 +20637,9 @@ def _setting_set(key: str, value: str):
         # Без сброса кеша cfg_get продолжал отдавать старое значение:
         # настройка записывалась в базу, но код её «не видел» до перезапуска.
         try:
-            _SETTINGS_CACHE.pop(key, None)
+            # Кеш уже загружен, поэтому простого pop мало: cfg_get пойдёт в
+            # схему и вернёт значение по умолчанию. Кладём новое значение.
+            _SETTINGS_CACHE[key] = value
         except Exception:
             pass
     except Exception as e:
