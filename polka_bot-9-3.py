@@ -23015,7 +23015,11 @@ def hunt_flush_stale_sending(minutes: int = 15) -> int:
                            f"пометили неудачей {failed}")
         return returned + failed
     except Exception as e:
-        logger.warning(f"flush sending: {e}")
+        # «not an error» — штатный ответ, когда застрявших отправок нет.
+        if 'not an error' in str(e):
+            logger.debug(f"flush sending: {e}")
+        else:
+            logger.warning(f"flush sending: {e}")
         return 0
 
 
