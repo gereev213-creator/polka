@@ -117,16 +117,20 @@ assert PUSHED[0] == ['лот-стр1'] and PUSHED[1] == ['лот-стр2'], PUSH
 assert sent == 2, sent
 print('в) цель на две страницы — отправка для обеих страниц')
 
-# ── г) один блок не обрывает проход, два подряд — выход с кодом 3
+# ── г) два блока подряд — не выход из цикла, а отдых и продолжение
+# Раньше проход завершался с кодом 3 и всё стояло до ручного перезапуска.
+# Теперь сборщик сам пережидает блокировку и работает дальше.
 reset()
 collect.fetch = lambda url, **kw: (_ for _ in ()).throw(
     collect.Blocked('HTTP 439 — доступ ограничен по IP'))
+_pauses = []
+collect.block_cool_down = lambda *a, **k: _pauses.append(1)
 try:
     collect.run_once(cfg_with([{'url': T1['url'], 'city': 'Ижевск', 'pages': 3}]))
-    raise AssertionError('ожидали выход с кодом 3 после двух блоков')
-except SystemExit as exc:
-    assert exc.code == 3, exc.code
-print('г) два блока подряд — выход с кодом 3')
+except SystemExit as exc:  # выход допустим только не из-за блокировки
+    raise AssertionError(f'проход не должен завершаться из-за блокировки: {exc.code}')
+assert _pauses, 'после двух блоков должен быть отдых'
+print('г) два блока подряд — отдых и продолжение, без остановки цикла')
 
 # ── д) один блок при нескольких целях: проход продолжается
 reset()
