@@ -1107,6 +1107,12 @@ async def safe_edit_message(query, text, keyboard=None, parse_mode=ParseMode.HTM
             else:
                 await query.edit_message_text(text=text, parse_mode=parse_mode)
     except Exception as e:
+        _msg = str(e)
+        # «Message is not modified» — не ошибка: текст и кнопки уже такие же.
+        # Раньше это писалось как ERROR и вдобавок отправляло копию сообщения.
+        if 'Message is not modified' in _msg:
+            logger.debug(f"правка не требуется: {_msg[:120]}")
+            return
         logger.error(f"Ошибка при редактировании сообщения: {e}")
         if keyboard:
             await query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode=parse_mode)
@@ -1128,6 +1134,11 @@ async def safe_edit_caption(query, caption, keyboard=None):
             else:
                 await query.edit_message_text(text=caption)
     except Exception as e:
+        _msg = str(e)
+        # Та же безобидная ситуация, что и с текстом: подпись уже такая же.
+        if 'Message is not modified' in _msg:
+            logger.debug(f"правка подписи не требуется: {_msg[:120]}")
+            return
         logger.error(f"Ошибка при редактировании подписи: {e}")
         # В случае ошибки отправляем новое сообщение
         if keyboard:
