@@ -43,6 +43,14 @@ checks = [
     ("плашки разбора ссылки", 'id="linkChips"' in TPL),
     ("ссылка отправляется без слов", 'q.length < 2 && !link0' in ADP),
     ("новый разбор ссылки первым", "search_link: link" in ADP),
+    # Ручной режим расширен: словами теперь ищет сам Авито (q=), поэтому
+    # человеку нужны цена от/до, город, состояние, минус-слова, выгода и фото.
+    ("поле цены от", 'id="minprice"' in TPL),
+    ("поле города", 'id="city"' in TPL),
+    ("состояние", 'id="condChips"' in TPL),
+    ("минус-слова", 'id="exclude"' in TPL),
+    ("выгода к рынку", 'id="discChips"' in TPL),
+    ("только с фото", 'id="photoChip"' in TPL),
 ]
 ok = True
 for name, res in checks:

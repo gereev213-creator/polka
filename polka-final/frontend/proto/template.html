@@ -786,6 +786,108 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
 <div class="scroll"><form class="card form" id="searchForm">
           <div class="field">
+            <label>Что ищем</label>
+            <input id="q" placeholder="Например: куртка зимняя мужская 152" required>
+          </div>
+          <div class="field">
+            <label>Цена до, ₽</label>
+            <input id="maxprice" placeholder="Например: 5000" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label>Цена от, ₽</label>
+            <input id="minprice" placeholder="Необязательно" inputmode="numeric">
+          </div>
+          <div class="field">
+            <label>Город</label>
+            <input id="city" placeholder="Любой" autocomplete="off">
+          </div>
+          <div class="field">
+            <label>Состояние</label>
+            <div class="chips" id="condChips" style="margin-top:0">
+              <button type="button" class="chip on" data-cond="any">Любое</button>
+              <button type="button" class="chip" data-cond="Отличное">Отличное</button>
+              <button type="button" class="chip" data-cond="Хорошее">Хорошее</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Продавец</label>
+            <div class="chips" id="sellerChips" style="margin-top:0">
+              <button type="button" class="chip on" data-seller="any">Любой</button>
+              <button type="button" class="chip" data-seller="private">Только частник</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Минус-слова</label>
+            <input id="exclude" placeholder="запчасти, битый, ремонт">
+          </div>
+          <div class="field">
+            <label>Выгода к рынку, от %</label>
+            <div class="chips" id="discChips" style="margin-top:0">
+              <button type="button" class="chip" data-disc="0">Любая</button>
+              <button type="button" class="chip on" data-disc="10">10%</button>
+              <button type="button" class="chip" data-disc="20">20%</button>
+              <button type="button" class="chip" data-disc="30">30%</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Фото</label>
+            <div class="chips" style="margin-top:0">
+              <button type="button" class="chip" id="photoChip" data-photo="1">Только с фото</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Ссылка на поиск с Авито — точный режим</label>
+            <input id="avitoLink" placeholder="https://www.avito.ru/…" inputmode="url"
+                   autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="newHint">Необязательно. Вставьте ссылку со своей выдачи — тогда сборщик
+              откроет ровно её: с подразделом и фильтрами Авито. Остальные поля можно не заполнять.</div>
+            <div id="linkChips" style="display:none"></div>
+          </div>
+          <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.</div>
+        </form></div><div class="bottomCta"><button class="bigbtn" form="emailForm">Получить код</button></div></section>
+<section class="screen" id="s-code"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Код из письма</span></div>
+<div class="scroll"><div class="card form">
+<p class="mut" id="codeHint" style="text-align:center;margin-bottom:14px">Отправили код на почту</p>
+<form id="codeForm" novalidate><div class="otp" id="otp"><input inputmode="numeric" autocomplete="one-time-code" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"></div></form>
+<p class="pmsg" id="codeMsg" style="text-align:center">Неверный код</p>
+<button class="resend" id="resend" disabled>Отправить ещё раз · 0:30</button>
+<button class="resend" onclick="go('email',true)">Изменить почту</button>
+</div></div><div class="bottomCta"><button class="bigbtn" form="codeForm">Войти</button></div></section>
+<section class="screen" id="s-done"><div class="welcomeCenter"><div class="logo"></div><h1>вы вошли</h1><p id="doneAccount">аккаунт привязан</p></div><div class="authActions"><button class="bigbtn" onclick="go('home',true)">Перейти в приложение</button></div></section>
+
+<!-- loading -->
+<section class="screen" id="s-loading"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><div class="searchBanner"></div><div class="grid" style="flex:none">
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:65%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:55%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:60%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
+<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:50%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div></div></section>
+
+<!-- empty -->
+<section class="screen" id="s-empty"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')"></button><div class="emptyIcon"></div><div class="emptyTxt">Пока пусто</div></section>
+
+<!-- home / finds -->
+<section class="screen active" id="s-home"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')" aria-label="Поиск лотов"></button><div class="scroll"><div class="grid" id="homeGrid"></div></div></section>
+
+<!-- market -->
+<section class="screen" id="s-market"><div class="ahead"><div class="logo"></div><span class="stag">Барахолка</span></div>
+
+<div id="feedBanners" style="display:flex;flex-direction:column;gap:10px"></div>
+<div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
+<div class="scroll"><div class="grid" id="marketGrid"></div></div></section>
+
+<!-- favorites -->
+<section class="screen" id="s-favorites"><div class="ahead"><div class="logo"></div><span class="stag">Избранное</span></div><div class="scroll"><div id="favList"></div><div class="nores" id="favEmpty">В избранном пока пусто</div></div></section>
+
+<!-- searches -->
+<section class="screen" id="s-searches"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Поиск лотов</span></div>
+<div class="seg"><button class="on">Мои поиски</button><button onclick="go('history')">История</button></div>
+<div class="scroll"><div id="searchList"></div>
+</div></div><div class="bottomCta"><button class="bigbtn" onclick="go('newsearch')">Новый поиск</button></div></section>
+
+<!-- new search -->
+<section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
+<div class="scroll"><form class="card form" id="searchForm">
+          <div class="field">
             <label>Ссылка на поиск с Авито</label>
             <input id="avitoLink" placeholder="https://www.avito.ru/…" inputmode="url"
                    autocomplete="off" autocapitalize="off" spellcheck="false">
