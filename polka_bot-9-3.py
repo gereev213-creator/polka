@@ -25719,10 +25719,12 @@ def contest_participants(limit: int = 500) -> List[Dict]:
         (max(1, min(2000, int(limit))),))
     out: List[Dict] = []
     for row in cursor.fetchall():
-        # db.get_user возвращает sqlite3.Row — приводим к словарю,
-        # иначе .get падает с «no attribute get».
-        user = dict(db.get_user(int(row['user_id'])) or {})
-        username = str(user.get('username') or '').lstrip('@')
+        # Берём имя напрямую из базы: db.get_user может вернуть
+        # sqlite3.Row, у которого нет .get.
+        cursor.execute("SELECT username FROM users WHERE user_id=?",
+                       (int(row['user_id']),))
+        urow = cursor.fetchone()
+        username = str((urow['username'] if urow else '') or '').lstrip('@')
         if not username or username.lower() in reserved:
             continue
         searches = int(row.get('searches') or 0)
@@ -31975,7 +31977,9 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                   'tickets_total': sum(p['tickets'] for p in parts),
                                   'draw': contest_draw(seed=20261130)})
         except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
+            import traceback as _tb
+            return _miniapp_json({'ok': False, 'error': str(e)[:200],
+                                  'where': _tb.format_exc().strip().splitlines()[-1][:200]})
 
     if action == 'contest_set':
         # Включить конкурс и (необязательно) поменять дату итогов.
