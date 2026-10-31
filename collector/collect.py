@@ -2282,7 +2282,7 @@ TARGET_PAUSE = int(os.environ.get('POLKA_TARGET_PAUSE', '20'))
 # Как часто можно проверять ОДИН поиск: по умолчанию раз в час
 CHECK_INTERVAL_MIN = int(os.environ.get('POLKA_CHECK_INTERVAL_MIN', '60'))
 # Как часто «прогреваться» на главной Авито (в проходах)
-WARM_UP_EVERY = int(os.environ.get('POLKA_WARM_UP_EVERY', '5'))
+WARM_UP_EVERY = int(os.environ.get('POLKA_WARM_UP_EVERY', '2'))
 # Сколько карточек открывать за проход ради описания и продавца.
 # Каждая карточка — отдельный запрос, поэтому немного.
 DETAILS_PER_PASS = int(os.environ.get('POLKA_DETAILS_PER_PASS', '3'))
@@ -2421,7 +2421,9 @@ def run_once(cfg: dict) -> int:
     try:
         if int(cfg.get('warm_up_every') or WARM_UP_EVERY) > 0:
             _pn = int(os.environ.get('POLKA_PASS_N', '0') or 0)
-            if _pn % int(cfg.get('warm_up_every') or WARM_UP_EVERY) == 0:
+            # Прогреваемся перед КАЖДЫМ проходом: главная открывается почти
+            # всегда и даёт cookies, с которыми раздел отдаётся чаще.
+            if _pn % int(cfg.get('warm_up_every') or WARM_UP_EVERY) == 0 or _BLOCK_BACKOFF[0] > 0:
                 warm_up()
     except Exception:
         pass
@@ -2434,7 +2436,12 @@ def run_once(cfg: dict) -> int:
             try:
                 import random as _rnd
                 _pause = int(cfg.get('target_pause') or TARGET_PAUSE)
+                # После блокировки пауза длиннее: два запроса подряд по
+                # разным разделам Авито считает серией и банит сильнее.
+                if _BLOCK_BACKOFF[0]:
+                    _pause = max(_pause, MIN_REQUEST_GAP) + _BLOCK_BACKOFF[0] * 30
                 time.sleep(_pause + _rnd.randint(0, 5))
+                print(f'  пауза {_pause} с перед следующим разделом')
             except Exception:
                 pass
         first_target[0] = False
