@@ -31743,6 +31743,18 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         db.conn.commit()
         return _miniapp_json({'ok': True, 'criteria': moved_c, 'to': to_id})
 
+    if action == 'config_info':
+        # Что реально используется: ссылка на канал, юзернеймы, ID канала.
+        try:
+            return _miniapp_json({'ok': True,
+                                  'channel_url': EMAIL_TG_CHANNEL_URL,
+                                  'channel_username': TG_CHANNEL_USERNAME,
+                                  'main_channel_id': main_channel_id(),
+                                  'bot_username': BOT_USERNAME,
+                                  'support': os.environ.get('SUPPORT_URL', '@suppolka')})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
+
     if action == 'sub_check':
         # Проверка условия «подписка на канал»: что именно видит бот.
         try:
