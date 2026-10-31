@@ -405,6 +405,12 @@ def _fetch_direct_body(url: str, timeout: int = 25) -> str:
             if len(r.text or '') < 200_000:
                 raise Blocked(f'{profile}: заглушка вместо выдачи '
                               f'({len(r.text or "")} байт)')
+            try:
+                if _VERBOSE_COMPRESSION[0]:
+                    print(f"  сжатие ответа: {r.headers.get('content-encoding') or 'нет'} "
+                          f"| размер по сети: {r.headers.get('content-length') or '?'}")
+            except Exception:
+                pass
             if sess is not None:
                 _cookies_remember(profile, sess)
             _WORKING_PROFILE = profile
@@ -494,6 +500,7 @@ _PENDING_ROTATION = {'url': '', 'expires': ''}
 _ROTATED_BY_API = [False]
 # Последняя ошибка API провайдера — показываем в диагностике
 PROXY_API_ERROR = ['']
+_VERBOSE_COMPRESSION = [str(os.environ.get('POLKA_VERBOSE', '1')) != '0']
 
 
 def _resources_reset() -> None:
