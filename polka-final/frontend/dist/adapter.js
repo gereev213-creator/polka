@@ -4,8 +4,16 @@
 
 // Пустая лента не должна оставлять голый экран
 function paintEmpty(count) {
-  // Пусто — просто текст, без плашки и кнопки
-  const html = '<div class="emptyState">Пока пусто</div>';
+  // Первый вход: человек ничего не создал — объясняем, с чего начать.
+  // Раньше на экране было просто «Пока пусто», и было непонятно, что делать.
+  const html = (window.__polkaHasSearches === false)
+    ? '<div class="emptyState emptyFirst">'
+      + '<div class="emptyArrow">↑</div>'
+      + '<b>Нажми на баннер «Поиск лотов» сверху</b>'
+      + '<span>Напиши, что ищешь и до какой цены — дальше всё сделаем сами</span>'
+      + '<button class="bigbtn emptyGo" onclick="go(\'searches\')">Создать поиск</button>'
+      + '</div>'
+    : '<div class="emptyState">Пока пусто</div>';
   if (count) return;
   ['homeGrid'].forEach((id) => {
     const el = document.getElementById(id);
@@ -194,6 +202,11 @@ function paintEmpty(count) {
 
   async function loadLots() {
     (window.PolkaLoading && window.PolkaLoading(document.getElementById('homeGrid'), 4));
+    // Нужно для подсказки на пустом экране: есть ли уже поиски
+    try {
+      const crit = await api('/api/hunt');
+      window.__polkaHasSearches = !!(crit && (crit.items || []).length);
+    } catch (e) { }
     try {
       const data = await api('/api/findings?limit=40');
       const rawItems = data.items || [];

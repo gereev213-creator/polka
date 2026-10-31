@@ -695,6 +695,16 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 /* Нет фото: фирменная голубая заливка, без текста */
 #photo.noPhotoFill{background:var(--grad)!important;background-image:var(--grad)!important}
 #photo.noPhotoFill .noPhotoMark{display:none}
+
+/* Первый вход: подсказка вместо «Пока пусто» */
+.emptyFirst{display:flex;flex-direction:column;align-items:center;gap:8px;
+  text-align:center;padding:26px 18px;color:var(--ink)}
+.emptyFirst b{font-size:16px;line-height:1.3;color:var(--blue)}
+.emptyFirst span{font-size:13px;color:#5C6E86;max-width:280px}
+.emptyFirst .emptyArrow{font-size:30px;color:var(--blue);line-height:1;
+  animation:hintUp 1.4s ease-in-out infinite}
+.emptyFirst .emptyGo{margin-top:8px;width:230px;height:46px;font-size:13px}
+@keyframes hintUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -999,8 +1009,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261031000922"></script>
-<script src="adapter.js?v=20261031000922"></script><script src="payments.js?v=20261031000922"></script><script src="admin.js?v=20261031000922"></script><script src="keyboard.js?v=20261031000922"></script><script src="telegram-safe.js?v=20261031000922"></script><script>
+</script><script src="telegram-web-app.js?v=20261031144012"></script>
+<script src="adapter.js?v=20261031144012"></script><script src="payments.js?v=20261031144012"></script><script src="admin.js?v=20261031144012"></script><script src="keyboard.js?v=20261031144012"></script><script src="telegram-safe.js?v=20261031144012"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
