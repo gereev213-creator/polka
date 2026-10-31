@@ -514,9 +514,23 @@ function paintEmpty(count) {
         }
         payBtn.onclick = () => buy(plans.find((p) => p.product === 'plus_30') || plans[0]);
       }
-      if (data.plan && data.plan !== 'trial') {
-        const title = $('trialTitle');
-        if (title) title.textContent = 'Плюс активен';
+      // Раньше любой план кроме trial подписывался «Плюс активен», и
+      // бесплатные пользователи видели активный Плюс, которого у них нет.
+      const plan = String(data.plan || '').toLowerCase();
+      const isPlus = plan === 'plus' || plan === 'pro' || data.plus_active === true;
+      const title = $('trialTitle');
+      const badge = $('trialBadge');
+      if (title) {
+        if (isPlus) {
+          title.textContent = 'Плюс активен';
+          if (badge) badge.textContent = 'Активно';
+        } else if (plan === 'trial') {
+          title.textContent = 'Пробный на 24 часа';
+          if (badge) badge.textContent = 'Активно';
+        } else {
+          title.textContent = 'Бесплатный тариф';
+          if (badge) badge.textContent = '2 поиска';
+        }
       }
     } catch (e) { }
   }
