@@ -58,7 +58,7 @@ function useApp() {
 // Метка сборки. Показывается в профиле мелким текстом: по ней видно,
 // какой именно бандл открыт у человека — иначе закэшированная версия
 // выглядит как «ничего не исправилось».
-const APP_BUILD = '2026-10-27-02'
+const APP_BUILD = '2026-10-31-01'
 
 function Logo() {
   return <img className="brand-logo" src="/polka-logo.png" alt="ПОЛКА" />
@@ -1625,11 +1625,72 @@ function HuntLinkPage() {
         </button>}
       />
 
-      {/* Слова — основной путь: человеку не нужно бегать на Авито и копировать
-          адрес. Ссылка осталась ниже как точный режим. */}
+      {/* Точный режим — первым. Человек копирует ссылку со своей выдачи на
+          Авито: сборщик идёт именно в этот раздел и с этими условиями, а не
+          перебирает всю категорию вслепую. Форма уже была в коде, но её
+          убрали с экрана 27.10 — вернул, потому что без неё сборщик ищет «как
+          получится», а не то, что человек просил. Слова — быстрый путь ниже. */}
       <div className="hunt-h1">Что ищем?</div>
       <div className="hunt-sub">
-        Напишите словами: «джинсы levis до 3000, только частные» — подберём фильтры сами.
+        Вставьте ссылку на поиск с Авито — перенесём раздел, цену и слова.
+      </div>
+
+      <div className="hunt-card">
+        <div className="hunt-card-head">
+          <span>Ссылка на поиск Авито</span>
+        </div>
+        <div className="hunt-card-sub">
+          Откройте Авито, выставьте фильтры и скопируйте адрес из строки браузера
+        </div>
+        <div className="hunt-field">
+          <input value={url} onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.avito.ru/..." inputMode="url"
+            autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+          <button type="button" className="hunt-paste" onClick={paste}>
+            Вставить
+          </button>
+          {url ? (
+            <button type="button" className="hunt-field-x" aria-label="Очистить"
+              onClick={() => setUrl('')}>×</button>
+          ) : null}
+        </div>
+
+        {chips.length ? (
+          <>
+            <div className="hunt-from-label">Из ссылки</div>
+            <div className="hunt-chips">
+              {chips.map((c) => (
+                <span key={c.label} className={c.kind === 'main' ? 'hunt-chip is-main' : 'hunt-chip'}>{c.label}</span>
+              ))}
+            </div>
+          </>
+        ) : null}
+
+        <button type="button" className="cta-primary hunt-cta"
+          disabled={busy || !url.trim()} onClick={send}>
+          {busy ? 'Проверяю…' : 'Найти лоты'}
+        </button>
+        <div className="hunt-eta">
+          <span className="hunt-eta-dot" />
+          Находки придут в течение часа · критерий сохранится сам
+        </div>
+        {note ? <div className="hunt-note">{note}</div> : null}
+        {limit ? (
+          <div className="link-limit">
+            <div className="link-limit-text">
+              Критерий занят на бесплатном плане. В «Плюсе» — до 10 критериев.
+            </div>
+            <div className="link-limit-actions">
+              <button type="button" className="primary-btn" onClick={() => navigate('/tariffs')}>Открыть Плюс</button>
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Быстрый путь словами — ниже, для тех, кому лень идти на Авито */}
+      <div className="section-label mt-20">Или словами</div>
+      <div className="hunt-sub">
+        «джинсы levis до 3000, только частные» — подберём фильтры сами.
       </div>
       <button type="button" className="cta-primary w-full mt-14"
         onClick={() => navigate('/hunt/manual')}>
