@@ -3925,14 +3925,41 @@ function AdminPage() {
 
           <div className="admin-kpi">
             {[['Пользователи', metrics.users], ['Критериев активно', metrics.criteria_active],
-              ['Отправлено', metrics.sent], ['Платежей', metrics.payments],
-              ['Находок в базе', metrics.findings]].map(([label, v]) => (
+              ['С поиском', metrics.criteria_users], ['Отправлено', metrics.sent],
+              ['Платежей', metrics.payments], ['Находок в базе', metrics.findings]].map(([label, v]) => (
               <div key={label} className="glass-card admin-kpi-cell">
                 <div className="admin-kpi-value">{v ?? 0}</div>
                 <div className="admin-kpi-label">{label}</div>
               </div>
             ))}
           </div>
+
+          {metrics.criteria_list?.length ? (
+            <div className="glass-card mt-14">
+              <div className="plan-name">
+                Поиски пользователей: {metrics.criteria_users || 0} чел ·
+                {' '}{metrics.criteria_total || 0} поисков
+                {metrics.criteria_paused ? ` · ${metrics.criteria_paused} на паузе` : ''}
+              </div>
+              <div className="admin-plans mt-8">
+                {metrics.criteria_list.map((c) => (
+                  <div key={c.id} className="admin-plan-line">
+                    <span>
+                      {c.active ? '●' : '‖'} {String(c.query || '').slice(0, 32)}
+                      {c.max_price ? ` · до ${c.max_price} ₽` : ''}
+                      {c.city ? ` · ${c.city}` : ''}
+                    </span>
+                    <span title="находок/отправлено">
+                      {c.finds || 0}/{c.sent || 0}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <div className="admin-key mt-8">
+                формат: находок/отправлено · ● активен · ‖ пауза
+              </div>
+            </div>
+          ) : null}
 
           {metrics.plans ? (
             <div className="glass-card mt-14">

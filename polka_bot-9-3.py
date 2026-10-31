@@ -31586,6 +31586,40 @@ async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Respons
             out['events'] = {str(r['name']): int(r['n']) for r in cursor.fetchall()}
         except Exception:
             out['events'] = {}
+        # Поиски пользователей: сколько людей вообще ищут, что именно и
+        # сколько находок принёс каждый поиск. Кратко, для статистики.
+        try:
+            out['criteria_total'] = one("SELECT COUNT(*) FROM hunt_criteria")
+            out['criteria_paused'] = one("SELECT COUNT(*) FROM hunt_criteria WHERE active=0")
+            cursor.execute("SELECT COUNT(DISTINCT user_id) AS n FROM hunt_criteria")
+            row = cursor.fetchone()
+            out['criteria_users'] = int(row['n'] or 0) if row else 0
+        except Exception:
+            out['criteria_users'] = 0
+        try:
+            cursor.execute(
+                "SELECT hc.id, hc.user_id, COALESCE(hc.query,'') AS query, "
+                "       COALESCE(hc.category,'') AS category, COALESCE(hc.city,'') AS city, "
+                "       COALESCE(hc.active,1) AS active, COALESCE(hc.max_price,0) AS max_price, "
+                "       COALESCE(hc.created_at,'') AS created_at, "
+                "       SUM(CASE WHEN hm.status IN ('sent','ready') THEN 1 ELSE 0 END) AS finds, "
+                "       SUM(CASE WHEN hm.status='sent' THEN 1 ELSE 0 END) AS sent "
+                "FROM hunt_criteria hc LEFT JOIN hunt_matches hm ON hm.crit_id = hc.id "
+                "GROUP BY hc.id ORDER BY hc.id DESC LIMIT 40")
+            rows = [dict(r) for r in cursor.fetchall()]
+            for d in rows:
+                try:
+                    cursor.execute("SELECT username, first_name FROM users WHERE user_id=?",
+                                   (int(d.get('user_id') or 0),))
+                    u = cursor.fetchone()
+                    if u:
+                        d['user_name'] = str(u['username'] or u['first_name'] or '')
+                except Exception:
+                    pass
+            out['criteria_list'] = rows
+        except Exception as e:
+            logger.warning(f"metrics criteria_list: {e}")
+            out['criteria_list'] = []
         return out
 
     metrics = await asyncio.to_thread(_db_locked, _collect)

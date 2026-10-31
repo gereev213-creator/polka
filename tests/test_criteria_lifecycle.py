@@ -14,6 +14,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = open(os.path.join(HERE, '..', 'polka_bot-9-3.py'), encoding='utf-8').read()
 COL = open(os.path.join(HERE, '..', 'collector', 'collect.py'), encoding='utf-8').read()
+UI = open(os.path.join(HERE, '..', 'polka-final/frontend/src/App.jsx'), encoding='utf-8').read()
 
 ok = 0
 fail = 0
@@ -51,6 +52,12 @@ check('сборщик пропускает проход без критерие�
       'Активных критериев нет — искать нечего' in COL)
 check('встроенный список только по флагу',
       "POLKA_USE_STATIC_TARGETS" in COL)
+
+# 5) админка показывает статистику поисков
+check('метрики отдают список поисков', "out['criteria_list']" in SRC)
+check('метрики считают людей с поиском', "criteria_users" in SRC)
+check('в админке есть блок поисков', 'Поиски пользователей' in UI)
+check('в админке видно находки/отправлено', "c.finds || 0}/{c.sent || 0}" in UI)
 
 print()
 if fail:
