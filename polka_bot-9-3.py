@@ -27017,10 +27017,21 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
 
 
 def remove_criterion(user_id: int, crit_id: int) -> bool:
+    """Удаляет поиск и все его решения.
+
+    Решения без критерия — мусор: они всплывали в ленте у тех, чей критерий
+    уже удалён. Удаляем только свои записи: чужой критерий так не снести.
+    """
     cursor = db.conn.cursor()
     cursor.execute("DELETE FROM hunt_criteria WHERE id=? AND user_id=?", (crit_id, user_id))
+    deleted = cursor.rowcount > 0
+    if deleted:
+        try:
+            cursor.execute("DELETE FROM hunt_matches WHERE crit_id=?", (crit_id,))
+        except Exception as e:
+            logger.warning(f"remove_criterion matches: {e}")
     db.conn.commit()
-    return cursor.rowcount > 0
+    return deleted
 
 
 async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
