@@ -8030,12 +8030,9 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ads_hint = f"У вас {active_ads} активных объявлений"
     else:
         ads_hint = "Разместите первое — это займёт 30 секунд"
-    text = (
-        f"<b>Полка</b>\n\n"
-        f"Находки дешевле рынка по вашим критериям и барахолка "
-        f"для перекупов.\n\n"
-        f"{ads_hint}."
-    )
+    # Приветствие короткое: одно предложение о сути сервиса.
+    text = ("<b>Полка</b>\n\n"
+            "Тот самый бот, который находит выгодные объявления раньше вас.")
     
     markup = InlineKeyboardMarkup(keyboard)
     if update.message:
