@@ -25719,7 +25719,9 @@ def contest_participants(limit: int = 500) -> List[Dict]:
         (max(1, min(2000, int(limit))),))
     out: List[Dict] = []
     for row in cursor.fetchall():
-        user = db.get_user(int(row['user_id'])) or {}
+        # db.get_user возвращает sqlite3.Row — приводим к словарю,
+        # иначе .get падает с «no attribute get».
+        user = dict(db.get_user(int(row['user_id'])) or {})
         username = str(user.get('username') or '').lstrip('@')
         if not username or username.lower() in reserved:
             continue
