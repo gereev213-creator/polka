@@ -21782,6 +21782,25 @@ def _criterion_where(crit: Dict, active_only: bool = True):
             parts.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
             params.append(f"*[^0-9]{num}[^0-9]*")
         where.append("(" + " OR ".join(parts) + ")")
+    # Слова запроса — в SQL. Этот фильтр убрали 26.10 (коммит dfbbf71),
+    # чтобы «по критериям были находки», и вместе с ним сломались медианы:
+    # медиана считалась по ВСЕМ объявлениям базы. Отсюда «iPhone 14 pro» с
+    # медианой 1 500 ₽ и мусор в ленте, потому что всё вокруг выглядело
+    # дешевле «рынка». Решения о находках принимает evaluate_ad, а SQL нужен
+    # для медианы и проверки критерия — там нужны именно слова.
+    for word in _query_words_required(crit.get('query')):
+        variants = query_word_variants(word)
+        if not variants:
+            continue
+        # Число (размер, память, год) ищем ТОЛЬКО отдельным словом: иначе
+        # «43» находило «435», «1430» и «2021-43».
+        if str(word).isdigit():
+            where.append("(' ' || COALESCE(title_lower, title) || ' ') GLOB ?")
+            params.append(f"*[^0-9]{word}[^0-9]*")
+        else:
+            # Слово засчитывается в ЛЮБОМ написании: айфон / iphone
+            where.append("(" + " OR ".join("COALESCE(title_lower, title) LIKE ?" for _ in variants) + ")")
+            params.extend(f"%{v}%" for v in variants)
     # Аксессуары не участвуют и в медиане. Иначе по критерию «Айфон» медиана
     # считалась вместе с кабелями и чехлами (5 000 ₽), настоящие телефоны за
     # 40 000 ₽ отсекались как «дорогие», а кабель за 490 ₽ выглядел находкой.
@@ -30756,10 +30775,13 @@ async def api_miniapp_findings(request: aiohttp_web.Request) -> aiohttp_web.Resp
         return _miniapp_err('unauthorized', 401)
     # По умолчанию без отсечки по скидке: у находок с Авито медиана часто
     # неизвестна (discount=0), и лента пустела, хотя бот эти лоты присылал.
+    # По умолчанию в ленте только то, что реально дешевле медианы. Раньше
+    # порог был 0, и в «находки» попадали лоты с discount=0 — монеты за 5 ₽
+    # и голова куклы, которые просто когда-то были отправлены.
     try:
-        min_discount = max(0, int(request.query.get('min_discount', 0) or 0))
+        min_discount = max(0, int(request.query.get('min_discount', 15) or 15))
     except ValueError:
-        min_discount = 0
+        min_discount = 15
     category = request.query.get('category', '')
     city = request.query.get('city', '')
     try:
