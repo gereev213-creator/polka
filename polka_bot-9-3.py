@@ -29480,6 +29480,163 @@ async def expire_ads_task(context):
             logger.warning(f"expire_ads_task: notify user ad={ad_id}: {e}")
 
 
+# ── Находка дня для админа ────────────────────────────────────────────────
+# Раз в сутки бот присылает админу несколько самых выгодных находок суток:
+# из них человек делает пост в канал и приводит новых людей. Отбор ручной
+# намеренно — пост пишет человек, бот только приносит материал и цифры.
+
+def _digest_seen_ids() -> set:
+    """id лотов, уже отправленных в дайджест, — чтобы не повторяться."""
+    try:
+        raw = _setting_get('digest.sent_ids', '') or ''
+        return set(int(x) for x in json.loads(raw)) if raw else set()
+    except Exception:
+        return set()
+
+
+def _digest_remember(ids: list) -> None:
+    try:
+        old = list(_digest_seen_ids()) + [int(i) for i in ids]
+        _setting_set('digest.sent_ids', json.dumps(old[-400:]))
+    except Exception:
+        pass
+
+
+def daily_deals(limit: int = 5, hours: int = 24, min_discount: int = 10) -> List[Dict]:
+    """Находки за сутки для поста в канал: сначала выгодные, потом свежие.
+
+    Только «скидка ≥ N%» брать нельзя: медиана по критерию считается от пяти
+    наблюдений, у новых поисков её ещё нет, и дайджест приходил бы пустым.
+    Поэтому сначала берём лоты реально ниже медианы, а если таких меньше
+    limit — добираем свежими находками, которые бот уже отправил. В посте
+    выгода показывается только там, где она посчитана.
+    """
+    try:
+        cutoff = (get_moscow_time() - timedelta(hours=int(hours))).isoformat()
+    except Exception:
+        cutoff = ''
+    base_where = """
+        a.status='active' AND a.price > 0
+          AND COALESCE(a.source_url,'') LIKE 'http%'
+          AND a.created_at >= ?
+          AND hm.status IN ('sent','ready')
+          AND hm.reason IN ('ok','ok_discount','price_drop')
+    """
+    select = """
+        SELECT a.id AS ad_id, a.title, a.price, a.city, a.category,
+               COALESCE(a.source_url,'') AS link,
+               MAX(COALESCE(hm.discount,0)) AS discount,
+               COALESCE(MAX(hc.median_price),0) AS median,
+               MAX(a.created_at) AS created_at
+        FROM ads a
+        JOIN hunt_matches hm ON hm.ad_id = a.id
+        LEFT JOIN hunt_criteria hc ON hc.id = hm.crit_id
+        WHERE {where}
+        GROUP BY a.id
+        {tail}
+    """
+    out: List[Dict] = []
+    try:
+        cur = db.conn.cursor()
+        cur.execute(select.format(where=base_where + " AND COALESCE(hm.discount,0) >= ?",
+                                  tail="ORDER BY discount DESC, a.price DESC LIMIT ?"),
+                    (cutoff, int(min_discount), int(limit)))
+        out = [dict(r) for r in cur.fetchall()]
+        if len(out) < limit:
+            got = [int(r['ad_id']) for r in out]
+            marks = ','.join('?' for _ in got) or '0'
+            cur.execute(select.format(where=base_where + f" AND a.id NOT IN ({marks})",
+                                      tail="ORDER BY a.created_at DESC LIMIT ?"),
+                        tuple([cutoff] + got + [int(limit) - len(out)]))
+            out += [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error(f"daily deals: {e}")
+    return out[:int(limit)]
+
+
+async def send_daily_digest(bot, limit: int = 5, force: bool = False) -> int:
+    """Шлёт админам подборку выгодных находок. Возвращает число лотов."""
+    deals = daily_deals(limit=limit)
+    seen = _digest_seen_ids()
+    fresh = deals if force else [d for d in deals if int(d['ad_id']) not in seen]
+    admins = sorted(set(int(x) for x in ADMIN_TELEGRAM_IDS)
+                    | set(int(x) for x in ADMIN_USER_IDS))
+    if not admins:
+        logger.warning("digest: нет админов в ADMIN_IDS/ADMIN_TELEGRAM_IDS")
+        return 0
+    if not fresh:
+        for aid in admins:
+            try:
+                await bot.send_message(
+                    chat_id=aid,
+                    text="🔥 Находок для поста за сутки нет: либо критерии узкие, "
+                         "либо сбор молчит. Проверьте сборщик.")
+            except Exception:
+                pass
+        return 0
+    sent = 0
+    for i, d in enumerate(fresh, 1):
+        title = _html.escape(str(d.get('title') or '')[:120])
+        price = int(d.get('price') or 0)
+        disc = int(d.get('discount') or 0)
+        median = int(d.get('median') or 0)
+        city = _html.escape(str(d.get('city') or ''))
+        cat = _html.escape(str(d.get('category') or ''))
+        link = str(d.get('link') or '')
+        text = f"🔥 <b>Находка дня #{i}</b>\n\n<b>{title}</b>\nЦена: <b>{price} ₽</b>"
+        if median:
+            text += f" · медиана {median} ₽"
+        if disc:
+            text += f"\nВыгода к рынку: <b>−{disc}%</b>"
+        meta = " · ".join(x for x in (city, cat) if x)
+        if meta:
+            text += f"\n{meta}"
+        if link:
+            text += f"\n\n{link}"
+        kbd = None
+        if link.startswith('http'):
+            kbd = InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Открыть на Авито", url=link)]])
+        for aid in admins:
+            try:
+                await bot.send_message(chat_id=aid, text=text, parse_mode=ParseMode.HTML,
+                                       reply_markup=kbd, disable_web_page_preview=False)
+            except Exception as e:
+                logger.warning(f"digest send {aid}: {e}")
+        sent += 1
+    _digest_remember([d['ad_id'] for d in fresh])
+    logger.info(f"Дайджест находок: отправлено {sent}")
+    return sent
+
+
+async def digest_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Ручной запуск дайджеста: /digest — только для админов."""
+    user = update.effective_user
+    if not user:
+        return
+    uid = int(user.id)
+    allowed = uid in ADMIN_USER_IDS or uid in ADMIN_TELEGRAM_IDS
+    if not allowed:
+        try:
+            allowed = bool(await is_admin(uid))
+        except Exception:
+            allowed = False
+    if not allowed:
+        return
+    n = await send_daily_digest(context.bot, limit=5, force=True)
+    try:
+        await update.message.reply_text(
+            f"Отправлено находок: {n}. Проверьте сообщения выше и сделайте пост.")
+    except Exception:
+        pass
+
+
+async def daily_digest_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    try:
+        await send_daily_digest(context.bot, limit=5)
+    except Exception as e:
+        logger.error(f"daily digest: {e}")
+
+
 async def setup_scheduler(application: Application):
     async def update_city_channel_cache(context: ContextTypes.DEFAULT_TYPE):
         """Раз в сутки обновляем число подписчиков городских каналов для ценообразования."""
@@ -29714,6 +29871,7 @@ async def setup_scheduler(application: Application):
     jq.run_daily(trigger_low_views_boost,    time=time(12, 0, tzinfo=ZoneInfo("Europe/Moscow")))
     jq.run_daily(daily_tasks,               time=time(3,  0, tzinfo=ZoneInfo("Europe/Moscow")))
     jq.run_daily(update_city_channel_cache, time=time(4,  0, tzinfo=ZoneInfo("Europe/Moscow")))
+    jq.run_daily(daily_digest_job,           time=time(10, 0, tzinfo=ZoneInfo("Europe/Moscow")))  # находка дня админу
     jq.run_repeating(send_search_notifications, interval=3600, first=600)
     jq.run_repeating(process_auto_bumps,        interval=3600, first=300)
     jq.run_repeating(remind_abandoned,          interval=1800, first=900)
@@ -35527,6 +35685,7 @@ def main():
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
     application.add_handler(CommandHandler("hunt_stats", hunt_stats_command))
+    application.add_handler(CommandHandler("digest", digest_command))
     application.add_handler(CommandHandler("dedupe", dedupe_command))
     application.add_handler(CommandHandler("promo", promo_command))
     application.add_handler(CommandHandler("admin", admin_command))
