@@ -20634,6 +20634,12 @@ def _setting_set(key: str, value: str):
                         "ON CONFLICT(key) DO UPDATE SET value=?, updated_at=?",
                         (key, value, now, value, now))
         db.conn.commit()
+        # Без сброса кеша cfg_get продолжал отдавать старое значение:
+        # настройка записывалась в базу, но код её «не видел» до перезапуска.
+        try:
+            _SETTINGS_CACHE.pop(key, None)
+        except Exception:
+            pass
     except Exception as e:
         logger.warning(f"setting {key}: {e}")
 
