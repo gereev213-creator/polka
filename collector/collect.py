@@ -2030,48 +2030,72 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
 
 
 def check_proxy(url: str) -> int:
-    """Пускает ли Авито через этот прокси.
+    """Пускает ли Авито с этого IP. Проверяет несколько адресов подряд.
 
-    Запускать ДО того, как платить за тариф: дешёвые прокси из дата-центров
-    Авито блокирует так же, как сервер. Нужен резидентный или мобильный.
+    Городские страницы (/izhevsk/...) Авито отдаёт реже, чем общие (/all/...),
+    поэтому пробуем оба варианта и говорим, какой сработал.
     """
     print(f"Прокси: {PROXY or 'не задан — идём напрямую'}")
     print(f"Клиент: {'curl_cffi, отпечаток ' + IMPERSONATE if _cffi else 'urllib (curl_cffi НЕ установлен!)'}")
-    print(f"Проверяем: {url}")
+
+    candidates = [url]
     try:
-        html = fetch(url, prefer_scraper=('q=' in url))
-    except Blocked as exc:
-        print(f"  ⛔ {exc}")
+        from urllib.parse import urlsplit, urlunsplit
+        sp = urlsplit(url)
+        parts = [p for p in sp.path.split('/') if p]
+        if len(parts) >= 2 and parts[0] != 'all':
+            candidates.append(urlunsplit((sp.scheme, sp.netloc,
+                                          '/all/' + parts[1], sp.query, '')))
+    except Exception:
+        pass
+    candidates.append('https://www.avito.ru/all/velosipedy?s=104')
+
+    print("  прогреваю cookies на главной…")
+    try:
+        warm_up()
+    except Exception:
+        pass
+
+    html = None
+    chosen = ''
+    for cand in candidates:
+        if 'q=' in cand:
+            continue
+        print(f"Проверяем: {cand}")
+        try:
+            page = fetch(cand, prefer_scraper=False)
+        except Blocked as exc:
+            print(f"  ⛔ {exc}")
+            continue
+        except Exception as exc:
+            print(f"  ✖ не открылось: {str(exc)[:80]}")
+            continue
+        if page:
+            html, chosen = page, cand
+            break
+
+    if not html:
+        print("  ⛔ все проверенные адреса закрыты.")
+        print("  Что это значит:")
         if PROXY:
-            print("  Этот прокси Авито не пускает — адреса дата-центров")
-            print("  блокируются целиком. Нужен резидентный или мобильный.")
+            print("   • прокси из дата-центра — Авито блокирует такие целиком;")
+            print("   • нужен резидентный или мобильный прокси.")
         else:
-            print("  Если curl_cffi не установлен — поставьте его:")
-            print("      pip3 install curl_cffi")
-            print("  Именно отпечаток клиента решает: обычный Python Авито")
-            print("  блокирует, а Safari-отпечаток проходит.")
+            print("   • телефон в мобильном интернете, а не в Wi-Fi — включите Wi-Fi;")
+            print("   • или этот IP под баном — перезагрузите роутер (IP сменится);")
+            print("   • подождите 20–30 минут и попробуйте снова.")
         return 1
-    except Exception as exc:
-        print(f"  ✖ не открылось: {exc}")
-        if 'CERTIFICATE_VERIFY' in str(exc):
-            print("  Это НЕ блокировка Авито, а отсутствие корневых сертификатов")
-            print("  у вашего Python. Лечится: pip3 install certifi")
-        else:
-            print("  Проверьте адрес, логин и пароль прокси.")
-        return 1
+
     items = parse_page(html)
-    print(f"  страница получена: {len(html)} байт")
+    print(f"  страница получена: {len(html)} байт ({chosen[:48]})")
     print(f"  карточек разобрано: {len(items)}")
     for it in items[:5]:
-        ago = it.get('hours_ago')
-        print(f"    {it['title'][:40]:42} {it['price']:>9} ₽  "
-              f"{('свежее' if ago is not None and ago <= 24 else (str(ago) + ' ч' if ago is not None else 'без даты'))}")
-    if not items:
-        print("  ⚠ Страница открылась, но карточек нет — возможно, изменилась вёрстка.")
-        return 2
+        print(f"    {str(it.get('title'))[:44]:<44} {it.get('price')} ₽")
+    if not _cffi:
+        print("  ⚠ curl_cffi не установлен — Авито будет резать чаще.")
+        print("    Установите: pip3 install curl_cffi")
     print("  ✅ Работает: Авито отдаёт выдачу, разбор находит объявления.")
     return 0
-
 
 def load_config(path: str) -> dict:
     # Файл может отсутствовать: на сервере всё приходит из переменных
