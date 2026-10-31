@@ -27,10 +27,20 @@ fi
 # Запуск в отдельной сессии: процесс не умрёт вместе с терминалом
 # В macOS нет setsid — отцепляем через nohup и disown: процесс получает
 # собственный PID и не зависит от терминала.
-POLKA_REQUEST_GAP="${POLKA_REQUEST_GAP:-90}" \
-POLKA_REQUEST_GAP_MAX="${POLKA_REQUEST_GAP_MAX:-240}" \
-nohup "$PY" -u collect.py --loop --every "${POLKA_EVERY:-1200}" \
-  >> "$LOG_FILE" 2>&1 &
+# Обёртка с перезапуском: если сборщик упадёт, он поднимется сам через 20 с.
+cat > logs/run.sh <<RUN
+#!/usr/bin/env bash
+cd "$(pwd)" || exit 1
+while true; do
+  POLKA_REQUEST_GAP="${POLKA_REQUEST_GAP:-90}" \
+  POLKA_REQUEST_GAP_MAX="${POLKA_REQUEST_GAP_MAX:-240}" \
+  "$PY" -u collect.py --loop --every "${POLKA_EVERY:-1200}" >> "$LOG_FILE" 2>&1
+  echo "=== $(date '+%Y-%m-%d %H:%M') сборщик завершился, перезапуск через 20 с ===" >> "$LOG_FILE"
+  sleep 20
+done
+RUN
+chmod +x logs/run.sh
+nohup logs/run.sh >/dev/null 2>&1 &
 disown 2>/dev/null || true
 
 echo $! > "$PID_FILE"
