@@ -2595,6 +2595,10 @@ def target_urls(target: dict, cfg: dict) -> list:
         return []
     pages = int(target.get('pages') or cfg.get('pages') or 1)
     pages = max(1, min(pages, 3))
+    # Поиск по тексту (q=) второй страницы не отдаёт — приходит пустая выдача.
+    # Лишний запрос к Авито нам не нужен: берём только первую страницу.
+    if 'q=' in url:
+        pages = 1
     pmin = target.get('pmin') or cfg.get('pmin') or 0
     pmax = target.get('pmax') or cfg.get('pmax') or 0
     extra = []
@@ -2857,6 +2861,14 @@ def run_once(cfg: dict) -> int:
             # Раньше такой проход считался успешным, и мы тратили трафик
             # вхолостую. Теперь уходим на паузу.
             if not items and 'data-marker="item"' not in (html or ''):
+                # Пустая страница — не всегда блокировка. У поиска по тексту
+                # (q=) вторая страница часто пустая: выдача закончилась.
+                # Блокировка — это КОРОТКАЯ заглушка (десятки КБ), а не
+                # страница на полмегабайта. Раньше «конец выдачи» считался
+                # блоком, и сборщик уходил в 45-минутный отдых на ровном месте.
+                if len(html or '') > 200_000:
+                    print("  карточек нет — выдача закончилась, беру следующую цель")
+                    break
                 blocked_streak += 1
                 _BLOCK_BACKOFF[0] = min(10, _BLOCK_BACKOFF[0] + 1)
                 print(f"  ⛔ страница без объявлений — считаю блоком ({blocked_streak})")
