@@ -25727,7 +25727,8 @@ def contest_participants(limit: int = 500) -> List[Dict]:
         username = str((urow['username'] if urow else '') or '').lstrip('@')
         if not username or username.lower() in reserved:
             continue
-        searches = int(row.get('searches') or 0)
+        # row — sqlite3.Row: индексация, а не .get
+        searches = int(row['searches'] or 0)
         tickets = min(CONTEST_MAX_TICKETS, searches)
         if tickets <= 0:
             continue
