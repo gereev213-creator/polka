@@ -132,7 +132,7 @@ conn.commit()
 ok = 0
 
 # ── 1. Настройки: диапазон, кэш без перезапуска, история, откат
-assert cfg_get('free.max_criteria') == 1, cfg_get('free.max_criteria')
+assert cfg_get('free.max_criteria') == 2, cfg_get('free.max_criteria')
 assert cfg_set('free.max_criteria', 3, by=1)['ok'] is True
 assert cfg_get('free.max_criteria') == 3, 'кэш не обновился без перезапуска'
 bad = cfg_set('free.max_criteria', 9999, by=1)
