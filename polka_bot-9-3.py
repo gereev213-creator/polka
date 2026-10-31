@@ -301,7 +301,19 @@ SMTP_PASS = os.environ.get("SMTP_PASS", "")
 VERIFY_FROM_EMAIL = os.environ.get("VERIFY_FROM_EMAIL", SMTP_USER)
 
 # Ссылки на основные каналы — для футера письма и т.п.
-EMAIL_TG_CHANNEL_URL  = os.environ.get("TG_CHANNEL_URL", "https://t.me/polkalot")
+def _safe_channel_url(raw: str, username: str) -> str:
+    """Ссылка на канал: если в переменной лежит не URL, а имя переменной
+    (так бывает при настройке окружения), собираем адрес по юзернейму.
+    Иначе кнопка «Подписаться» вела в никуда."""
+    val = str(raw or '').strip()
+    if val.lower().startswith(('http://', 'https://')) and '.' in val:
+        return val
+    name = str(username or 'polkalot').lstrip('@').strip()
+    return f"https://t.me/{name or 'polkalot'}"
+
+
+EMAIL_TG_CHANNEL_URL  = _safe_channel_url(
+    os.environ.get("TG_CHANNEL_URL", ""), os.environ.get("TG_CHANNEL_USERNAME", "polkalot"))
 EMAIL_MAX_CHANNEL_URL = os.environ.get("MAX_CHANNEL_URL", "https://max.ru/se13354909_biz")
 
 SUBSCRIPTION_PRICE = 199
