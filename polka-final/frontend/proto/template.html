@@ -771,7 +771,7 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 
 <div id="feedBanners" style="display:flex;flex-direction:column;gap:10px"></div>
 <div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
-<div class="scroll"><div class="grid" id="marketGrid"></div></div></section>
+<div class="scroll"><div class="grid" id="marketGrid"></div><div class="nores" id="nores">Ничего не найдено — попробуйте другой запрос</div></div></section>
 
 <!-- favorites -->
 <section class="screen" id="s-favorites"><div class="ahead"><div class="logo"></div><span class="stag">Избранное</span></div><div class="scroll"><div id="favList"></div><div class="nores" id="favEmpty">В избранном пока пусто</div></div></section>
@@ -839,75 +839,9 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
             <label>Ссылка на поиск с Авито — точный режим</label>
             <input id="avitoLink" placeholder="https://www.avito.ru/…" inputmode="url"
                    autocomplete="off" autocapitalize="off" spellcheck="false">
-            <div class="newHint">Необязательно. Вставьте ссылку со своей выдачи — тогда сборщик
-              откроет ровно её: с подразделом и фильтрами Авито. Остальные поля можно не заполнять.</div>
+            <div class="newHint">Необязательно. Вставьте ссылку со своей выдачи — сборщик откроет
+              ровно её: с подразделом и фильтрами Авито. Остальные поля можно не заполнять.</div>
             <div id="linkChips" style="display:none"></div>
-          </div>
-          <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.</div>
-        </form></div><div class="bottomCta"><button class="bigbtn" form="emailForm">Получить код</button></div></section>
-<section class="screen" id="s-code"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Код из письма</span></div>
-<div class="scroll"><div class="card form">
-<p class="mut" id="codeHint" style="text-align:center;margin-bottom:14px">Отправили код на почту</p>
-<form id="codeForm" novalidate><div class="otp" id="otp"><input inputmode="numeric" autocomplete="one-time-code" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"><input inputmode="numeric" maxlength="1"></div></form>
-<p class="pmsg" id="codeMsg" style="text-align:center">Неверный код</p>
-<button class="resend" id="resend" disabled>Отправить ещё раз · 0:30</button>
-<button class="resend" onclick="go('email',true)">Изменить почту</button>
-</div></div><div class="bottomCta"><button class="bigbtn" form="codeForm">Войти</button></div></section>
-<section class="screen" id="s-done"><div class="welcomeCenter"><div class="logo"></div><h1>вы вошли</h1><p id="doneAccount">аккаунт привязан</p></div><div class="authActions"><button class="bigbtn" onclick="go('home',true)">Перейти в приложение</button></div></section>
-
-<!-- loading -->
-<section class="screen" id="s-loading"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><div class="searchBanner"></div><div class="grid" style="flex:none">
-<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:65%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
-<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:55%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
-<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:60%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div>
-<div class="skel"><div class="shine" style="height:118px"></div><div class="shine" style="height:16px;margin:12px 4px 8px;width:50%"></div><div class="shine" style="height:30px;border-radius:99px"></div></div></div></section>
-
-<!-- empty -->
-<section class="screen" id="s-empty"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')"></button><div class="emptyIcon"></div><div class="emptyTxt">Пока пусто</div></section>
-
-<!-- home / finds -->
-<section class="screen active" id="s-home"><div class="ahead"><div class="logo"></div><span class="stag">Находки</span></div><button class="searchBanner" onclick="go('searches')" aria-label="Поиск лотов"></button><div class="scroll"><div class="grid" id="homeGrid"></div></div></section>
-
-<!-- market -->
-<section class="screen" id="s-market"><div class="ahead"><div class="logo"></div><span class="stag">Барахолка</span></div>
-
-<div id="feedBanners" style="display:flex;flex-direction:column;gap:10px"></div>
-<div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
-<div class="scroll"><div class="grid" id="marketGrid"></div></div></section>
-
-<!-- favorites -->
-<section class="screen" id="s-favorites"><div class="ahead"><div class="logo"></div><span class="stag">Избранное</span></div><div class="scroll"><div id="favList"></div><div class="nores" id="favEmpty">В избранном пока пусто</div></div></section>
-
-<!-- searches -->
-<section class="screen" id="s-searches"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Поиск лотов</span></div>
-<div class="seg"><button class="on">Мои поиски</button><button onclick="go('history')">История</button></div>
-<div class="scroll"><div id="searchList"></div>
-</div></div><div class="bottomCta"><button class="bigbtn" onclick="go('newsearch')">Новый поиск</button></div></section>
-
-<!-- new search -->
-<section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
-<div class="scroll"><form class="card form" id="searchForm">
-          <div class="field">
-            <label>Ссылка на поиск с Авито</label>
-            <input id="avitoLink" placeholder="https://www.avito.ru/…" inputmode="url"
-                   autocomplete="off" autocapitalize="off" spellcheck="false">
-            <div class="newHint">Точный режим: откройте Авито, выставьте фильтры и вставьте адрес из строки браузера. Сборщик пойдёт ровно в этот раздел.</div>
-            <div id="linkChips" style="display:none"></div>
-          </div>
-          <div class="field">
-            <label>Или словами — что ищем</label>
-            <input id="q" placeholder="Например: шорты carhartt" required>
-          </div>
-          <div class="field">
-            <label>Цена до, ₽</label>
-            <input id="maxprice" placeholder="Например: 5000" inputmode="numeric">
-          </div>
-          <div class="field">
-            <label>Продавец</label>
-            <div class="chips" id="sellerChips" style="margin-top:0">
-              <button type="button" class="chip on" data-seller="any">Любой</button>
-              <button type="button" class="chip" data-seller="private">Только частник</button>
-            </div>
           </div>
           <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.</div>
         </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
@@ -1063,7 +997,7 @@ function togglePause(e,btn){e.stopPropagation();const card=btn.closest('.scard')
 $('searchForm').addEventListener('submit',e=>{e.preventDefault();const q=$('q').value.trim()||'Новый поиск',p=$('maxprice').value.trim();$('searchList').insertAdjacentHTML('afterbegin',`<article class="card scard" onclick="go('history')"><div class="top"><h3>${q}</h3><button class="pause" onclick="togglePause(event,this)"><svg width="15" height="15"><use href="#i-pause"/></svg></button></div><div class="chips"><span class="chip">до ${p} ₽</span></div><div class="sfoot"><span class="mut">мониторинг запущен</span><span class="mut">только что</span></div></article>`);go('searches',true);toast('Поиск запущен')});
 document.querySelectorAll('#hseg button').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('#hseg button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.hrow').forEach(r=>r.style.display=(b.dataset.h==='all'||r.dataset.st===b.dataset.h)?'flex':'none');document.querySelectorAll('.group').forEach(g=>g.style.display=[...g.querySelectorAll('.hrow')].some(r=>r.style.display!=='none')?'block':'none')}));
 let adPhoto='';
-function cyclePhoto(){const order=['','iphone','jacket'];adPhoto=order[(order.indexOf(adPhoto)+1)%order.length];const m=$('photoMain');m.classList.toggle('has',!!adPhoto);m.style.backgroundImage=adPhoto?`var(--${adPhoto})`:'';$('photoLabel').textContent=adPhoto?'Главное фото':'+ Добавить фото';toast(adPhoto?'Фото добавлено':'Фото убрано')}
+function cyclePhoto(){const m0=$('photoMain');if(!m0)return;const order=['','iphone','jacket'];adPhoto=order[(order.indexOf(adPhoto)+1)%order.length];const m=$('photoMain');m.classList.toggle('has',!!adPhoto);m.style.backgroundImage=adPhoto?`var(--${adPhoto})`:'';$('photoLabel').textContent=adPhoto?'Главное фото':'+ Добавить фото';toast(adPhoto?'Фото добавлено':'Фото убрано')}
 document.querySelectorAll('[data-choice]').forEach(g=>g.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>g.querySelectorAll('.chip').forEach(x=>x.classList.toggle('on',x===c)))));
 function chosen(name){const el=document.querySelector(`[data-choice="${name}"] .chip.on`);return el?el.textContent.trim():''}
 $('delivery').addEventListener('click',e=>e.currentTarget.classList.toggle('on'));
