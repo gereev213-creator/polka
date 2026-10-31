@@ -27,23 +27,23 @@ proot-distro login debian -- bash -lc \
    pip3 install --break-system-packages -q curl_cffi" \
   || fail "Не удалось поставить зависимости внутри Debian."
 
-say "4/6  Скачиваю сборщик (через Python внутри Debian — curl в Termux бывает сломан)"
+say "4/6  Скачиваю сборщик (через Python внутри Debian)"
 mkdir -p "$DEST"
 proot-distro login debian -- bash -lc "python3 - <<'PY'
 import os, urllib.request
 base = 'https://raw.githubusercontent.com/gereev213-creator/polka/master/collector'
 dst = '/root/polka-collector'
 os.makedirs(dst, exist_ok=True)
-files = {'collect.py': 'collect.py', 'android/runner.sh': 'runner.sh', 'android/README.md': 'README.md'}
-for src, name in files.items():
+for src, name in [('collect.py','collect.py'), ('android/runner.sh','runner.sh'), ('android/README.md','README.md')]:
     try:
-        urllib.request.urlretrieve(f'{base}/{src}', os.path.join(dst, name))
+        urllib.request.urlretrieve(base + '/' + src, os.path.join(dst, name))
         print('ok', name)
     except Exception as e:
         print('fail', name, e)
-PY" || fail "Не удалось скачать файлы внутри Debian."
-chmod +x "$DEST/runner.sh" || true
-[ -f "$DEST/collect.py" ] || fail "collect.py не появился — проверьте интернет."
+PY"
+chmod +x "$DEST/runner.sh" 2>/dev/null || true
+[ -f "$DEST/collect.py" ] || fail "collect.py не появился — проверьте интернет в Debian."
+echo "Сборщик на месте."
 
 say "5/6  Нужен токен приёма находок"
 echo "Вставьте токен (INGEST_TOKEN из Amvera) и нажмите Enter."
