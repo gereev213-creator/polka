@@ -31978,8 +31978,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                   'draw': contest_draw(seed=20261130)})
         except Exception as e:
             import traceback as _tb
+            lines = [l.strip() for l in _tb.format_exc().strip().splitlines()
+                     if l.strip().startswith('File')]
             return _miniapp_json({'ok': False, 'error': str(e)[:200],
-                                  'where': _tb.format_exc().strip().splitlines()[-1][:200]})
+                                  'where': lines[-1][:240] if lines else ''})
 
     if action == 'contest_set':
         # Включить конкурс и (необязательно) поменять дату итогов.
