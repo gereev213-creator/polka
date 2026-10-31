@@ -69,8 +69,12 @@ BLOCK_MARKERS = ('captcha', 'showcaptcha', 'Доступ ограничен', '�
 # Признаки того, что лот больше не продаётся. Авито не отдаёт статус
 # в выдаче — узнаём только переоткрыв страницу.
 GONE_MARKERS = ('объявление снято', 'снято с публикации', 'объявление не найдено',
-                'страница не найдена', 'товар продан', 'продано', 'объявление удалено',
+                'страница не найдена', 'товар продан', 'объявление удалено',
                 'это объявление больше не доступно')
+# Слово «продано» в одиночку сюда НЕ входит: оно встречается в обычных
+# описаниях («продано более 100 штук»), и лот помечался исчезнувшим ложно.
+# Живая страница объявления определяется по ITEM_MARKERS — это проверяется
+# первым, а маркеры снятия только если страница не похожа на живую.
 
 
 # Маркеры страницы ОДНОГО объявления (на странице выдачи их нет, поэтому
@@ -758,6 +762,77 @@ def fetch_item(url: str, timeout: int = 20) -> str:
     if not any(m in text for m in ITEM_MARKERS):
         raise Blocked("страница объявления не распознана (нет знакомых маркеров)")
     return text
+
+
+def listing_state_from_page(html: str, status: int = 200) -> str:
+    """Судьба лота по странице объявления: 'active' | 'gone' | 'unknown'.
+
+    Порядок проверок важен. Сначала «это живое объявление», и только потом
+    слова о снятии: активный лот, в описании которого продавец написал
+    «продано более 100 штук», иначе помечался исчезнувшим — а из этого
+    считаются часы «ушло за 3 часа», то есть ложь попадала в главный
+    ориентир цены для перекупа.
+    """
+    if status in (404, 410):
+        return 'gone'
+    if status >= 400:
+        return 'unknown'
+    text = html or ''
+    low = text.lower()
+    if any(marker in text for marker in ITEM_MARKERS):
+        return 'active'
+    if any(marker in low for marker in GONE_MARKERS):
+        return 'gone'
+    return 'unknown'
+
+
+def fetch_item_state(url: str, timeout: int = 20) -> str:
+    """Открывает страницу лота и возвращает его судьбу.
+
+    Отдельно от fetch_item(): тот на 404 и на нераспознанной странице бросает
+    Blocked — для сбора описания это верно, а для проверки лота 404 как раз
+    и значит «снято». И отдельно от fetch(): тот проверяет маркер СТРАНИЦЫ
+    ВЫДАЧИ (data-marker="item"), которого на странице объявления нет никогда,
+    поэтому проверка лотов через него не могла работать в принципе.
+
+    При блокировке по IP и заданном SCRAPINGBEE_KEY страница берётся через
+    скрапер: он ходит со своего адреса и блокировку обходит.
+    """
+    if _cffi is not None:
+        profile = _WORKING_PROFILE or IMPERSONATE_POOL[0]
+        proxies = {'http': PROXY, 'https': PROXY} if PROXY else None
+        try:
+            r = _cffi.get(url, impersonate=profile, timeout=timeout, proxies=proxies)
+        except Exception as exc:
+            raise Blocked(f"{profile}: {str(exc)[:70]}")
+        if r.status_code in (403, 429, 439):
+            if (SCRAPINGBEE_KEY and not _SCRAPER_BROKEN
+                    and len(_SCRAPER_USED) < SCRAPER_PAGES_PER_RUN):
+                _SCRAPER_USED.append(url)
+                return listing_state_from_page(_fetch_via_scraper(url, timeout=max(timeout, 60)))
+            raise Blocked(f"HTTP {r.status_code} — доступ ограничен по IP")
+        if r.status_code not in (200, 404, 410):
+            raise Blocked(f"HTTP {r.status_code} — неожиданный ответ")
+        _WORKING_PROFILE = profile
+        return listing_state_from_page(r.text or '', r.status_code)
+
+    # Без curl_cffi — обычный urllib; 404/410 здесь это «снято», а не ошибка
+    req = urllib.request.Request(url, headers={
+        'User-Agent': USER_AGENT,
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'ru-RU,ru;q=0.9',
+    })
+    try:
+        with _opener().open(req, timeout=timeout) as resp:
+            return listing_state_from_page(
+                resp.read().decode('utf-8', errors='replace'),
+                getattr(resp, 'status', 200))
+    except urllib.error.HTTPError as exc:
+        if exc.code in (404, 410):
+            return 'gone'
+        if exc.code in (403, 429, 439):
+            raise Blocked(f"HTTP {exc.code} — доступ ограничен по IP")
+        raise
 
 
 # ── Разбор страницы ─────────────────────────────────────────────────────────
@@ -2024,20 +2099,20 @@ def check_listings(server: str, token: str, limit: int = 30) -> int:
         ext = item.get('external_id')
         if not url or not ext:
             continue
-        state = 'active'
         try:
-            html = fetch(url, prefer_scraper=('q=' in url))
-            low = html.lower()
-            if any(marker in low for marker in GONE_MARKERS):
-                state = 'gone'
+            # Раньше здесь стоял fetch() — он проверяет маркер СТРАНИЦЫ ВЫДАЧИ
+            # (data-marker="item"), которого на странице объявления нет ни
+            # одного. Поэтому каждый лот «падал» в Blocked, и проверка
+            # обрывалась на первом же: 27 запусков, ноль отметок «снято».
+            state = fetch_item_state(url, timeout=20)
         except Blocked as exc:
             print(f"  ⛔ {exc} — прекращаю проверку")
             break
-        except urllib.error.HTTPError as exc:
-            # 404 и 410 — страницы больше нет, значит лот снят или продан
-            if exc.code in (404, 410):
-                state = 'gone'
         except Exception:
+            continue
+        if state == 'unknown':
+            # Страница не распознана — не сообщаем серверу ничего, чтобы
+            # не записать лоту ложное «активен» вместо реального снятия.
             continue
         if state == 'gone':
             gone += 1
@@ -2557,7 +2632,12 @@ def run_once(cfg: dict) -> int:
                          if any(matches_local(it, f) for f in locals_here)]
                 if before != len(items):
                     print(f"  после фильтров ссылки: {len(items)} из {before}")
-            print(f"  найдено карточек: {len(items)}")
+            with_price = sum(1 for it in items if int(it.get('price') or 0) > 0)
+            # Второе число — метрика деградации: если карточки есть, а цена
+            # пропала у большинства, сломалась вёрстка, а не выдача опустела.
+            # Видно в одной строке лога, без выгрузки страниц.
+            print(f"  найдено карточек: {len(items)} (с ценой {with_price}, "
+                  f"страница {len(html or '') // 1024} КБ)")
             if not items:
                 if '?' in url and 'q=' in url:
                     # Проверено на живом сайте: на поисковый запрос Авито отдаёт
