@@ -9,6 +9,12 @@ API = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
                         'polka-final/frontend/src/api.js'), encoding='utf-8').read()
 APP = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
                         'polka-final/frontend/src/App.jsx'), encoding='utf-8').read()
+# Живой Mini App — это прототип proto/, а не React-сборка: Docker копирует
+# proto/index.html поверх dist. Поэтому точный режим проверяем здесь.
+TPL = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                        'polka-final/frontend/proto/template.html'), encoding='utf-8').read()
+ADP = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                        'polka-final/frontend/proto/adapter.js'), encoding='utf-8').read()
 
 checks = [
     ("парсер ссылки существует", 'def parse_avito_filter_url(' in SRC),
@@ -32,6 +38,11 @@ checks = [
     ("кнопка отправки ссылки", 'onClick={send}' in APP),
     ("вкладки убраны", 'chat-tabs' not in JSX),
     ("клиент зовёт эндпоинт", 'huntFromLink' in API),
+    # Живой мини-апп — proto/: в React-сборку смотрит только админка.
+    ("поле ссылки в живом мини-аппе", 'id="avitoLink"' in TPL),
+    ("плашки разбора ссылки", 'id="linkChips"' in TPL),
+    ("ссылка отправляется без слов", 'q.length < 2 && !link0' in ADP),
+    ("новый разбор ссылки первым", "search_link: link" in ADP),
 ]
 ok = True
 for name, res in checks:

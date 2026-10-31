@@ -787,7 +787,14 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <section class="screen" id="s-newsearch"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Новый поиск</span></div>
 <div class="scroll"><form class="card form" id="searchForm">
           <div class="field">
-            <label>Что ищем</label>
+            <label>Ссылка на поиск с Авито</label>
+            <input id="avitoLink" placeholder="https://www.avito.ru/…" inputmode="url"
+                   autocomplete="off" autocapitalize="off" spellcheck="false">
+            <div class="newHint">Точный режим: откройте Авито, выставьте фильтры и вставьте адрес из строки браузера. Сборщик пойдёт ровно в этот раздел.</div>
+            <div id="linkChips" style="display:none"></div>
+          </div>
+          <div class="field">
+            <label>Или словами — что ищем</label>
             <input id="q" placeholder="Например: шорты carhartt" required>
           </div>
           <div class="field">
