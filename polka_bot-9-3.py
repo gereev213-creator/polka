@@ -3346,6 +3346,14 @@ class Database:
         # убрать фон, улучшить качество фото, поиск по фото, AI-генерация
         # описания — каждая доступна БЕСПЛАТНО один раз (навсегда, не по дням),
         # чтобы показать пользователю ценность ПОЛКА ПЛЮС перед покупкой.
+        # Сколько раз тест продлевали компенсацией (находок не было).
+        if 'trial_extended' not in user_cols:
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN trial_extended INTEGER DEFAULT 0")
+                db.conn.commit()
+                user_cols.append('trial_extended')
+            except Exception:
+                pass
         for _trial_col in ("trial_rembg_used", "trial_enhance_used",
                             "trial_photo_search_used", "trial_ai_gen_used"):
             if _trial_col not in user_cols:
@@ -23471,6 +23479,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
+    'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
     'contest.min_referrals': ('int', 0, 1000, 5, 'Минимум приглашений для участия'),
@@ -25789,6 +25798,44 @@ async def _contest_loop():
         await asyncio.sleep(600)
 
 
+def _user_findings_since(user_id: int, since_iso: str) -> int:
+    """Сколько находок реально ушло человеку с указанного момента.
+
+    Нужно для компенсации: если за тестовые сутки не пришло ни одной
+    находки, тест продлевается — человек не должен платить за пустоту.
+    """
+    try:
+        cursor = db.conn.cursor()
+        cursor.execute(
+            "SELECT COUNT(*) AS n FROM hunt_matches hm "
+            "JOIN hunt_criteria hc ON hc.id = hm.crit_id "
+            "WHERE hc.user_id = ? AND hm.status IN ('sent','sending','ready') "
+            "AND COALESCE(hm.created_at, '') >= ?",
+            (int(user_id), str(since_iso)))
+        row = cursor.fetchone()
+        return int(row['n'] or 0) if row else 0
+    except Exception:
+        return 0
+
+
+def _extend_trial_compensation(user_id: int, trial_started: str, max_ext: int) -> bool:
+    """Продлевает тест на 24 часа, если находок не было. Возвращает факт."""
+    try:
+        user = db.get_user(int(user_id)) or {}
+        done = int(user.get('trial_extended') or 0)
+        if done >= max_ext:
+            return False
+        if _user_findings_since(int(user_id), trial_started) > 0:
+            return False
+        now_iso = get_moscow_time().isoformat()
+        db.update_user(int(user_id), trial_started_at=now_iso, trial_extended=done + 1)
+        logger.info(f"тест продлён на 24 ч: user={user_id}, раз #{done + 1}")
+        return True
+    except Exception as e:
+        logger.warning(f"продление теста: {e}")
+        return False
+
+
 def _user_plan(user_id: int) -> Dict:
     """План человека: free / trial / plus + лимиты, задержка, тщательный отбор.
 
@@ -25831,6 +25878,17 @@ def _user_plan(user_id: int) -> Dict:
     if plan == 'trial':
         hours = int(_hours_since(trial_started) or 0)
         trial_hours = trial_days * 24
+        # Компенсация: не пришло ни одной находки — продлеваем на сутки,
+        # но не больше contest/плана-лимита раз, чтобы не было вечного теста.
+        if hours >= trial_hours:
+            try:
+                _max_ext = int(cfg_get('trial.max_extensions'))
+            except Exception:
+                _max_ext = 3
+            _ext = globals().get('_extend_trial_compensation')
+            if _ext and _ext(int(user_id), trial_started, _max_ext):
+                hours = 0
+                trial_hours = 24
         if hours >= trial_hours:
             # Пробный период закончился: переводим на free и приостанавливаем лишнее
             plan = 'free'
