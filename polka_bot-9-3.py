@@ -22776,7 +22776,10 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
             marks = ','.join('?' for _ in ids)
             cursor.execute(f"SELECT * FROM ads WHERE id IN ({marks})", ids)
         else:
-            sql = "SELECT * FROM ads WHERE source <> 'polka' AND price > 0"
+            # Только находки с Авито: доска ('polka','miniapp') не должна
+            # участвовать в подборе по критериям.
+            sql = ("SELECT * FROM ads WHERE COALESCE(source,'') NOT IN "
+                   "('polka','miniapp') AND price > 0")
             params = []
             if only_missing:
                 # «Решений ещё нет» считаем ПО ЭТОМУ критерию, а не по всем
@@ -27489,7 +27492,9 @@ def cleanup_findings() -> Dict:
     Заодно медиана превращается в скользящее окно за последние дни: это
     точнее описывает рынок, чем среднее по древним объявлениям.
 
-    Доску (source='polka') НЕ трогаем: это объявления живых людей.
+    Доску НЕ трогаем ни в каком виде: source='polka' — объявления через бота,
+    source='miniapp' — через мини-апп. Раньше 'miniapp' не был исключён, и
+    чистка стирала доску мини-аппа.
     Отметки об отправке тоже оставляем — они крошечные и защищают
     от повторной присылки, если объявление появится снова.
     """
@@ -27512,7 +27517,11 @@ def cleanup_findings() -> Dict:
         while True:
             cursor.execute(
                 "DELETE FROM ads WHERE id IN (SELECT id FROM ads WHERE "
-                "source IS NOT NULL AND source <> 'polka' "
+                # Доска — это 'polka' И 'miniapp': объявления, которые люди
+                # подают прямо в мини-аппе. Раньше здесь стояло только 'polka',
+                # и чистка удаляла доску мини-аппа целиком — пользователь
+                # открывал «Барахолку», а там пусто.
+                "source IS NOT NULL AND source NOT IN ('polka','miniapp') "
                 "AND (discount_percent IS NULL OR discount_percent < ?) "
                 "AND COALESCE(parsed_at, created_at) < ? LIMIT ?)",
                 (HUNT_MIN_DISCOUNT, junk_cutoff, CHUNK))
@@ -27527,7 +27536,7 @@ def cleanup_findings() -> Dict:
         while True:
             cursor.execute(
                 "DELETE FROM ads WHERE id IN (SELECT id FROM ads WHERE "
-                "source IS NOT NULL AND source <> 'polka' "
+                "source IS NOT NULL AND source NOT IN ('polka','miniapp') "
                 "AND discount_percent >= ? "
                 "AND COALESCE(parsed_at, created_at) < ? LIMIT ?)",
                 (HUNT_MIN_DISCOUNT, cutoff, CHUNK))
