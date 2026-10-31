@@ -23482,7 +23482,9 @@ async def _send_hunt_digest(crit: Dict, items: list) -> int:
 # на странице). Включается одной переменной, если понадобится.
 HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
 # ── ЭТАП H: монетизация (значения в переменных окружения, не в коде) ──────────
-PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '1'))
+# Два поиска бесплатно: с одним человек чаще всего не успевает увидеть
+# находку и уходит. Пауза и удаление поисков — всегда бесплатны.
+PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '2'))
 PLAN_FREE_DELAY_MIN = int(os.environ.get('FREE_DELAY_MIN', '10'))
 # Тестовый период — 24 часа и один поиск: короткая проба, дальше тариф.
 PLAN_TRIAL_DAYS = int(os.environ.get('TRIAL_DAYS', '1'))
@@ -24655,7 +24657,7 @@ async def api_hunt_template_use(request: aiohttp_web.Request) -> aiohttp_web.Res
     if crit_id == -1:
         limit = _criteria_limit(viewer_id)
         return _miniapp_json({'ok': False, 'error': 'limit_reached', 'limit': limit,
-                              'detail': f'Достигнут лимит критериев ({limit}). '
+                              'detail': f'Достигнут лимит поисков ({limit}). '
                                         'Замените существующий или откройте «Плюс».'},
                              status=402)
     if not crit_id:
