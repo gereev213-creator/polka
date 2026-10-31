@@ -12,7 +12,7 @@ say() { printf "\n\033[1;34m%s\033[0m\n" "$1"; }
 fail() { printf "\n\033[1;31m%s\033[0m\n" "$1"; exit 1; }
 
 say "1/6  Базовые пакеты Termux"
-pkg install -y proot-distro curl >/dev/null 2>&1 || true
+pkg install -y proot-distro >/dev/null 2>&1 || true
 
 if [ ! -d "$ROOTFS" ]; then
   say "2/6  Ставлю Debian (3–5 минут, нужен интернет)"
@@ -23,16 +23,27 @@ fi
 
 say "3/6  Ставлю Python и библиотеку внутри Debian (2–4 минуты)"
 proot-distro login debian -- bash -lc \
-  "apt-get update -qq && apt-get install -y -qq python3 python3-pip unzip ca-certificates && \
+  "apt-get update -qq && apt-get install -y -qq python3 python3-pip unzip ca-certificates curl && \
    pip3 install --break-system-packages -q curl_cffi" \
   || fail "Не удалось поставить зависимости внутри Debian."
 
-say "4/6  Скачиваю сборщик"
+say "4/6  Скачиваю сборщик (через Python внутри Debian — curl в Termux бывает сломан)"
 mkdir -p "$DEST"
-curl -sL "$REPO_RAW/collect.py"  -o "$DEST/collect.py"  || fail "Не скачался collect.py"
-curl -sL "$REPO_RAW/android/runner.sh" -o "$DEST/runner.sh" || fail "Не скачался runner.sh"
-curl -sL "$REPO_RAW/android/README.md" -o "$DEST/README.md" || true
-chmod +x "$DEST/runner.sh"
+proot-distro login debian -- bash -lc "python3 - <<'PY'
+import os, urllib.request
+base = 'https://raw.githubusercontent.com/gereev213-creator/polka/master/collector'
+dst = '/root/polka-collector'
+os.makedirs(dst, exist_ok=True)
+files = {'collect.py': 'collect.py', 'android/runner.sh': 'runner.sh', 'android/README.md': 'README.md'}
+for src, name in files.items():
+    try:
+        urllib.request.urlretrieve(f'{base}/{src}', os.path.join(dst, name))
+        print('ok', name)
+    except Exception as e:
+        print('fail', name, e)
+PY" || fail "Не удалось скачать файлы внутри Debian."
+chmod +x "$DEST/runner.sh" || true
+[ -f "$DEST/collect.py" ] || fail "collect.py не появился — проверьте интернет."
 
 say "5/6  Нужен токен приёма находок"
 echo "Вставьте токен (INGEST_TOKEN из Amvera) и нажмите Enter."
