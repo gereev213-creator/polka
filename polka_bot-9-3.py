@@ -13495,8 +13495,37 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         active_pins, pin_revenue, pin_count = 0, 0, 0
 
+    # ── Реальная аудитория ───────────────────────────────────────────────
+    # Часть людей удалила или заблокировала бота: слать им нельзя, но в
+    # «Пользователях» они висят. Показываем отдельно, чтобы владелец видел
+    # живую аудиторию, а не размер таблицы.
+    try:
+        blocked_n = len(_blocked_user_ids())
+    except Exception:
+        blocked_n = 0
+    try:
+        _c = db.conn.cursor()
+        _c.execute("SELECT COUNT(*) FROM hunt_criteria WHERE active=1")
+        crit_active_n = int(_c.fetchone()[0] or 0)
+        _c.execute("SELECT COUNT(*) FROM (SELECT user_id FROM hunt_criteria GROUP BY user_id)")
+        crit_users_n = int(_c.fetchone()[0] or 0)
+        _c.execute("SELECT details, created_at FROM logs WHERE action='broadcast_sent' "
+                   "ORDER BY id DESC LIMIT 1")
+        _lb = _c.fetchone()
+    except Exception:
+        crit_active_n, crit_users_n, _lb = 0, 0, None
+    reachable_n = max(0, int(stats['total_users']) - blocked_n)
+    last_broadcast = ('ещё не было' if not _lb else
+                      f"{_lb[0]} · {str(_lb[1] or '')[:16].replace('T', ' ')}")
+
     text = (
         f"<b>Статистика системы</b>\n\n"
+        f"<b>Реальная аудитория</b>\n"
+        f" • В базе: {stats['total_users']}\n"
+        f" • Доступны (можно написать): <b>{reachable_n}</b>\n"
+        f" • Заблокировали/удалили бота: {blocked_n}\n"
+        f" • С активным поиском: {crit_users_n} чел ({crit_active_n} поисков)\n"
+        f" • Последняя рассылка: {last_broadcast}\n\n"
         f" Пользователи: <b>{stats['total_users']}</b>\n"
         f" Объявления: <b>{stats['total_ads']}</b>\n"
         f" • Активных: {stats['active_ads']}\n"
