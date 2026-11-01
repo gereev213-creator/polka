@@ -80,6 +80,14 @@ function paintEmpty(count) {
       _loadEnd();
       const err = new Error('HTTP ' + res.status);
       err.status = res.status;
+      // Сервер объясняет причину (например, «Оформите Плюс») — без этого
+      // интерфейс молчал, и человек не понимал, почему поиск не включился.
+      try {
+        const body = await res.json();
+        err.data = body || {};
+        err.error = body && body.error;
+        err.detail = body && body.detail;
+      } catch (e2) { err.data = {}; }
       throw err;
     }
     try {
@@ -237,7 +245,15 @@ function paintEmpty(count) {
       try { if (TG && TG.showAlert) TG.showAlert(okText); } catch (e) { }
       return true;
     } catch (e) {
-      if (TG && TG.showAlert) TG.showAlert('Не удалось создать поиск');
+      const why = (e && (e.detail || e.error)) || '';
+      const isLimit = (e && (e.status === 402 || e.error === 'limit'));
+      if (isLimit) {
+        const text = (e && e.detail) || 'Оформите «Плюс», чтобы создавать больше поисков.';
+        try { if (TG && TG.showAlert) TG.showAlert(text); } catch (e3) { }
+        if (typeof go === 'function') go('tariffs');
+      } else {
+        if (TG && TG.showAlert) TG.showAlert(why || 'Не удалось создать поиск');
+      }
       return false;
     }
   }
@@ -317,6 +333,11 @@ function paintEmpty(count) {
     if (c.with_photo) chips.push('<span class="chip">с фото</span>');
     if (Number(c.min_discount || 0) > 10) {
       chips.push(`<span class="chip">выгода от ${c.min_discount}%</span>`);
+    }
+    if (!c.active && c.paused_reason) {
+      chips.push('<span class="chip">' +
+        (c.paused_reason === 'ttl' ? 'нужен Плюс: сутки истекли' : 'нужен Плюс') +
+        '</span>');
     }
     const fresh = c.new_count || 0;
     const _ts = c.last_run || c.last_check || c.updated_at || c.last_match_at || '';
@@ -414,7 +435,18 @@ function paintEmpty(count) {
               body: JSON.stringify({ active: crit && crit.active ? 0 : 1 }),
             });
             loadSearches();
-          } catch (err) { }
+          } catch (err) {
+            // Лимит или истекшие бесплатные сутки: объясняем и ведём в тарифы
+            const isLimit = err && (err.status === 402 || err.error === 'limit');
+            if (isLimit) {
+              try {
+                if (TG && TG.showAlert) {
+                  TG.showAlert(err.detail || 'Оформите «Плюс», чтобы держать поиск активным.');
+                }
+              } catch (e2) { }
+              if (typeof go === 'function') go('tariffs');
+            }
+          }
         });
       });
     } catch (e) { }

@@ -23450,7 +23450,10 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
 # ── ЭТАП H: монетизация (значения в переменных окружения, не в коде) ──────────
 # Два поиска бесплатно: с одним человек чаще всего не успевает увидеть
 # находку и уходит. Пауза и удаление поисков — всегда бесплатны.
-PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '2'))
+PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '1'))
+# Бесплатный (он же пробный) поиск живёт сутки, потом встаёт на паузу:
+# снять её можно только в «Плюсе». Это и есть точка монетизации.
+FREE_CRITERION_TTL_HOURS = int(os.environ.get('FREE_CRITERION_TTL_HOURS', '24'))
 PLAN_FREE_DELAY_MIN = int(os.environ.get('FREE_DELAY_MIN', '10'))
 # Тестовый период — 24 часа и один поиск: короткая проба, дальше тариф.
 PLAN_TRIAL_DAYS = int(os.environ.get('TRIAL_DAYS', '1'))
@@ -25954,6 +25957,49 @@ def _user_plan(user_id: int) -> Dict:
             'show_price': int(cfg_get('plus.price_display_old'))}
 
 
+def pause_expired_free_criteria() -> int:
+    """Бесплатный поиск живёт сутки, потом встаёт на паузу.
+
+    Так устроен бесплатный доступ: один поиск на 24 часа. Дальше он остаётся
+    в списке (и его находки — тоже), но не ищет, пока человек не оформит
+    «Плюс». Возвращает число поставленных на паузу.
+    """
+    cutoff = (get_moscow_time() - timedelta(hours=int(FREE_CRITERION_TTL_HOURS))).isoformat()
+    cursor = db.conn.cursor()
+    paused = 0
+    try:
+        cursor.execute(
+            "SELECT id, user_id FROM hunt_criteria WHERE active=1 "
+            "AND COALESCE(created_at,'') <> '' AND created_at < ? "
+            "ORDER BY id LIMIT 500", (cutoff,))
+        rows = [dict(r) for r in cursor.fetchall()]
+        for r in rows:
+            try:
+                plan = str(_user_plan(int(r['user_id'])).get('name') or '')
+            except Exception:
+                plan = 'free'
+            if plan not in ('free', 'trial'):
+                continue
+            cursor.execute(
+                "UPDATE hunt_criteria SET active=0, paused_reason='ttl' WHERE id=?",
+                (int(r['id']),))
+            paused += 1
+        if paused:
+            db.conn.commit()
+            logger.info(f"Бесплатные поиски старше {FREE_CRITERION_TTL_HOURS} ч "
+                        f"поставлены на паузу: {paused}")
+    except Exception as e:
+        logger.warning(f"pause free criteria: {e}")
+    return paused
+
+
+async def pause_expired_free_criteria_job(context=None) -> None:
+    try:
+        await asyncio.to_thread(pause_expired_free_criteria)
+    except Exception as e:
+        logger.warning(f"ttl pause job: {e}")
+
+
 def _criteria_limit(user_id: int) -> int:
     p = _user_plan(int(user_id))
     bonus = min(_referral_criteria_bonus(int(user_id)), int(cfg_get('ref.max_bonus')))
@@ -26695,6 +26741,9 @@ def _criterion_public(crit: Dict) -> Dict:
         # «только частник», «состояние: Хорошее». Без него карточка поиска
         # выглядела так, будто все фильтры потерялись.
         'requirements': crit.get('requirements') or '',
+        # Почему поиск на паузе: 'ttl' — истекли бесплатные сутки, 'limit' —
+        # лишний по тарифу. Интерфейс по этому полю показывает «нужен Плюс».
+        'paused_reason': crit.get('paused_reason') or '',
         'exclude': _crit_exclude_words(crit),
         'strict_model': int(crit.get('strict_model') or 0),
     }
@@ -27171,9 +27220,38 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         if not crit_id:
             return _miniapp_err('not_found', 404)
         active = 1 if int((body or {}).get('active') or 0) else 0
+        if active:
+            # Возобновление — платное действие, если бесплатный лимит исчерпан
+            # или поиск встал из-за суточного лимита. Иначе человек обходил
+            # лимит кнопкой «пауза/возобновить» сколько угодно раз.
+            try:
+                cursor = db.conn.cursor()
+                cursor.execute("SELECT COALESCE(paused_reason,'') AS pr FROM hunt_criteria "
+                               "WHERE id=? AND user_id=?", (crit_id, int(viewer_id)))
+                row = cursor.fetchone()
+                reason = str(row['pr'] or '') if row else ''
+                plan = str(_user_plan(int(viewer_id)).get('name') or '')
+                if plan in ('free', 'trial') and reason == 'ttl':
+                    return _miniapp_json(
+                        {'ok': False, 'error': 'limit',
+                         'detail': 'Бесплатный поиск работает 24 часа. '
+                                   'Чтобы держать его активным, оформите «Плюс».'},
+                        status=402)
+                limit = _criteria_limit(int(viewer_id))
+                cursor.execute("SELECT COUNT(*) AS n FROM hunt_criteria "
+                               "WHERE user_id=? AND active=1", (int(viewer_id),))
+                nrow = cursor.fetchone()
+                if int(nrow['n'] or 0) >= limit:
+                    return _miniapp_json(
+                        {'ok': False, 'error': 'limit',
+                         'detail': 'Оформите «Плюс»: на бесплатном доступен '
+                                   'один активный поиск.'}, status=402)
+            except Exception as e:
+                logger.warning(f"criteria patch limit: {e}")
         try:
             cursor = db.conn.cursor()
-            cursor.execute("UPDATE hunt_criteria SET active=? WHERE id=? AND user_id=?",
+            cursor.execute("UPDATE hunt_criteria SET active=?, paused_reason='' "
+                           "WHERE id=? AND user_id=?",
                            (active, crit_id, int(viewer_id)))
             db.conn.commit()
             if not cursor.rowcount:
@@ -29898,6 +29976,7 @@ async def setup_scheduler(application: Application):
     jq.run_daily(daily_tasks,               time=time(3,  0, tzinfo=ZoneInfo("Europe/Moscow")))
     jq.run_daily(update_city_channel_cache, time=time(4,  0, tzinfo=ZoneInfo("Europe/Moscow")))
     jq.run_daily(daily_digest_job,           time=time(10, 0, tzinfo=ZoneInfo("Europe/Moscow")))  # находка дня админу
+    jq.run_repeating(pause_expired_free_criteria_job, interval=900, first=120)  # сутки бесплатному поиску
     jq.run_repeating(send_search_notifications, interval=3600, first=600)
     jq.run_repeating(process_auto_bumps,        interval=3600, first=300)
     jq.run_repeating(remind_abandoned,          interval=1800, first=900)

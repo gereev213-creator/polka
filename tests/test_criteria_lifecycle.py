@@ -63,6 +63,17 @@ ADP = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/adapter.js'), en
 check('карточка показывает минус-слова', 'минус: ${String(c.exclude)' in ADP)
 check('карточка показывает состояние', 'состояние: ${rj.condition_min}' in ADP)
 
+# 6) бесплатный доступ: 1 поиск, сутки, потом пауза и только Плюс
+check('бесплатный лимит — один поиск', "FREE_MAX_CRITERIA', '1'" in SRC)
+check('сутки бесплатного поиска', "FREE_CRITERION_TTL_HOURS" in SRC)
+check('авто-пауза по сроку есть', 'def pause_expired_free_criteria(' in SRC)
+check('джоб паузы в расписании', 'pause_expired_free_criteria_job' in SRC)
+check('снятие паузы проверяет лимит', "reason == 'ttl'" in SRC)
+check('снятие паузы проверяет активные', 'один активный поиск' in SRC)
+check('клиент показывает «Оформите Плюс»', 'Оформите «Плюс»' in ADP)
+check('клиент ведёт в тарифы', "go('tariffs')" in ADP)
+check('карточка показывает причину паузы', 'нужен Плюс' in ADP)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
