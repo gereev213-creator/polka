@@ -7603,6 +7603,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Создание/обновление пользователя
     user_data = db.get_user(user.id)
+    _first_time = not bool(user_data)
     if not user_data:
         new_user = {
             'user_id': user.id,
@@ -7636,7 +7637,26 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если пришли по ссылке из канала (контакт/избранное), сначала показываем
     # то, что человек просил: старое ветвление ниже.
     if not (deep_link_action or deep_link_ad_id):
-        return await show_main_menu(update, context)
+        _state = await show_main_menu(update, context)
+        if _first_time:
+            # Первый вход: коротко про бонус и кнопка активации ПОД текстом.
+            try:
+                await update.message.reply_text(
+                    "<b>🎁 Приветственный бонус</b>\n\n"
+                    "Новичкам — <b>1 поиск лота бесплатно на 24 часа</b>.\n\n"
+                    "Напишите, что ищете (например «куртка зимняя мужская до 5000»), "
+                    "и бот пришлёт в Telegram подходящие объявления с Авито: "
+                    "цену, ссылку и выгоду к рынку.\n\n"
+                    "Карта не нужна, подписка тоже.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🎁 Активировать бонус",
+                                              callback_data="start_trial")],
+                    ]),
+                    parse_mode=ParseMode.HTML,
+                )
+            except Exception as e:
+                logger.warning(f"welcome bonus: {e}")
+        return _state
     else:
         # Обработка deep links после проверки подписки
         if deep_link_action == 'contact' and deep_link_ad_id:
@@ -7884,8 +7904,8 @@ async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     except Exception as e:
         logger.warning(f"start_trial: {e}")
     text = (
-        "<b>Бесплатный период активирован</b> 🎁\n\n"
-        "Один поиск работает 24 часа — без карты и без подписки.\n\n"
+        "<b>Бонус активирован</b> 🎁\n\n"
+        "Ваш поиск работает 24 часа — без карты и без подписки.\n\n"
         "Напишите боту, что ищете, например: «куртка зимняя мужская до 5000» — "
         "или откройте приложение кнопкой ниже."
     )

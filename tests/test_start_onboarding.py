@@ -46,7 +46,15 @@ check('приветствие по имени', 'Привет, {_name}' in menu)
 check('заголовка «Полка» в меню нет', '<b>Полка</b>' not in menu)
 check('имя берётся у пользователя', 'first_name' in menu)
 
-# 4) deep links не сломаны
+# 4) приветственный бонус для первого входа
+check('бонус только для новых', '_first_time = not bool(user_data)' in SRC)
+check('текст про бонус', 'Приветственный бонус' in SRC)
+check('бонус — один поиск на 24 часа', '1 поиск лота бесплатно на 24 часа' in SRC)
+check('кнопка активации под текстом', '🎁 Активировать бонус' in SRC)
+check('кнопка ведёт в start_trial', 'callback_data="start_trial"' in SRC)
+check('после активации открывается приложение', 'Бонус активирован' in SRC)
+
+# 5) deep links не сломаны
 check('deep links обрабатываются', 'if not (deep_link_action or deep_link_ad_id):' in SRC)
 
 print()
