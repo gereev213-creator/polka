@@ -574,8 +574,14 @@ function paintEmpty(count) {
           title.textContent = 'Пробный на 24 часа';
           if (badge) badge.textContent = 'Активно';
         } else {
+          // Число берём у сервера, а не из головы: раньше здесь было
+          // захардкожено «2 поиска», хотя бесплатный тариф — один.
           title.textContent = 'Бесплатный тариф';
-          if (badge) badge.textContent = '2 поиска';
+          if (badge) {
+            const lim = Number(data.criteria_limit || data.free_max_criteria || 1);
+            const word = lim === 1 ? 'поиск' : (lim >= 2 && lim <= 4 ? 'поиска' : 'поисков');
+            badge.textContent = lim + ' ' + word;
+          }
         }
       }
     } catch (e) { }
