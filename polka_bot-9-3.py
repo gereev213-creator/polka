@@ -26691,6 +26691,10 @@ def _criterion_public(crit: Dict) -> Dict:
         'active': bool(crit.get('active')),
         'mode': crit.get('mode') or 'any',
         'requirements_json': _crit_requirements_json(crit),
+        # Текст требований нужен интерфейсу: из него рисуются чипы
+        # «только частник», «состояние: Хорошее». Без него карточка поиска
+        # выглядела так, будто все фильтры потерялись.
+        'requirements': crit.get('requirements') or '',
         'exclude': _crit_exclude_words(crit),
         'strict_model': int(crit.get('strict_model') or 0),
     }

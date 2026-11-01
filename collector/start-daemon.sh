@@ -10,6 +10,15 @@ cd "$(dirname "$0")" || exit 1
 PY=python3
 command -v "$PY" >/dev/null 2>&1 || PY=python
 
+# Локальные настройки (браузерный режим, прокси, темп) — не в git
+if [ -f browser.env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./browser.env
+  set +a
+  echo "Настройки из browser.env применены"
+fi
+
 mkdir -p logs
 PID_FILE="logs/collector.pid"
 LOG_FILE="logs/collector.log"

@@ -298,9 +298,25 @@ function paintEmpty(count) {
     if (c.min_price) chips.push(`<span class="chip">от ${fmt(c.min_price)}</span>`);
     if (c.city) chips.push(`<span class="chip">${c.city}</span>`);
     if (c.requirements) {
-      String(c.requirements).split(',').slice(0, 3).forEach((r) => {
+      String(c.requirements).split(',').slice(0, 4).forEach((r) => {
         if (r.trim()) chips.push(`<span class="chip">${r.trim()}</span>`);
       });
+    }
+    // Требования из нового поля: частник и состояние могли прийти только
+    // в requirements_json, и тогда карточка выглядела «фильтров нет».
+    const rj = c.requirements_json || {};
+    if (rj.private_only && !/частник/i.test(String(c.requirements || ''))) {
+      chips.push('<span class="chip">только частник</span>');
+    }
+    if (rj.condition_min && !/состояние/i.test(String(c.requirements || ''))) {
+      chips.push(`<span class="chip">состояние: ${rj.condition_min}</span>`);
+    }
+    if (c.exclude) {
+      chips.push(`<span class="chip">минус: ${String(c.exclude).slice(0, 24)}</span>`);
+    }
+    if (c.with_photo) chips.push('<span class="chip">с фото</span>');
+    if (Number(c.min_discount || 0) > 10) {
+      chips.push(`<span class="chip">выгода от ${c.min_discount}%</span>`);
     }
     const fresh = c.new_count || 0;
     const _ts = c.last_run || c.last_check || c.updated_at || c.last_match_at || '';
@@ -632,8 +648,11 @@ function paintEmpty(count) {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
-      // Ссылки в форме больше нет: ищем по словам.
-      if (q.length < 2) return;
+      // Ссылка с Авито — точный режим. Если она есть, слова и цена не нужны:
+      // сборщик пойдёт ровно по выбранному человеку разделу.
+      const linkEl0 = document.getElementById('avitoLink');
+      const link0 = linkEl0 ? String(linkEl0.value || '').trim() : '';
+      if (q.length < 2 && !link0) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
       const sellerEl = document.querySelector('#sellerChips [data-seller].on');
       const seller = sellerEl ? String(sellerEl.getAttribute('data-seller') || 'any') : 'any';
@@ -660,18 +679,29 @@ function paintEmpty(count) {
         .filter(Boolean).join(',');
       // Если человек вставил ссылку с Авито — идём точно по ней: там уже
       // его фильтры, и сборщику не нужно перебирать всю категорию.
-      const linkEl = document.getElementById('avitoLink');
-      const link = linkEl ? String(linkEl.value || '').trim() : '';
+      const link = link0;
       let ok = false;
       if (link) {
+        // Сначала новый разбор ссылки: он принимает любую ссылку поиска,
+        // даже без набора фильтров f=. Старый эндпоинт — как запасной.
         try {
-          const res = await window.PolkaAPI.api('/api/hunt/from-link', {
-            method: 'POST', body: JSON.stringify({ url: link }),
+          const res = await window.PolkaAPI.api('/api/hunt', {
+            method: 'POST', body: JSON.stringify({ search_link: link }),
           });
           ok = !!(res && (res.ok !== false));
         } catch (e) {
           ok = false;
-          if (window.PolkaNotify) window.PolkaNotify('Ссылка не подошла — проверь, что это поиск Авито');
+        }
+        if (!ok) {
+          try {
+            const res2 = await window.PolkaAPI.api('/api/hunt/from-link', {
+              method: 'POST', body: JSON.stringify({ url: link }),
+            });
+            ok = !!(res2 && (res2.ok !== false));
+          } catch (e) {
+            ok = false;
+            if (window.PolkaNotify) window.PolkaNotify('Ссылка не подошла — нужна ссылка поиска с Авито');
+          }
         }
       }
       if (!ok && !link) {

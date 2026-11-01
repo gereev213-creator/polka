@@ -58,6 +58,10 @@ check('метрики отдают список поисков', "out['criteria_
 check('метрики считают людей с поиском', "criteria_users" in SRC)
 check('в админке есть блок поисков', 'Поиски пользователей' in UI)
 check('в админке видно находки/отправлено', "c.finds || 0}/{c.sent || 0}" in UI)
+check('сервер отдаёт требования поиска', "'requirements': crit.get('requirements')" in SRC)
+ADP = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/adapter.js'), encoding='utf-8').read()
+check('карточка показывает минус-слова', 'минус: ${String(c.exclude)' in ADP)
+check('карточка показывает состояние', 'состояние: ${rj.condition_min}' in ADP)
 
 print()
 if fail:

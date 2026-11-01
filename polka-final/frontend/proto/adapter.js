@@ -298,9 +298,25 @@ function paintEmpty(count) {
     if (c.min_price) chips.push(`<span class="chip">от ${fmt(c.min_price)}</span>`);
     if (c.city) chips.push(`<span class="chip">${c.city}</span>`);
     if (c.requirements) {
-      String(c.requirements).split(',').slice(0, 3).forEach((r) => {
+      String(c.requirements).split(',').slice(0, 4).forEach((r) => {
         if (r.trim()) chips.push(`<span class="chip">${r.trim()}</span>`);
       });
+    }
+    // Требования из нового поля: частник и состояние могли прийти только
+    // в requirements_json, и тогда карточка выглядела «фильтров нет».
+    const rj = c.requirements_json || {};
+    if (rj.private_only && !/частник/i.test(String(c.requirements || ''))) {
+      chips.push('<span class="chip">только частник</span>');
+    }
+    if (rj.condition_min && !/состояние/i.test(String(c.requirements || ''))) {
+      chips.push(`<span class="chip">состояние: ${rj.condition_min}</span>`);
+    }
+    if (c.exclude) {
+      chips.push(`<span class="chip">минус: ${String(c.exclude).slice(0, 24)}</span>`);
+    }
+    if (c.with_photo) chips.push('<span class="chip">с фото</span>');
+    if (Number(c.min_discount || 0) > 10) {
+      chips.push(`<span class="chip">выгода от ${c.min_discount}%</span>`);
     }
     const fresh = c.new_count || 0;
     const _ts = c.last_run || c.last_check || c.updated_at || c.last_match_at || '';
