@@ -14362,9 +14362,13 @@ async def broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_message(query, f"{EM_FAIL} Нет данных для рассылки")
         return States.ADMIN_MENU
     
-    # Получаем всех пользователей
-    users = db.get_all_users()
+    # Получаем всех пользователей, но не тратим время на тех, кто уже
+    # заблокировал бота: им Telegram всё равно ответит Forbidden.
+    all_users = db.get_all_users()
+    _blocked_now = _blocked_user_ids()
+    users = [u for u in all_users if int(u.get('user_id') or 0) not in _blocked_now]
     total_users = len(users)
+    skipped_blocked = len(all_users) - total_users
     
     # Отправляем сообщение о начале
     try:
@@ -14374,6 +14378,7 @@ async def broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     sent_count = 0
     failed_count = 0
+    blocked_count = 0
     
     with_button = broadcast_data.get('with_button', True)
     btn_kb = InlineKeyboardMarkup([[_miniapp_open_button()]]) if with_button else None
@@ -14423,9 +14428,15 @@ async def broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             sent_count += 1
         except Exception as e:
-            failed_count += 1
-            logger.error(f"Не удалось отправить сообщение пользователю {user['user_id']}: {e}")
-        
+            if _is_blocked_error(e):
+                # «user is deactivated» и «bot was blocked» — человека больше
+                # нет. Помечаем и больше в рассылку не включаем.
+                _mark_bot_blocked(int(user['user_id']), str(e))
+                blocked_count += 1
+            else:
+                failed_count += 1
+                logger.error(f"Не удалось отправить сообщение пользователю {user['user_id']}: {e}")
+
         # Небольшая задержка, чтобы не превысить лимиты Telegram
         await asyncio.sleep(0.1)
     
@@ -14434,11 +14445,17 @@ async def broadcast_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
         del context.user_data['broadcast_data']
     
     # Логируем рассылку
-    db.log_action(update.effective_user.id, "broadcast_sent", 
-                  f"Sent: {sent_count}, Failed: {failed_count}, Total: {total_users}")
+    db.log_action(update.effective_user.id, "broadcast_sent",
+                  f"Sent: {sent_count}, Failed: {failed_count}, Blocked: {blocked_count}, "
+                  f"Total: {total_users}, Skipped: {skipped_blocked}")
     
     await safe_edit_message(query,
-        text=f"{EM_OK} Рассылка завершена!\n\nСтатистика:\n• Отправлено: {sent_count}\n• Не отправлено: {failed_count}\n• Всего пользователей: {total_users}",
+        text=f"{EM_OK} Рассылка завершена!\n\n"
+             f"• Доставлено: {sent_count}\n"
+             f"• Заблокировали бота: {blocked_count}\n"
+             f"• Ошибки отправки: {failed_count}\n"
+             f"• Пропущено (уже блокировали): {skipped_blocked}\n"
+             f"• Всего в базе: {len(all_users)}",
         keyboard=[[InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]]
     )
     
@@ -23124,17 +23141,69 @@ def hunt_flush_stale_pending(minutes: int = 0) -> int:
         return 0
 
 
+def _is_blocked_error(exc: Exception) -> bool:
+    """Telegram ответил, что человек удалил/заблокировал бота."""
+    low = str(exc).lower()
+    name = type(exc).__name__
+    return (name == 'Forbidden' or 'forbidden' in low
+            or 'bot was blocked' in low or 'user is deactivated' in low
+            or 'chat not found' in low or 'blocked by the user' in low)
+
+
+def _mark_bot_blocked(user_id: int, reason: str = '') -> None:
+    """Помечает человека как недоступного — в ОДНОМ месте.
+
+    Раньше блокировки писались то в таблицу notify_blocked, то в настройки
+    bot_blocked:<id>, и статистика их не видела. Теперь пишем в оба места
+    (для совместимости) и считаем по обоим.
+    """
+    try:
+        cur = db.conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS notify_blocked (user_id INTEGER PRIMARY KEY,"
+                    " blocked_at TEXT)")
+        cur.execute("INSERT OR REPLACE INTO notify_blocked(user_id, blocked_at) VALUES(?, ?)",
+                    (int(user_id), get_moscow_time().isoformat()))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"mark_bot_blocked table: {e}")
+    try:
+        _setting_set(f'bot_blocked:{int(user_id)}', get_moscow_time().isoformat())
+    except Exception:
+        pass
+    logger.warning(f"бот заблокирован пользователем {user_id}: {str(reason)[:80]}")
+
+
+def _blocked_user_ids() -> set:
+    """Все, кому слать нельзя: объединение таблицы и настроек."""
+    out = set()
+    try:
+        cur = db.conn.cursor()
+        cur.execute("CREATE TABLE IF NOT EXISTS notify_blocked (user_id INTEGER PRIMARY KEY,"
+                    " blocked_at TEXT)")
+        cur.execute("SELECT user_id FROM notify_blocked")
+        out |= {int(r[0]) for r in cur.fetchall() if r and r[0]}
+    except Exception:
+        pass
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT key FROM settings_kv WHERE key LIKE 'bot_blocked:%'")
+        for r in cur.fetchall():
+            try:
+                out.add(int(str(r[0]).split(':', 1)[1]))
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return out
+
+
 def hunt_note_blocked(user_id: int, reason: str = '') -> None:
     """Запоминает, что человек заблокировал бота: слать ему больше нельзя.
 
     Пишем в настройки, чтобы приложение могло показать плашку «откройте
     бота и нажмите Start» — без этого находки уходили в пустоту.
     """
-    try:
-        _setting_set(f'bot_blocked:{int(user_id)}', get_moscow_time().isoformat())
-        logger.warning(f"hunt: бот заблокирован пользователем {user_id}: {str(reason)[:80]}")
-    except Exception as e:
-        logger.warning(f"hunt_note_blocked: {e}")
+    _mark_bot_blocked(user_id, reason)
 
 
 def hunt_is_blocked(user_id: int) -> bool:
@@ -31685,6 +31754,38 @@ async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Respons
             out['events'] = {str(r['name']): int(r['n']) for r in cursor.fetchall()}
         except Exception:
             out['events'] = {}
+        # ── Реальная аудитория ────────────────────────────────────────────
+        # «Пользователей» в базе много, но часть удалила или заблокировала
+        # бота: им нельзя ничего отправить. Считаем отдельно доступных,
+        # заблокировавших и активных за неделю/месяц.
+        try:
+            _blocked = _blocked_user_ids()
+            out['users_blocked'] = len(_blocked)
+            cursor.execute("SELECT COUNT(*) AS n FROM users")
+            _total_row = cursor.fetchone()
+            _total = int(_total_row['n'] or 0) if _total_row else 0
+            out['users_total'] = _total
+            out['users_reachable'] = max(0, _total - out['users_blocked'])
+            _now = get_moscow_time()
+            for _days, _key in ((7, 'users_active_7d'), (30, 'users_active_30d')):
+                try:
+                    _cut = (_now - timedelta(days=_days)).isoformat()
+                    cursor.execute("SELECT COUNT(*) AS n FROM users "
+                                   "WHERE COALESCE(last_activity,'') >= ?", (_cut,))
+                    _r = cursor.fetchone()
+                    out[_key] = int(_r['n'] or 0) if _r else 0
+                except Exception:
+                    out[_key] = 0
+            # Последняя рассылка: сколько доставлено и сколько блокируют
+            try:
+                cursor.execute("SELECT details, created_at FROM logs "
+                               "WHERE action='broadcast_sent' ORDER BY id DESC LIMIT 1")
+                _b = cursor.fetchone()
+                out['last_broadcast'] = (dict(_b) if _b else {})
+            except Exception:
+                out['last_broadcast'] = {}
+        except Exception as e:
+            logger.warning(f"metrics audience: {e}")
         # Поиски пользователей: сколько людей вообще ищут, что именно и
         # сколько находок принёс каждый поиск. Кратко, для статистики.
         try:

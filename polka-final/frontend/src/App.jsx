@@ -3924,15 +3924,32 @@ function AdminPage() {
           </div>
 
           <div className="admin-kpi">
-            {[['Пользователи', metrics.users], ['Критериев активно', metrics.criteria_active],
-              ['С поиском', metrics.criteria_users], ['Отправлено', metrics.sent],
-              ['Платежей', metrics.payments], ['Находок в базе', metrics.findings]].map(([label, v]) => (
+            {[['В базе', metrics.users_total ?? metrics.users],
+              ['Доступны', metrics.users_reachable],
+              ['Заблокировали бота', metrics.users_blocked],
+              ['Активных 7 дней', metrics.users_active_7d],
+              ['С поиском', metrics.criteria_users],
+              ['Критериев активно', metrics.criteria_active],
+              ['Отправлено', metrics.sent],
+              ['Платежей', metrics.payments],
+              ['Находок в базе', metrics.findings]].map(([label, v]) => (
               <div key={label} className="glass-card admin-kpi-cell">
                 <div className="admin-kpi-value">{v ?? 0}</div>
                 <div className="admin-kpi-label">{label}</div>
               </div>
             ))}
           </div>
+
+          {metrics.last_broadcast?.details ? (
+            <div className="glass-card mt-14">
+              <div className="plan-name">Последняя рассылка</div>
+              <div className="admin-key mt-8">
+                {String(metrics.last_broadcast.details)}
+                {' · '}
+                {String(metrics.last_broadcast.created_at || '').slice(0, 16).replace('T', ' ')}
+              </div>
+            </div>
+          ) : null}
 
           {metrics.criteria_list?.length ? (
             <div className="glass-card mt-14">

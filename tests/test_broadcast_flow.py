@@ -53,7 +53,20 @@ photo = SRC[p_i:p_j]
 check('фото для рассылки не уходят в чужие режимы',
       photo.find("ud.get('broadcast_data') is not None") < photo.find("ud.get('republish_step')"))
 
-# 4) отправка и отчёт на месте
+# 4) блокировки бота учитываются
+check('есть распознавание блокировки', 'def _is_blocked_error(' in SRC)
+check('есть общая пометка блокировки', 'def _mark_bot_blocked(' in SRC)
+check('рассылка пропускает заблокировавших', '_blocked_user_ids()' in SRC)
+check('отчёт считает заблокировавших', 'blocked_count' in SRC)
+check('статистика: доступны и заблокировали',
+      "out['users_reachable']" in SRC and "out['users_blocked']" in SRC)
+UI = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..',
+                       'polka-final/frontend/src/App.jsx'), encoding='utf-8').read()
+check('в админке KPI «Доступны»', "'Доступны'" in UI)
+check('в админке KPI «Заблокировали бота»', "'Заблокировали бота'" in UI)
+check('в админке блок последней рассылки', 'Последняя рассылка' in UI)
+
+# 4b) отправка и отчёт на месте
 check('есть цикл отправки', 'for user in users:' in SRC)
 check('есть отчёт по рассылке', 'Рассылка завершена' in SRC)
 check('данные рассылки очищаются', "del context.user_data['broadcast_data']" in SRC)
