@@ -7632,33 +7632,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # Обычный /start (без deep link) — приветствие и активация пробного.
-    # Если пришли по ссылке из канала (контакт/избранное), сразу показываем
+    # Обычный /start — сразу главное меню, без длинного приветствия.
+    # Если пришли по ссылке из канала (контакт/избранное), сначала показываем
     # то, что человек просил: старое ветвление ниже.
     if not (deep_link_action or deep_link_ad_id):
-        keyboard = [
-            [InlineKeyboardButton(EM_OK + " Активировать бесплатный период",
-                                  callback_data="start_trial")],
-            [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
-                                  web_app=WebAppInfo(url=_miniapp_url()))],
-        ]
-        await update.message.reply_text(
-            "<b>ПОЛКА — находим объявления дешевле рынка</b>\n\n"
-            "Вы пишете, что ищете: «куртка зимняя мужская до 5000», "
-            "«iPhone 15 Pro до 40000». Бот сам проверяет новые объявления "
-            "на Авито и присылает в Telegram только то, что подходит, "
-            "с ценой и ссылкой.\n\n"
-            "Что внутри:\n"
-            "• один поиск бесплатно на 24 часа — без карты и подписки;\n"
-            "• отсев «не тех» объявлений, чехлов и запчастей;\n"
-            "• выгода к рынку — сразу видно, дешевле вещь или нет.\n\n"
-            f"Новости сервиса и лучшие находки дня — в нашем канале: {EMAIL_TG_CHANNEL_URL}\n\n"
-            "Нажмите «Активировать бесплатный период», и можно искать.",
-            reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode=ParseMode.HTML,
-            disable_web_page_preview=True,
-        )
-        return States.START
+        return await show_main_menu(update, context)
     else:
         # Обработка deep links после проверки подписки
         if deep_link_action == 'contact' and deep_link_ad_id:
@@ -8099,8 +8077,11 @@ async def show_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ads_hint = f"У вас {active_ads} активных объявлений"
     else:
         ads_hint = "Разместите первое — это займёт 30 секунд"
-    # Приветствие короткое: одно предложение о сути сервиса.
-    text = ("<b>Полка</b>\n\n"
+    # Приветствие по имени вместо заголовка «Полка»: человек сразу видит
+    # обращение к себе, а не название сервиса.
+    _name = str(getattr(user, 'first_name', '') or getattr(user, 'username', '') or '').strip()
+    _hi = f"Привет, {_name}! 👋" if _name else "Привет! 👋"
+    text = (f"<b>{_hi}</b>\n\n"
             "Тот самый бот, который находит выгодные объявления раньше вас.")
     
     markup = InlineKeyboardMarkup(keyboard)
