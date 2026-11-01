@@ -27081,19 +27081,15 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
 
 
 def remove_criterion(user_id: int, crit_id: int) -> bool:
-    """Удаляет поиск и все его решения.
+    """Удаляет поиск. Найденные им лоты остаются в ленте как история.
 
-    Решения без критерия — мусор: они всплывали в ленте у тех, чей критерий
-    уже удалён. Удаляем только свои записи: чужой критерий так не снести.
+    Раньше вместе с поиском удалялись и его решения — и человек, удалив
+    поиск, терял уже присланные находки («находки скипнулись в ленте»).
+    Теперь поиск перестаёт искаться, а лента показывает то, что уже пришло.
     """
     cursor = db.conn.cursor()
     cursor.execute("DELETE FROM hunt_criteria WHERE id=? AND user_id=?", (crit_id, user_id))
     deleted = cursor.rowcount > 0
-    if deleted:
-        try:
-            cursor.execute("DELETE FROM hunt_matches WHERE crit_id=?", (crit_id,))
-        except Exception as e:
-            logger.warning(f"remove_criterion matches: {e}")
     db.conn.commit()
     return deleted
 
@@ -30965,10 +30961,12 @@ async def _findings_from_matches(viewer_id: int, min_discount: int, category: st
         where = ["(hm.user_id = ? OR hm.crit_id IN "
                  "(SELECT id FROM hunt_criteria WHERE user_id = ?))",
                  statuses, ok_reasons, "a.status='active'",
-                 # Критерий на паузе не должен приносить находки в ленту —
-                 # в боте уведомления уже останавливаются, а лента показывала
-                 "EXISTS (SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id "
-                 "AND hc.user_id = ? AND hc.active = 1)"]
+                 # Критерий на паузе не приносит НОВЫХ находок, но уже
+                 # присланные остаются в ленте. Если критерий удалён вовсе —
+                 # находки тем более не исчезают: это история человека.
+                 "(NOT EXISTS (SELECT 1 FROM hunt_criteria hc0 WHERE hc0.id = hm.crit_id) "
+                 " OR EXISTS (SELECT 1 FROM hunt_criteria hc WHERE hc.id = hm.crit_id "
+                 "AND hc.user_id = ? AND hc.active = 1))"]
         params: List = [int(viewer_id), int(viewer_id), int(viewer_id)]
     if min_discount > 0:
         where.append("COALESCE(hm.discount, 0) >= ?")

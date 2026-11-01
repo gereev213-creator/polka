@@ -44,7 +44,7 @@ i = SRC.index('def remove_criterion(')
 j = SRC.index('\ndef ', i + 10)
 body = SRC[i:j]
 check('удаление критерия', 'DELETE FROM hunt_criteria' in body)
-check('удаление решений критерия', 'DELETE FROM hunt_matches WHERE crit_id=?' in body)
+check('история находок при удалении не стирается', 'DELETE FROM hunt_matches' not in body)
 check('чужой критерий не удаляется', 'AND user_id=?' in body)
 
 # 4) без активных критериев сборщик не ходит на Авито
@@ -82,6 +82,10 @@ check('бесплатный лимит берётся у сервера', 'data.
 check('в описании Плюса — 1 поиск в бесплатном', 'В бесплатном и пробном — 1 поиск на 24 часа' in TPL)
 check('нет обещания проверки каждые 5 минут', 'Проверка каждые 5 минут' not in TPL)
 check('честный интервал проверки', 'Проверка каждые 20 минут' in TPL)
+
+# 7b) лента не теряет уже присланные находки при удалении поиска
+check('лента показывает историю без критерия',
+      'NOT EXISTS (SELECT 1 FROM hunt_criteria hc0' in SRC)
 
 # 8) на ПК мини-апп не растягивается на весь экран
 TPL = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/template.html'),
