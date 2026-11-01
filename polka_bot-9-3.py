@@ -14208,6 +14208,13 @@ async def admin_broadcast_start(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard=[[InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]]
     )
     
+    # Чистим другие «ждущие ввод» флаги: иначе сообщение для рассылки
+    # улетало в удаление объявления или в перевыгрузку в MAX («Введите
+    # число — ID объявления») — ровно это и случилось у владельца.
+    for _stale in ('del_ad_step', 'del_ad_id', 'republish_step', 'grant_step',
+                   'grant_target', 'grant_service', 'awaiting_banner_key',
+                   'crypto_amount', 'review_rating', 'appeal_review_id'):
+        context.user_data.pop(_stale, None)
     context.user_data['broadcast_data'] = {'photos': [], 'text': '', 'with_button': True}
     return States.ADMIN_BROADCAST
 
@@ -35863,6 +35870,9 @@ def main():
     # ─── Диспетчер входящих фото ─────────────────────────────────────────────────
     async def dispatch_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ud = context.user_data
+        # Рассылка первой: фото для рассылки не должны уходить в чужие режимы
+        if ud.get('broadcast_data') is not None:
+            return await handle_broadcast_message(update, context)
         if ud.get('republish_step'):
             return await handle_admin_republish_forward(update, context)
         if ud.get('del_ad_step') == 'id_input':
@@ -35872,8 +35882,6 @@ def main():
             return await handle_search_photo(update, context)
         if ud.get('creating_ad') is not None:
             return await handle_photos(update, context)
-        if ud.get('broadcast_data') is not None:
-            return await handle_broadcast_message(update, context)
         # Админ: фото для баннера (панель «Баннеры»)
         if ud.get('awaiting_banner_key'):
             return await handle_banner_photo(update, context)
@@ -35958,6 +35966,10 @@ def main():
             return await handle_grant_user_id_text(update, context)
         if ud.get('grant_step') == 'count':
             return await handle_grant_count_text(update, context)
+        # Рассылка (админ) — ПЕРВОЙ: это явный режим, и он не должен
+        # уступать зависшим флагам удаления объявления или перевыгрузки.
+        if ud.get('broadcast_data') is not None:
+            return await handle_broadcast_message(update, context)
         # Перевыгрузка в MAX (админ) — проверяем ДО удаления
         if ud.get('republish_step'):
             if update.message.forward_origin:
@@ -36003,9 +36015,6 @@ def main():
         if ud.get('review_rating'):          return await review_handle_text(update, context)
         # Обжалование отзыва
         if ud.get('appeal_review_id'):       return await appeal_review_handle_text(update, context)
-        # Рассылка (текст/фото)
-        if ud.get('broadcast_data') is not None:
-            return await handle_broadcast_message(update, context)
         # Активный чат — релей только свободного текста (после всех state-флагов)
         if ud.get('active_chat'):            return await handle_chat_message(update, context)
         # По умолчанию — текстовый поиск
