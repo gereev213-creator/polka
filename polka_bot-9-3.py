@@ -435,44 +435,9 @@ async def rate_limit_middleware(update, context):
                 pass
             return
 
-    # ── Проверка подписки на канал ──────────────────────────────────────────
-    user_data = db.get_user(user.id)
-    if user_data and user_data.get("subscribed"):
-        return
-
-    subscribed = await check_subscription(user.id, context)
-    if subscribed:
-        db.update_user(user.id, subscribed=1)
-        return
-
-    # Не подписан — пускаем только /start и кнопку проверки
-    cb_data = update.callback_query.data if update.callback_query else ""
-    msg_text = update.message.text if update.message else ""
-
-    if msg_text == "/start" or cb_data == "check_subscription":
-        return
-
-    if update.callback_query:
-        try:
-            await update.callback_query.answer("Сначала подпишитесь на канал", show_alert=True)
-        except Exception:
-            pass
-        return
-
-    if update.message:
-        ch_url = EMAIL_TG_CHANNEL_URL
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton(EM_ARROW_R + " Подписаться", url=ch_url)],
-            [InlineKeyboardButton(" Я подписался", callback_data="check_subscription")],
-        ])
-        try:
-            await update.message.reply_text(
-                f"Для доступа к боту подпишитесь на наш канал:\n{ch_url}",
-                reply_markup=keyboard,
-            )
-        except Exception:
-            pass
-        return
+    # Подписку на канал больше НЕ требуем: человек сразу видит, что это за
+    # сервис, и может активировать пробный период одной кнопкой. Канал
+    # упоминается в приветствии как источник новостей — без шлагбаума.
 
 # ── Цветные кнопки: Bot API 9.4 style=primary/danger ─────────────────────────
 _DANGER_KW = (f"{EM_FAIL} Удалить", f"{EM_FAIL} Отмена", f"{EM_FAIL} Отклонить", "Закрыть", f"{EM_FAIL}", "Бан", "Отменить", "Отказ")
@@ -7660,26 +7625,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     logger.error(f"Не удалось уведомить реферера: {e}")
     
-    # Проверка подписки
+    # Подписку не требуем — сразу рассказываем, что это за сервис
     subscribed = await check_subscription(user.id, context)
-    db.update_user(user.id, subscribed=int(subscribed))
-    
-    if not subscribed:
-        # Сохраняем deep link — обработаем после подтверждения подписки
-        if deep_link_action:
-            context.user_data['_pending_deep_action'] = deep_link_action
-        if deep_link_ad_id:
-            context.user_data['_pending_deep_ad_id'] = deep_link_ad_id
+    try:
+        db.update_user(user.id, subscribed=int(bool(subscribed)))
+    except Exception:
+        pass
+
+    # Обычный /start (без deep link) — приветствие и активация пробного.
+    # Если пришли по ссылке из канала (контакт/избранное), сразу показываем
+    # то, что человек просил: старое ветвление ниже.
+    if not (deep_link_action or deep_link_ad_id):
         keyboard = [
-            [InlineKeyboardButton(EM_ARROW_R + " Подписаться на канал", url=EMAIL_TG_CHANNEL_URL)],
-            [InlineKeyboardButton(EM_OK + " Я подписался", callback_data="check_subscription")]
+            [InlineKeyboardButton(EM_OK + " Активировать бесплатный период",
+                                  callback_data="start_trial")],
+            [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
+                                  web_app=WebAppInfo(url=_miniapp_url()))],
         ]
         await update.message.reply_text(
-            "Добро пожаловать в Полку!\n\n"
-            "Площадка объявлений России. Никаких комиссий.\n\n"
-            f"Для доступа подпишитесь на наш канал:\n{EMAIL_TG_CHANNEL_URL}\n"
-            "После подписки нажмите кнопку ниже.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "<b>ПОЛКА — находим объявления дешевле рынка</b>\n\n"
+            "Вы пишете, что ищете: «куртка зимняя мужская до 5000», "
+            "«iPhone 15 Pro до 40000». Бот сам проверяет новые объявления "
+            "на Авито и присылает в Telegram только то, что подходит, "
+            "с ценой и ссылкой.\n\n"
+            "Что внутри:\n"
+            "• один поиск бесплатно на 24 часа — без карты и подписки;\n"
+            "• отсев «не тех» объявлений, чехлов и запчастей;\n"
+            "• выгода к рынку — сразу видно, дешевле вещь или нет.\n\n"
+            f"Новости сервиса и лучшие находки дня — в нашем канале: {EMAIL_TG_CHANNEL_URL}\n\n"
+            "Нажмите «Активировать бесплатный период», и можно искать.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode=ParseMode.HTML,
+            disable_web_page_preview=True,
         )
         return States.START
     else:
@@ -7907,6 +7884,49 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if context.user_data.pop('show_onboarding', False):
             return await show_onboarding(update, context)
         return await show_main_menu(update, context)
+
+async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Кнопка «Активировать бесплатный период» в приветствии.
+
+    Не просим подписку и не просим карту: включаем пробный план и сразу
+    показываем кнопку, которая открывает приложение.
+    """
+    query = update.callback_query
+    user = update.effective_user
+    try:
+        await query.answer("Бесплатный период активирован")
+    except Exception:
+        pass
+    try:
+        u = db.get_user(user.id) or {}
+        patch = {'plan': 'trial', 'subscribed': 1}
+        if not u.get('trial_started_at'):
+            patch['trial_started_at'] = get_moscow_time().isoformat()
+        db.update_user(user.id, **patch)
+    except Exception as e:
+        logger.warning(f"start_trial: {e}")
+    text = (
+        "<b>Бесплатный период активирован</b> 🎁\n\n"
+        "Один поиск работает 24 часа — без карты и без подписки.\n\n"
+        "Напишите боту, что ищете, например: «куртка зимняя мужская до 5000» — "
+        "или откройте приложение кнопкой ниже."
+    )
+    kbd = InlineKeyboardMarkup([
+        [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
+                              web_app=WebAppInfo(url=_miniapp_url()))],
+    ])
+    try:
+        await query.edit_message_text(text, reply_markup=kbd,
+                                      parse_mode=ParseMode.HTML,
+                                      disable_web_page_preview=True)
+    except Exception:
+        try:
+            await query.message.reply_text(text, reply_markup=kbd,
+                                           parse_mode=ParseMode.HTML,
+                                           disable_web_page_preview=True)
+        except Exception:
+            pass
+
 
 async def check_subscription_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -10858,17 +10878,7 @@ async def create_ad_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_answer(query, "Аккаунт заблокирован за нарушение правил.", show_alert=True)
         return ConversationHandler.END
 
-    subscribed = await check_subscription(user.id, context)
-    if not subscribed:
-        try: await query.message.delete()
-        except: pass
-        await context.bot.send_message(user.id, "Сначала подпишитесь на канал!",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton(EM_ARROW_R + " Подписаться", url=EMAIL_TG_CHANNEL_URL)],
-                [InlineKeyboardButton(EM_OK + " Я подписался", callback_data="check_subscription")],
-                [InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")]]))
-        return ConversationHandler.END
-
+    # Подписку не требуем: бот работает без шлагбаума.
     db.ensure_daily_ads_fresh(user.id)
     user_data = db.get_user(user.id)
     tariff = normalize_tariff(user_data['tariff'])
@@ -36021,6 +36031,7 @@ def main():
     application.add_handler(CallbackQueryHandler(favorites,                  pattern="^favorites$"))
     application.add_handler(CallbackQueryHandler(show_profile,               pattern="^profile$"))
     application.add_handler(CallbackQueryHandler(check_subscription_callback,pattern="^check_subscription$"))
+    application.add_handler(CallbackQueryHandler(start_trial_callback,pattern="^start_trial$"))
     application.add_handler(CallbackQueryHandler(skip_verification_callback, pattern="^skip_verification$"))
     application.add_handler(CallbackQueryHandler(templates_menu,             pattern="^templates_menu$"))
     application.add_handler(CallbackQueryHandler(my_chats,                   pattern="^my_chats$"))
