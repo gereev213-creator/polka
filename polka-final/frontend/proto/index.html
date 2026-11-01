@@ -772,7 +772,7 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 
 <div id="feedBanners" style="display:flex;flex-direction:column;gap:10px"></div>
 <div class="tools"><label class="searchpill"><svg width="15" height="15"><use href="#i-search"/></svg><input id="mq" placeholder="Поиск вещей"></label><button class="filterbtn" onclick="openSheet('filters')"><svg width="15" height="15"><use href="#i-sliders"/></svg>Фильтры</button></div>
-<div class="scroll"><div class="grid" id="marketGrid"></div><div class="nores" id="nores">Ничего не найдено — попробуйте другой запрос</div></div></section>
+<div class="scroll"><div class="grid" id="marketGrid"></div></div></section>
 
 <!-- favorites -->
 <section class="screen" id="s-favorites"><div class="ahead"><div class="logo"></div><span class="stag">Избранное</span></div><div class="scroll"><div id="favList"></div><div class="nores" id="favEmpty">В избранном пока пусто</div></div></section>
@@ -983,7 +983,7 @@ let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('sho
 function heartBtn(l){return `<button class="heart ${l.fav?'on':''} ${l.img?'onpic':''}" data-fav="${l.id}" aria-label="В избранное"><svg width="14" height="14"><use href="#i-heart"/></svg></button>`}
 function lotCard(l){const bg=l.img?`style="background-image:var(--${l.img})"`:"";return `<article class="lot" data-open="${l.id}"><div class="lotimg" ${bg}>${l.img?'':'Нет фото'}${heartBtn(l)}</div><h3>${l.title}</h3><div class="pricepill">${fmt(l.price)}</div></article>`}
 function renderGrids(){$('homeGrid').innerHTML=LOTS.map(lotCard).join('');renderMarket()}
-function renderMarket(){const q=($('mq').value||'').toLowerCase();let max=Infinity,photo=false;document.querySelectorAll('[data-f].on').forEach(c=>{if(c.dataset.f==='photo')photo=true;else max=Math.min(max,+c.dataset.f)});const list=LOTS.filter(l=>l.title.toLowerCase().includes(q)&&l.price<=max&&(!photo||l.img));$('marketGrid').innerHTML=list.map(lotCard).join('');$('nores').style.display=list.length?'none':'block'}
+function renderMarket(){const q=($('mq').value||'').toLowerCase();let max=Infinity,photo=false;document.querySelectorAll('[data-f].on').forEach(c=>{if(c.dataset.f==='photo')photo=true;else max=Math.min(max,+c.dataset.f)});const list=LOTS.filter(l=>l.title.toLowerCase().includes(q)&&l.price<=max&&(!photo||l.img));$('marketGrid').innerHTML=list.map(lotCard).join('');const _nr=$('nores');if(_nr)_nr.style.display=list.length?'none':'block'}
 function renderFavs(){const list=LOTS.filter(l=>l.fav);$('favList').innerHTML=list.map(l=>`<article class="card fav" data-open="${l.id}"><span class="th" ${l.img?`style="background-image:var(--${l.img})"`:''}>${l.img?'':'нет фото'}</span><span><h3>${l.title}</h3><span class="pricepill">${fmt(l.price)}</span></span><button class="trash" data-fav="${l.id}"><svg width="14" height="14"><use href="#i-trash"/></svg></button></article>`).join('');$('favEmpty').style.display=list.length?'none':'block';$('favCount').textContent=list.length}
 function toggleFav(id){const l=LOTS.find(x=>x.id===id);l.fav=!l.fav;renderGrids();renderFavs();syncProductFav();toast(l.fav?'Добавлено в избранное':'Убрано из избранного')}
 document.addEventListener('click',e=>{const f=e.target.closest('[data-fav]');if(f){e.stopPropagation();toggleFav(+f.dataset.fav);return}const o=e.target.closest('[data-open]');if(o)openLot(+o.dataset.open)});
