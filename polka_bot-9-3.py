@@ -12865,10 +12865,11 @@ async def admin_panel_callback(update: Update, context: ContextTypes.DEFAULT_TYP
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
          InlineKeyboardButton(" Восстановить БД", callback_data="admin_recover_db")],
-        [InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant"),
-         InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad")],
-        [InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max"),
-         InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
+        [InlineKeyboardButton(" Объявления пользователей", callback_data="admin_user_ads"),
+         InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant")],
+        [InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad"),
+         InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max")],
+        [InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
     ]
     if query:
         await safe_edit_message(query, "Панель администратора\n\nВыберите раздел:", keyboard)
@@ -13451,10 +13452,11 @@ async def _admin_panel_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE
          InlineKeyboardButton(EM_WARN + " Жалобы", callback_data="admin_reports")],
         [InlineKeyboardButton(EM_DOT + " Переиндексировать фото", callback_data="admin_reindex_photos"),
           InlineKeyboardButton(" Восстановить БД", callback_data="admin_recover_db")],
-        [InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant"),
-         InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad")],
-        [InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max"),
-         InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
+        [InlineKeyboardButton(" Объявления пользователей", callback_data="admin_user_ads"),
+         InlineKeyboardButton(" Выдать лимиты", callback_data="admin_grant")],
+        [InlineKeyboardButton(" Удалить объявление", callback_data="admin_del_ad"),
+         InlineKeyboardButton("↻ Перевыгрузить в MAX", callback_data="admin_republish_max")],
+        [InlineKeyboardButton(EM_ARROW_L + " Меню", callback_data="back_to_menu")],
     ]
     
     try:
@@ -13548,6 +13550,56 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await safe_edit_message(query, text, keyboard, parse_mode=ParseMode.HTML)
     db.log_action(update.effective_user.id, "admin_stats_view", "Viewed statistics")
+
+async def admin_user_ads(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Список объявлений, которые подали пользователи (доска).
+
+    Владелец попросил видеть их прямо в панели: что подают, за сколько,
+    в каком статусе и под каким аккаунтом.
+    """
+    query = update.callback_query
+    await safe_answer(query)
+    if not await is_admin(update.effective_user.id):
+        return
+    board = ("COALESCE(source,'polka') IN ('polka','miniapp')")
+    try:
+        cur = db.conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM ads WHERE {board}")
+        total = int(cur.fetchone()[0] or 0)
+        cur.execute(f"SELECT status, COUNT(*) AS n FROM ads WHERE {board} GROUP BY status")
+        by_status = {str(r['status']): int(r['n']) for r in cur.fetchall()}
+        cur.execute(f"SELECT id, title, price, status, city, user_id, views, created_at "
+                    f"FROM ads WHERE {board} ORDER BY id DESC LIMIT 15")
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning(f"admin_user_ads: {e}")
+        rows, total, by_status = [], 0, {}
+
+    if not total:
+        text = ("<b>Объявления пользователей</b>\n\n"
+                "На доске пока нет объявлений.")
+    else:
+        active = by_status.get('active', 0)
+        mod = by_status.get('moderation', 0)
+        inactive = by_status.get('inactive', 0)
+        lines = [f"<b>Объявления пользователей</b>", "",
+                 f"Всего: <b>{total}</b>",
+                 f"• активных: {active} · на модерации: {mod} · снятых: {inactive}", ""]
+        for r in rows:
+            _t = str(r.get('title') or '')[:28]
+            _status = {'active': '✅', 'moderation': '⏳', 'inactive': '⛔'}.get(
+                str(r.get('status')), '•')
+            _city = f" · {r.get('city')}" if r.get('city') else ''
+            lines.append(f"{_status} #{r.get('id')} · {_t} · {int(r.get('price') or 0)} ₽"
+                         f"{_city} · u{r.get('user_id')}")
+        text = "\n".join(lines)
+
+    keyboard = [
+        [InlineKeyboardButton(EM_REFRESH + " Обновить", callback_data="admin_user_ads"),
+         InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")],
+    ]
+    await safe_edit_message(query, text, keyboard, parse_mode=ParseMode.HTML)
+
 
 async def admin_moderation(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -36303,6 +36355,7 @@ def main():
     application.add_handler(CallbackQueryHandler(enter_promo_handler,             pattern="^enter_promo$"))
     application.add_handler(CallbackQueryHandler(confirm_payment_promo,           pattern="^confirm_payment_promo$"))
     application.add_handler(CallbackQueryHandler(admin_stats,                pattern="^admin_stats$"))
+    application.add_handler(CallbackQueryHandler(admin_user_ads,            pattern="^admin_user_ads$"))
     application.add_handler(CallbackQueryHandler(admin_moderation,           pattern="^admin_moderation$"))
     application.add_handler(CallbackQueryHandler(admin_view_moderation_ad,   pattern="^admin_view_ad:"))
     application.add_handler(CallbackQueryHandler(moderate_ad_action,         pattern="^moderate_approve:|^moderate_reject:"))

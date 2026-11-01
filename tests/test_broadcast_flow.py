@@ -75,6 +75,12 @@ check('в «Статистике» есть заблокировавшие', 'З
 check('в «Статистике» есть последняя рассылка', 'Последняя рассылка' in stats_body)
 check('в «Статистике» считаются поиски', 'crit_active_n' in stats_body)
 
+# 4a2) в панели есть кнопка «Объявления пользователей»
+check('кнопка объявлений в панели', 'callback_data="admin_user_ads"' in SRC)
+check('обработчик объявлений есть', 'async def admin_user_ads(' in SRC)
+check('обработчик зарегистрирован', 'pattern="^admin_user_ads$"' in SRC)
+check('показываются лоты доски', "COALESCE(source,'polka') IN ('polka','miniapp')" in SRC)
+
 # 4b) отправка и отчёт на месте
 check('есть цикл отправки', 'for user in users:' in SRC)
 check('есть отчёт по рассылке', 'Рассылка завершена' in SRC)
