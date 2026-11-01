@@ -83,6 +83,12 @@ check('в описании Плюса — 1 поиск в бесплатном',
 check('нет обещания проверки каждые 5 минут', 'Проверка каждые 5 минут' not in TPL)
 check('честный интервал проверки', 'Проверка каждые 20 минут' in TPL)
 
+# 8) на ПК мини-апп не растягивается на весь экран
+TPL = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/template.html'),
+           encoding='utf-8').read()
+check('десктопная колонка по центру', '@media (min-width: 620px)' in TPL)
+check('ширина колонки 420px', 'width:420px!important' in TPL)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')

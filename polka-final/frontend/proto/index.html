@@ -705,6 +705,20 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
   animation:hintUp 1.4s ease-in-out infinite}
 .emptyFirst .emptyGo{margin-top:8px;width:230px;height:46px;font-size:13px}
 @keyframes hintUp{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+/* ── ПК и ноутбук ─────────────────────────────────────────────────────────
+   В Telegram Desktop окно мини-аппа шире телефона (бывает 1600px), и
+   мобильные экраны растягивались: баннер на всю ширину, огромные отступы,
+   карточки в две колонки через пол-экрана. Держим телефонную колонку
+   по центру — так же, как это делают все мини-аппы на десктопе. */
+@media (min-width: 620px){
+  html,body{display:flex!important;align-items:center!important;justify-content:center!important}
+  #wrap{position:relative!important;inset:auto!important;width:420px!important;
+        height:min(880px,94dvh)!important;margin:0 auto!important}
+  #stage{position:relative!important;left:auto!important;top:auto!important;
+         width:100%!important;height:100%!important;border-radius:32px!important;
+         box-shadow:0 24px 60px rgba(31,72,140,.25)!important}
+}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
