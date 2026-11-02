@@ -37,7 +37,7 @@ check('требует авторизации', "return _miniapp_err('unauthorize
 check('ограничивает выдачу', 'limit = max(1, min(6, limit))' in SRC)
 check('только активные', "if str(ad.get('status') or '') != 'active':" in SRC)
 check('только с ценой', 'if price <= 0:' in SRC)
-check('убирает дубли', 'if key in seen:' in SRC)
+check('убирает дубли', 'if key in seen_keys:' in SRC)
 check('событие sample_shown пишется', "'sample_shown'" in SRC)
 
 # 2) клиент: разметка и стили
@@ -90,6 +90,14 @@ check('аксессуар «для запроса» отсекается',
       is_junk('Apple USB-C 20W для iPhone 11-17 Pro Max', 'iphone'))
 check('товар с «для» в подарок не отсекается',
       not is_junk('Куртка зимняя для мальчика', 'куртка'))
+
+# 6) регресс: дедуп не должен ронять выдачу (NameError в _collect)
+_start = SRC.index('async def api_hunt_sample(')
+_end = SRC.index('async def api_client_event(', _start)
+_body = SRC[_start:_end]
+check('нет обращения к несуществующей seen', 'in seen:' not in _body and 'seen.add(' not in _body)
+check('дедуп по id', 'seen_ads = set()' in _body)
+check('дедуп по заголовку+цене', 'seen_keys = set()' in _body)
 
 print()
 if fail:

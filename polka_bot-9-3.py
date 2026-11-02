@@ -25804,6 +25804,7 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
     def _collect():
         items = []
         seen_ads = set()
+        seen_keys = set()
         # «айфон» должен находить «iPhone»: ищем по исходному запросу и по
         # латинским вариантам из словаря брендов (Wikidata) + фонетике.
         terms = [q]
@@ -25839,9 +25840,9 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
             if _sample_is_junk(title, q):
                 continue
             key = (title.lower(), price)
-            if key in seen:
+            if key in seen_keys:
                 continue
-            seen.add(key)
+            seen_keys.add(key)
             items.append({
                 'id': int(ad.get('id') or 0),
                 'title': title,
