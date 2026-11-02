@@ -26200,7 +26200,8 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
                     (int(r['id']),))
                 paused += 1
                 report.setdefault('paused_rows', []).append(
-                    {'user_id': int(r['user_id']), 'query': str(r.get('query') or '')})
+                    {'id': int(r['id']), 'user_id': int(r['user_id']),
+                     'query': str(r.get('query') or '')})
             except Exception as e:
                 report['details'].append(f"update_err id{r['id']}: {e}")
         if paused:
@@ -26214,27 +26215,96 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     return paused
 
 
-async def _notify_trial_expired(user_id: int, query: str) -> None:
+def _trial_expired_caption(query: str, stats: Dict) -> str:
+    """Текст «пробный закончился» с конкретикой вместо сухой просьбы.
+
+    Человек платит не за «Плюс», а за то, что уже видел. Поэтому показываем
+    сколько находок прислали и самую выгодную — с ценой, выгодой к рынку и
+    ссылкой. Если находок не было — честно пишем, сколько проверили.
+    """
+    name = _hunt_escape(str(query or 'поиск')[:60])
+    sent = int(stats.get('sent') or 0)
+    checked = int(stats.get('checked') or 0)
+    best = stats.get('best') or {}
+    lines = ["⏳ <b>Пробный период закончился</b>", ""]
+    lines.append(f"Поиск «{name}» поставлен на паузу: бесплатный поиск "
+                 f"работает 24 часа.")
+    if sent > 0 and best:
+        title = _hunt_escape(str(best.get('title') or '')[:60])
+        price = _money(best.get('price') or 0)
+        disc = int(best.get('discount') or 0)
+        lines.append("")
+        lines.append(f"За это время мы прислали <b>{sent}</b> находок.")
+        if disc > 0:
+            lines.append(f"Самая выгодная: <b>{title}</b> — <b>{price} ₽</b>, "
+                         f"на {disc}% ниже рынка.")
+        else:
+            lines.append(f"Одна из них: <b>{title}</b> — <b>{price} ₽</b>.")
+    elif checked > 0:
+        lines.append("")
+        lines.append(f"Мы проверили <b>{checked}</b> объявлений, но подходящего "
+                     f"пока не нашлось.")
+    else:
+        lines.append("")
+        lines.append("Новых подходящих объявлений за сутки не появилось.")
+    lines.append("")
+    lines.append("На «Плюсе» поиск не останавливается через сутки и продолжает "
+                 "искать — до 10 поисков одновременно.")
+    return "\n".join(lines)
+
+
+def _trial_expired_stats(crit_id: int) -> Dict:
+    """Что успели найти по этому поиску: отправлено, проверено, лучший лот."""
+    out: Dict = {'sent': 0, 'checked': 0, 'best': {}}
+    cid = int(crit_id or 0)
+    if not cid:
+        return out
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_matches "
+                    "WHERE crit_id=? AND status='sent'", (cid,))
+        row = cur.fetchone()
+        out['sent'] = int((row['n'] if row else 0) or 0)
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE crit_id=?", (cid,))
+        row = cur.fetchone()
+        out['checked'] = int((row['n'] if row else 0) or 0)
+        cur.execute(
+            "SELECT hm.discount AS disc, a.title, a.price, a.source_url, a.city "
+            "FROM hunt_matches hm JOIN ads a ON a.id = hm.ad_id "
+            "WHERE hm.crit_id=? AND hm.status='sent' "
+            "ORDER BY COALESCE(hm.discount,0) DESC, a.price ASC LIMIT 1", (cid,))
+        row = cur.fetchone()
+        if row:
+            b = dict(row)
+            out['best'] = {'title': b.get('title') or '',
+                           'price': int(b.get('price') or 0),
+                           'discount': int(b.get('disc') or 0),
+                           'url': str(b.get('source_url') or '')}
+    except Exception as e:
+        logger.warning(f"trial expired stats {cid}: {e}")
+    return out
+
+
+async def _notify_trial_expired(user_id: int, query: str, crit_id: int = 0) -> None:
     """Говорит человеку, что бесплатные сутки вышли и поиск встал.
 
-    Без этого поиск просто исчезал из работы, и человек не понимал, почему
-    находки перестали приходить. Кнопки ведут в тарифы и в приложение.
+    С конкретикой: сколько находок прислали и какая самая выгодная. Кнопки —
+    открыть находку, тарифы и приложение.
     """
     token = str(TOKEN or os.environ.get('BOT_TOKEN', ''))
     uid = int(user_id or 0)
     if not token or not uid:
         return
-    name = _html.escape(str(query or 'поиск')[:60])
-    text = (f"<b>Пробный период закончился</b> ⏳\n\n"
-            f"Поиск «{name}» поставлен на паузу: бесплатный поиск работает "
-            f"24 часа.\n\n"
-            f"Чтобы вернуть его и держать активным, оформите «Плюс» — "
-            f"до 10 поисков без суточного ограничения.")
-    kb = {'inline_keyboard': [
-        [{'text': 'Оформить Плюс',
-          'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}],
-        [{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}],
-    ]}
+    stats = await asyncio.to_thread(_trial_expired_stats, int(crit_id or 0))
+    text = _trial_expired_caption(query, stats)
+    rows = []
+    best_url = str((stats.get('best') or {}).get('url') or '')
+    if best_url.startswith('http'):
+        rows.append([{'text': '🔥 Открыть находку', 'url': best_url}])
+    rows.append([{'text': 'Оформить Плюс',
+                  'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}])
+    rows.append([{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}])
+    kb = {'inline_keyboard': rows}
     try:
         import aiohttp as _aio
         url = f'https://api.telegram.org/bot{token}/sendMessage'
@@ -26265,7 +26335,8 @@ async def pause_expired_free_criteria_job(context=None) -> None:
         logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
                     f"на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
         for row in rep.get('paused_rows') or []:
-            await _notify_trial_expired(row.get('user_id'), row.get('query'))
+            await _notify_trial_expired(row.get('user_id'), row.get('query'),
+                                        row.get('id') or 0)
     except Exception as e:
         logger.exception(f"ttl pause job: {e}")
 
@@ -30712,7 +30783,8 @@ async def _ttl_pause_loop(bot) -> None:
                         f"на паузу {rep.get('paused')}, "
                         f"ошибка {rep.get('error') or 'нет'}")
             for row in rep.get('paused_rows') or []:
-                await _notify_trial_expired(row.get('user_id'), row.get('query'))
+                await _notify_trial_expired(row.get('user_id'), row.get('query'),
+                                            row.get('id') or 0)
         except Exception as e:
             logger.exception(f"ttl pause loop: {e}")
         await asyncio.sleep(900)
@@ -32556,7 +32628,8 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             who = int(ADMIN_USER_IDS[0])
         if not who:
             return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
-        await _notify_trial_expired(who, str((body or {}).get('query') or 'куртка зимняя мужская'))
+        await _notify_trial_expired(who, str((body or {}).get('query') or 'куртка зимняя мужская'),
+                                    int((body or {}).get('crit') or 0))
         return _miniapp_json({'ok': True, 'sent_to': who})
 
     if action == 'pause_ttl':
@@ -32564,7 +32637,8 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         rep: Dict = {}
         n = await asyncio.to_thread(pause_expired_free_criteria, rep)
         for row in rep.get('paused_rows') or []:
-            await _notify_trial_expired(row.get('user_id'), row.get('query'))
+            await _notify_trial_expired(row.get('user_id'), row.get('query'),
+                                        row.get('id') or 0)
         return _miniapp_json({'ok': True, 'paused': n, **rep})
 
     if action == 'llm_probe':
