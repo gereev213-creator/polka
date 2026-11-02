@@ -7657,7 +7657,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await update.message.reply_text(
                     "<b>🎁 Приветственный бонус</b>\n\n"
-                    "Новичкам — <b>1 поиск лота бесплатно на 24 часа</b>.\n\n"
+                    "Бесплатно можно вести <b>один поиск лота</b> — "
+                    "без ограничения по времени.\n\n"
                     "Откройте приложение и создайте первый поиск лота: укажите, "
                     "что ищете, — бот пришлёт подходящие объявления с Авито, "
                     "с ценой, ссылкой и выгодой к рынку.",
@@ -7939,7 +7940,7 @@ async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             pass
         return
     try:
-        patch = {'plan': 'trial', 'subscribed': 1}
+        patch = {'plan': 'free', 'subscribed': 1}
         if not u.get('trial_started_at'):
             patch['trial_started_at'] = get_moscow_time().isoformat()
         db.update_user(user.id, **patch)
@@ -23930,6 +23931,11 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
     'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
+    # ВАРИАНТ A: бесплатный поиск не встаёт на паузу через сутки.
+    # 0 — никогда (текущее правило), N — ставить на паузу через N часов.
+    # Оставлено на будущее, если захотим вернуть ограничение по времени.
+    'free.ttl_hours': ('int', 0, 720, 0,
+                       'Через сколько часов пауза бесплатному поиску (0 — никогда)'),
     # 1 — автоматические сообщения пользователям выключены (дожим,
     # напоминания, уведомления о паузе). Нужно, чтобы правки и тесты не
     # уходили живым людям: именно из-за этого ушли двое.
@@ -26345,6 +26351,17 @@ async def api_pay_paw_notify(request: aiohttp_web.Request) -> aiohttp_web.Respon
 
 
 def ensure_monetization() -> None:
+    # ВАРИАНТ A: отдельного «пробного» больше нет — один бесплатный поиск
+    # без ограничения по времени. Старые записи trial переводим в free,
+    # чтобы ни у кого не осталось «пробного периода» в интерфейсе.
+    try:
+        _cur = db.conn.cursor()
+        _cur.execute("UPDATE users SET plan='free' WHERE plan='trial'")
+        if _cur.rowcount:
+            db.conn.commit()
+            logger.info(f"trial → free: переведено {_cur.rowcount} пользователей")
+    except Exception as _e:
+        logger.warning(f"trial→free: {_e}")
     """Таблицы и колонки монетизации (этап H2). Всё идемпотентно."""
     cursor = db.conn.cursor()
     for sql in (
@@ -26641,6 +26658,13 @@ def _user_plan(user_id: int) -> Dict:
     user = db.get_user(int(user_id)) or {}
     plan = str(user.get('plan') or '')
     now = get_moscow_time()
+    # ВАРИАНТ A: «пробный» больше не отдельный план — это бесплатный доступ.
+    if plan == 'trial':
+        plan = 'free'
+        try:
+            db.update_user(int(user_id), plan='free')
+        except Exception:
+            pass
     # Активная подписка важнее поля users.plan: после оплаты оно может
     # остаться 'trial', и человек получал лимиты пробного вместо Плюса.
     _sub_active = _plus_subscription(int(user_id))
@@ -26751,7 +26775,18 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     «колонки paused_reason нет» было не видно: ошибка глушилась в логе.
     """
     now = get_moscow_time()
-    base_cutoff = (now - timedelta(hours=int(FREE_CRITERION_TTL_HOURS))).isoformat()
+    # ВАРИАНТ A: по умолчанию бесплатный поиск работает без ограничения по
+    # времени. Пауза включается только если админ явно задал free.ttl_hours.
+    try:
+        _ttl_hours = int(cfg_get('free.ttl_hours') or 0)
+    except Exception:
+        _ttl_hours = 0
+    if _ttl_hours <= 0:
+        report = report if report is not None else {}
+        report.update({'candidates': 0, 'paused': 0, 'extended': 0,
+                       'disabled': True, 'cutoff': ''})
+        return 0
+    base_cutoff = (now - timedelta(hours=_ttl_hours)).isoformat()
     cursor = db.conn.cursor()
     paused = 0
     extended = 0
@@ -28443,8 +28478,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 if plan in ('free', 'trial') and reason == 'ttl':
                     return _miniapp_json(
                         {'ok': False, 'error': 'limit',
-                         'detail': 'Бесплатный поиск работает 24 часа. '
-                                   'Чтобы держать его активным, оформите «Плюс».'},
+                         'detail': 'Чтобы вести второй поиск, оформите «Плюс» '
+                                   'или замените текущий.'},
                         status=402)
                 limit = _criteria_limit(int(viewer_id))
                 cursor.execute("SELECT COUNT(*) AS n FROM hunt_criteria "

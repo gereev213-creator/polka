@@ -234,7 +234,29 @@ function paintEmpty(count) {
   }
 
   // Создание критерия из формы «Новый поиск»
-  async function createSearch(payload) {
+  // Сколько активных поисков у человека: нужно, чтобы объяснить лимит и
+  // предложить заменить старый, а не просто «оформите подписку».
+  async function activeSearches() {
+    try {
+      const data = await api('/api/hunt');
+      const items = (data && (data.items || data.searches)) || [];
+      return items.filter((c) => Number(c.active !== false) && c.active !== 0);
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function askConfirm(text) {
+    const TG = window.Telegram && window.Telegram.WebApp;
+    if (TG && TG.showConfirm) {
+      return new Promise((resolve) => {
+        try { TG.showConfirm(text, (ok) => resolve(!!ok)); } catch (e) { resolve(false); }
+      });
+    }
+    try { return Promise.resolve(window.confirm(text)); } catch (e) { return Promise.resolve(false); }
+  }
+
+  async function createSearch(payload, _retried) {
     try {
       await api('/api/hunt', { method: 'POST', body: JSON.stringify(payload) });
       // Честно объясняем механику: находка приходит, когда продавец
@@ -248,7 +270,25 @@ function paintEmpty(count) {
       const why = (e && (e.detail || e.error)) || '';
       const isLimit = (e && (e.status === 402 || e.error === 'limit'));
       if (isLimit) {
-        const text = (e && e.detail) || 'Оформите «Плюс», чтобы создавать больше поисков.';
+        // На бесплатном доступен один активный поиск. Вместо тупика
+        // «оформите подписку» предлагаем заменить текущий: старый перестанет
+        // искать, новый начнёт. Это честно и не требует оплаты.
+        const mine = await activeSearches();
+        if (mine.length && !_retried) {
+          const name = String(mine[0].query || 'ваш поиск').slice(0, 40);
+          const ok = await askConfirm(
+            'У вас уже есть поиск «' + name + '» — на бесплатном доступен один.\n\n'
+            + 'Заменить его новым? Текущий перестанет искать, его находки останутся в ленте.');
+          if (ok) {
+            try {
+              await api('/api/hunt?id=' + encodeURIComponent(mine[0].id), { method: 'DELETE' });
+            } catch (eDel) { }
+            return createSearch(payload, true);
+          }
+        }
+        const text = mine.length
+          ? 'Активный поиск уже есть. Можно заменить его новым или оформить «Плюс», чтобы вести до 10 сразу.'
+          : ((e && e.detail) || 'Оформите «Плюс», чтобы создавать больше поисков.');
         try { if (TG && TG.showAlert) TG.showAlert(text); } catch (e3) { }
         if (typeof go === 'function') go('tariffs');
       } else {
@@ -611,7 +651,7 @@ function paintEmpty(count) {
           title.textContent = 'Плюс активен';
           if (badge) badge.textContent = 'Активно';
         } else if (plan === 'trial') {
-          title.textContent = 'Пробный на 24 часа';
+          title.textContent = 'Бесплатный доступ';
           if (badge) badge.textContent = 'Активно';
         } else {
           // Число берём у сервера, а не из головы: раньше здесь было
@@ -2895,7 +2935,7 @@ function paintEmpty(count) {
             const TG = window.Telegram && window.Telegram.WebApp;
             const text = planState.plan === 'plus'
               ? 'Лимит поисков исчерпан. Продлите Плюс, чтобы добавить ещё.'
-              : 'Пробный период закончился. Оформите Плюс, чтобы создавать поиски.';
+              : 'Чтобы вести второй поиск, оформите «Плюс» или замените текущий.';
             if (TG && TG.showAlert) { try { TG.showAlert(text); } catch (e) { } }
             try { if (typeof window.go === 'function') window.go('tariffs', true); } catch (e) { }
             return;

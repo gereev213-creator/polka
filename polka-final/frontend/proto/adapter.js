@@ -651,7 +651,7 @@ function paintEmpty(count) {
           title.textContent = 'Плюс активен';
           if (badge) badge.textContent = 'Активно';
         } else if (plan === 'trial') {
-          title.textContent = 'Пробный на 24 часа';
+          title.textContent = 'Бесплатный доступ';
           if (badge) badge.textContent = 'Активно';
         } else {
           // Число берём у сервера, а не из головы: раньше здесь было
@@ -2935,7 +2935,7 @@ function paintEmpty(count) {
             const TG = window.Telegram && window.Telegram.WebApp;
             const text = planState.plan === 'plus'
               ? 'Лимит поисков исчерпан. Продлите Плюс, чтобы добавить ещё.'
-              : 'Пробный период закончился. Оформите Плюс, чтобы создавать поиски.';
+              : 'Чтобы вести второй поиск, оформите «Плюс» или замените текущий.';
             if (TG && TG.showAlert) { try { TG.showAlert(text); } catch (e) { } }
             try { if (typeof window.go === 'function') window.go('tariffs', true); } catch (e) { }
             return;
