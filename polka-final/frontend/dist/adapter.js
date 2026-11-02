@@ -546,6 +546,46 @@ function paintEmpty(count) {
   const fmt = (n) => (n || 0).toLocaleString('ru-RU');
 
   let plans = [];
+  let mainAmount = 0;
+
+  // Цена со скидкой по промокоду: код может прийти ссылкой из бота
+  // (/?screen=tariffs&promo=PLUS50-123), может быть введён вручную.
+  function applyPromoPrice() {
+    const price = $('priceNow');
+    if (!price || !mainAmount) return;
+    const pct = Number(window.__promoPercent || 0);
+    if (pct > 0) {
+      const newPrice = Math.round(mainAmount * (100 - pct) / 100);
+      price.innerHTML = fmt(newPrice) + ' <span>руб/мес</span> '
+        + '<s style="opacity:.5;font-weight:600">' + fmt(mainAmount) + '</s> '
+        + '<b style="color:#1a8f4c">−' + pct + '%</b>';
+    } else {
+      price.innerHTML = fmt(mainAmount) + ' <span>руб/мес</span>';
+    }
+  }
+
+  (function readPromoFromUrl() {
+    let code = '';
+    try {
+      code = new URLSearchParams(location.search).get('promo') || '';
+    } catch (e) { }
+    if (!code) return;
+    window.__promo = String(code).trim().toUpperCase();
+    window.PolkaAPI.api('/api/pay/promo-check?code=' + encodeURIComponent(code))
+      .then((res) => {
+        const pct = Number((res && (res.percent || res.discount)) || 0);
+        if (pct > 0) {
+          window.__promoPercent = pct;
+          applyPromoPrice();
+          if (window.PolkaNotify) {
+            window.PolkaNotify('Скидка ' + pct + '% по коду ' + window.__promo);
+          }
+        }
+      })
+      .catch(() => { });
+  })();
+
+  window.addEventListener('polka:promo', () => applyPromoPrice());
 
   async function loadPlans() {
     try {
@@ -555,8 +595,8 @@ function paintEmpty(count) {
       if (payBtn && plans.length) {
         const main = plans.find((p) => p.product === 'plus_30') || plans[0];
         if (main && main.amount) {
-          const price = $('priceNow');
-          if (price) price.innerHTML = fmt(main.amount) + ' <span>руб/мес</span>';
+          mainAmount = Number(main.amount) || 0;
+          applyPromoPrice();
         }
         payBtn.onclick = () => buy(plans.find((p) => p.product === 'plus_30') || plans[0]);
       }

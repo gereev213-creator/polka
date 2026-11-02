@@ -26712,6 +26712,175 @@ def _trial_expired_stats(crit_id: int) -> Dict:
     return out
 
 
+# ── Дожим до подписки (по принципам системного follow-up) ───────────────────
+# Касания после окончания пробного: через сутки — предложение со скидкой,
+# через трое — последний шанс. Плюс отдельная ветка для тех, кто зашёл и не
+# создал ни одного поиска: показываем конкретные находки, а не просим денег.
+CONV_PROMO_PERCENT = 50
+CONV_PROMO_DAYS = 7
+CONV_STAGE1_HOURS = 24
+CONV_STAGE2_HOURS = 72
+
+
+def _conv_state_get(user_id: int) -> str:
+    try:
+        return str(_setting_get(f'conv:{int(user_id)}') or '')
+    except Exception:
+        return ''
+
+
+def _conv_state_set(user_id: int, value: str) -> None:
+    try:
+        _setting_set(f'conv:{int(user_id)}', str(value)[:60])
+    except Exception:
+        pass
+
+
+def issue_personal_promo(user_id: int, percent: int = CONV_PROMO_PERCENT,
+                         days: int = CONV_PROMO_DAYS) -> str:
+    """Персональный промокод на скидку. Один на человека, идемпотентно."""
+    uid = int(user_id or 0)
+    if not uid:
+        return ''
+    code = f'PLUS{int(percent)}-{uid % 1000000}'
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT code FROM promo_codes WHERE code=?", (code,))
+        if cur.fetchone():
+            return code
+    except Exception:
+        pass
+    expires = (get_moscow_time() + timedelta(days=int(days))).isoformat()
+    res = promo_create(code, 'discount', int(percent), max_uses=1, per_user=1,
+                       expires_at=expires, note=f'auto conv {uid}', by=0)
+    return code if res.get('ok') else ''
+
+
+def _conv_caption(stage: str, query: str, findings: int, promo: str,
+                  price: int, discounted: int) -> str:
+    """Текст касания: ценность и конкретная выгода, без «купите, пожалуйста»."""
+    name = _hunt_escape(str(query or 'ваш поиск')[:50])
+    lines: List[str] = []
+    if stage == 'nosearch':
+        lines += ["👋 <b>Вы ещё не создали ни одного поиска</b>", ""]
+        lines.append("Один запрос — и бот сам проверяет новые объявления на "
+                     "Авито и присылает подходящие, когда они появляются.")
+        lines.append("")
+        lines.append("Откройте приложение и создайте первый поиск: "
+                     "это займёт полминуты.")
+        return "\n".join(lines)
+    if stage == 'last':
+        lines += ["⏰ <b>Последний шанс на −50%</b>", ""]
+        lines.append(f"Скидка по коду <code>{_hunt_escape(promo)}</code> "
+                     f"на первый месяц «Плюса» действует ещё 48 часов.")
+    else:
+        lines += ["⏸ <b>Поиск «%s» остановлен</b>" % name, ""]
+        if int(findings or 0) > 0:
+            lines.append(f"За пробный период мы прислали <b>{int(findings)}</b> "
+                         f"находок по этому запросу.")
+        else:
+            lines.append("Мы проверяли объявления каждые 20 минут, но "
+                         "подходящего пока не нашлось.")
+        lines.append("")
+        lines.append("Чтобы поиск продолжил работать и присылал новые находки — "
+                     "нужен «Плюс»: до 10 поисков, без суточного ограничения.")
+    if promo and price and discounted:
+        lines.append("")
+        lines.append(f"🎁 Персональная скидка <b>−{CONV_PROMO_PERCENT}%</b>: "
+                     f"<b>{int(discounted)} ₽</b> вместо {int(price)} ₽ за первый месяц.")
+        lines.append(f"Код: <code>{_hunt_escape(promo)}</code> (действует 48 часов).")
+    return "\n".join(lines)
+
+
+def _conv_keyboard(promo: str, stage: str) -> Dict:
+    rows: List[List[Dict]] = []
+    if stage == 'nosearch':
+        rows.append([{'text': '➕ Создать поиск',
+                      'web_app': {'url': f"{_miniapp_url()}/?screen=newsearch"}}])
+    else:
+        url = f"{_miniapp_url()}/?screen=tariffs"
+        if promo:
+            url += f"&promo={promo}"
+            rows.append([{'text': f'🎁 Забрать −{CONV_PROMO_PERCENT}%',
+                          'web_app': {'url': url}}])
+        else:
+            rows.append([{'text': 'Оформить Плюс', 'web_app': {'url': url}}])
+    rows.append([{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}])
+    return {'inline_keyboard': rows}
+
+
+def _conv_plan() -> List[Dict]:
+    """Кому и какое касание отправить сейчас. Только чтение базы."""
+    actions: List[Dict] = []
+    now = get_moscow_time()
+    try:
+        cur = db.conn.cursor()
+        # A. Зашёл и не создал ни одного поиска дольше суток — показываем
+        #    ценность, денег не просим.
+        cur.execute(
+            "SELECT u.user_id FROM users u WHERE COALESCE(u.plan,'')='trial' "
+            "AND COALESCE(u.trial_started_at,'')<>'' "
+            "AND NOT EXISTS (SELECT 1 FROM hunt_criteria hc "
+            "                WHERE hc.user_id = u.user_id) LIMIT 200")
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            if _conv_state_get(uid):
+                continue
+            try:
+                user = db.get_user(uid) or {}
+                hours = int(_hours_since(str(user.get('trial_started_at') or '')) or 0)
+            except Exception:
+                continue
+            if hours < CONV_STAGE1_HOURS:
+                continue
+            actions.append({
+                'user_id': uid, 'stage': 'nosearch',
+                'text': _conv_caption('nosearch', '', 0, '', 0, 0),
+                'kb': _conv_keyboard('', 'nosearch')})
+
+        # B. Поиск остановлен по сроку: +1 сутки — предложение со скидкой,
+        #    +3 суток — последний шанс.
+        cur.execute(
+            "SELECT hc.user_id, hc.query, hc.id FROM hunt_criteria hc "
+            "WHERE COALESCE(hc.active,1)=0 AND COALESCE(hc.paused_reason,'')='ttl' "
+            "GROUP BY hc.user_id ORDER BY MIN(hc.id) LIMIT 200")
+        for row in cur.fetchall():
+            uid = int(row['user_id'])
+            query = str(row.get('query') or '')
+            state = _conv_state_get(uid)
+            stage_num = 0
+            sent_at = state
+            if state.startswith('1:'):
+                stage_num, sent_at = 1, state[2:]
+            if stage_num == 1:
+                try:
+                    elapsed_h = (now - datetime.fromisoformat(sent_at)).total_seconds() / 3600.0
+                except Exception:
+                    elapsed_h = 0
+                if elapsed_h < (CONV_STAGE2_HOURS - CONV_STAGE1_HOURS):
+                    continue
+                stage = 'last'
+            elif state:
+                continue
+            else:
+                stage = 'first'
+            promo = issue_personal_promo(uid)
+            try:
+                stats = _trial_expired_stats(int(row.get('id') or 0))
+            except Exception:
+                stats = {'sent': 0}
+            price = int(cfg_get('pay.rub_30') or 149)
+            discounted = int(round(price * (100 - CONV_PROMO_PERCENT) / 100.0))
+            actions.append({
+                'user_id': uid, 'stage': stage,
+                'text': _conv_caption(stage, query, int(stats.get('sent') or 0),
+                                      promo, price, discounted),
+                'kb': _conv_keyboard(promo, stage)})
+    except Exception as e:
+        logger.warning(f"conv plan: {e}")
+    return actions
+
+
 async def _tg_send_html(user_id: int, text: str, kb: Dict) -> bool:
     """Отправка сообщения человеку через Bot API (без объекта Application).
 
@@ -31266,6 +31435,25 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
         return {'ok': False, 'error': str(e)[:160]}
 
 
+async def _conversion_loop(bot) -> None:
+    """Дожим: касания после пробного — через сутки и через трое."""
+    await asyncio.sleep(240)
+    while True:
+        try:
+            actions = await asyncio.to_thread(_conv_plan)
+            for a in actions:
+                ok = await _tg_send_html(a['user_id'], a['text'], a['kb'])
+                if ok:
+                    stage = '1' if a['stage'] == 'first' else a['stage']
+                    await asyncio.to_thread(
+                        _conv_state_set, a['user_id'],
+                        f"{stage}:{get_moscow_time().isoformat()}")
+                    logger.info(f"дожим: {a['stage']} → {a['user_id']}")
+        except Exception as e:
+            logger.exception(f"conversion loop: {e}")
+        await asyncio.sleep(1800)
+
+
 async def _ttl_pause_loop(bot) -> None:
     """Авто-пауза бесплатных поисков — своим циклом, не через JobQueue.
 
@@ -31355,6 +31543,12 @@ async def post_init(application: Application):
         logger.info("ttl pause: фоновый цикл запущен")
     except Exception as _te:
         logger.warning(f"ttl pause task: {_te}")
+    try:
+        asyncio.create_task(_conversion_loop(application.bot))
+        _ASYNC_LOOPS.append('conversion_loop')
+        logger.info("дожим до подписки: фоновый цикл запущен")
+    except Exception as _cv:
+        logger.warning(f"conversion task: {_cv}")
     try:
         asyncio.create_task(_admin_digest_loop(application.bot))
         _ASYNC_LOOPS.append('admin_digest_loop')
@@ -33190,6 +33384,35 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'restored': restored, 'skipped': skipped})
+
+    if action == 'conv_plan':
+        # Что бы движок дожима отправил прямо сейчас (без отправки и пометок)
+        plan = await asyncio.to_thread(_conv_plan)
+        return _miniapp_json({'ok': True, 'count': len(plan),
+                              'items': [{k: a[k] for k in ('user_id', 'stage')}
+                                        for a in plan[:20]]})
+
+    if action == 'conv_test':
+        # Предпросмотр касания на себе: текст + кнопки + реальный промокод
+        who = 0
+        try:
+            who = int((body or {}).get('user') or 0)
+        except Exception:
+            who = 0
+        if not who and ADMIN_USER_IDS:
+            who = int(ADMIN_USER_IDS[0])
+        if not who:
+            return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        stage = str((body or {}).get('stage') or 'first')
+        promo = await asyncio.to_thread(issue_personal_promo, who)
+        price = int(cfg_get('pay.rub_30') or 149)
+        discounted = int(round(price * (100 - CONV_PROMO_PERCENT) / 100.0))
+        text = _conv_caption(stage, str((body or {}).get('query') or 'айфон'),
+                             int((body or {}).get('findings') or 3),
+                             promo, price, discounted)
+        await _tg_send_html(who, text, _conv_keyboard(promo, stage))
+        return _miniapp_json({'ok': True, 'sent_to': who, 'stage': stage,
+                              'promo': promo})
 
     if action == 'pause_ttl':
         # Ручной запуск авто-паузы бесплатных поисков + отчёт, почему не сработало
