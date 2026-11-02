@@ -61,6 +61,32 @@ check('использует общие списки находок', 'HUNT_RE_JU
 check('фильтр применяется в выдаче', 'if _sample_is_junk(title, q):' in SRC)
 check('не фильтрует слово из запроса', 'not in low_q' in SRC)
 
+# 5) живая проверка фильтра мусора (функции достаём из исходника)
+import ast
+import re
+
+tree = ast.parse(SRC)
+_fns = {}
+for node in tree.body:
+    if isinstance(node, ast.FunctionDef) and getattr(node, 'name', None) in (
+            '_hunt_word_pattern', '_sample_is_junk'):
+        exec(ast.get_source_segment(SRC, node), _fns)
+    if isinstance(node, ast.Assign):
+        for t in node.targets:
+            if isinstance(t, ast.Name) and t.id in ('HUNT_JUNK_ANYWHERE', 'HUNT_JUNK_START'):
+                exec(ast.get_source_segment(SRC, node), _fns)
+_fns['re'] = re
+_fns['HUNT_RE_JUNK_ANYWHERE'] = _fns['_hunt_word_pattern'](_fns['HUNT_JUNK_ANYWHERE'])
+_fns['HUNT_RE_JUNK_START'] = _fns['_hunt_word_pattern'](_fns['HUNT_JUNK_START'])
+is_junk = _fns['_sample_is_junk']
+
+check('чехлы отсекаются (множественное число)', is_junk('Чехлы на айфоны', 'айфон'))
+check('чехол отсекается', is_junk('Чехол на iPhone 13', 'айфон'))
+check('повербанк отсекается', is_junk('Повербанк для айфона', 'айфон'))
+check('телефон не отсекается', not is_junk('iPhone 15 Pro 128 ГБ', 'айфон'))
+check('куртка не отсекается', not is_junk('Куртка зимняя мужская', 'куртка'))
+check('если ищут чехол — не фильтруем', not is_junk('Чехлы на айфон', 'чехлы'))
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
