@@ -30246,8 +30246,6 @@ async def setup_scheduler(application: Application):
         jq.run_daily(trigger_low_views_boost,    time=time(12, 0, tzinfo=ZoneInfo("Europe/Moscow"))),
         jq.run_daily(daily_tasks,               time=time(3,  0, tzinfo=ZoneInfo("Europe/Moscow"))),
         jq.run_daily(update_city_channel_cache, time=time(4,  0, tzinfo=ZoneInfo("Europe/Moscow"))),
-        jq.run_daily(daily_digest_job,           time=time(10, 0, tzinfo=ZoneInfo("Europe/Moscow"))),
-        jq.run_repeating(pause_expired_free_criteria_job, interval=900, first=120),
         jq.run_repeating(send_search_notifications, interval=3600, first=600),
         jq.run_repeating(process_auto_bumps,        interval=3600, first=300),
         jq.run_repeating(remind_abandoned,          interval=1800, first=900),
@@ -36724,6 +36722,15 @@ def main():
                 if _retry >= 30:
                     raise
                 await asyncio.sleep(5)
+        # ВАЖНО: post_init НЕ вызывается при ручном initialize()+start() —
+        # его запускает только run_polling. Без него не стартовали: задачи
+        # планировщика, фоновые циклы (авто-пауза, напоминания, находка дня,
+        # конкурс), создание таблиц чатов и FTS. Вызываем руками.
+        try:
+            await post_init(application)
+            print(f"{EM_OK} post_init выполнен")
+        except Exception as _pi_err:
+            logger.exception(f"post_init: {_pi_err}")
         await application.start()
         set_tg_bot_instance(application.bot)
         await application.updater.start_polling(allowed_updates=Update.ALL_TYPES)
