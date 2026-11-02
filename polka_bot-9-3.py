@@ -26823,6 +26823,7 @@ def _conv_plan() -> List[Dict]:
             "AND NOT EXISTS (SELECT 1 FROM hunt_criteria hc "
             "                WHERE hc.user_id = u.user_id) LIMIT 200")
         for row in cur.fetchall():
+            row = dict(row)
             uid = int(row['user_id'])
             if _conv_state_get(uid):
                 continue
@@ -26845,6 +26846,7 @@ def _conv_plan() -> List[Dict]:
             "WHERE COALESCE(hc.active,1)=0 AND COALESCE(hc.paused_reason,'')='ttl' "
             "GROUP BY hc.user_id ORDER BY MIN(hc.id) LIMIT 200")
         for row in cur.fetchall():
+            row = dict(row)  # sqlite3.Row не умеет .get()
             uid = int(row['user_id'])
             query = str(row.get('query') or '')
             state = _conv_state_get(uid)
