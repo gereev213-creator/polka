@@ -19367,6 +19367,14 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
                          'min_discount': HUNT_MIN_DISCOUNT}
     except Exception as e:
         out['criteria_error'] = str(e)[:200]
+    # Отпечаток кода, который реально запущен: по нему видно, доехал ли деплой.
+    try:
+        import hashlib as _hl
+        with open(os.path.abspath(__file__), 'rb') as _fh:
+            out['source_sha'] = _hl.sha256(_fh.read()).hexdigest()[:12]
+    except Exception as _se:
+        out['source_sha'] = f'err:{_se}'[:40]
+    out['app_bound'] = globals().get('_APP') is not None
     out['jobs'] = list(_SCHEDULED_JOBS)
     out['jobs_count'] = len(_SCHEDULED_JOBS)
     # Живая проверка: планировщик уже запущен, поэтому jobs() работает.
