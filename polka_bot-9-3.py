@@ -26130,47 +26130,65 @@ def _user_plan(user_id: int) -> Dict:
             'show_price': int(cfg_get('plus.price_display_old'))}
 
 
-def pause_expired_free_criteria() -> int:
+def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     """Бесплатный поиск живёт сутки, потом встаёт на паузу.
 
-    Так устроен бесплатный доступ: один поиск на 24 часа. Дальше он остаётся
-    в списке (и его находки — тоже), но не ищет, пока человек не оформит
-    «Плюс». Возвращает число поставленных на паузу.
+    report (если передан) заполняется подробностями: сколько кандидатов
+    нашли, какие у них планы и что ответила база. Без этого поломки вроде
+    «колонки paused_reason нет» было не видно: ошибка глушилась в логе.
     """
     cutoff = (get_moscow_time() - timedelta(hours=int(FREE_CRITERION_TTL_HOURS))).isoformat()
     cursor = db.conn.cursor()
     paused = 0
+    if report is None:
+        report = {}
+    report['cutoff'] = cutoff
+    report['candidates'] = 0
+    report['details'] = []
     try:
         cursor.execute(
-            "SELECT id, user_id FROM hunt_criteria WHERE active=1 "
+            "SELECT id, user_id, created_at FROM hunt_criteria WHERE active=1 "
             "AND COALESCE(created_at,'') <> '' AND created_at < ? "
             "ORDER BY id LIMIT 500", (cutoff,))
         rows = [dict(r) for r in cursor.fetchall()]
+        report['candidates'] = len(rows)
         for r in rows:
             try:
                 plan = str(_user_plan(int(r['user_id'])).get('name') or '')
-            except Exception:
-                plan = 'free'
+            except Exception as e:
+                plan = '?'
+                report['details'].append(f"plan_err id{r['id']}: {e}")
+            report['details'].append(
+                f"id{r['id']} u{r['user_id']} plan={plan} at={str(r.get('created_at'))[:16]}")
             if plan not in ('free', 'trial'):
                 continue
-            cursor.execute(
-                "UPDATE hunt_criteria SET active=0, paused_reason='ttl' WHERE id=?",
-                (int(r['id']),))
-            paused += 1
+            try:
+                cursor.execute(
+                    "UPDATE hunt_criteria SET active=0, paused_reason='ttl' WHERE id=?",
+                    (int(r['id']),))
+                paused += 1
+            except Exception as e:
+                report['details'].append(f"update_err id{r['id']}: {e}")
         if paused:
             db.conn.commit()
             logger.info(f"Бесплатные поиски старше {FREE_CRITERION_TTL_HOURS} ч "
                         f"поставлены на паузу: {paused}")
     except Exception as e:
-        logger.warning(f"pause free criteria: {e}")
+        logger.exception(f"pause free criteria: {e}")
+        report['error'] = f"{type(e).__name__}: {e}"
+    report['paused'] = paused
     return paused
 
 
 async def pause_expired_free_criteria_job(context=None) -> None:
+    rep: Dict = {}
     try:
-        await asyncio.to_thread(pause_expired_free_criteria)
+        await asyncio.to_thread(pause_expired_free_criteria, rep)
+        if rep.get('candidates'):
+            logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
+                        f"поставлено на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
     except Exception as e:
-        logger.warning(f"ttl pause job: {e}")
+        logger.exception(f"ttl pause job: {e}")
 
 
 def _criteria_limit(user_id: int) -> int:
@@ -32383,6 +32401,12 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                             'private' if int((body or {}).get('private') or 0) else 'any',
                             '', None, '', 0, '', '', '')
         return _miniapp_json({'ok': bool(cid and cid > 0), 'id': cid, 'query': q})
+
+    if action == 'pause_ttl':
+        # Ручной запуск авто-паузы бесплатных поисков + отчёт, почему не сработало
+        rep: Dict = {}
+        n = await asyncio.to_thread(pause_expired_free_criteria, rep)
+        return _miniapp_json({'ok': True, 'paused': n, **rep})
 
     if action == 'llm_probe':
         # Живая проверка модели: отправляем одну фразу и возвращаем ответ.
