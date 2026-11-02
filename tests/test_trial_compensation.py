@@ -80,6 +80,11 @@ check('уведомление только у паузы', "report.setdefault('p
 check('продлённые не попадают в уведомления',
       "report.setdefault('extended_rows'" in SRC)
 
+# 9) восстановление поисков, остановленных до фикса
+check('есть действие restore_ttl', "action == 'restore_ttl'" in SRC)
+check('восстанавливает только trial', "if str(r.get('plan') or '') != 'trial':" in SRC)
+check('уважает лимит продлений', "if int(r.get('te') or 0) >= _max_ext:" in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')

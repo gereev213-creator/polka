@@ -32775,6 +32775,47 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                     int((body or {}).get('crit') or 0))
         return _miniapp_json({'ok': True, 'sent_to': who})
 
+    if action == 'restore_ttl':
+        # Разовое восстановление поисков, остановленных ДО фикса компенсации:
+        # их поставили на паузу, хотя находок не было — по правилам их надо
+        # было продлить. Оставляем на паузе тем, кому она по делу (были
+        # находки или это уже free-план), и тем, у кого кончился лимит.
+        restored, skipped = [], 0
+        try:
+            cur = db.conn.cursor()
+            cur.execute(
+                "SELECT hc.id, hc.user_id, hc.query, hc.created_at, "
+                "COALESCE(u.plan,'') AS plan, COALESCE(u.trial_extended,0) AS te "
+                "FROM hunt_criteria hc JOIN users u ON u.user_id = hc.user_id "
+                "WHERE COALESCE(hc.active,1)=0 AND COALESCE(hc.paused_reason,'')='ttl'")
+            rows = [dict(r) for r in cur.fetchall()]
+            _max_ext = int(cfg_get('trial.max_extensions') or 3)
+            for r in rows:
+                if str(r.get('plan') or '') != 'trial':
+                    skipped += 1
+                    continue
+                if int(r.get('te') or 0) >= _max_ext:
+                    skipped += 1
+                    continue
+                if _user_findings_since(int(r['user_id']), str(r.get('created_at') or '')) > 0:
+                    skipped += 1
+                    continue
+                cur.execute(
+                    "UPDATE hunt_criteria SET active=1, paused_reason='', "
+                    "free_extended_hours=? WHERE id=?",
+                    (int(FREE_CRITERION_TTL_HOURS), int(r['id'])))
+                cur.execute(
+                    "UPDATE users SET trial_extended=COALESCE(trial_extended,0)+1 "
+                    "WHERE user_id=?", (int(r['user_id']),))
+                restored.append({'id': int(r['id']), 'user_id': int(r['user_id']),
+                                 'query': str(r.get('query') or '')[:40]})
+            db.conn.commit()
+            logger.info(f"restore_ttl: восстановлено {len(restored)}, пропущено {skipped}")
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'restored': restored, 'skipped': skipped})
+
     if action == 'pause_ttl':
         # Ручной запуск авто-паузы бесплатных поисков + отчёт, почему не сработало
         rep: Dict = {}
