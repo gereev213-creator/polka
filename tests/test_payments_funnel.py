@@ -56,6 +56,18 @@ check('клиент рисует кнопки тарифов', 'renderPlanChips'
 check('кнопка показывает сумму', "'Оплатить ' + rub(price)" in PAY)
 check('цена по сроку тарифа', "руб/нед" in PAY)
 
+# 6) версия скриптов обновляется при сборке (Telegram кеширует js)
+import re as _re
+IDX = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/index.html'),
+           encoding='utf-8').read()
+BUILD = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/build.py'),
+             encoding='utf-8').read()
+_vers = set(_re.findall(r'\.js\?v=(\d{8,})', IDX))
+check('у скриптов есть версия', bool(_vers))
+check('версия одна для всех скриптов', len(_vers) == 1, str(_vers))
+check('сборка штампует версию заново', 'stamp = datetime.now()' in BUILD)
+check('новая версия новее прошлой', bool(_vers) and max(_vers) > '20261031184809')
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')

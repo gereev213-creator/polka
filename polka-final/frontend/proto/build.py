@@ -2,6 +2,8 @@
 """Build a self-contained index.html from template.html (fonts + images inlined)."""
 import base64
 import mimetypes
+import re
+from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -43,6 +45,11 @@ def main() -> None:
         "/*__ASSETS__*/", "".join(declarations)
     )
     assert "__FONTS__" not in html and "__ASSETS__" not in html
+    # Версия в ссылках на скрипты: Telegram WebView кеширует *.js агрессивно,
+    # и человек оставался на старой версии оплаты/адаптера. Штамп обновляется
+    # при каждой сборке, поэтому новые скрипты подхватываются сразу.
+    stamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    html = re.sub(r"\.js\?v=\d{8,}", f".js?v={stamp}", html)
     (ROOT / "index.html").write_text(html, encoding="utf-8")
     print(f"built index.html ({len(html) / 1024:.0f} KB)")
 
