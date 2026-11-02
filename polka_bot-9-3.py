@@ -22330,6 +22330,63 @@ def _hunt_reason_label(reason: str) -> str:
     return HUNT_REASON_LABELS.get(reason, reason)
 
 
+_AD_PARAM_KEYS = {
+    'memory': ('память', 'объём памяти', 'объем памяти', 'озу', 'оперативная память'),
+    'year': ('год выпуска', 'год'),
+    'mileage': ('пробег',),
+    'akb': ('акб', 'аккумулятор', 'ёмкость аккумулятора', 'емкость аккумулятора'),
+}
+
+
+def _ad_param(ad: Dict, kind: str) -> str:
+    """Значение параметра объявления из params_json («Память: 128 ГБ»)."""
+    raw = ad.get('params_json') or ''
+    if not raw:
+        return ''
+    try:
+        params = json.loads(raw) if isinstance(raw, str) else dict(raw or {})
+    except Exception:
+        return ''
+    low = {str(k).strip().lower(): str(v or '').strip() for k, v in (params or {}).items()}
+    for key in _AD_PARAM_KEYS.get(kind, ()):
+        if low.get(key):
+            return low[key]
+    return ''
+
+
+def _ad_number(text: str) -> int:
+    """Первое число из строки: «128 ГБ» → 128, «1 200 000 км» → 1200000."""
+    m = re.search(r'(\d[\d\s]*)', str(text or ''))
+    if not m:
+        return 0
+    try:
+        return int(re.sub(r'\D', '', m.group(1)) or 0)
+    except Exception:
+        return 0
+
+
+def _ad_requirement_violation(ad: Dict, rj: Dict) -> str:
+    """Нарушение расширенных требований по параметрам карточки. '' — всё ок."""
+    if rj.get('memory_min'):
+        val = _ad_number(_ad_param(ad, 'memory'))
+        if val and val < int(rj['memory_min']):
+            return 'memory_low'
+    if rj.get('year_min'):
+        val = _ad_number(_ad_param(ad, 'year'))
+        if val and val < int(rj['year_min']):
+            return 'year_old'
+    if rj.get('mileage_max'):
+        val = _ad_number(_ad_param(ad, 'mileage'))
+        if val and val > int(rj['mileage_max']):
+            return 'mileage_high'
+    if rj.get('size'):
+        want = str(rj['size']).strip().lower()
+        have = str(ad.get('size') or '').strip().lower()
+        if want and have and want not in have:
+            return 'size_mismatch'
+    return ''
+
+
 def _hunt_needs_description(crit: Dict) -> bool:
     """Зависит ли решение от описания — тогда его должен принести сборщик."""
     # Переключатель hunt.require_desc: '1' (по умолчанию) — ждём описание,
@@ -22850,6 +22907,11 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 return no('opened')
         else:
             unverified = True
+    # Параметры карточки: память, год, пробег, размер. Приходят из страницы
+    # объявления (params_json), поэтому работают только после загрузки описаний.
+    _violation = _ad_requirement_violation(ad, rj)
+    if _violation:
+        return no(_violation)
 
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
@@ -27752,12 +27814,18 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                 "UPDATE ads SET description=?, description_lower=?, seller_type=?, "
                 "seller_name=?, seller_ads=?, "
                 "params_json=COALESCE(NULLIF(?,''), params_json), "
+                "condition=COALESCE(NULLIF(?, ''), condition), "
+                "size=COALESCE(NULLIF(?, ''), size), "
                 "desc_state='ok', desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
                 "WHERE id=?",
                 (description, description.lower(),
                  str(raw.get('seller_type') or '')[:20],
                  str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
-                 params_json, now, ad_id))
+                 params_json,
+                 str((params or {}).get('Состояние') or (params or {}).get('состояние') or '')[:40],
+                 str((params or {}).get('Размер') or (params or {}).get('Размер одежды')
+                     or (params or {}).get('Размер обуви') or '')[:30],
+                 now, ad_id))
             updated += 1
             touched.append(ad_id)
         except Exception as e:
@@ -28458,6 +28526,19 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             if not (50 <= _bat <= 100):
                 _bat = 85
             req_json['battery_min'] = _bat
+        # Память / год / пробег / размер — по словам из требований.
+        _mm = _re.search(r'памят[а-я]*\s*(?:от\s*)?(\d{2,4})', low)
+        if _mm:
+            req_json['memory_min'] = int(_mm.group(1))
+        _ym = _re.search(r'год[а-я]*\s*(?:от\s*)?(20\d{2}|19\d{2})', low)
+        if _ym:
+            req_json['year_min'] = int(_ym.group(1))
+        _km = _re.search(r'пробег[а-я]*\s*(?:до\s*)?(\d{3,7})', low)
+        if _km:
+            req_json['mileage_max'] = int(_km.group(1))
+        _sz = _re.search(r'размер[а-я]*\s*([\w.,/\-]{1,10})', low)
+        if _sz and not _sz.group(1).isdigit() is False:
+            req_json['size'] = _sz.group(1)
         # Новые условия поиска: цена от, город, состояние, только с фото,
         # минус-слова и минимальная скидка к рынку.
         try:
