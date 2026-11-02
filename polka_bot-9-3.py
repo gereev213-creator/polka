@@ -23240,7 +23240,13 @@ def hunt_need_details(ad_ids: Optional[List[int]] = None, limit: int = 0) -> Lis
             if word_conds:
                 sql += " AND (" + " OR ".join(word_conds) + ")"
                 params.extend(word_params)
-            sql += " ORDER BY id DESC LIMIT ?"
+            # Сначала те, из-за которых уже стоит решение (pending_details):
+            # раньше очередь шла просто по свежести, и старые карточки,
+            # ожидающие проверки, не открывались никогда — новые приходили
+            # быстрее, чем сборщик успевал. Теперь ожидающие в приоритете.
+            sql += (" ORDER BY (SELECT COUNT(*) FROM hunt_matches hm "
+                    "WHERE hm.ad_id = ads.id AND hm.status='pending_details') DESC, "
+                    "id DESC LIMIT ?")
             params.append(max(limit * 4, limit))
             cursor.execute(sql, tuple(params))
         ads = [dict(r) for r in cursor.fetchall()]
