@@ -20941,6 +20941,7 @@ async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
         return 0
     if not need:
         return 0
+    logger.info(f"details: открываю {len(need)} карточек")
     items, blocked, done = [], 0, 0
     for ad in need[:limit]:
         url = str(ad.get('source_url') or '')
@@ -21046,12 +21047,6 @@ async def _collector_inline_loop():
                 logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
                 await asyncio.sleep(min(300, max(60, left * 60)))
                 continue
-            # Описания и продавцы — до следующей пачки поиска: без них не
-            # работают фильтры «частник», состояние и АКБ.
-            try:
-                await _collector_details_pass(collector, cfg, limit=4)
-            except Exception as _dpe:
-                logger.warning(f"details pass: {_dpe}")
             # Часовая квота запросов к Авито: чаще — гарантированный 429.
             # Считаем по окну в 60 минут и храним в настройках.
             try:
@@ -21187,6 +21182,16 @@ async def _collector_inline_loop():
                 _setting_set('collector.req_count', str(int(cfg_get('collector.req_count') or 0) + 1))
             except Exception:
                 pass
+            # Описания и продавцы — ПОСЛЕ сбора и с таймаутом: раньше этот
+            # проход стоял в начале и подвешивал весь сбор (pass_running=1,
+            # объявления не приходили часами).
+            try:
+                await asyncio.wait_for(
+                    _collector_details_pass(collector, cfg, limit=3), timeout=150)
+            except asyncio.TimeoutError:
+                logger.warning("details pass: таймаут 150 с — пропускаю")
+            except Exception as _dpe:
+                logger.warning(f"details pass: {_dpe}")
             try:
                 _mb = collector.FETCH_BYTES[0] / (1024 * 1024)
                 collector.FETCH_BYTES[0] = 0
