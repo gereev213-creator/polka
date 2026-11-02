@@ -25801,6 +25801,8 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
     if len(q) < 2:
         return _miniapp_json({'ok': True, 'items': [], 'count': 0, 'q': q})
 
+    _debug: Dict[str, Any] = {}
+
     def _collect():
         items = []
         seen_ads = set()
@@ -25812,11 +25814,15 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
             terms += _alias_expand_cached(q)
         except Exception as _ae:
             logger.warning(f"alias expand: {_ae}")
+        _debug['terms'] = terms[:4]
         rows = []
         for _term in terms[:4]:
             try:
-                rows.extend(db.search_ads(_term, limit * 5))
-            except Exception:
+                _found = db.search_ads(_term, limit * 5)
+                _debug.setdefault('found', {})[_term] = len(_found or [])
+                rows.extend(_found)
+            except Exception as _se:
+                _debug.setdefault('search_errors', {})[_term] = f'{type(_se).__name__}: {_se}'[:120]
                 continue
         # Берём с запасом: часть отсеется по цене/фото/дублям.
         for ad in rows:
@@ -25860,13 +25866,18 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
         items = await asyncio.to_thread(_db_read, _collect)
     except Exception as e:
         logger.warning(f"hunt sample: {e}")
+        _debug['error'] = f"{type(e).__name__}: {e}"[:200]
         items = []
     if viewer:
         try:
             _plan_event(int(viewer), 'sample_shown', {'q': q[:40], 'n': len(items)})
         except Exception:
             pass
-    return _miniapp_json({'ok': True, 'items': items, 'count': len(items), 'q': q})
+    payload_out: Dict[str, Any] = {'ok': True, 'items': items, 'count': len(items), 'q': q}
+    if admin_preview:
+        # Диагностика только для админ-токена: какие варианты искали и что нашли
+        payload_out['debug'] = _debug
+    return _miniapp_json(payload_out)
 
 
 async def api_client_event(request: aiohttp_web.Request) -> aiohttp_web.Response:
