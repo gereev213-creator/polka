@@ -99,6 +99,12 @@ check('миграция paused_reason есть',
 check('paused_reason во втором списке миграций',
       "'paused_reason')" in SRC or '"paused_reason"' in SRC)
 
+# 10) автоматизм: пауза, уведомление, планировщик видны в диагностике
+check('есть уведомление о конце пробного', 'async def _notify_trial_expired(' in SRC)
+check('уведомление отправляется из джоба', 'await _notify_trial_expired(' in SRC)
+check('джоб логирует каждый прогон', 'кандидатов {rep.get' in SRC)
+check('список джобов в диагностике', "_SCHEDULED_JOBS" in SRC and "out['jobs']" in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')

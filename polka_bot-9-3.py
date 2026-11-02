@@ -19367,6 +19367,8 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
                          'min_discount': HUNT_MIN_DISCOUNT}
     except Exception as e:
         out['criteria_error'] = str(e)[:200]
+    out['jobs'] = list(_SCHEDULED_JOBS)
+    out['jobs_count'] = len(_SCHEDULED_JOBS)
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
     # ── Этап K1: задержки запросов и блокировки цикла событий ──────────────
@@ -19432,6 +19434,9 @@ DB_WRITE_LOCK = threading.RLock()
 _INGEST_STATS: Dict[str, Any] = {'last_ms': 0, 'last_n': 0, 'last_at': ''}
 _API_STATS: Dict[str, Dict] = {}
 _LOOP_LAG: Dict[str, Any] = {'max_ms': 0, 'count': 0, 'last_ms': 0, 'at': ''}
+# Имена задач планировщика — для диагностики /api/diag: видно,
+# действительно ли зарегистрированы авто-пауза, дайджест и прочее.
+_SCHEDULED_JOBS: List[str] = []
 # Один запрос к SQLite не должен держать блокировку дольше этого времени
 SLOW_REQUEST_MS = int(os.environ.get('SLOW_REQUEST_MS', '1500'))
 MEDIANS_DEBOUNCE_SEC = int(os.environ.get('MEDIANS_DEBOUNCE_SEC', '150'))
@@ -26147,7 +26152,7 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     report['details'] = []
     try:
         cursor.execute(
-            "SELECT id, user_id, created_at FROM hunt_criteria WHERE active=1 "
+            "SELECT id, user_id, query, created_at FROM hunt_criteria WHERE active=1 "
             "AND COALESCE(created_at,'') <> '' AND created_at < ? "
             "ORDER BY id LIMIT 500", (cutoff,))
         rows = [dict(r) for r in cursor.fetchall()]
@@ -26167,6 +26172,8 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
                     "UPDATE hunt_criteria SET active=0, paused_reason='ttl' WHERE id=?",
                     (int(r['id']),))
                 paused += 1
+                report.setdefault('paused_rows', []).append(
+                    {'user_id': int(r['user_id']), 'query': str(r.get('query') or '')})
             except Exception as e:
                 report['details'].append(f"update_err id{r['id']}: {e}")
         if paused:
@@ -26180,13 +26187,58 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     return paused
 
 
+async def _notify_trial_expired(user_id: int, query: str) -> None:
+    """Говорит человеку, что бесплатные сутки вышли и поиск встал.
+
+    Без этого поиск просто исчезал из работы, и человек не понимал, почему
+    находки перестали приходить. Кнопки ведут в тарифы и в приложение.
+    """
+    token = str(TOKEN or os.environ.get('BOT_TOKEN', ''))
+    uid = int(user_id or 0)
+    if not token or not uid:
+        return
+    name = _html.escape(str(query or 'поиск')[:60])
+    text = (f"<b>Пробный период закончился</b> ⏳\n\n"
+            f"Поиск «{name}» поставлен на паузу: бесплатный поиск работает "
+            f"24 часа.\n\n"
+            f"Чтобы вернуть его и держать активным, оформите «Плюс» — "
+            f"до 10 поисков без суточного ограничения.")
+    kb = {'inline_keyboard': [
+        [{'text': 'Оформить Плюс',
+          'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}],
+        [{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}],
+    ]}
+    try:
+        import aiohttp as _aio
+        url = f'https://api.telegram.org/bot{token}/sendMessage'
+        async with _aio.ClientSession() as sess:
+            async with sess.post(
+                    url,
+                    json={'chat_id': uid, 'text': text, 'parse_mode': 'HTML',
+                          'reply_markup': kb, 'disable_web_page_preview': True},
+                    timeout=_aio.ClientTimeout(total=20)) as r:
+                if r.status >= 400:
+                    body = await r.text()
+                    low = body.lower()
+                    if ('blocked' in low or 'deactivated' in low
+                            or 'chat not found' in low):
+                        _mark_bot_blocked(uid, body[:120])
+                    else:
+                        logger.warning(f"ttl notify {uid}: {r.status} {body[:120]}")
+    except Exception as e:
+        logger.warning(f"ttl notify error {uid}: {e}")
+
+
 async def pause_expired_free_criteria_job(context=None) -> None:
     rep: Dict = {}
     try:
         await asyncio.to_thread(pause_expired_free_criteria, rep)
-        if rep.get('candidates'):
-            logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
-                        f"поставлено на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
+        # Пишем КАЖДЫЙ прогон, даже пустой: иначе «джоб молчит» не отличить
+        # от «джоб не запускается».
+        logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
+                    f"на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
+        for row in rep.get('paused_rows') or []:
+            await _notify_trial_expired(row.get('user_id'), row.get('query'))
     except Exception as e:
         logger.exception(f"ttl pause job: {e}")
 
@@ -30171,7 +30223,15 @@ async def setup_scheduler(application: Application):
     jq.run_repeating(unpin_expired_ads,         interval=300,  first=60)   # каждые 5 минут
     jq.run_repeating(process_message_relay,     interval=30,   first=10)   # каждые 30 секунд
     jq.run_repeating(subscription_reminders,    interval=21600, first=3600) # каждые 6 часов
-    logger.info("Шедулер: 9 задач запущены")
+    try:
+        _SCHEDULED_JOBS.clear()
+        for _j in jq.jobs():
+            _cb = getattr(_j, 'callback', None)
+            _SCHEDULED_JOBS.append(getattr(_cb, '__name__', 'job'))
+    except Exception:
+        pass
+    logger.info(f"Шедулер: {len(_SCHEDULED_JOBS)} задач запущены: "
+                f"{', '.join(_SCHEDULED_JOBS)}")
 
 
 
@@ -32402,10 +32462,26 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                             '', None, '', 0, '', '', '')
         return _miniapp_json({'ok': bool(cid and cid > 0), 'id': cid, 'query': q})
 
+    if action == 'notify_test':
+        # Предпросмотр уведомления «пробный период закончился» на себе
+        who = 0
+        try:
+            who = int((body or {}).get('user') or 0)
+        except Exception:
+            who = 0
+        if not who and ADMIN_USER_IDS:
+            who = int(ADMIN_USER_IDS[0])
+        if not who:
+            return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        await _notify_trial_expired(who, str((body or {}).get('query') or 'куртка зимняя мужская'))
+        return _miniapp_json({'ok': True, 'sent_to': who})
+
     if action == 'pause_ttl':
         # Ручной запуск авто-паузы бесплатных поисков + отчёт, почему не сработало
         rep: Dict = {}
         n = await asyncio.to_thread(pause_expired_free_criteria, rep)
+        for row in rep.get('paused_rows') or []:
+            await _notify_trial_expired(row.get('user_id'), row.get('query'))
         return _miniapp_json({'ok': True, 'paused': n, **rep})
 
     if action == 'llm_probe':
