@@ -25,6 +25,8 @@ COPY max_compat.py ./
 
 # Static assets (email banner, etc.)
 COPY assets/ ./assets/
+# Словарь брендов ru→en для поиска (Wikidata CC0, см. tools/build_aliases.py)
+COPY data/ ./data/
 # Сборщик находок: запускается на сервере как дочерний процесс,
 # чтобы не требовать компьютера пользователя
 COPY collector/ ./collector/

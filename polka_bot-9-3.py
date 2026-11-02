@@ -25616,6 +25616,136 @@ async def api_chats_unread(request: aiohttp_web.Request) -> aiohttp_web.Response
         return _miniapp_json({'count': 0})
 
 
+# ── Словарь ru→en для поиска: «айфон» должен находить «iPhone» ──────────────
+# Данные: data/ru_en_aliases.json (Wikidata CC0 + ручные популярные товары).
+# Генератор: tools/build_aliases.py. Плюс фонетический скелет: если бренда
+# нет в словаре, сравниваем согласные («нитендо» → Nintendo).
+_ALIAS_CACHE: Dict[str, Any] = {'loaded': False, 'pairs': {}, 'phon': {}}
+
+_RU2LAT = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+    'ж': 'z', 'з': 'z', 'и': 'i', 'й': 'i', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'c', 'ч': 'c', 'ш': 's', 'щ': 's', 'ъ': '',
+    'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'u', 'я': 'a',
+}
+
+
+def _alias_skel(word: str) -> str:
+    """Согласный скелет слова: 'айфон' и 'iPhone' дают 'fn'."""
+    out = []
+    for ch in str(word or '').lower():
+        if ch in _RU2LAT:
+            out.append(_RU2LAT[ch])
+        elif 'a' <= ch <= 'z' or ch.isdigit():
+            out.append(ch)
+    t = ''.join(out)
+    for a, b in (('ph', 'f'), ('ck', 'k'), ('ch', 'c'), ('sh', 's'),
+                 ('zh', 'z'), ('x', 'ks'), ('q', 'k'), ('w', 'v'),
+                 ('j', 'i'), ('y', 'i')):
+        t = t.replace(a, b)
+    t = t.replace('h', '')
+    t = ''.join(c for c in t if c not in 'aeiou')
+    # двойные буквы схлопываем: gucci → gk
+    res = []
+    for c in t:
+        if not res or res[-1] != c:
+            res.append(c)
+    return ''.join(res)
+
+
+def _alias_build_index(pairs: Dict, en_terms: List[str]) -> Dict:
+    """Индекс: скелет → латинские названия (+ ключи с одной удалённой буквой)."""
+    phon: Dict[str, set] = {}
+
+    def _add(skel: str, term: str) -> None:
+        if len(skel) < 2 or len(skel) > 24:
+            return
+        phon.setdefault(skel, set()).add(term)
+        if len(skel) >= 4:
+            for i in range(len(skel)):
+                key = skel[:i] + skel[i + 1:]
+                if len(key) >= 2:
+                    phon.setdefault(key, set()).add(term)
+
+    for term in en_terms:
+        t = str(term or '').strip().lower()
+        if not t or ' ' in t:
+            continue
+        _add(_alias_skel(t), t)
+    for ru, en in (pairs or {}).items():
+        t = str(en or '').strip().lower()
+        if not t or ' ' in t or not str(ru).count(' '):
+            _add(_alias_skel(ru), t)
+    return phon
+
+
+def _alias_expand(query: str, pairs: Dict, phon: Dict, max_variants: int = 3) -> List[str]:
+    """Варианты запроса с латинскими брендами: 'айфон 13' → 'iphone 13'."""
+    q = str(query or '').strip().lower()
+    if not q:
+        return []
+    out: List[str] = []
+
+    def _push(v: str) -> None:
+        v = ' '.join(str(v or '').split())
+        if v and v != q and v not in out:
+            out.append(v)
+
+    # 1) фраза целиком (словарь содержит и многословные пары)
+    if q in pairs:
+        _push(pairs[q])
+    # 2) фразы из 2-3 слов внутри запроса
+    words = q.split()
+    if len(words) > 1:
+        for size in (3, 2):
+            for i in range(0, len(words) - size + 1):
+                chunk = ' '.join(words[i:i + size])
+                if chunk in pairs:
+                    _push(' '.join(words[:i] + [pairs[chunk]] + words[i + size:]))
+    # 3) отдельные слова: словарь, иначе фонетический скелет
+    for idx, w in enumerate(words):
+        if len(w) < 3:
+            continue
+        repl = pairs.get(w)
+        if not repl:
+            cands = phon.get(_alias_skel(w)) or []
+            cands = [c for c in cands if c != w]
+            repl = sorted(cands, key=len)[0] if cands else ''
+        if repl and repl != w:
+            _push(' '.join(words[:idx] + [repl] + words[idx + 1:]))
+        if len(out) >= max_variants:
+            break
+    return out[:max_variants]
+
+
+def _alias_data() -> Dict:
+    """Ленивая загрузка словаря (64 КБ JSON из репозитория)."""
+    if _ALIAS_CACHE.get('loaded'):
+        return _ALIAS_CACHE
+    pairs, phon = {}, {}
+    try:
+        import unicodedata as _ud  # noqa: F401
+        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            'data', 'ru_en_aliases.json')
+        with open(path, encoding='utf-8') as fh:
+            data = json.load(fh)
+        pairs = dict(data.get('pairs') or {})
+        en_terms = list(data.get('en_terms') or [])
+        phon = _alias_build_index(pairs, en_terms)
+        logger.info(f"словарь брендов: {len(pairs)} пар, "
+                    f"{len(en_terms)} латинских названий")
+    except Exception as e:
+        logger.warning(f"словарь брендов не загрузился: {e}")
+    _ALIAS_CACHE.update({'loaded': True, 'pairs': pairs, 'phon': phon})
+    return _ALIAS_CACHE
+
+
+def _alias_expand_cached(query: str) -> List[str]:
+    data = _alias_data()
+    return _alias_expand(query, data.get('pairs') or {}, data.get('phon') or {})
+
+
 def _sample_is_junk(title: str, query: str) -> bool:
     """Мусор ли объявление для примеров: чехлы, плёнки, коробки, реплики.
 
@@ -25673,9 +25803,26 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
     def _collect():
         items = []
-        seen = set()
+        seen_ads = set()
+        # «айфон» должен находить «iPhone»: ищем по исходному запросу и по
+        # латинским вариантам из словаря брендов (Wikidata) + фонетике.
+        terms = [q]
+        try:
+            terms += _alias_expand_cached(q)
+        except Exception as _ae:
+            logger.warning(f"alias expand: {_ae}")
+        rows = []
+        for _term in terms[:4]:
+            try:
+                rows.extend(db.search_ads(_term, limit * 5))
+            except Exception:
+                continue
         # Берём с запасом: часть отсеется по цене/фото/дублям.
-        for ad in db.search_ads(q, limit * 5):
+        for ad in rows:
+            ad_id = ad.get('id')
+            if ad_id in seen_ads:
+                continue
+            seen_ads.add(ad_id)
             if str(ad.get('status') or '') != 'active':
                 continue
             try:
