@@ -90,7 +90,7 @@ _DETAILS_BLOCKED_SINCE = 0.0
 # После 439 сборщик пережидает и пробует САМ, без ручного перезапуска.
 # Одна попытка за 30 минут ничего не жжёт, а блок Авито обычно спадает
 # за 1–2 часа — через 2–4 попытки описания снова пойдут.
-DETAILS_BLOCK_RETRY_SEC = 1800
+DETAILS_BLOCK_RETRY_SEC = 7200
 # Сколько символов описания хранить. Дальше — маркетинговый шум продавца.
 DESC_MAX_CHARS = 2000
 
@@ -3005,11 +3005,11 @@ def details_only_loop(server: str, token: str, limit: int = 0,
                 time.sleep(min(left + 5, DETAILS_BLOCK_RETRY_SEC))
                 continue
         # Не больше 8 карточек за проход: 30 подряд гарантированно дают 439.
-        _limit = int(os.environ.get('POLKA_DETAILS_LIMIT') or 0) or limit or 8
+        _limit = int(os.environ.get('POLKA_DETAILS_LIMIT') or 0) or limit or 2
         # Паузы между карточками: 20–40 с по умолчанию, можно замедлить
         # переменными, если Авито начал отвечать 439.
-        _pmin = float(os.environ.get('POLKA_DETAILS_PAUSE_MIN') or 20)
-        _pmax = float(os.environ.get('POLKA_DETAILS_PAUSE_MAX') or 40)
+        _pmin = float(os.environ.get('POLKA_DETAILS_PAUSE_MIN') or 90)
+        _pmax = float(os.environ.get('POLKA_DETAILS_PAUSE_MAX') or 180)
         try:
             items = fetch_need_details(server, token, _limit)
         except Exception as exc:
