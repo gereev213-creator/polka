@@ -33743,6 +33743,28 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                     int((body or {}).get('crit') or 0))
         return _miniapp_json({'ok': True, 'sent_to': who})
 
+    if action == 'unpause_ttl':
+        # ВАРИАНТ A: бесплатный поиск больше не встаёт на паузу по сроку.
+        # Значит поиски, которые старая логика успела остановить, надо вернуть
+        # в работу — люди не должны страдать из-за смены правил.
+        restored = []
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT id, user_id, query FROM hunt_criteria "
+                        "WHERE COALESCE(active,1)=0 AND COALESCE(paused_reason,'')='ttl'")
+            for _r in cur.fetchall():
+                r = dict(_r)
+                cur.execute("UPDATE hunt_criteria SET active=1, paused_reason='' "
+                            "WHERE id=?", (int(r['id']),))
+                restored.append({'id': int(r['id']), 'user_id': int(r['user_id']),
+                                 'query': str(r.get('query') or '')[:40]})
+            db.conn.commit()
+            logger.info(f"unpause_ttl: возвращено в работу {len(restored)} поисков")
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'restored': restored})
+
     if action == 'restore_ttl':
         # Разовое восстановление поисков, остановленных ДО фикса компенсации:
         # их поставили на паузу, хотя находок не было — по правилам их надо
