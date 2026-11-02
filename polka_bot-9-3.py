@@ -28348,31 +28348,37 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                               'max_price': max_price, 'requirements': req})
 
     if method == 'POST' and str((body or {}).get('search_link') or '').strip():
-        # Создание критерия из ссылки Авито одним запросом: разбираем ссылку,
-        # сохраняем путь и фильтры, по ним сборщик ищет ровно эту выдачу.
+        # Ссылка с Авито больше не создаёт «точный режим». Причина: ссылки
+        # вида m.avito.ru/...?context=… не разбираются в слова — критерий
+        # получал запрос «товар», матчил всю базу (400 решений) и присылал
+        # одну случайную находку. Теперь: пытаемся вытащить слова; если
+        # получилось — создаём ОБЫЧНЫЙ поиск по словам; если нет — честно
+        # просим написать запрос словами.
         link = parse_avito_search_link((body or {}).get('search_link'))
-        if not link.get('ok'):
-            return _miniapp_json({'ok': False, 'error': 'bad_link',
-                                  'detail': link.get('error') or 'Ссылка не подошла'},
-                                 status=400)
-        q = str(link.get('q') or '').strip()[:100]
-        # Сохраняем ИСХОДНУЮ ссылку: в браузерном режиме сборщик открывает
-        # её целиком (подраздел, фильтры f=, город), а не пересобирает заново.
-        raw_link = str((body or {}).get('search_link') or '').strip()[:2000]
+        q = str(link.get('q') or '').strip()[:100] if link.get('ok') else ''
+        useless = q.lower() in ('', 'товар', 'товары', 'объявление', 'объявления') or len(q) < 3
+        if not link.get('ok') or useless:
+            return _miniapp_json({
+                'ok': False, 'error': 'link_unsupported',
+                'detail': 'Ссылки с Авито больше не поддерживаются. Напишите, '
+                          'что ищете, словами — например «куртка зимняя мужская» '
+                          'или «iphone 15 pro».'},
+                status=400)
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), q,
             str((body or {}).get('category') or ''), str((body or {}).get('city') or ''),
             int(link.get('max_price') or 0), 0, int(link.get('min_price') or 0), 0, 0,
-            'private' if str(link.get('user') or '') == '1' else 'any', '', None, '', 0,
-            '', raw_link, '', link)
+            'private' if str(link.get('user') or '') == '1' else 'any', '',
+            None, '', 0, '', '', '', None)
         if crit_id == -1:
-            return _miniapp_json({'ok': False, 'error': 'limit'}, status=402)
+            return _miniapp_json({'ok': False, 'error': 'limit',
+                                  'detail': 'Оформите «Плюс»: на бесплатном доступен '
+                                            'один активный поиск.'}, status=402)
         if not crit_id:
             return _miniapp_json({'ok': False, 'error': 'duplicate'}, status=409)
         return _miniapp_json({'ok': True, 'id': crit_id, 'query': q,
-                              'path': link.get('path'), 'q': q,
-                              'max_price': link.get('max_price'),
-                              'min_price': link.get('min_price')})
+                              'converted': True,
+                              'detail': 'Создали обычный поиск по словам из ссылки'})
 
     # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
     # страницы — он авторизуется токеном, а не initData
@@ -33396,6 +33402,35 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'restored': restored, 'skipped': skipped})
+
+    if action == 'fix_link_criteria':
+        # Разовые правки критериев, созданных из ссылок Авито:
+        # «товар» (parser не вытащил слова) — на паузу, чтобы не матчил всю
+        # базу; осмысленные слова — конвертируем в обычный поиск по словам,
+        # убирая путь/фильтры ссылки (они и ломали сбор).
+        fixed, paused = [], []
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT id, user_id, query FROM hunt_criteria "
+                        "WHERE COALESCE(filter_url,'')<>'' OR COALESCE(search_path,'')<>''")
+            for _r in cur.fetchall():
+                r = dict(_r)
+                q = str(r.get('query') or '').strip().lower()
+                if q in ('', 'товар', 'товары', 'объявление', 'объявления'):
+                    cur.execute("UPDATE hunt_criteria SET active=0, paused_reason='link' "
+                                "WHERE id=?", (int(r['id']),))
+                    paused.append(int(r['id']))
+                else:
+                    cur.execute("UPDATE hunt_criteria SET filter_url='', search_path='', "
+                                "filter_blob='' WHERE id=?", (int(r['id']),))
+                    fixed.append(int(r['id']))
+            db.conn.commit()
+            logger.info(f"fix_link_criteria: конвертировано {len(fixed)}, "
+                        f"на паузу {len(paused)}")
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
 
     if action == 'conv_plan':
         # Что бы движок дожима отправил прямо сейчас (без отправки и пометок)

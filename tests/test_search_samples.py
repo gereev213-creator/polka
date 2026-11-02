@@ -103,6 +103,14 @@ check('нет обращения к несуществующей seen', 'in seen
 check('дедуп по id', 'seen_ads = set()' in _body)
 check('дедуп по заголовку+цене', 'seen_keys = set()' in _body)
 
+# 7) ссылочный поиск убран из формы и не создаёт мусор
+check('в форме нет поля ссылки', 'avitoLink' not in TPL)
+check('в собранной странице нет поля ссылки', 'avitoLink' not in IDX)
+check('сервер отвечает понятной ошибкой', "'link_unsupported'" in SRC)
+check('осмысленные слова из ссылки создают обычный поиск', "'converted': True" in SRC)
+check('есть разовая починка старых ссылочных поисков',
+      "action == 'fix_link_criteria'" in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
