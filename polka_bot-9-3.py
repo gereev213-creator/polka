@@ -7658,10 +7658,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(
                     "<b>🎁 Приветственный бонус</b>\n\n"
                     "Новичкам — <b>1 поиск лота бесплатно на 24 часа</b>.\n\n"
-                    "Напишите, что ищете (например «куртка зимняя мужская до 5000»), "
-                    "и бот пришлёт в Telegram подходящие объявления с Авито: "
-                    "цену, ссылку и выгоду к рынку.\n\n"
-                    "Карта не нужна, подписка тоже.",
+                    "Откройте приложение и создайте первый поиск лота: укажите, "
+                    "что ищете, — бот пришлёт подходящие объявления с Авито, "
+                    "с ценой, ссылкой и выгодой к рынку.",
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton("🎁 Активировать бонус",
                                               callback_data="start_trial")],
@@ -7909,8 +7908,37 @@ async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer("Бесплатный период активирован")
     except Exception:
         pass
+    # Уже оплаченный Плюс не понижаем: старая кнопка «Активировать бонус»
+    # остаётся в истории чата, и раньше её нажатие переводило человека с
+    # «Плюса» на пробный план (владелец как раз на это наткнулся).
+    try:
+        has_plus = bool(_plus_subscription(int(user.id)))
+    except Exception:
+        has_plus = False
     try:
         u = db.get_user(user.id) or {}
+    except Exception:
+        u = {}
+    if has_plus or str(u.get('plan') or '') == 'plus':
+        try:
+            await query.answer("У вас уже активен «Плюс»")
+        except Exception:
+            pass
+        text = ("<b>У вас уже активен «Плюс»</b> 👍\n\n"
+                "Поиски работают без суточного ограничения — искать можно "
+                "прямо в приложении.")
+        kbd = InlineKeyboardMarkup([
+            [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
+                                  web_app=WebAppInfo(url=_miniapp_url()))],
+        ])
+        try:
+            await query.edit_message_text(text, reply_markup=kbd,
+                                          parse_mode=ParseMode.HTML,
+                                          disable_web_page_preview=True)
+        except Exception:
+            pass
+        return
+    try:
         patch = {'plan': 'trial', 'subscribed': 1}
         if not u.get('trial_started_at'):
             patch['trial_started_at'] = get_moscow_time().isoformat()
@@ -7919,9 +7947,9 @@ async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         logger.warning(f"start_trial: {e}")
     text = (
         "<b>Бонус активирован</b> 🎁\n\n"
-        "Ваш поиск работает 24 часа — без карты и без подписки.\n\n"
-        "Напишите боту, что ищете, например: «куртка зимняя мужская до 5000» — "
-        "или откройте приложение кнопкой ниже."
+        "Откройте приложение и создайте первый поиск лота: укажите, что "
+        "ищете, — бот пришлёт подходящие объявления с Авито.\n\n"
+        "Кнопка ниже сразу открывает ПОЛКУ."
     )
     kbd = InlineKeyboardMarkup([
         [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",

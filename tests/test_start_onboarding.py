@@ -57,6 +57,16 @@ check('после активации открывается приложение
 # 5) deep links не сломаны
 check('deep links обрабатываются', 'if not (deep_link_action or deep_link_ad_id):' in SRC)
 
+# 6) тексты бонуса — без обещаний «про карту»
+check('нет «без карты и без подписки»', 'без карты и без подписки' not in SRC)
+check('нет «Карта не нужна»', 'Карта не нужна' not in SRC)
+check('инструкция: открой приложение и создай поиск',
+      'создайте первый поиск лота' in SRC)
+check('Плюс не понижается старой кнопкой',
+      'У вас уже активен «Плюс»' in SRC and '_plus_subscription' in SRC)
+check('активация бонуса проверяет подписку',
+      'has_plus = bool(_plus_subscription(int(user.id)))' in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
