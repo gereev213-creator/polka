@@ -26400,26 +26400,16 @@ def _trial_expired_stats(crit_id: int) -> Dict:
     return out
 
 
-async def _notify_trial_expired(user_id: int, query: str, crit_id: int = 0) -> None:
-    """Говорит человеку, что бесплатные сутки вышли и поиск встал.
+async def _tg_send_html(user_id: int, text: str, kb: Dict) -> bool:
+    """Отправка сообщения человеку через Bot API (без объекта Application).
 
-    С конкретикой: сколько находок прислали и какая самая выгодная. Кнопки —
-    открыть находку, тарифы и приложение.
+    Нужна фоновым циклам: у них нет context.bot. Если человек заблокировал
+    бота — помечаем его, чтобы больше не тратить попытки.
     """
     token = str(TOKEN or os.environ.get('BOT_TOKEN', ''))
     uid = int(user_id or 0)
     if not token or not uid:
-        return
-    stats = await asyncio.to_thread(_trial_expired_stats, int(crit_id or 0))
-    text = _trial_expired_caption(query, stats)
-    rows = []
-    best_url = str((stats.get('best') or {}).get('url') or '')
-    if best_url.startswith('http'):
-        rows.append([{'text': '🔥 Открыть находку', 'url': best_url}])
-    rows.append([{'text': 'Оформить Плюс',
-                  'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}])
-    rows.append([{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}])
-    kb = {'inline_keyboard': rows}
+        return False
     try:
         import aiohttp as _aio
         url = f'https://api.telegram.org/bot{token}/sendMessage'
@@ -26436,9 +26426,61 @@ async def _notify_trial_expired(user_id: int, query: str, crit_id: int = 0) -> N
                             or 'chat not found' in low):
                         _mark_bot_blocked(uid, body[:120])
                     else:
-                        logger.warning(f"ttl notify {uid}: {r.status} {body[:120]}")
+                        logger.warning(f"tg send {uid}: {r.status} {body[:120]}")
+                    return False
+                return True
     except Exception as e:
-        logger.warning(f"ttl notify error {uid}: {e}")
+        logger.warning(f"tg send error {uid}: {e}")
+        return False
+
+
+def _trial_extended_caption(query: str, stats: Dict) -> str:
+    """Текст «пробный продлён»: объясняем, почему бесплатно и что дальше."""
+    name = _hunt_escape(str(query or 'поиск')[:60])
+    checked = int(stats.get('checked') or 0)
+    lines = ["⏳ <b>Пробный период продлён</b>", ""]
+    lines.append(f"По поиску «{name}» за сутки подходящих объявлений не "
+                 f"нашлось, поэтому мы бесплатно продлили его ещё на 24 часа.")
+    lines.append("")
+    if checked > 0:
+        lines.append(f"Уже проверили <b>{checked}</b> объявлений — продолжим "
+                     f"искать и напишем сразу, как что-то найдём.")
+    else:
+        lines.append("Новых объявлений по вашему запросу пока не было — "
+                     "продолжим следить.")
+    lines.append("")
+    lines.append("<i>Платить пока не нужно.</i>")
+    return "\n".join(lines)
+
+
+async def _notify_trial_extended(user_id: int, query: str, crit_id: int = 0) -> None:
+    """Сообщает, что пробный продлён бесплатно (находок не было)."""
+    stats = await asyncio.to_thread(_trial_expired_stats, int(crit_id or 0))
+    text = _trial_extended_caption(query, stats)
+    kb = {'inline_keyboard': [
+        [{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}],
+        [{'text': 'Мои поиски',
+          'web_app': {'url': f"{_miniapp_url()}/?screen=searches"}}],
+    ]}
+    await _tg_send_html(user_id, text, kb)
+
+
+async def _notify_trial_expired(user_id: int, query: str, crit_id: int = 0) -> None:
+    """Говорит человеку, что бесплатные сутки вышли и поиск встал.
+
+    С конкретикой: сколько находок прислали и какая самая выгодная. Кнопки —
+    открыть находку, тарифы и приложение.
+    """
+    stats = await asyncio.to_thread(_trial_expired_stats, int(crit_id or 0))
+    text = _trial_expired_caption(query, stats)
+    rows = []
+    best_url = str((stats.get('best') or {}).get('url') or '')
+    if best_url.startswith('http'):
+        rows.append([{'text': '🔥 Открыть находку', 'url': best_url}])
+    rows.append([{'text': 'Оформить Плюс',
+                  'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}])
+    rows.append([{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}])
+    await _tg_send_html(user_id, text, {'inline_keyboard': rows})
 
 
 async def pause_expired_free_criteria_job(context=None) -> None:
@@ -26450,6 +26492,9 @@ async def pause_expired_free_criteria_job(context=None) -> None:
         logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
                     f"продлено {rep.get('extended')}, "
                     f"на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
+        for row in rep.get('extended_rows') or []:
+            await _notify_trial_extended(row.get('user_id'), row.get('query'),
+                                         row.get('id') or 0)
         for row in rep.get('paused_rows') or []:
             await _notify_trial_expired(row.get('user_id'), row.get('query'),
                                         row.get('id') or 0)
@@ -30925,6 +30970,9 @@ async def _ttl_pause_loop(bot) -> None:
                         f"продлено {rep.get('extended')}, "
                         f"на паузу {rep.get('paused')}, "
                         f"ошибка {rep.get('error') or 'нет'}")
+            for row in rep.get('extended_rows') or []:
+                await _notify_trial_extended(row.get('user_id'), row.get('query'),
+                                             row.get('id') or 0)
             for row in rep.get('paused_rows') or []:
                 await _notify_trial_expired(row.get('user_id'), row.get('query'),
                                             row.get('id') or 0)
@@ -32760,6 +32808,21 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                             '', None, '', 0, '', '', '')
         return _miniapp_json({'ok': bool(cid and cid > 0), 'id': cid, 'query': q})
 
+    if action == 'notify_extend_test':
+        # Предпросмотр уведомления «пробный продлён» на себе
+        who = 0
+        try:
+            who = int((body or {}).get('user') or 0)
+        except Exception:
+            who = 0
+        if not who and ADMIN_USER_IDS:
+            who = int(ADMIN_USER_IDS[0])
+        if not who:
+            return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        await _notify_trial_extended(who, str((body or {}).get('query') or 'куртка зимняя мужская'),
+                                     int((body or {}).get('crit') or 0))
+        return _miniapp_json({'ok': True, 'sent_to': who})
+
     if action == 'notify_test':
         # Предпросмотр уведомления «пробный период закончился» на себе
         who = 0
@@ -32820,6 +32883,9 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         # Ручной запуск авто-паузы бесплатных поисков + отчёт, почему не сработало
         rep: Dict = {}
         n = await asyncio.to_thread(pause_expired_free_criteria, rep)
+        for row in rep.get('extended_rows') or []:
+            await _notify_trial_extended(row.get('user_id'), row.get('query'),
+                                         row.get('id') or 0)
         for row in rep.get('paused_rows') or []:
             await _notify_trial_expired(row.get('user_id'), row.get('query'),
                                         row.get('id') or 0)

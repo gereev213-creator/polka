@@ -73,6 +73,28 @@ check('запрос экранирован', '&lt;b&gt;hack&lt;/b&gt;' in text4)
 check('заголовок экранирован', '&lt;i&gt;x&lt;/i&gt;' in text4)
 check('без дискаунта не врёт про выгоду', 'ниже рынка' not in text4)
 
+# 4б) уведомление о продлении: объясняет, что продлили бесплатно
+fn2 = next((n for n in tree.body
+            if isinstance(n, ast.FunctionDef) and n.name == '_trial_extended_caption'), None)
+check('функция текста продления найдена', fn2 is not None)
+ns2 = {'Dict': dict, '_html': html,
+       '_money': lambda v: f"{int(v or 0):,}".replace(',', ' '),
+       '_hunt_escape': lambda v: html.escape(str(v or ''))}
+exec(ast.get_source_segment(SRC, fn2), ns2)
+cap_ext = ns2['_trial_extended_caption']
+
+t_ext = cap_ext('айфоны', {'sent': 0, 'checked': 2899, 'best': {}})
+check('продление: сообщает о +24 часах', 'ещё на 24 часа' in t_ext)
+check('продление: объясняет причину', 'не нашлось' in t_ext)
+check('продление: пишет, сколько проверили', 'проверили <b>2899</b>' in t_ext)
+check('продление: говорит, что платить не нужно', 'Платить пока не нужно' in t_ext)
+
+t_ext0 = cap_ext('товар', {'sent': 0, 'checked': 0, 'best': {}})
+check('продление без проверок: честно про пустоту', 'пока не было' in t_ext0)
+check('продление экранирует запрос', '&lt;' in cap_ext('<b>x</b>', {'checked': 0}))
+check('есть предпросмотр продления', "action == 'notify_extend_test'" in SRC)
+check('продление уведомляет из циклов', '_notify_trial_extended(row.get' in SRC)
+
 # 5) сквозные связи в коде
 check('статистика по критерию есть', 'def _trial_expired_stats(' in SRC)
 check('считает отправленные', "status='sent'" in SRC)
