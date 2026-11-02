@@ -20974,14 +20974,30 @@ async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
         })
         done += 1
         await asyncio.sleep(2.5)   # не долбим Авито
-    if items:
+    # Неудачи тоже отправляем: сервер увеличит desc_attempts, и карточка
+    # не будет вечно висеть первой в очереди (иначе проход каждые 30 минут
+    # пытался открывать одну и ту же карточку).
+    failed = [{'external_id': ext, 'state': 'failed'}
+              for ext in _details_failed_ids(need, items)]
+    if items or failed:
         try:
             await asyncio.to_thread(collector.push_details, cfg['server'],
-                                    cfg['token'], 'avito', items)
-            logger.info(f"details: принесли {done} описаний")
+                                    cfg['token'], 'avito', items + failed)
+            logger.info(f"details: принесли {done} описаний, не удалось {len(failed)}")
         except Exception as e:
             logger.warning(f"details push: {e}")
     return done
+
+
+def _details_failed_ids(need: List[Dict], items: List[Dict]) -> List[str]:
+    '''Какие карточки не удалось открыть — их помечаем failed.'''
+    ok_ids = {str(i.get('external_id')) for i in items}
+    out = []
+    for ad in need:
+        ext = str(ad.get('external_id') or '')
+        if ext and ext not in ok_ids:
+            out.append(ext)
+    return out
 
 
 async def _collector_inline_loop():
