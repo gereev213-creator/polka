@@ -2988,8 +2988,22 @@ def details_only_loop(server: str, token: str, limit: int = 0,
     """
     total = 0
     while True:
+        # Блокировка страниц объявлений: не дёргаем Авито чаще раза в 30 минут.
+        # Раньше цикл каждые ~2 минуты печатал предупреждение и ждал, но
+        # выглядело это как «сборщик ничего не делает» — теперь ждём молча и
+        # одной строкой сообщаем, сколько осталось.
+        if _DETAILS_BLOCKED and _DETAILS_BLOCKED_SINCE:
+            left = int(DETAILS_BLOCK_RETRY_SEC - (time.time() - _DETAILS_BLOCKED_SINCE))
+            if left > 0:
+                print(f"  ⏸ страницы объявлений закрыты Авито, жду {left // 60 + 1} мин")
+                time.sleep(min(left + 5, DETAILS_BLOCK_RETRY_SEC))
+                continue
         # Не больше 8 карточек за проход: 30 подряд гарантированно дают 439.
-        _limit = limit or 8
+        _limit = int(os.environ.get('POLKA_DETAILS_LIMIT') or 0) or limit or 8
+        # Паузы между карточками: 20–40 с по умолчанию, можно замедлить
+        # переменными, если Авито начал отвечать 439.
+        _pmin = float(os.environ.get('POLKA_DETAILS_PAUSE_MIN') or 20)
+        _pmax = float(os.environ.get('POLKA_DETAILS_PAUSE_MAX') or 40)
         try:
             items = fetch_need_details(server, token, _limit)
         except Exception as exc:
@@ -3002,7 +3016,7 @@ def details_only_loop(server: str, token: str, limit: int = 0,
                 # карточки. Описания — единственный способ проверить слова,
                 # которых нет в заголовке, поэтому лучше медленно, но да.
                 got = collect_details(server, token, 'avito', items,
-                                      pause=(20.0, 40.0))
+                                      pause=(_pmin, max(_pmin, _pmax)))
                 total += int(got or 0)
                 print(f"  принесено описаний: {got} (всего за смену {total})")
             except Exception as exc:
