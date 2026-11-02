@@ -25613,6 +25613,79 @@ async def api_chats_unread(request: aiohttp_web.Request) -> aiohttp_web.Response
         return _miniapp_json({'count': 0})
 
 
+async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/hunt/sample?q= — что уже есть на Авито по этому запросу.
+
+    Показываем ДО создания поиска: человек за 10 секунд видит, что сервис
+    живой и по его запросу есть лоты. Иначе он создаёт поиск, сутки ждёт
+    тишины и уходит (23 из 30 поисков не дали ни одной находки).
+    """
+    viewer = _miniapp_viewer(request)
+    admin_preview = False
+    if not viewer:
+        try:
+            admin_preview = await _admin_read_ok(request)
+        except Exception:
+            admin_preview = False
+    if not viewer and not admin_preview:
+        return _miniapp_err('unauthorized', 401)
+    q = str(request.query.get('q') or '').strip()
+    try:
+        limit = int(request.query.get('limit') or 4)
+    except Exception:
+        limit = 4
+    limit = max(1, min(6, limit))
+    if len(q) < 2:
+        return _miniapp_json({'ok': True, 'items': [], 'count': 0, 'q': q})
+
+    def _collect():
+        items = []
+        seen = set()
+        # Берём с запасом: часть отсеется по цене/фото/дублям.
+        for ad in db.search_ads(q, limit * 5):
+            if str(ad.get('status') or '') != 'active':
+                continue
+            try:
+                price = int(ad.get('price') or 0)
+            except Exception:
+                price = 0
+            if price <= 0:
+                continue
+            photos = ad.get('photos') or []
+            photo = str(photos[0]) if isinstance(photos, list) and photos else ''
+            title = str(ad.get('title') or '').strip()[:90]
+            if not title:
+                continue
+            key = (title.lower(), price)
+            if key in seen:
+                continue
+            seen.add(key)
+            items.append({
+                'id': int(ad.get('id') or 0),
+                'title': title,
+                'price': price,
+                'discount': int(ad.get('discount_percent') or 0),
+                'city': str(ad.get('city') or ''),
+                'photo': photo,
+                'url': str(ad.get('source_url') or ''),
+            })
+            if len(items) >= limit:
+                break
+        return items
+
+    try:
+        items = await asyncio.to_thread(_db_read, _collect)
+    except Exception as e:
+        logger.warning(f"hunt sample: {e}")
+        items = []
+    if viewer:
+        try:
+            _plan_event(int(viewer), 'sample_shown', {'q': q[:40], 'n': len(items)})
+        except Exception:
+            pass
+    return _miniapp_json({'ok': True, 'items': items, 'count': len(items), 'q': q})
+
+
 async def api_client_event(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/event {name, props} — событие воронки из приложения (этап R).
 
@@ -36295,6 +36368,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_route('*', '/api/hunt', api_hunt_criteria)
     app.router.add_get('/api/findings/stats', api_findings_stats)
     app.router.add_get('/api/findings', api_miniapp_findings)
+    app.router.add_get('/api/hunt/sample', api_hunt_sample)
     app.router.add_post('/api/findings/hide', api_findings_hide)
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)

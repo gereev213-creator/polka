@@ -682,6 +682,81 @@ function paintEmpty(count) {
     const form = $('searchForm');
     if (!form || form.__wired) return;
     form.__wired = true;
+
+    // ── Примеры находок до создания поиска ───────────────────────────────
+    // Пока человек печатает запрос, показываем, что по нему уже есть на
+    // Авито. Иначе он создаёт поиск, сутки ждёт тишины и уходит: 23 из 30
+    // поисков не дали ни одной находки.
+    const _esc = (v) => String(v == null ? '' : v)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+    const qEl = $('q');
+    const sampleBox = $('sampleBox');
+    let sampleTimer = null, sampleSeq = 0;
+
+    function renderSamples(items) {
+      if (!sampleBox) return;
+      const list = Array.isArray(items) ? items : [];
+      if (!list.length) {
+        sampleBox.innerHTML = '<div class="sampleEmpty">По этому запросу пока пусто — '
+          + 'создайте поиск, и бот будет следить за новыми объявлениями.</div>';
+        sampleBox.classList.add('show');
+        return;
+      }
+      const money = (n) => String(Math.round(Number(n) || 0))
+        .replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+      const rows = list.slice(0, 3).map((a) => {
+        const ph = a.photo
+          ? `<img src="${_esc(a.photo)}" alt="" loading="lazy">`
+          : '<span class="sampleTh">нет фото</span>';
+        const disc = Number(a.discount || 0) > 0
+          ? `<span class="sampleDisc">−${Number(a.discount)}%</span>` : '';
+        const city = a.city ? ` · ${_esc(a.city)}` : '';
+        return `<div class="sampleRow" data-sample-url="${_esc(a.url || '')}">${ph}
+          <div class="sampleInfo"><p class="sampleName">${_esc(a.title || '')}</p>
+          <div class="sampleMeta"><span class="samplePrice">${money(a.price)} ₽</span>${disc}<span>${city}</span></div></div></div>`;
+      }).join('');
+      sampleBox.innerHTML = '<div class="sampleTitle">Уже есть на Авито по этому запросу</div>'
+        + rows
+        + '<div class="sampleMore">Это то, что мы уже нашли. Ваш поиск будет проверять '
+        + 'новые объявления и присылать подходящие в Telegram.</div>';
+      sampleBox.classList.add('show');
+    }
+
+    async function fetchSamples() {
+      if (!qEl || !sampleBox) return;
+      const q = String(qEl.value || '').trim();
+      if (q.length < 3) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; return; }
+      const seq = ++sampleSeq;
+      try {
+        const res = await window.PolkaAPI.api(
+          '/api/hunt/sample?q=' + encodeURIComponent(q) + '&limit=3');
+        if (seq !== sampleSeq) return;
+        renderSamples(res && res.items);
+      } catch (e) {
+        // примеры — не критично: форма должна работать и без них
+      }
+    }
+
+    if (qEl && sampleBox) {
+      qEl.addEventListener('input', () => {
+        clearTimeout(sampleTimer);
+        const q = String(qEl.value || '').trim();
+        if (q.length < 3) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; return; }
+        sampleTimer = setTimeout(fetchSamples, 500);
+      });
+      sampleBox.addEventListener('click', (e) => {
+        const row = e.target.closest && e.target.closest('[data-sample-url]');
+        if (!row) return;
+        const url = row.getAttribute('data-sample-url') || '';
+        if (!url) return;
+        const TG = window.Telegram && window.Telegram.WebApp;
+        try {
+          if (TG && TG.openLink) TG.openLink(url);
+          else window.open(url, '_blank');
+        } catch (_) { }
+      });
+    }
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
@@ -755,7 +830,13 @@ function paintEmpty(count) {
           exclude: exclude || minus,
         });
       }
-      if (ok) { const lk = document.getElementById('avitoLink'); if (lk) lk.value = ''; form.reset(); document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on')); if (typeof go === 'function') go('searches'); }
+      if (ok) {
+        const lk = document.getElementById('avitoLink'); if (lk) lk.value = '';
+        form.reset();
+        document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on'));
+        if (sampleBox) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; }
+        if (typeof go === 'function') go('searches');
+      }
     });
   }
 
