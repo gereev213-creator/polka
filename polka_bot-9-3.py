@@ -30212,24 +30212,27 @@ async def setup_scheduler(application: Application):
                 pass
 
     jq = application.job_queue
-    jq.run_daily(trigger_low_views_boost,    time=time(12, 0, tzinfo=ZoneInfo("Europe/Moscow")))
-    jq.run_daily(daily_tasks,               time=time(3,  0, tzinfo=ZoneInfo("Europe/Moscow")))
-    jq.run_daily(update_city_channel_cache, time=time(4,  0, tzinfo=ZoneInfo("Europe/Moscow")))
-    jq.run_daily(daily_digest_job,           time=time(10, 0, tzinfo=ZoneInfo("Europe/Moscow")))  # находка дня админу
-    jq.run_repeating(pause_expired_free_criteria_job, interval=900, first=120)  # сутки бесплатному поиску
-    jq.run_repeating(send_search_notifications, interval=3600, first=600)
-    jq.run_repeating(process_auto_bumps,        interval=3600, first=300)
-    jq.run_repeating(remind_abandoned,          interval=1800, first=900)
-    jq.run_repeating(unpin_expired_ads,         interval=300,  first=60)   # каждые 5 минут
-    jq.run_repeating(process_message_relay,     interval=30,   first=10)   # каждые 30 секунд
-    jq.run_repeating(subscription_reminders,    interval=21600, first=3600) # каждые 6 часов
+    # Сохраняем объекты задач, которые вернул run_*: JobQueue.jobs() в момент
+    # настройки ПАДАЕТ (планировщик ещё не запущен), поэтому раньше список
+    # задач в диагностике всегда был пустым и выглядело, будто джобов нет.
+    _jobs = [
+        jq.run_daily(trigger_low_views_boost,    time=time(12, 0, tzinfo=ZoneInfo("Europe/Moscow"))),
+        jq.run_daily(daily_tasks,               time=time(3,  0, tzinfo=ZoneInfo("Europe/Moscow"))),
+        jq.run_daily(update_city_channel_cache, time=time(4,  0, tzinfo=ZoneInfo("Europe/Moscow"))),
+        jq.run_daily(daily_digest_job,           time=time(10, 0, tzinfo=ZoneInfo("Europe/Moscow"))),
+        jq.run_repeating(pause_expired_free_criteria_job, interval=900, first=120),
+        jq.run_repeating(send_search_notifications, interval=3600, first=600),
+        jq.run_repeating(process_auto_bumps,        interval=3600, first=300),
+        jq.run_repeating(remind_abandoned,          interval=1800, first=900),
+        jq.run_repeating(unpin_expired_ads,         interval=300,  first=60),
+        jq.run_repeating(process_message_relay,     interval=30,   first=10),
+        jq.run_repeating(subscription_reminders,    interval=21600, first=3600),
+    ]
     try:
-        _SCHEDULED_JOBS.clear()
-        for _j in jq.jobs():
-            _cb = getattr(_j, 'callback', None)
-            _SCHEDULED_JOBS.append(getattr(_cb, '__name__', 'job'))
-    except Exception:
-        pass
+        _SCHEDULED_JOBS[:] = [getattr(getattr(j, 'callback', None), '__name__', 'job')
+                              for j in _jobs if j]
+    except Exception as _e:
+        logger.warning(f"scheduler names: {_e}")
     logger.info(f"Шедулер: {len(_SCHEDULED_JOBS)} задач запущены: "
                 f"{', '.join(_SCHEDULED_JOBS)}")
 
