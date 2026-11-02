@@ -25,8 +25,10 @@ COPY max_compat.py ./
 
 # Static assets (email banner, etc.)
 COPY assets/ ./assets/
-# Словарь брендов ru→en для поиска (Wikidata CC0, см. tools/build_aliases.py)
-COPY data/ ./data/
+# Словарь брендов ru→en для поиска (Wikidata CC0, см. tools/build_aliases.py).
+# ВАЖНО: кладём в assets, а не в ./data/ — каталог /app/data в образе
+# переключал путь к БД с персистентного /data на эфемерный файл в контейнере.
+COPY data/ru_en_aliases.json ./assets/ru_en_aliases.json
 # Сборщик находок: запускается на сервере как дочерний процесс,
 # чтобы не требовать компьютера пользователя
 COPY collector/ ./collector/

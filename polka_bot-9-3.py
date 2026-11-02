@@ -2543,8 +2543,14 @@ class Database:
                 # Путь по умолчанию подстраивается под площадку: Amvera даёт
                 # /data, BOTHOST — /app/data (их папка персистентного хранилища).
                 # Явный DB_PATH всегда главнее.
+                # /data — единственная папка, которая переживает деплой на
+                # Amvera. Одно время здесь стояло «если есть /app/data, бери
+                # его»: достаточно было создать каталог /app/data в образе
+                # (assets), и бот переезжал на файл внутри контейнера —
+                # база обнулялась при каждом деплое. Теперь /data главнее,
+                # /app/data — только если /data недоступен (BOTHOST).
                 _default_db = "/data/polka.db"
-                if os.path.isdir("/app/data"):
+                if not os.path.isdir("/data") and os.path.isdir("/app/data"):
                     _default_db = "/app/data/polka.db"
                 db_path = os.environ.get("DB_PATH", _default_db)
 
@@ -25726,8 +25732,15 @@ def _alias_data() -> Dict:
     pairs, phon = {}, {}
     try:
         import unicodedata as _ud  # noqa: F401
-        path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                            'data', 'ru_en_aliases.json')
+        _base = os.path.dirname(os.path.abspath(__file__))
+        path = ''
+        for _cand in (os.path.join(_base, 'assets', 'ru_en_aliases.json'),
+                      os.path.join(_base, 'data', 'ru_en_aliases.json')):
+            if os.path.isfile(_cand):
+                path = _cand
+                break
+        if not path:
+            raise FileNotFoundError('ru_en_aliases.json не найден')
         with open(path, encoding='utf-8') as fh:
             data = json.load(fh)
         pairs = dict(data.get('pairs') or {})
