@@ -25463,6 +25463,8 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
     # 6. Журнал — необязателен: платёж уже создан, и его сбой не должен
     #    отменять оплату.
     try:
+        _plan_event(int(user_id), 'pay_click',
+                    {'product': product, 'amount': amount})
         _plan_event(int(user_id), 'invoice_created',
                     {'product': product, 'provider': 'paw', 'amount': amount})
         _plan_event(int(user_id), 'paw_order', {'product': product, 'amount': amount})
@@ -25968,6 +25970,16 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     }
     viewer = _miniapp_viewer(request)
     user_plan = resolve_plan(viewer) if viewer else 'trial'
+    # A/B цены входа: половине показываем неделю (49 ₽) как основной тариф,
+    # половине — месяц (149 ₽). Так проверим, что покупают охотнее, не меняя
+    # витрину всем сразу.
+    try:
+        _bucket = int(viewer or 0) % 2
+    except Exception:
+        _bucket = 0
+    _default_product = 'week' if _bucket == 0 else 'plus_30'
+    if not any(str(p.get('product')) == _default_product for p in plans):
+        _default_product = (plans[0].get('product') if plans else 'plus_30')
     # Воронка: экран тарифов открыт. Клиент дополнительно ничего слать не
     # должен — он и так запрашивает этот метод при открытии экрана.
     if viewer:
@@ -25976,6 +25988,8 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         except Exception:
             pass
     return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
+                          'variant': 'week' if _default_product == 'week' else 'month',
+                          'default_product': _default_product,
                           'enabled': cispay_enabled() or paw_enabled(),
                           'cispay_enabled': cispay_enabled(),
                           'paw_enabled': paw_enabled(),

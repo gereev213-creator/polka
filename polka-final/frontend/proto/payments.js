@@ -55,18 +55,60 @@
 
   function priceNode() { return document.getElementById('priceNow'); }
 
+  function unitLabel(days) {
+    if (Number(days) === 7) return 'руб/нед';
+    return 'руб/мес';
+  }
+
+  function planTitle(days) {
+    if (Number(days) === 7) return 'Неделя';
+    if (Number(days) === 90) return '90 дней';
+    return 'Месяц';
+  }
+
+  // Кнопки тарифов внутри синей карточки: человек видит все варианты и
+  // выбирает цену входа сам. Раньше всегда продавался месяц за 149 ₽.
+  function renderPlanChips() {
+    var wrap = document.getElementById('tarwrap');
+    if (!wrap || !STATE.plans || !STATE.plans.length) return;
+    var host = document.getElementById('planChipsBox');
+    if (!host) {
+      host = document.createElement('div');
+      host.id = 'planChipsBox';
+      wrap.insertBefore(host, wrap.firstChild);
+    }
+    host.innerHTML = '';
+    STATE.plans.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'planChip' + (STATE.current && p.product === STATE.current.product ? ' on' : '');
+      b.innerHTML = '<b>' + planTitle(p.days) + '</b><span>' + rub(p.amount) + '</span>';
+      b.addEventListener('click', function () {
+        STATE.current = p;
+        Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('on'); });
+        b.classList.add('on');
+        paintPlans();
+        showBalanceButton();
+      });
+      host.appendChild(b);
+    });
+  }
+
   function paintPlans() {
     var node = priceNode();
     if (!node || !STATE.current || !STATE.current.amount) return;
     var base = Number(STATE.current.amount) || 0;
     var pct = Number(window.__promoPercent || 0);
     var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
-    var html = rub(price).replace(' \u20BD', ' <span>руб/мес</span>');
+    var html = rub(price).replace(' \u20BD', ' <span>' + unitLabel(STATE.current.days) + '</span>');
     if (pct) {
       html += ' <span style="text-decoration:line-through;opacity:.6;font-size:12px">'
-            + rub(base) + '</span>';
+            + rub(base) + '</span>'
+            + ' <b style="color:#8ef0b1">−' + pct + '%</b>';
     }
     node.innerHTML = html;
+    var btn = document.getElementById('payBtn');
+    if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub(price);
   }
 
   function paintPaid(days) {
@@ -82,6 +124,8 @@
       btn.disabled = true;
       btn.style.opacity = '0.65';
     }
+    var chips = document.getElementById('planChipsBox');
+    if (chips) chips.style.display = 'none';
     var plus = document.getElementById('pluspill');
     if (plus) plus.style.display = 'inline-flex';
   }
@@ -93,9 +137,12 @@
       var data = await window.PolkaAPI.api('/api/pay/plans');
       STATE.plans = data.plans || [];
       STATE.plan = data.plan || 'trial';
+      var wanted = String(data.default_product || 'plus_30');
       STATE.current =
+        STATE.plans.filter(function (p) { return p.product === wanted; })[0] ||
         STATE.plans.filter(function (p) { return p.product === 'plus_30'; })[0] ||
         STATE.plans[0] || null;
+      renderPlanChips();
       paintPlans();
       showBalanceButton();
       if (STATE.plan && STATE.plan !== 'trial' && STATE.plan !== 'free') {
@@ -369,7 +416,27 @@
     window.go = wrapped;
   }
 
+  function readPromoFromUrl() {
+    var code = '';
+    try {
+      code = new URLSearchParams(location.search).get('promo') || '';
+    } catch (e) { }
+    if (!code) return;
+    window.__promo = String(code).trim().toUpperCase();
+    window.PolkaAPI.api('/api/pay/promo-check?code=' + encodeURIComponent(code))
+      .then(function (res) {
+        var pct = Number((res && (res.percent || res.discount)) || 0);
+        if (pct > 0) {
+          window.__promoPercent = pct;
+          paintPlans();
+          showBalanceButton();
+        }
+      })
+      .catch(function () { });
+  }
+
   function init() {
+    readPromoFromUrl();
     wirePayButton();
     // Скидка пришла — пересчитываем цену на кнопке
     window.addEventListener('polka:promo', function () {

@@ -15,6 +15,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, '..')
 SRC = open(os.path.join(ROOT, 'polka_bot-9-3.py'), encoding='utf-8').read()
 ADP = open(os.path.join(ROOT, 'polka-final/frontend/proto/adapter.js'), encoding='utf-8').read()
+PAY = open(os.path.join(ROOT, 'polka-final/frontend/proto/payments.js'), encoding='utf-8').read()
 
 ok = 0
 fail = 0
@@ -89,10 +90,13 @@ check('цикл дожима запускается', "create_task(_conversion_l
 check('пометка касаний хранится', "'conv:'" in SRC or 'f\'conv:{' in SRC or 'conv:{int(user_id)}' in SRC)
 check('есть предпросмотр conv_test', "action == 'conv_test'" in SRC)
 
-# 8) клиент: скидка из ссылки видна в цене
-check('клиент читает promo из ссылки', "get('promo')" in ADP)
-check('клиент показывает цену со скидкой', 'function applyPromoPrice(' in ADP)
-check('старая цена зачёркнута', '<s style=' in ADP)
+# 8) клиент: скидка из ссылки видна в цене (канонический владелец — payments.js)
+check('клиент читает promo из ссылки', "get('promo')" in PAY)
+check('клиент применяет скидку к цене', 'window.__promoPercent = pct' in PAY)
+check('старая цена зачёркнута', 'line-through' in PAY)
+check('есть выбор тарифа', 'function renderPlanChips(' in PAY)
+check('A/B: тариф по умолчанию с сервера', "data.default_product" in PAY)
+check('цена подписана по сроку', 'function unitLabel(' in PAY)
 
 # 9) лимит одноразового промокода реально проверяется
 check('счётчик берётся из колонки uses', "promo.get('uses')" in SRC)
