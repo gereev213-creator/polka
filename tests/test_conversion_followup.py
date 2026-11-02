@@ -94,6 +94,12 @@ check('клиент читает promo из ссылки', "get('promo')" in ADP
 check('клиент показывает цену со скидкой', 'function applyPromoPrice(' in ADP)
 check('старая цена зачёркнута', '<s style=' in ADP)
 
+# 9) лимит одноразового промокода реально проверяется
+check('счётчик берётся из колонки uses', "promo.get('uses')" in SRC)
+check('инкремент пишет в uses', 'SET uses=COALESCE(uses,0)+1' in SRC)
+check('нет старой колонки в апдейте', 'current_uses=current_uses+1' not in SRC)
+check('заблокированные не получают касания', 'if uid in blocked' in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')

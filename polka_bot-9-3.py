@@ -24226,7 +24226,11 @@ def promo_discount(code: str) -> Dict:
         if parsed is not None and parsed < get_moscow_time():
             return {'ok': False, 'error': 'expired', 'detail': 'Срок промокода истёк'}
     limit = int(promo.get('max_uses') or 0)
-    used = int(promo.get('current_uses') or 0)
+    # В таблице promo_codes колонка называется uses. Раньше здесь читался
+    # current_uses от старой таблицы promocodes: .get() возвращал 0, лимит
+    # никогда не проверялся, и одноразовой скидкой можно было пользоваться
+    # бесконечно.
+    used = int(promo.get('uses') or promo.get('current_uses') or 0)
     if limit and used >= limit:
         return {'ok': False, 'error': 'limit', 'detail': 'Промокод больше не действует'}
     pct = max(1, min(100, int(promo.get('value') or 0)))
@@ -24240,7 +24244,7 @@ def promo_mark_used(code: str) -> None:
         return
     try:
         cursor = db.conn.cursor()
-        cursor.execute("UPDATE promo_codes SET current_uses=current_uses+1 WHERE code=?", (code,))
+        cursor.execute("UPDATE promo_codes SET uses=COALESCE(uses,0)+1 WHERE code=?", (code,))
         db.conn.commit()
     except Exception as e:
         logger.warning(f"promo_mark_used: {e}")
@@ -26814,6 +26818,10 @@ def _conv_plan() -> List[Dict]:
     actions: List[Dict] = []
     now = get_moscow_time()
     try:
+        blocked = _blocked_user_ids()
+    except Exception:
+        blocked = set()
+    try:
         cur = db.conn.cursor()
         # A. Зашёл и не создал ни одного поиска дольше суток — показываем
         #    ценность, денег не просим.
@@ -26825,7 +26833,7 @@ def _conv_plan() -> List[Dict]:
         for row in cur.fetchall():
             row = dict(row)
             uid = int(row['user_id'])
-            if _conv_state_get(uid):
+            if uid in blocked or _conv_state_get(uid):
                 continue
             try:
                 user = db.get_user(uid) or {}
@@ -26848,6 +26856,8 @@ def _conv_plan() -> List[Dict]:
         for row in cur.fetchall():
             row = dict(row)  # sqlite3.Row не умеет .get()
             uid = int(row['user_id'])
+            if uid in blocked:
+                continue
             query = str(row.get('query') or '')
             state = _conv_state_get(uid)
             stage_num = 0
