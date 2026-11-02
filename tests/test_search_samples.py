@@ -58,7 +58,7 @@ check('ошибка примеров не ломает форму', 'приме�
 # 4) мусор не попадает в примеры (чехлы, плёнки, коробки)
 check('есть фильтр мусора', 'def _sample_is_junk(' in SRC)
 check('использует общие списки находок', 'HUNT_RE_JUNK_START' in SRC and 'HUNT_RE_JUNK_ANYWHERE' in SRC)
-check('фильтр применяется в выдаче', 'if _sample_is_junk(title, q):' in SRC)
+check('фильтр применяется в выдаче', 'if _sample_is_junk(title, q,' in SRC)
 check('не фильтрует слово из запроса', 'not in low_q' in SRC)
 
 # 5) живая проверка фильтра мусора (функции достаём из исходника)
@@ -90,6 +90,10 @@ check('аксессуар «для запроса» отсекается',
       is_junk('Apple USB-C 20W для iPhone 11-17 Pro Max', 'iphone'))
 check('товар с «для» в подарок не отсекается',
       not is_junk('Куртка зимняя для мальчика', 'куртка'))
+check('аксессуар «для» отсекается и по латинскому варианту',
+      is_junk('Apple USB-C 20W для iPhone 11-17 Pro Max', 'айфон', 'iphone'))
+check('телефон с «для» в подарок не отсекается',
+      not is_junk('iPhone 15 Pro 128 ГБ', 'айфон', 'iphone'))
 
 # 6) регресс: дедуп не должен ронять выдачу (NameError в _collect)
 _start = SRC.index('async def api_hunt_sample(')

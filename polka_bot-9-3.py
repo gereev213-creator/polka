@@ -25759,7 +25759,7 @@ def _alias_expand_cached(query: str) -> List[str]:
     return _alias_expand(query, data.get('pairs') or {}, data.get('phon') or {})
 
 
-def _sample_is_junk(title: str, query: str) -> bool:
+def _sample_is_junk(title: str, query: str, alternates: str = '') -> bool:
     """Мусор ли объявление для примеров: чехлы, плёнки, коробки, реплики.
 
     Переиспользуем те же списки, что отсеивают находки: иначе на запрос
@@ -25778,12 +25778,16 @@ def _sample_is_junk(title: str, query: str) -> bool:
             return True
         # «Apple USB-C 20W для iPhone» — аксессуар для запроса, а не телефон:
         # если искомое слово стоит ПОСЛЕ «для», это товар «для него».
-        token = next((w for w in low_q.split() if len(w) >= 3), '')
-        if token and ' для ' in low_title:
-            pos_q = low_title.find(token)
+        # Проверяем и исходный запрос, и латинские варианты из словаря
+        # («айфон» → iphone), иначе правило не срабатывало на латинских
+        # заголовках.
+        tokens = [w for w in (low_q + ' ' + str(alternates or '').lower()).split()
+                  if len(w) >= 3]
+        if ' для ' in low_title:
             pos_for = low_title.find(' для ')
-            if pos_q > pos_for:
-                return True
+            for token in tokens:
+                if low_title.find(token) > pos_for:
+                    return True
     except Exception:
         return False
     return False
@@ -25856,7 +25860,7 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
             title = str(ad.get('title') or '').strip()[:90]
             if not title:
                 continue
-            if _sample_is_junk(title, q):
+            if _sample_is_junk(title, q, ' '.join(terms[1:])):
                 continue
             key = (title.lower(), price)
             if key in seen_keys:
