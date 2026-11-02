@@ -53,13 +53,14 @@ check('не больше 4 карточек за проход', 'limit=4' in SRC
 
 # 4) тихий режим
 check('есть настройка auto_sends.paused', "'auto_sends.paused'" in SRC)
-check('по умолчанию выключено', "('str', None, None, '1'" in SRC)
+check('по умолчанию автосообщения включены', "('str', None, None, '0'" in SRC)
 check('есть хелпер', 'def _auto_sends_paused(' in SRC)
 check('дожим уважает тишину', 'дожим: тихий режим' in SRC)
 check('продление уважает тишину', 'продление: тихий режим' in SRC)
 check('уведомления о паузе уважают тишину',
       SRC.count('if not _auto_sends_paused():') >= 2)
 check('есть действие auto_sends', "action == 'auto_sends'" in SRC)
+check('тесты только на админов', "'test_only_admin'" in SRC)
 
 print()
 if fail:

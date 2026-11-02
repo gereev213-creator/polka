@@ -23831,8 +23831,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     # 1 — автоматические сообщения пользователям выключены (дожим,
     # напоминания, уведомления о паузе). Нужно, чтобы правки и тесты не
     # уходили живым людям: именно из-за этого ушли двое.
-    'auto_sends.paused': ('str', None, None, '1',
-                          '1 — не отправлять автосообщения, 0 — отправлять'),
+    'auto_sends.paused': ('str', None, None, '0',
+                          '1 — не отправлять автосообщения (тихий режим), '
+                          '0 — отправлять как обычно'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
     'collector.targets': ('int', 1, 5, 1, 'Целей за проход сборщика'),
@@ -26815,16 +26816,16 @@ CONV_STAGE2_HOURS = 72
 
 
 def _auto_sends_paused() -> bool:
-    """Выключены ли автоматические сообщения пользователям.
+    """Включён ли тихий режим (автосообщения не отправляются).
 
-    По умолчанию — выключены (1). Включаются осознанно: /set
-    auto_sends.paused 0 или действием обслуживания. Так правки и тесты не
-    уходят живым людям.
+    По умолчанию автосообщения РАБОТАЮТ (0). Тихий режим — ручной
+    инструмент на время правок: /set auto_sends.paused 1. Тестовые
+    отправки при этом идут только на аккаунты админов.
     """
     try:
-        return str(cfg_get('auto_sends.paused') or '1') == '1'
+        return str(cfg_get('auto_sends.paused') or '0') == '1'
     except Exception:
-        return True
+        return False
 
 
 def _conv_state_get(user_id: int) -> str:
@@ -33553,6 +33554,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             who = int(ADMIN_USER_IDS[0])
         if not who:
             return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        if int(who) not in ADMIN_USER_IDS:
+            return _miniapp_json({'ok': False, 'error': 'test_only_admin',
+                                  'detail': 'Тестовые отправки — только на аккаунты админов'},
+                                 status=403)
         await _notify_trial_extended(who, str((body or {}).get('query') or 'куртка зимняя мужская'),
                                      int((body or {}).get('crit') or 0))
         return _miniapp_json({'ok': True, 'sent_to': who})
@@ -33568,6 +33573,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             who = int(ADMIN_USER_IDS[0])
         if not who:
             return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        if int(who) not in ADMIN_USER_IDS:
+            return _miniapp_json({'ok': False, 'error': 'test_only_admin',
+                                  'detail': 'Тестовые отправки — только на аккаунты админов'},
+                                 status=403)
         await _notify_trial_expired(who, str((body or {}).get('query') or 'куртка зимняя мужская'),
                                     int((body or {}).get('crit') or 0))
         return _miniapp_json({'ok': True, 'sent_to': who})
@@ -33666,6 +33675,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             who = int(ADMIN_USER_IDS[0])
         if not who:
             return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        if int(who) not in ADMIN_USER_IDS:
+            return _miniapp_json({'ok': False, 'error': 'test_only_admin',
+                                  'detail': 'Тестовые отправки — только на аккаунты админов'},
+                                 status=403)
         exp = str((body or {}).get('expires_at') or
                   (get_moscow_time() + timedelta(days=3)).isoformat())
         text = _renew_caption(int((body or {}).get('days') or 3), exp)
@@ -33695,6 +33708,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             who = int(ADMIN_USER_IDS[0])
         if not who:
             return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        if int(who) not in ADMIN_USER_IDS:
+            return _miniapp_json({'ok': False, 'error': 'test_only_admin',
+                                  'detail': 'Тестовые отправки — только на аккаунты админов'},
+                                 status=403)
         stage = str((body or {}).get('stage') or 'first')
         promo = await asyncio.to_thread(issue_personal_promo, who)
         price = int(cfg_get('pay.rub_30') or 149)
