@@ -2823,6 +2823,11 @@ class Database:
             "ALTER TABLE hunt_criteria ADD COLUMN mode TEXT DEFAULT 'any'",
             # Когда мы уже объяснили человеку, что по критерию пока пусто
             "ALTER TABLE hunt_criteria ADD COLUMN told_empty_at TEXT",
+            # Почему поиск на паузе: 'ttl' — истекли бесплатные сутки,
+            # 'limit' — лишний по тарифу. Без этой колонки UPDATE падал,
+            # ошибка глушилась, и авто-пауза через 24 часа не срабатывала
+            # вообще — поиски висели активными, и никто не платил.
+            "ALTER TABLE hunt_criteria ADD COLUMN paused_reason TEXT DEFAULT ''",
         ]:
             try:
                 cursor.execute(_col_sql)
@@ -26973,7 +26978,8 @@ def ensure_filter_blob_column() -> None:
     колонка добавляется отдельно и только если её нет.
     """
     for column in ('filter_blob', 'filter_url', 'filter_labels',
-                   'from_link', 'search_path', 'search_q', 'search_filters', 'search_user'):
+                   'from_link', 'search_path', 'search_q', 'search_filters', 'search_user',
+                   'paused_reason'):
         try:
             have = {r[0] for r in db.conn.execute(
                 "SELECT name FROM pragma_table_info('hunt_criteria')")}

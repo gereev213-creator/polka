@@ -93,6 +93,12 @@ TPL = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/template.html'),
 check('десктопная колонка по центру', '@media (min-width: 620px)' in TPL)
 check('ширина колонки 420px', 'width:420px!important' in TPL)
 
+# 9) колонка причины паузы реально существует (миграция)
+check('миграция paused_reason есть',
+      "ALTER TABLE hunt_criteria ADD COLUMN paused_reason" in SRC)
+check('paused_reason во втором списке миграций',
+      "'paused_reason')" in SRC or '"paused_reason"' in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
