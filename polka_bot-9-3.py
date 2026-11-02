@@ -25633,6 +25633,14 @@ def _sample_is_junk(title: str, query: str) -> bool:
         m2 = HUNT_RE_JUNK_START.match(low_title)
         if m2 and m2.group(0).lower() not in low_q:
             return True
+        # «Apple USB-C 20W для iPhone» — аксессуар для запроса, а не телефон:
+        # если искомое слово стоит ПОСЛЕ «для», это товар «для него».
+        token = next((w for w in low_q.split() if len(w) >= 3), '')
+        if token and ' для ' in low_title:
+            pos_q = low_title.find(token)
+            pos_for = low_title.find(' для ')
+            if pos_q > pos_for:
+                return True
     except Exception:
         return False
     return False
