@@ -2500,8 +2500,12 @@ def push_details(server: str, token: str, source: str, items: list) -> dict:
         return json.loads(resp.read().decode())
 
 
+DETAILS_PAUSE = (float(os.environ.get('POLKA_DETAILS_PAUSE_MIN') or 4),
+                 float(os.environ.get('POLKA_DETAILS_PAUSE_MAX') or 9))
+
+
 def collect_details(server: str, token: str, source: str, items: list,
-                    pause: tuple = (4.0, 9.0)) -> int:
+                    pause: tuple = None) -> int:
     """Открывает карточки кандидатов и присылает описания на сервер.
 
     Сервер этого сделать не может: он в дата-центре, и Авито его блокирует,
@@ -2515,6 +2519,8 @@ def collect_details(server: str, token: str, source: str, items: list,
     шлём — иначе три неудачных прохода подряд навсегда закроют карточку.
     """
     global _DETAILS_BLOCKED, _DETAILS_BLOCKED_SINCE
+    if pause is None:
+        pause = DETAILS_PAUSE
     if not items:
         return 0
     if _DETAILS_BLOCKED:

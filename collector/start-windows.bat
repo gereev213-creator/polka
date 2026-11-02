@@ -16,6 +16,12 @@ set "POLKA_REQUEST_GAP_MAX=30"
 rem --- How long to wait for manual Avito check in browser window ---
 set "POLKA_MANUAL_WAIT=600"
 
+rem --- Details (descriptions, seller, params: battery/memory/size) ---
+set "POLKA_DETAILS_PER_PASS=6"
+rem --- Pauses between item pages: Avito blocks fast crawling ---
+set "POLKA_DETAILS_PAUSE_MIN=40"
+set "POLKA_DETAILS_PAUSE_MAX=80"
+
 if not exist logs mkdir logs
 if not exist config.json (
   echo config.json not found. Copy it from the other computer into this folder.
