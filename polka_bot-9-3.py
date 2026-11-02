@@ -2828,6 +2828,9 @@ class Database:
             # ошибка глушилась, и авто-пауза через 24 часа не срабатывала
             # вообще — поиски висели активными, и никто не платил.
             "ALTER TABLE hunt_criteria ADD COLUMN paused_reason TEXT DEFAULT ''",
+            # Сколько часов бесплатный поиск уже продлевали компенсацией:
+            # находок нет → сутки добавляются (до trial.max_extensions).
+            "ALTER TABLE hunt_criteria ADD COLUMN free_extended_hours INTEGER DEFAULT 0",
         ]:
             try:
                 cursor.execute(_col_sql)
@@ -26201,56 +26204,129 @@ def _user_plan(user_id: int) -> Dict:
             'show_price': int(cfg_get('plus.price_display_old'))}
 
 
-def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
-    """Бесплатный поиск живёт сутки, потом встаёт на паузу.
+def _ttl_decision(now, created_at, ext_hours: int, findings: int,
+                  max_ext_hours: int, allow_extend: bool = True) -> str:
+    """Что делать с бесплатным поиском: 'wait' | 'extend' | 'pause'.
 
-    report (если передан) заполняется подробностями: сколько кандидатов
-    нашли, какие у них планы и что ответила база. Без этого поломки вроде
+    Правило продукта: сутки поиска бесплатны, но если человеку НЕ ПРИШЛО
+    ни одной находки — сутки продлеваются компенсацией (до
+    trial.max_extensions раз). Пауза только когда находки были (значит
+    ценность показана) или когда лимит продлений исчерпан.
+    """
+    try:
+        created = created_at
+        if isinstance(created_at, str):
+            created = datetime.fromisoformat(str(created_at))
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=now.tzinfo)
+        age_hours = (now - created).total_seconds() / 3600.0
+    except Exception:
+        return 'wait'
+    window = float(int(FREE_CRITERION_TTL_HOURS) + int(ext_hours or 0))
+    if age_hours < window:
+        return 'wait'
+    if allow_extend and int(findings or 0) <= 0 and int(ext_hours or 0) < int(max_ext_hours or 0):
+        return 'extend'
+    return 'pause'
+
+
+def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
+    """Сутки бесплатного поиска: продлить, если находок не было, иначе пауза.
+
+    report (если передан) заполняется подробностями: сколько кандидатов,
+    какие планы, кого продлили и что ответила база. Без этого поломки вроде
     «колонки paused_reason нет» было не видно: ошибка глушилась в логе.
     """
-    cutoff = (get_moscow_time() - timedelta(hours=int(FREE_CRITERION_TTL_HOURS))).isoformat()
+    now = get_moscow_time()
+    base_cutoff = (now - timedelta(hours=int(FREE_CRITERION_TTL_HOURS))).isoformat()
     cursor = db.conn.cursor()
     paused = 0
+    extended = 0
     if report is None:
         report = {}
-    report['cutoff'] = cutoff
+    report['cutoff'] = base_cutoff
     report['candidates'] = 0
     report['details'] = []
     try:
+        _max_ext = int(cfg_get('trial.max_extensions') or 0)
+    except Exception:
+        _max_ext = 0
+    max_ext_hours = max(0, _max_ext) * int(FREE_CRITERION_TTL_HOURS)
+    try:
         cursor.execute(
-            "SELECT id, user_id, query, created_at FROM hunt_criteria WHERE active=1 "
-            "AND COALESCE(created_at,'') <> '' AND created_at < ? "
-            "ORDER BY id LIMIT 500", (cutoff,))
+            "SELECT id, user_id, query, created_at, "
+            "COALESCE(free_extended_hours,0) AS ext FROM hunt_criteria "
+            "WHERE active=1 AND COALESCE(created_at,'') <> '' AND created_at < ? "
+            "ORDER BY id LIMIT 500", (base_cutoff,))
         rows = [dict(r) for r in cursor.fetchall()]
         report['candidates'] = len(rows)
         for r in rows:
+            uid = int(r['user_id'])
             try:
-                plan = str(_user_plan(int(r['user_id'])).get('name') or '')
+                plan = str(_user_plan(uid).get('name') or '')
             except Exception as e:
                 plan = '?'
                 report['details'].append(f"plan_err id{r['id']}: {e}")
-            report['details'].append(
-                f"id{r['id']} u{r['user_id']} plan={plan} at={str(r.get('created_at'))[:16]}")
             if plan not in ('free', 'trial'):
+                report['details'].append(
+                    f"id{r['id']} u{uid} plan={plan} — пропуск (платный)")
                 continue
+            ext = int(r.get('ext') or 0)
+            trial_started = ''
+            try:
+                user = db.get_user(uid) or {}
+                trial_started = str(user.get('trial_started_at') or '')
+            except Exception:
+                trial_started = ''
+            findings = _user_findings_since(uid, trial_started or str(r.get('created_at')))
+            decision = _ttl_decision(now, r.get('created_at'), ext, findings,
+                                     max_ext_hours, allow_extend=(plan == 'trial'))
+            report['details'].append(
+                f"id{r['id']} u{uid} plan={plan} ext={ext} находок={findings} "
+                f"→ {decision} at={str(r.get('created_at'))[:16]}")
+            if decision == 'wait':
+                continue
+            if decision == 'extend':
+                # Компенсация: человек не увидел ни одной находки. Продлеваем
+                # и сам поиск, и пробный период, чтобы не брать деньги за пустоту.
+                ok_ext = False
+                try:
+                    _ext_fn = globals().get('_extend_trial_compensation')
+                    ok_ext = bool(_ext_fn and _ext_fn(uid, trial_started, _max_ext))
+                except Exception as e:
+                    report['details'].append(f"extend_err id{r['id']}: {e}")
+                if ok_ext:
+                    try:
+                        cursor.execute(
+                            "UPDATE hunt_criteria SET free_extended_hours=? WHERE id=?",
+                            (ext + int(FREE_CRITERION_TTL_HOURS), int(r['id'])))
+                        extended += 1
+                        report.setdefault('extended_rows', []).append(
+                            {'id': int(r['id']), 'user_id': uid,
+                             'query': str(r.get('query') or '')})
+                    except Exception as e:
+                        report['details'].append(f"extend_upd_err id{r['id']}: {e}")
+                    continue
+                # Продления кончились — дальше обычная пауза
             try:
                 cursor.execute(
                     "UPDATE hunt_criteria SET active=0, paused_reason='ttl' WHERE id=?",
                     (int(r['id']),))
                 paused += 1
                 report.setdefault('paused_rows', []).append(
-                    {'id': int(r['id']), 'user_id': int(r['user_id']),
+                    {'id': int(r['id']), 'user_id': uid,
                      'query': str(r.get('query') or '')})
             except Exception as e:
                 report['details'].append(f"update_err id{r['id']}: {e}")
-        if paused:
+        if paused or extended:
             db.conn.commit()
-            logger.info(f"Бесплатные поиски старше {FREE_CRITERION_TTL_HOURS} ч "
-                        f"поставлены на паузу: {paused}")
+            logger.info(f"Бесплатные поиски: продлено {extended}, "
+                        f"на паузу {paused}")
     except Exception as e:
         logger.exception(f"pause free criteria: {e}")
         report['error'] = f"{type(e).__name__}: {e}"
     report['paused'] = paused
+    report['extended'] = extended
     return paused
 
 
@@ -26372,6 +26448,7 @@ async def pause_expired_free_criteria_job(context=None) -> None:
         # Пишем КАЖДЫЙ прогон, даже пустой: иначе «джоб молчит» не отличить
         # от «джоб не запускается».
         logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
+                    f"продлено {rep.get('extended')}, "
                     f"на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
         for row in rep.get('paused_rows') or []:
             await _notify_trial_expired(row.get('user_id'), row.get('query'),
@@ -27186,7 +27263,7 @@ def ensure_filter_blob_column() -> None:
     """
     for column in ('filter_blob', 'filter_url', 'filter_labels',
                    'from_link', 'search_path', 'search_q', 'search_filters', 'search_user',
-                   'paused_reason'):
+                   'paused_reason', 'free_extended_hours'):
         try:
             have = {r[0] for r in db.conn.execute(
                 "SELECT name FROM pragma_table_info('hunt_criteria')")}
@@ -30845,6 +30922,7 @@ async def _ttl_pause_loop(bot) -> None:
         try:
             await asyncio.to_thread(pause_expired_free_criteria, rep)
             logger.info(f"ttl pause loop: кандидатов {rep.get('candidates')}, "
+                        f"продлено {rep.get('extended')}, "
                         f"на паузу {rep.get('paused')}, "
                         f"ошибка {rep.get('error') or 'нет'}")
             for row in rep.get('paused_rows') or []:

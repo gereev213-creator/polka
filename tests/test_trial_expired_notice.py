@@ -78,7 +78,7 @@ check('статистика по критерию есть', 'def _trial_expired
 check('считает отправленные', "status='sent'" in SRC)
 check('берёт лучший лот по выгоде', 'ORDER BY COALESCE(hm.discount,0) DESC' in SRC)
 check('уведомление принимает критерий', 'async def _notify_trial_expired(user_id: int, query: str, crit_id: int = 0)' in SRC)
-check('пауза передаёт id критерия', "{'id': int(r['id']), 'user_id': int(r['user_id'])" in SRC)
+check('пауза передаёт id критерия', "{'id': int(r['id']), 'user_id': uid" in SRC)
 check('кнопка «Открыть находку» есть', 'Открыть находку' in SRC)
 check('кнопка ведёт на ссылку находки', "'url': best_url" in SRC)
 
