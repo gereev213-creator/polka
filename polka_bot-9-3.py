@@ -19375,6 +19375,7 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception as _se:
         out['source_sha'] = f'err:{_se}'[:40]
     out['app_bound'] = globals().get('_APP') is not None
+    out['async_loops'] = list(_ASYNC_LOOPS)
     out['jobs'] = list(_SCHEDULED_JOBS)
     out['jobs_count'] = len(_SCHEDULED_JOBS)
     # Живая проверка: планировщик уже запущен, поэтому jobs() работает.
@@ -19461,6 +19462,8 @@ _LOOP_LAG: Dict[str, Any] = {'max_ms': 0, 'count': 0, 'last_ms': 0, 'at': ''}
 # Имена задач планировщика — для диагностики /api/diag: видно,
 # действительно ли зарегистрированы авто-пауза, дайджест и прочее.
 _SCHEDULED_JOBS: List[str] = []
+# Фоновые asyncio-циклы (не через JobQueue): видно в /api/diag
+_ASYNC_LOOPS: List[str] = []
 # Один запрос к SQLite не должен держать блокировку дольше этого времени
 SLOW_REQUEST_MS = int(os.environ.get('SLOW_REQUEST_MS', '1500'))
 MEDIANS_DEBOUNCE_SEC = int(os.environ.get('MEDIANS_DEBOUNCE_SEC', '150'))
@@ -30695,6 +30698,44 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
         return {'ok': False, 'error': str(e)[:160]}
 
 
+async def _ttl_pause_loop(bot) -> None:
+    """Авто-пауза бесплатных поисков — своим циклом, не через JobQueue.
+
+    JobQueue на этом сервере задачи не удерживает (jobs() пуст, задачи не
+    срабатывают), поэтому критичное для денег действие держим на asyncio —
+    так же, как пересчёт находок, который работает.
+    """
+    await asyncio.sleep(90)
+    while True:
+        rep: Dict = {}
+        try:
+            await asyncio.to_thread(pause_expired_free_criteria, rep)
+            logger.info(f"ttl pause loop: кандидатов {rep.get('candidates')}, "
+                        f"на паузу {rep.get('paused')}, "
+                        f"ошибка {rep.get('error') or 'нет'}")
+            for row in rep.get('paused_rows') or []:
+                await _notify_trial_expired(row.get('user_id'), row.get('query'))
+        except Exception as e:
+            logger.exception(f"ttl pause loop: {e}")
+        await asyncio.sleep(900)
+
+
+async def _admin_digest_loop(bot) -> None:
+    """Находка дня админу: свой цикл, раз в сутки в 10:00 МСК."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            now = get_moscow_time()
+            today = now.strftime('%Y-%m-%d')
+            if now.hour == 10 and str(cfg_get('digest.last_day') or '') != today:
+                _setting_set('digest.last_day', today)
+                n = await send_daily_digest(bot, limit=5)
+                logger.info(f"daily digest loop: отправлено {n}")
+        except Exception as e:
+            logger.exception(f"daily digest loop: {e}")
+        await asyncio.sleep(600)
+
+
 async def _finding_of_day_loop(bot):
     """Раз в 15 минут проверяем, не пора ли опубликовать находку дня."""
     await asyncio.sleep(40)
@@ -30735,6 +30776,18 @@ async def post_init(application: Application):
         logger.info("конкурс: планировщик итогов запущен")
     except Exception as _ce:
         logger.warning(f"contest task: {_ce}")
+    try:
+        asyncio.create_task(_ttl_pause_loop(application.bot))
+        _ASYNC_LOOPS.append('ttl_pause_loop')
+        logger.info("ttl pause: фоновый цикл запущен")
+    except Exception as _te:
+        logger.warning(f"ttl pause task: {_te}")
+    try:
+        asyncio.create_task(_admin_digest_loop(application.bot))
+        _ASYNC_LOOPS.append('admin_digest_loop')
+        logger.info("daily digest: фоновый цикл запущен")
+    except Exception as _de:
+        logger.warning(f"daily digest task: {_de}")
     init_fts5()
     # Сбрасываем старые команды принудительно
     try:

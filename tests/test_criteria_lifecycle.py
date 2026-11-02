@@ -105,6 +105,13 @@ check('уведомление отправляется из джоба', 'await 
 check('джоб логирует каждый прогон', 'кандидатов {rep.get' in SRC)
 check('список джобов в диагностике', "_SCHEDULED_JOBS" in SRC and "out['jobs']" in SRC)
 
+# 11) критичные задачи держатся на asyncio-циклах, а не только на JobQueue
+check('есть цикл авто-паузы', 'async def _ttl_pause_loop(' in SRC)
+check('цикл авто-паузы запускается', "create_task(_ttl_pause_loop(" in SRC)
+check('есть цикл дайджеста', 'async def _admin_digest_loop(' in SRC)
+check('цикл дайджеста запускается', "create_task(_admin_digest_loop(" in SRC)
+check('циклы видны в диагностике', "out['async_loops']" in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
