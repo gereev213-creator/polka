@@ -734,12 +734,17 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
    карточки в две колонки через пол-экрана. Держим телефонную колонку
    по центру — так же, как это делают все мини-аппы на десктопе. */
 @media (min-width: 620px){
-  html,body{display:flex!important;align-items:center!important;justify-content:center!important}
-  #wrap{position:relative!important;inset:auto!important;width:420px!important;
-        height:min(880px,94dvh)!important;margin:0 auto!important}
+  /* Телеграм на ПК открывает мини-апп в большом окне. Показываем его как
+     аккуратную «телефонную» колонку на фоне, а не растянутую страницу. */
+  html,body{display:flex!important;align-items:center!important;justify-content:center!important;
+            background:radial-gradient(1200px 600px at 50% -10%,#eef5fc 0%,#d7e6f7 55%,#c9dcf2 100%)!important}
+  #wrap{position:relative!important;inset:auto!important;width:440px!important;
+        height:min(900px,94dvh)!important;margin:0 auto!important;
+        border-radius:34px;overflow:hidden;
+        box-shadow:0 40px 90px rgba(24,58,120,.30),0 0 0 1px rgba(255,255,255,.55)}
   #stage{position:relative!important;left:auto!important;top:auto!important;
-         width:100%!important;height:100%!important;border-radius:32px!important;
-         box-shadow:0 24px 60px rgba(31,72,140,.25)!important}
+         width:100%!important;height:100%!important;border-radius:34px!important;
+         box-shadow:none!important}
 }
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
@@ -854,6 +859,16 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
               <button type="button" class="chip" data-seller="private">Только частник</button>
             </div>
           </div>
+          <div class="field" id="dynFilters" style="display:none">
+            <label id="dynFiltersLabel">Фильтры под запрос</label>
+            <div class="chips" style="margin-top:0" id="dynFiltersChips"></div>
+            <div class="field" id="sizeField" style="display:none;margin-top:10px">
+              <label>Размер</label>
+              <input id="sizeInput" placeholder="Например: 52, 42, L" autocomplete="off">
+            </div>
+            <div class="newHint" id="dynFiltersHint">Показываем только те фильтры,
+              которые имеют смысл для этого товара.</div>
+          </div>
           <div class="field">
             <label>Минус-слова</label>
             <input id="exclude" placeholder="запчасти, битый, ремонт">
@@ -868,32 +883,10 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
             </div>
           </div>
           <div class="field">
-            <label>Дополнительно</label>
-            <div class="chips" style="margin-top:0">
-              <button type="button" class="chip" data-req="оригинал">Оригинал</button>
-              <button type="button" class="chip" data-req="не вскрывался">Не вскрывался</button>
-              <button type="button" class="chip" data-req="полный комплект">Полный комплект</button>
-              <button type="button" class="chip" data-req="память от 256">Память от 256</button>
-              <button type="button" class="chip" data-req="год от 2015">Год от 2015</button>
-              <button type="button" class="chip" data-req="пробег до 100000">Пробег до 100 000</button>
-            </div>
-            <div class="newHint">Работают, когда продавец указал параметры в карточке:
-              память и АКБ — для телефонов и ноутбуков, год и пробег — для авто,
-              размер и состояние — для одежды и обуви.</div>
-          </div>
-          <div class="field">
             <label>Фото</label>
             <div class="chips" style="margin-top:0">
               <button type="button" class="chip" id="photoChip" data-photo="1">Только с фото</button>
             </div>
-          </div>
-          <div class="field">
-            <label>Батарея (для техники)</label>
-            <div class="chips" style="margin-top:0">
-              <button type="button" class="chip" data-req="АКБ от 85%">АКБ от 85%</button>
-            </div>
-            <div class="newHint">Покажем только лоты, где продавец указал
-              ёмкость аккумулятора не ниже — важно для iPhone и ноутбуков.</div>
           </div>
           <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.<br><b>На бесплатном — 1 активный поиск.</b> Новый можно создать, заменив старый.</div>
         </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>

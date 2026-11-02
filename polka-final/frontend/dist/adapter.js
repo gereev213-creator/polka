@@ -757,6 +757,96 @@ function paintEmpty(count) {
     } catch (e) { }
   }
 
+  // ── Фильтры под категорию ────────────────────────────────────────────
+  // Раньше внизу формы висели все фильтры сразу: АКБ, пробег, память, год —
+  // человеку с «курткой» они не нужны и только путают. Теперь набор зависит
+  // от запроса: техника → АКБ/память, авто → год/пробег, одежда → размер,
+  // у всех есть состояние, продавец и «оригинал/комплект».
+  const FILTER_SETS = {
+    tech: {
+      label: 'Техника',
+      chips: [['АКБ от 85%', 'АКБ от 85%'], ['Память от 256', 'память от 256'],
+              ['Не вскрывался', 'не вскрывался'], ['Полный комплект', 'полный комплект'],
+              ['Оригинал', 'оригинал']],
+      size: false,
+    },
+    auto: {
+      label: 'Авто',
+      chips: [['Год от 2015', 'год от 2015'], ['Пробег до 100 000', 'пробег до 100000'],
+              ['Не битый', 'не битый'], ['Один владелец', 'один владелец']],
+      size: false,
+    },
+    fashion: {
+      label: 'Одежда и обувь',
+      chips: [['Оригинал', 'оригинал'], ['Новое с биркой', 'новое с биркой']],
+      size: true,
+    },
+    home: {
+      label: 'Дом и мебель',
+      chips: [['Полный комплект', 'полный комплект']],
+      size: true,
+    },
+    general: {
+      label: 'Фильтры',
+      chips: [['Оригинал', 'оригинал'], ['Полный комплект', 'полный комплект']],
+      size: false,
+    },
+  };
+
+  const CATEGORY_WORDS = [
+    ['auto', ['авто', 'машин', 'автомобил', 'toyota', 'тойот', 'bmw', 'бмв', 'мерседес',
+              'audi', 'ауди', 'kia', 'киа', 'hyundai', 'хендай', 'nissan', 'ниссан',
+              'лада', 'ваз', 'пробег', 'двигател', 'коробка передач']],
+    ['tech', ['iphone', 'айфон', 'samsung', 'самсунг', 'xiaomi', 'сяоми', 'redmi', 'редми',
+              'ноутбук', 'макбук', 'macbook', 'airpods', 'эйрподс', 'наушник', 'ipad',
+              'айпад', 'планшет', 'playstation', 'плейстейшн', 'xbox', 'иксбокс',
+              'nintendo', 'свитч', 'телефон', 'смартфон', 'видеокарт', 'rtx', 'gtx',
+              'процессор', 'ryzen', 'intel', 'nvidia', 'ssd', 'hdd', 'монитор', 'приставк']],
+    ['fashion', ['куртк', 'худи', 'джинс', 'кроссовк', 'ботинк', 'платье', 'сумк',
+                 'пальто', 'пуховик', 'футболк', 'рубашк', 'шорт', 'штаны', 'обувь',
+                 'nike', 'найк', 'adidas', 'адидас', 'gucci', 'гуччи', 'stone island',
+                 'palm angels', 'off white', 'balenciaga', 'ботинк', 'сапог']],
+    ['home', ['диван', 'стол', 'кресл', 'шкаф', 'мебел', 'кроват', 'матrac', 'матрас',
+              'кухн', 'холодильник', 'стиральн']],
+  ];
+
+  function detectCategory(q) {
+    const low = String(q || '').toLowerCase();
+    for (const [key, words] of CATEGORY_WORDS) {
+      if (words.some((w) => low.includes(w))) return key;
+    }
+    return 'general';
+  }
+
+  function renderDynamicFilters() {
+    const qEl = $('q');
+    const box = $('dynFilters');
+    const chipsBox = $('dynFiltersChips');
+    const label = $('dynFiltersLabel');
+    const sizeField = $('sizeField');
+    if (!box || !chipsBox) return;
+    const q = String((qEl && qEl.value) || '').trim();
+    if (q.length < 2) { box.style.display = 'none'; return; }
+    const set = FILTER_SETS[detectCategory(q)] || FILTER_SETS.general;
+    label.textContent = set.label;
+    const prev = {};
+    [...chipsBox.querySelectorAll('.chip')].forEach((c) => {
+      prev[c.getAttribute('data-req')] = c.classList.contains('on');
+    });
+    chipsBox.innerHTML = '';
+    set.chips.forEach(([text, req]) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip' + (prev[req] ? ' on' : '');
+      b.setAttribute('data-req', req);
+      b.textContent = text;
+      b.addEventListener('click', () => b.classList.toggle('on'));
+      chipsBox.appendChild(b);
+    });
+    if (sizeField) sizeField.style.display = set.size ? 'block' : 'none';
+    box.style.display = 'block';
+  }
+
   // Новый поиск: отправка формы
   function wireForm() {
     const form = $('searchForm');
@@ -818,6 +908,8 @@ function paintEmpty(count) {
       }
     }
 
+    if (qEl) qEl.addEventListener('input', renderDynamicFilters);
+    setTimeout(renderDynamicFilters, 300);
     if (qEl && sampleBox) {
       qEl.addEventListener('input', () => {
         clearTimeout(sampleTimer);
@@ -851,6 +943,9 @@ function paintEmpty(count) {
       const seller = sellerEl ? String(sellerEl.getAttribute('data-seller') || 'any') : 'any';
       const chips = [...document.querySelectorAll('#searchForm .chip.on')]
         .map((b) => (b.getAttribute('data-req') || '').trim()).filter(Boolean);
+      const sizeEl = document.getElementById('sizeInput');
+      const sizeVal = sizeEl ? String(sizeEl.value || '').trim().slice(0, 12) : '';
+      if (sizeVal) chips.push('размер ' + sizeVal);
       if (seller === 'private') chips.push('только частник');
 
       // Новые условия поиска
@@ -915,6 +1010,8 @@ function paintEmpty(count) {
         form.reset();
         document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on'));
         if (sampleBox) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; }
+        const _df = document.getElementById('dynFilters');
+        if (_df) _df.style.display = 'none';
         if (typeof go === 'function') go('searches');
       }
     });
@@ -1560,7 +1657,10 @@ function paintEmpty(count) {
         }
       }
       set('pMeta', [raw.city, when, raw.condition || ''].filter(Boolean).join(' · '));
-      set('pDesc', raw.description || 'Описание на Авито — откройте объявление');
+      const _src = String(raw.source || '').toLowerCase();
+      const _board = _src === 'polka' || _src === 'miniapp';
+      set('pDesc', raw.description
+        || (_board ? 'Описание не добавлено' : 'Описание на Авито — откройте объявление'));
 
       // Фотографии: реальный список объявления (photo_urls приходит с сервера)
       const photos = (Array.isArray(raw.photo_urls) && raw.photo_urls.length
