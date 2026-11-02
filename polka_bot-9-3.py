@@ -25613,6 +25613,28 @@ async def api_chats_unread(request: aiohttp_web.Request) -> aiohttp_web.Response
         return _miniapp_json({'count': 0})
 
 
+def _sample_is_junk(title: str, query: str) -> bool:
+    """Мусор ли объявление для примеров: чехлы, плёнки, коробки, реплики.
+
+    Переиспользуем те же списки, что отсеивают находки: иначе на запрос
+    «айфон» в примерах висели «Чехол на iPhone» и «Повербанк для айфона», и
+    сервис выглядел как барахолка. Если само слово есть в запросе
+    («ищу чехол») — не фильтруем: человек ищет именно это.
+    """
+    low_title = str(title or '').lower()
+    low_q = str(query or '').lower()
+    try:
+        m = HUNT_RE_JUNK_ANYWHERE.search(low_title)
+        if m and m.group(0).lower() not in low_q:
+            return True
+        m2 = HUNT_RE_JUNK_START.match(low_title)
+        if m2 and m2.group(0).lower() not in low_q:
+            return True
+    except Exception:
+        return False
+    return False
+
+
 async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/hunt/sample?q= — что уже есть на Авито по этому запросу.
 
@@ -25655,6 +25677,8 @@ async def api_hunt_sample(request: aiohttp_web.Request) -> aiohttp_web.Response:
             photo = str(photos[0]) if isinstance(photos, list) and photos else ''
             title = str(ad.get('title') or '').strip()[:90]
             if not title:
+                continue
+            if _sample_is_junk(title, q):
                 continue
             key = (title.lower(), price)
             if key in seen:

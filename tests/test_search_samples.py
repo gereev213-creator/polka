@@ -55,6 +55,12 @@ check('клик открывает объявление', 'data-sample-url' in A
 check('примеры скрываются после создания', 'sampleBox.innerHTML = \'\'' in ADP)
 check('ошибка примеров не ломает форму', 'примеры — не критично' in ADP)
 
+# 4) мусор не попадает в примеры (чехлы, плёнки, коробки)
+check('есть фильтр мусора', 'def _sample_is_junk(' in SRC)
+check('использует общие списки находок', 'HUNT_RE_JUNK_START' in SRC and 'HUNT_RE_JUNK_ANYWHERE' in SRC)
+check('фильтр применяется в выдаче', 'if _sample_is_junk(title, q):' in SRC)
+check('не фильтрует слово из запроса', 'not in low_q' in SRC)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
