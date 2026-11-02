@@ -19107,11 +19107,15 @@ async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Resp
     price_map = {'plus_week': ('week', 7), 'week': ('week', 7),
                  'plus_30': ('plus_30', 30), 'plus_90': ('plus_90', 90)}
     _, days = price_map.get(product, ('plus_30', 30))
+    # Цена — та же, что в счёте: из настроек (pay.rub_week / pay.rub_30 /
+    # pay.rub_90). Раньше читалась несуществующая таблица pay_plans, и для
+    # 90 дней списывалось 149 ₽ вместо 349 ₽ — прямая потеря денег.
+    price = 0
     try:
-        cur = db.conn.cursor()
-        cur.execute("SELECT amount FROM pay_plans WHERE product=?", (product,))
-        row = cur.fetchone()
-        price = int(row['amount']) if row else 0
+        _prod_key = str(product)
+        if _prod_key not in CISPAY_PLANS:
+            _prod_key = 'plus_30' if days >= 30 else 'week'
+        price = int(round(_cispay_price(CISPAY_PLANS[_prod_key][1])))
     except Exception:
         price = 0
     if not price:
@@ -19139,6 +19143,11 @@ async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Resp
     except Exception as e:
         logger.warning(f'pay with balance: {e}')
         return _miniapp_err('save_failed', 500)
+    try:
+        _plan_event(int(viewer_id), 'balance_pay',
+                    {'product': product, 'amount': price, 'days': days})
+    except Exception:
+        pass
     expires = ''
     try:
         expires = _grant_plus_days(int(viewer_id), days) or ''
@@ -31467,6 +31476,92 @@ async def post_finding_of_the_day(bot=None, force: bool = False) -> Dict:
         return {'ok': False, 'error': str(e)[:160]}
 
 
+# ── Напоминание о продлении подписки ────────────────────────────────────────
+RENEW_REMIND_DAYS = 3
+
+
+def _renew_caption(days_left: int, expires_at: str) -> str:
+    """Текст напоминания о продлении: срок и что даёт Плюс."""
+    try:
+        _d = datetime.fromisoformat(str(expires_at))
+        until = _d.strftime('%d.%m')
+    except Exception:
+        until = ''
+    tail = f" (до {until})" if until else ''
+    return ("🔔 <b>«Плюс» заканчивается</b>\n\n"
+            f"Доступ закончится через {int(days_left)} дн.{tail}. "
+            "После этого поиски встанут на паузу и новые находки перестанут "
+            "приходить.\n\n"
+            "Продлить можно в приложении: 149 ₽ за месяц или 49 ₽ за неделю. "
+            "Если приглашали друзей — часть суммы можно закрыть балансом.")
+
+
+def _renew_plan() -> List[Dict]:
+    """Кому напомнить о продлении: у кого подписка кончается в ближайшие дни."""
+    actions: List[Dict] = []
+    now = get_moscow_time()
+    try:
+        blocked = _blocked_user_ids()
+    except Exception:
+        blocked = set()
+    try:
+        cur = db.conn.cursor()
+        cur.execute(
+            "SELECT user_id, MAX(expires_at) AS exp FROM subscriptions "
+            "WHERE expires_at <> '' GROUP BY user_id")
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning(f"renew plan: {e}")
+        return actions
+    for r in rows:
+        uid = int(r.get('user_id') or 0)
+        exp = str(r.get('exp') or '')
+        if not uid or not exp or uid in blocked:
+            continue
+        try:
+            exp_dt = datetime.fromisoformat(exp)
+        except Exception:
+            continue
+        hours_left = (exp_dt - now).total_seconds() / 3600.0
+        if hours_left <= 0:
+            continue
+        days_left = max(1, int(round(hours_left / 24.0)))
+        if days_left > RENEW_REMIND_DAYS:
+            continue
+        try:
+            if str(_setting_get(f'renew:{uid}') or '') == exp:
+                continue
+        except Exception:
+            pass
+        actions.append({'user_id': uid, 'expires_at': exp, 'days_left': days_left,
+                        'text': _renew_caption(days_left, exp),
+                        'kb': {'inline_keyboard': [
+                            [{'text': 'Продлить',
+                              'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}],
+                            [{'text': 'Открыть Полку',
+                              'web_app': {'url': _miniapp_url()}}],
+                        ]}})
+    return actions
+
+
+async def _renewal_loop(bot) -> None:
+    """Раз в 3 часа: напоминание о продлении за 3 дня и в день окончания."""
+    await asyncio.sleep(180)
+    while True:
+        try:
+            actions = await asyncio.to_thread(_renew_plan)
+            for a in actions:
+                ok = await _tg_send_html(a['user_id'], a['text'], a['kb'])
+                if ok:
+                    await asyncio.to_thread(_setting_set, f"renew:{a['user_id']}",
+                                            str(a['expires_at']))
+                    logger.info(f"продление: напоминание → {a['user_id']} "
+                                f"(осталось {a['days_left']} дн.)")
+        except Exception as e:
+            logger.exception(f"renewal loop: {e}")
+        await asyncio.sleep(3 * 3600)
+
+
 async def _conversion_loop(bot) -> None:
     """Дожим: касания после пробного — через сутки и через трое."""
     await asyncio.sleep(240)
@@ -31575,6 +31670,12 @@ async def post_init(application: Application):
         logger.info("ttl pause: фоновый цикл запущен")
     except Exception as _te:
         logger.warning(f"ttl pause task: {_te}")
+    try:
+        asyncio.create_task(_renewal_loop(application.bot))
+        _ASYNC_LOOPS.append('renewal_loop')
+        logger.info("продление подписки: фоновый цикл запущен")
+    except Exception as _rn:
+        logger.warning(f"renewal task: {_rn}")
     try:
         asyncio.create_task(_conversion_loop(application.bot))
         _ASYNC_LOOPS.append('conversion_loop')
@@ -33445,6 +33546,33 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
+
+    if action == 'renew_plan':
+        plan = await asyncio.to_thread(_renew_plan)
+        return _miniapp_json({'ok': True, 'count': len(plan),
+                              'items': [{k: a[k] for k in ('user_id', 'days_left')}
+                                        for a in plan[:20]]})
+
+    if action == 'renew_test':
+        who = 0
+        try:
+            who = int((body or {}).get('user') or 0)
+        except Exception:
+            who = 0
+        if not who and ADMIN_USER_IDS:
+            who = int(ADMIN_USER_IDS[0])
+        if not who:
+            return _miniapp_json({'ok': False, 'error': 'no_user'}, status=400)
+        exp = str((body or {}).get('expires_at') or
+                  (get_moscow_time() + timedelta(days=3)).isoformat())
+        text = _renew_caption(int((body or {}).get('days') or 3), exp)
+        kb = {'inline_keyboard': [
+            [{'text': 'Продлить',
+              'web_app': {'url': f"{_miniapp_url()}/?screen=tariffs"}}],
+            [{'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}],
+        ]}
+        await _tg_send_html(who, text, kb)
+        return _miniapp_json({'ok': True, 'sent_to': who})
 
     if action == 'conv_plan':
         # Что бы движок дожима отправил прямо сейчас (без отправки и пометок)
