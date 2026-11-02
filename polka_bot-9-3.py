@@ -20926,6 +20926,63 @@ async def _notify_admins_collector_disabled(why: str):
             pass
 
 
+async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
+    """Приносит описания и данные продавца для карточек, которым это нужно.
+
+    Без описания сервер не может проверить «частник / состояние / АКБ», и
+    человек получает лоты, которые не просил. Раньше этим занимался только
+    ноутбук, и в базе почти не было описаний (desc_state пустой у 4267 из
+    4267). Просим немного за проход и останавливаемся после двух блокировок.
+    """
+    try:
+        need = await asyncio.to_thread(hunt_need_details, None, limit)
+    except Exception as e:
+        logger.warning(f"details queue: {e}")
+        return 0
+    if not need:
+        return 0
+    items, blocked, done = [], 0, 0
+    for ad in need[:limit]:
+        url = str(ad.get('source_url') or '')
+        ext = str(ad.get('external_id') or '')
+        if not url.startswith('http') or not ext:
+            continue
+        try:
+            html = await asyncio.to_thread(collector.fetch_item, url, 25)
+        except Exception as e:
+            logger.info(f"details fetch: {e}")
+            html = ''
+        if not html:
+            blocked += 1
+            if blocked >= 2:
+                break
+            continue
+        try:
+            data = await asyncio.to_thread(collector.parse_item_page, html)
+        except Exception:
+            continue
+        if not data:
+            continue
+        items.append({
+            'external_id': ext,
+            'description': str(data.get('description') or '')[:4000],
+            'seller_type': str(data.get('seller_type') or ''),
+            'seller_name': str(data.get('seller_name') or ''),
+            'seller_ads': int(data.get('seller_ads') or 0),
+            'state': 'ok' if str(data.get('description') or '') else 'failed',
+        })
+        done += 1
+        await asyncio.sleep(2.5)   # не долбим Авито
+    if items:
+        try:
+            await asyncio.to_thread(collector.push_details, cfg['server'],
+                                    cfg['token'], 'avito', items)
+            logger.info(f"details: принесли {done} описаний")
+        except Exception as e:
+            logger.warning(f"details push: {e}")
+    return done
+
+
 async def _collector_inline_loop():
     """Собирает находки в этом же процессе — без второго интерпретатора."""
     if not COLLECTOR_ENABLED or not COLLECTOR_INLINE:
@@ -20989,6 +21046,12 @@ async def _collector_inline_loop():
                 logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
                 await asyncio.sleep(min(300, max(60, left * 60)))
                 continue
+            # Описания и продавцы — до следующей пачки поиска: без них не
+            # работают фильтры «частник», состояние и АКБ.
+            try:
+                await _collector_details_pass(collector, cfg, limit=4)
+            except Exception as _dpe:
+                logger.warning(f"details pass: {_dpe}")
             # Часовая квота запросов к Авито: чаще — гарантированный 429.
             # Считаем по окну в 60 минут и храним в настройках.
             try:
@@ -22735,7 +22798,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             return no('shop')
         if hunt_shop_in_name(str(ad.get('seller_name') or '')):
             return no('shop')
-    if deep_check and rj.get('condition_min') and rj.get('condition_min') != 'any':
+    if rj.get('condition_min') and rj.get('condition_min') != 'any':
         if desc_ok:
             grade, conf = classify_condition(title_raw, description)
             want = _CONDITION_RANK.get(rj['condition_min'], 3)
@@ -22747,7 +22810,7 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                     return no('condition_below')
         else:
             unverified = True
-    if deep_check and rj.get('battery_min'):
+    if rj.get('battery_min'):
         if desc_ok:
             batt = extract_battery_percent(title_raw, description)
             if batt is None:
@@ -22756,16 +22819,13 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 return no('battery_low')
         else:
             unverified = True
-    if deep_check and rj.get('not_opened'):
+    if rj.get('not_opened'):
         if desc_ok:
             if _opened_markers_hit(title_raw + ' ' + description):
                 return no('opened')
         else:
             unverified = True
-    # Без тщательного отбора (free) эти условия не применяем — только пометка
-    if not deep_check and (rj.get('condition_min') or rj.get('battery_min')
-                           or rj.get('not_opened')):
-        unverified = True
+
 
     # Дата. Неизвестную дату НЕ отбрасываем — её нет у большинства карточек, —
     # но помечаем одинаково в чате и ленте (решение B1).
@@ -23768,6 +23828,11 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
     'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
+    # 1 — автоматические сообщения пользователям выключены (дожим,
+    # напоминания, уведомления о паузе). Нужно, чтобы правки и тесты не
+    # уходили живым людям: именно из-за этого ушли двое.
+    'auto_sends.paused': ('str', None, None, '1',
+                          '1 — не отправлять автосообщения, 0 — отправлять'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
     'collector.targets': ('int', 1, 5, 1, 'Целей за проход сборщика'),
@@ -26749,6 +26814,19 @@ CONV_STAGE1_HOURS = 24
 CONV_STAGE2_HOURS = 72
 
 
+def _auto_sends_paused() -> bool:
+    """Выключены ли автоматические сообщения пользователям.
+
+    По умолчанию — выключены (1). Включаются осознанно: /set
+    auto_sends.paused 0 или действием обслуживания. Так правки и тесты не
+    уходят живым людям.
+    """
+    try:
+        return str(cfg_get('auto_sends.paused') or '1') == '1'
+    except Exception:
+        return True
+
+
 def _conv_state_get(user_id: int) -> str:
     try:
         return str(_setting_get(f'conv:{int(user_id)}') or '')
@@ -27008,12 +27086,13 @@ async def pause_expired_free_criteria_job(context=None) -> None:
         logger.info(f"ttl pause: кандидатов {rep.get('candidates')}, "
                     f"продлено {rep.get('extended')}, "
                     f"на паузу {rep.get('paused')}, ошибка {rep.get('error') or 'нет'}")
-        for row in rep.get('extended_rows') or []:
-            await _notify_trial_extended(row.get('user_id'), row.get('query'),
-                                         row.get('id') or 0)
-        for row in rep.get('paused_rows') or []:
-            await _notify_trial_expired(row.get('user_id'), row.get('query'),
-                                        row.get('id') or 0)
+        if not _auto_sends_paused():
+            for row in rep.get('extended_rows') or []:
+                await _notify_trial_extended(row.get('user_id'), row.get('query'),
+                                             row.get('id') or 0)
+            for row in rep.get('paused_rows') or []:
+                await _notify_trial_expired(row.get('user_id'), row.get('query'),
+                                            row.get('id') or 0)
     except Exception as e:
         logger.exception(f"ttl pause job: {e}")
 
@@ -28334,6 +28413,13 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             req_json['private_only'] = 1
         if 'комплект' in low:
             req_json['full_set'] = 1
+        # АКБ: «АКБ от 85%», «акб 90», «батарея 80+» → минимальный процент.
+        if 'акб' in low or 'батаре' in low:
+            _bm = _re.search(r'(\d{2,3})', low)
+            _bat = int(_bm.group(1)) if _bm else 85
+            if not (50 <= _bat <= 100):
+                _bat = 85
+            req_json['battery_min'] = _bat
         # Новые условия поиска: цена от, город, состояние, только с фото,
         # минус-слова и минимальная скидка к рынку.
         try:
@@ -31549,6 +31635,10 @@ async def _renewal_loop(bot) -> None:
     await asyncio.sleep(180)
     while True:
         try:
+            if _auto_sends_paused():
+                logger.info("продление: тихий режим — напоминания не шлём")
+                await asyncio.sleep(3 * 3600)
+                continue
             actions = await asyncio.to_thread(_renew_plan)
             for a in actions:
                 ok = await _tg_send_html(a['user_id'], a['text'], a['kb'])
@@ -31567,6 +31657,10 @@ async def _conversion_loop(bot) -> None:
     await asyncio.sleep(240)
     while True:
         try:
+            if _auto_sends_paused():
+                logger.info("дожим: тихий режим — сообщения пользователям не шлём")
+                await asyncio.sleep(1800)
+                continue
             actions = await asyncio.to_thread(_conv_plan)
             for a in actions:
                 ok = await _tg_send_html(a['user_id'], a['text'], a['kb'])
@@ -31597,12 +31691,13 @@ async def _ttl_pause_loop(bot) -> None:
                         f"продлено {rep.get('extended')}, "
                         f"на паузу {rep.get('paused')}, "
                         f"ошибка {rep.get('error') or 'нет'}")
-            for row in rep.get('extended_rows') or []:
-                await _notify_trial_extended(row.get('user_id'), row.get('query'),
-                                             row.get('id') or 0)
-            for row in rep.get('paused_rows') or []:
-                await _notify_trial_expired(row.get('user_id'), row.get('query'),
-                                            row.get('id') or 0)
+            if not _auto_sends_paused():
+                for row in rep.get('extended_rows') or []:
+                    await _notify_trial_extended(row.get('user_id'), row.get('query'),
+                                                 row.get('id') or 0)
+                for row in rep.get('paused_rows') or []:
+                    await _notify_trial_expired(row.get('user_id'), row.get('query'),
+                                                row.get('id') or 0)
         except Exception as e:
             logger.exception(f"ttl pause loop: {e}")
         await asyncio.sleep(900)
@@ -33546,6 +33641,14 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
+
+    if action == 'auto_sends':
+        try:
+            paused = 1 if int((body or {}).get('paused') or 0) else 0
+        except Exception:
+            paused = 1
+        _setting_set('auto_sends.paused', str(paused))
+        return _miniapp_json({'ok': True, 'paused': paused})
 
     if action == 'renew_plan':
         plan = await asyncio.to_thread(_renew_plan)
