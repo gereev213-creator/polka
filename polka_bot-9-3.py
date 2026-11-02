@@ -19369,6 +19369,22 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
         out['criteria_error'] = str(e)[:200]
     out['jobs'] = list(_SCHEDULED_JOBS)
     out['jobs_count'] = len(_SCHEDULED_JOBS)
+    # Живая проверка: планировщик уже запущен, поэтому jobs() работает.
+    # Это доказывает, что авто-пауза и остальные задачи реально стоят в очереди,
+    # а не просто «должны были зарегистрироваться».
+    try:
+        _app_obj = globals().get('_APP')
+        if _app_obj is not None and getattr(_app_obj, 'job_queue', None) is not None:
+            _names = []
+            for _j in _app_obj.job_queue.jobs():
+                _cb = getattr(_j, 'callback', None)
+                _names.append(getattr(_cb, '__name__', 'job'))
+            out['jobs_runtime'] = _names
+            out['jobs_runtime_count'] = len(_names)
+        else:
+            out['jobs_runtime'] = None
+    except Exception as _je:
+        out['jobs_runtime_error'] = str(_je)[:200]
     # Хвост лога — то, ради чего всё это
     out['log_tail'] = list(_LOG_BUFFER)[-80:]
     # ── Этап K1: задержки запросов и блокировки цикла событий ──────────────
@@ -30687,6 +30703,10 @@ async def _finding_of_day_loop(bot):
 
 async def post_init(application: Application):
     # Инициализируем новые таблицы и индексы
+    try:
+        globals()['_APP'] = application
+    except Exception:
+        pass
     await init_chat_tables()
     try:
         globals()['_BOT_INSTANCE'] = application.bot
@@ -32334,7 +32354,8 @@ async def _prune_loop() -> None:
                     total += n
                     if n < 500:
                         break
-                    time.sleep(0.25)
+                    import time as _sleep_mod
+                    _sleep_mod.sleep(0.25)
                 return total
             removed = await asyncio.to_thread(_db_locked, _prune)
             if removed:
