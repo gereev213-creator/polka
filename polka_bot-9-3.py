@@ -23831,6 +23831,12 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     # 1 — автоматические сообщения пользователям выключены (дожим,
     # напоминания, уведомления о паузе). Нужно, чтобы правки и тесты не
     # уходили живым людям: именно из-за этого ушли двое.
+    # Ждать ли описание карточки, прежде чем считать находку готовой.
+    # '0' отключает очередь описаний целиком — тогда состояние, АКБ и
+    # «частник» не проверяются (так и было: у 4266 из 4267 объявлений
+    # не было ни описания, ни продавца).
+    'hunt.require_desc': ('str', None, None, '1',
+                          '1 — ждать описание и проверять состояние/АКБ, 0 — не ждать'),
     'auto_sends.paused': ('str', None, None, '0',
                           '1 — не отправлять автосообщения (тихий режим), '
                           '0 — отправлять как обычно'),
@@ -33656,7 +33662,9 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         # разошлось с ожиданием (например, hunt.require_desc=0 отключал
         # очередь описаний, и фильтры «состояние/АКБ/частник» не работали).
         key = str((body or {}).get('key') or '').strip()
-        if key not in SETTINGS_SCHEMA:
+        _op_prefixes = ('hunt.', 'collector.', 'auto_sends.', 'backup.',
+                        'trial.', 'free.', 'plus.', 'pay.')
+        if key not in SETTINGS_SCHEMA and not key.startswith(_op_prefixes):
             return _miniapp_json({'ok': False, 'error': 'unknown_key'}, status=400)
         value = str((body or {}).get('value') if (body or {}).get('value') is not None else '')
         _setting_set(key, value)
