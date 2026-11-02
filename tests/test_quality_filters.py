@@ -60,6 +60,7 @@ check('продление уважает тишину', 'продление: т�
 check('уведомления о паузе уважают тишину',
       SRC.count('if not _auto_sends_paused():') >= 2)
 check('есть действие auto_sends', "action == 'auto_sends'" in SRC)
+check('есть правка настроек по токену', "action == 'set_setting'" in SRC)
 check('тесты только на админов', "'test_only_admin'" in SRC)
 
 print()

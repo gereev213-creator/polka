@@ -33651,6 +33651,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
 
+    if action == 'set_setting':
+        # Правка настройки по admin-токену: нужно, когда значение в базе
+        # разошлось с ожиданием (например, hunt.require_desc=0 отключал
+        # очередь описаний, и фильтры «состояние/АКБ/частник» не работали).
+        key = str((body or {}).get('key') or '').strip()
+        if key not in SETTINGS_SCHEMA:
+            return _miniapp_json({'ok': False, 'error': 'unknown_key'}, status=400)
+        value = str((body or {}).get('value') if (body or {}).get('value') is not None else '')
+        _setting_set(key, value)
+        return _miniapp_json({'ok': True, 'key': key, 'value': value})
+
     if action == 'auto_sends':
         try:
             paused = 1 if int((body or {}).get('paused') or 0) else 0
