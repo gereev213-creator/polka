@@ -13921,6 +13921,34 @@ async def handle_moderation_reason(update: Update, context: ContextTypes.DEFAULT
     await admin_moderation(update, context)
     return States.ADMIN_MENU
 
+def _payments_waiting_summary() -> tuple:
+    """Сколько счетов создано и не оплачено (карта/СБП) + готовая строка.
+
+    get_pending_payments показывает только ручные платежи с чеком, поэтому
+    созданные счета PayAnyWay были в админке невидимы: «нет платежей на
+    проверке» при 13 неоплаченных счетах.
+    """
+    waiting_n, rows = 0, []
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM payments WHERE status='waiting'")
+        _row = cur.fetchone()
+        waiting_n = int((_row['n'] if _row else 0) or 0)
+        cur.execute("SELECT product, amount, created_at FROM payments "
+                    "WHERE status='waiting' ORDER BY id DESC LIMIT 3")
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning(f"payments waiting summary: {e}")
+    text = ''
+    if waiting_n:
+        text = f"Счета созданы, но не оплачены: <b>{waiting_n}</b>\n"
+        for w in rows:
+            text += (f"  {w.get('product')} — {int(w.get('amount') or 0)}₽ · "
+                     f"{str(w.get('created_at') or '')[:16]}\n")
+        text += "\n"
+    return waiting_n, text
+
+
 async def admin_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Показывает платежи, ожидающие проверки"""
     query = update.callback_query
@@ -13933,16 +13961,17 @@ async def admin_payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         pending_payments = db.get_pending_payments(50)
+        _waiting_n, waiting_text = _payments_waiting_summary()
 
         if not pending_payments:
-            text = f"{EM_OK} Нет платежей на проверке"
+            text = f"{EM_OK} Нет платежей на проверке\n\n{waiting_text}"
             keyboard = [
                 [InlineKeyboardButton(EM_DOT + " Архив платежей", callback_data="admin_payments_archive")],
                 [InlineKeyboardButton(EM_REFRESH + " Обновить", callback_data="admin_payments"),
                  InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]
             ]
         else:
-            text = f"Ждут проверки: {len(pending_payments)}\n\n"
+            text = f"{waiting_text}Ждут проверки: {len(pending_payments)}\n\n"
             keyboard = []
             for payment in pending_payments[:5]:
                 text += (
@@ -14156,15 +14185,16 @@ async def moderate_payment_action(update: Update, context: ContextTypes.DEFAULT_
         
         # Показываем обновлённый список платежей
         pending_payments = db.get_pending_payments(50)
+        _waiting_n, waiting_text = _payments_waiting_summary()
         if not pending_payments:
-            text = f"{EM_OK} Нет платежей на проверке"
+            text = f"{EM_OK} Нет платежей на проверке\n\n{waiting_text}"
             keyboard = [
                 [InlineKeyboardButton(EM_DOT + " Архив платежей", callback_data="admin_payments_archive")],
                 [InlineKeyboardButton(EM_REFRESH + " Обновить", callback_data="admin_payments"),
                  InlineKeyboardButton(EM_ARROW_L + " Панель", callback_data="admin_back")]
             ]
         else:
-            text = f"Ждут проверки: {len(pending_payments)}\n\n"
+            text = f"{waiting_text}Ждут проверки: {len(pending_payments)}\n\n"
             keyboard = []
             for payment in pending_payments[:5]:
                 text += (
@@ -25389,6 +25419,8 @@ async def paw_order_create(user_id: int, product: str, base_url: str,
     # 6. Журнал — необязателен: платёж уже создан, и его сбой не должен
     #    отменять оплату.
     try:
+        _plan_event(int(user_id), 'invoice_created',
+                    {'product': product, 'provider': 'paw', 'amount': amount})
         _plan_event(int(user_id), 'paw_order', {'product': product, 'amount': amount})
     except Exception as e:
         logger.warning(f"paw event: {e}")
@@ -25617,6 +25649,13 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     }
     viewer = _miniapp_viewer(request)
     user_plan = resolve_plan(viewer) if viewer else 'trial'
+    # Воронка: экран тарифов открыт. Клиент дополнительно ничего слать не
+    # должен — он и так запрашивает этот метод при открытии экрана.
+    if viewer:
+        try:
+            _plan_event(int(viewer), 'tariffs_opened', {'plan': user_plan})
+        except Exception:
+            pass
     return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
                           'enabled': cispay_enabled() or paw_enabled(),
                           'cispay_enabled': cispay_enabled(),
@@ -28040,6 +28079,31 @@ async def _hunt_catchup_loop():
         await asyncio.sleep(600)
 
 
+def expire_stale_invoices(hours: int = 24) -> int:
+    """Помечает счета без оплаты как expired.
+
+    Живой пример: 13 счетов PayAnyWay висели в статусе 'waiting' неделями.
+    В админке это выглядело как «0 платежей на проверке», в метриках — как
+    будто люди платят, но деньги не доходят. На деле счета просто брошены.
+    """
+    try:
+        now = get_moscow_time()
+        cutoff = (now - timedelta(hours=int(hours))).isoformat()
+        cur = db.conn.cursor()
+        cur.execute(
+            "UPDATE payments SET status='expired', checked_at=? "
+            "WHERE status='waiting' AND COALESCE(created_at,'') <> '' "
+            "AND created_at < ?", (now.isoformat(), cutoff))
+        n = int(cur.rowcount or 0)
+        if n:
+            db.conn.commit()
+            logger.info(f"expire stale invoices: {n} шт.")
+        return n
+    except Exception as e:
+        logger.warning(f"expire stale invoices: {e}")
+        return 0
+
+
 async def _findings_cleanup_loop():
     """Чистит базу от старого мусора.
 
@@ -28054,6 +28118,7 @@ async def _findings_cleanup_loop():
             # В рабочем потоке: удаление тысяч строк даже порциями не
             # должно занимать цикл событий — иначе лента и бот ждут.
             await asyncio.to_thread(cleanup_all)
+            await asyncio.to_thread(expire_stale_invoices)
         except Exception as e:
             logger.warning(f"findings cleanup loop: {e}")
         await asyncio.sleep(6 * 3600)
