@@ -54,7 +54,7 @@ PAY = open(os.path.join(HERE, '..', 'polka-final/frontend/proto/payments.js'),
 check('клиент выбирает тариф по умолчанию', 'data.default_product' in PAY)
 check('клиент рисует кнопки тарифов', 'renderPlanChips' in PAY)
 check('кнопка показывает сумму', "'Оплатить ' + rub(price)" in PAY)
-check('цена по сроку тарифа', "rub/нед" in PAY)
+check('цена по сроку тарифа', "руб/нед" in PAY)
 
 print()
 if fail:
