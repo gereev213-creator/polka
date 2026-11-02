@@ -27138,6 +27138,53 @@ def _conv_plan() -> List[Dict]:
     return actions
 
 
+async def _notify_cohort(text: str, kb: Dict, plans=('', 'free'),
+                         dry_run: bool = False) -> Dict:
+    """Рассылка уведомления выбранной группе пользователей.
+
+    Идёт напрямую через Bot API, по одному сообщению: 0.06 с паузы, чтобы
+    не упереться в лимиты Telegram. Заблокировавших бота пропускаем и
+    помечаем. Возвращает статистику. dry_run=True — только посчитать.
+    """
+    sent = blocked = failed = skipped = 0
+    try:
+        blocked_ids = _blocked_user_ids()
+    except Exception:
+        blocked_ids = set()
+    try:
+        cur = db.conn.cursor()
+        marks = ','.join('?' for _ in plans) or "''"
+        cur.execute(f"SELECT user_id, COALESCE(plan,'') AS plan FROM users "
+                    f"WHERE COALESCE(plan,'') IN ({marks})", tuple(plans))
+        users = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.warning(f"notify cohort: {e}")
+        return {'ok': False, 'error': str(e)[:120]}
+    total = len(users)
+    if dry_run:
+        reachable = [u for u in users if int(u['user_id']) not in blocked_ids]
+        return {'ok': True, 'total': total, 'reachable': len(reachable),
+                'blocked': total - len(reachable), 'dry_run': True}
+    for u in users:
+        uid = int(u.get('user_id') or 0)
+        if not uid:
+            skipped += 1
+            continue
+        if uid in blocked_ids:
+            blocked += 1
+            continue
+        ok = await _tg_send_html(uid, text, kb)
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+        await asyncio.sleep(0.06)
+    logger.info(f"рассылка: всего {total}, отправлено {sent}, "
+                f"заблокировали {blocked}, ошибок {failed}")
+    return {'ok': True, 'total': total, 'sent': sent,
+            'blocked': blocked, 'failed': failed}
+
+
 async def _tg_send_html(user_id: int, text: str, kb: Dict) -> bool:
     """Отправка сообщения человеку через Bot API (без объекта Application).
 
@@ -33847,6 +33894,39 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         value = str((body or {}).get('value') if (body or {}).get('value') is not None else '')
         _setting_set(key, value)
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
+
+    if action == 'notify_cohort':
+        # Текст фиксированный (см. ниже), чтобы нельзя было случайно
+        # разослать что попало. dry=1 — только посчитать получателей.
+        text = (
+            "🎁 <b>Хорошая новость</b>\n\n"
+            "Теперь у каждого есть <b>один бесплатный поиск лота</b> — "
+            "без ограничения по времени.\n\n"
+            "Раньше бесплатный поиск останавливался через сутки. Мы это "
+            "убрали: создайте поиск — и он будет искать, пока вы сами его "
+            "не замените или не удалите.\n\n"
+            "Находки приходят в этот чат: цена, ссылка и насколько дешевле "
+            "рынка.\n\n"
+            "Нужен второй поиск или находки сразу, без задержки — есть "
+            "«Плюс»."
+        )
+        kb = {'inline_keyboard': [[
+            {'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}]]}
+        dry = str((body or {}).get('dry') or '0') == '1'
+        if not dry and str(_setting_get('notice.free_forever.sent') or ''):
+            return _miniapp_json({'ok': False, 'error': 'already_sent',
+                                  'at': str(_setting_get('notice.free_forever.sent'))},
+                                 status=409)
+        if dry:
+            return _miniapp_json(await _notify_cohort(text, kb, ('', 'free'), dry_run=True))
+        # В фоне: 270 сообщений — это не дело HTTP-запроса.
+        async def _run_notice():
+            res = await _notify_cohort(text, kb, ('', 'free'))
+            if res.get('ok'):
+                _setting_set('notice.free_forever.sent', get_moscow_time().isoformat())
+                logger.info(f"рассылка про бесплатный поиск: {res}")
+        asyncio.create_task(_run_notice())
+        return _miniapp_json({'ok': True, 'started': True})
 
     if action == 'auto_sends':
         try:

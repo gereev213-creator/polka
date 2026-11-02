@@ -56,6 +56,9 @@ check('описание Плюса без суточного ограничен�
       'В бесплатном — один поиск без ограничения по времени' in TPL)
 
 check('старые паузы по сроку можно снять', "action == 'unpause_ttl'" in SRC)
+check('есть безопасная рассылка по группе', 'async def _notify_cohort(' in SRC)
+check('рассылка пропускает заблокировавших', 'uid in blocked_ids' in SRC)
+check('есть предпросмотр и защита от повтора', "'already_sent'" in SRC)
 
 print()
 if fail:
