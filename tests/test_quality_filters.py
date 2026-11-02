@@ -52,6 +52,7 @@ check('ограничен таймаутом', 'timeout=150' in SRC)
 check('не блокирует сбор (после run_once)', SRC.find('await asyncio.wait_for(\n                    _collector_details_pass') > SRC.find('collector.run_once'))
 check('описания уходят в /api/ingest/details', 'collector.push_details' in SRC)
 check('неудачи помечаются failed', '_details_failed_ids' in SRC)
+check('очередь отдаёт url — проход читает его', "ad.get('url') or ad.get('source_url')" in SRC)
 check('не больше 3 карточек за проход', 'limit=3' in SRC)
 
 # 4) тихий режим

@@ -20944,7 +20944,11 @@ async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
     logger.info(f"details: открываю {len(need)} карточек")
     items, blocked, done = [], 0, 0
     for ad in need[:limit]:
-        url = str(ad.get('source_url') or '')
+        # Очередь отдаёт поле 'url', а не 'source_url' (hunt_need_details
+        # собирает {'external_id','url','id'}). Раньше проход читал
+        # source_url, получал пусто и МОЛЧА пропускал все карточки — поэтому
+        # описаний так и не появилось.
+        url = str(ad.get('url') or ad.get('source_url') or '')
         ext = str(ad.get('external_id') or '')
         if not url.startswith('http') or not ext:
             continue
