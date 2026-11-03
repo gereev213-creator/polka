@@ -21437,7 +21437,17 @@ async def _collector_inline_loop():
             blocked_now = getattr(_collector_inline_loop, '_last_blocked', False)
         except Exception:
             blocked_now = False
-        if blocked_now:
+        # Серверный режим: фиксированный интервал, без адаптивного
+        # умножения. После блокировок адаптив разгонял паузу до 25–40 минут,
+        # и новые объявления приходили слишком редко. 2–3 цели за проход
+        # укладываются в лимиты и без этого.
+        try:
+            _fixed = str(cfg_get('collector.fixed_interval') or '0') == '1'
+        except Exception:
+            _fixed = False
+        if _fixed:
+            nxt = max(180, int(cur))
+        elif blocked_now:
             nxt = min(3600, max(600, int(cur * 1.7)))
         else:
             nxt = max(600, int(cur * 0.8))
