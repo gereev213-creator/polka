@@ -86,16 +86,32 @@
     return unitLabel(days);
   }
 
-  // Кнопки тарифов внутри синей карточки: человек видит все варианты и
-  // выбирает цену входа сам. Раньше всегда продавался месяц за 149 ₽.
+  // Группы витрины: сначала PRO для перекупов, ниже — обычные варианты.
+  var PLAN_GROUPS = [
+    ['Для перекупов', ['pro_30', 'pro_90']],
+    ['Обычные варианты', ['unlimited_30', 'pack_5', 'extra_search']],
+  ];
+
+  var PLAN_META = {
+    pro_30: '20 поисков · приоритетная проверка · подборка раз в неделю',
+    pro_90: '20 поисков · приоритетная проверка · подборки 3 месяца',
+    unlimited_30: 'без ограничения поисков · находки без задержки',
+    pack_5: '10 поисков · 30 дней',
+    extra_search: '3 поиска · 30 дней',
+  };
+  var PLAN_SHORT = {
+    pro_30: 'PRO', pro_90: 'PRO', unlimited_30: 'Безлимит',
+    pack_5: 'Пакет', extra_search: 'Мини', week: 'Неделя', plus_30: 'Месяц',
+    plus_90: '90 дней',
+  };
+
+  function rub2(n) {
+    var v = Math.round(Number(n) || 0);
+    return v.toLocaleString('ru-RU') + ' \u20BD';
+  }
+
   function renderPlanChips() {
     var wrap = document.getElementById('tarwrap');
-    var hint = document.getElementById('planHint');
-    if (hint) {
-      hint.textContent = 'Один поиск — бесплатно. Пакеты — от 29 ₽. '
-        + 'Безлимит на 30 дней — 140 ₽. Для перекупов — PRO: 20 поисков, '
-        + 'приоритетная проверка и ручная подборка находок.';
-    }
     if (!wrap || !STATE.plans || !STATE.plans.length) return;
     var host = document.getElementById('planChipsBox');
     if (!host) {
@@ -104,53 +120,73 @@
       wrap.insertBefore(host, wrap.firstChild);
     }
     host.innerHTML = '';
-    var visible = STATE.plans.filter(function (p) {
-      return VISIBLE_PRODUCTS.indexOf(String(p.product)) !== -1;
+    var visible = {};
+    STATE.plans.forEach(function (pl) {
+      if (VISIBLE_PRODUCTS.indexOf(String(pl.product)) !== -1) visible[pl.product] = pl;
     });
-    // Старый кеш ответа/скрипта не должен оставлять человека без выбора:
-    // если новых офферов нет — показываем то, что пришло.
-    if (!visible.length) visible = STATE.plans.slice();
-    visible.forEach(function (p) {
-      var b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'planChip' + (STATE.current && p.product === STATE.current.product ? ' on' : '');
-      b.innerHTML = '<b>' + planTitle(p.product, p.days) + '</b><span>'
-        + rub(p.amount) + ' · ' + planUnit(p.product, p.days) + '</span>';
-      b.addEventListener('click', function () {
-        STATE.current = p;
-        Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('on'); });
-        b.classList.add('on');
-        paintPlans();
-        showBalanceButton();
+    // Старый кеш ответа не должен оставлять человека без выбора.
+    if (!Object.keys(visible).length) {
+      STATE.plans.forEach(function (pl) { visible[pl.product] = pl; });
+    }
+    PLAN_GROUPS.forEach(function (group) {
+      var items = group[1].map(function (k) { return visible[k]; }).filter(Boolean);
+      if (!items.length) return;
+      var sec = document.createElement('div');
+      sec.className = 'sect';
+      sec.textContent = group[0];
+      host.appendChild(sec);
+      items.forEach(function (pl) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'planChip'
+          + (STATE.current && pl.product === STATE.current.product ? ' on' : '');
+        var title = PLAN_SHORT[pl.product] || planTitle(pl.product, pl.days);
+        var tag = (String(pl.product).indexOf('pro_') === 0)
+          ? '<span class="tag">для перекупов</span>' : '';
+        var meta = PLAN_META[pl.product] || planUnit(pl.product, pl.days);
+        b.innerHTML = '<span class="pn"><b>' + title + tag + '</b><i>' + meta
+          + '</i></span><span class="pp">' + rub2(pl.amount) + '</span>';
+        b.addEventListener('click', function () {
+          STATE.current = pl;
+          Array.prototype.forEach.call(host.querySelectorAll('.planChip'), function (c) {
+            c.classList.remove('on');
+          });
+          b.classList.add('on');
+          paintPlans();
+          showBalanceButton();
+        });
+        host.appendChild(b);
       });
-      host.appendChild(b);
     });
   }
 
   function paintPlans() {
-    // Цена пишется в кнопку; отдельного узла #priceNow может не быть вовсе,
-    // поэтому он не должен блокировать отрисовку (раньше кнопка оставалась
-    // голой «Оплатить» без суммы).
+    // Цена живёт в одном месте — в карточке выбранного тарифа.
     if (!STATE.current || !STATE.current.amount) return;
     var base = Number(STATE.current.amount) || 0;
     var pct = Number(window.__promoPercent || 0);
     var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
-    // Цена показывается ТОЛЬКО в кнопке — раньше она дублировалась рядом
-    // («Оплатить 140 ₽» и следом «140 без лимита · 30 дней») и перекрывала
-    // плашку. Отдельная строка нужна лишь для промо: зачёркнутая старая цена.
-    var node = priceNode();
-    if (node) {
-      if (pct) {
-        node.style.display = 'inline';
-        node.innerHTML = '<s>' + rub(base) + '</s> <b style="color:#1a8f4c">−'
-          + pct + '%</b>';
-      } else {
-        node.style.display = 'none';
-        node.innerHTML = '';
-      }
-    }
+    var prod = String(STATE.current.product || '');
+    var nameEl = document.getElementById('planName');
+    var periodEl = document.getElementById('planPeriod');
+    var priceEl = document.getElementById('planPrice');
+    var noteEl = document.getElementById('planNote');
     var btn = document.getElementById('payBtn');
+    var days = Number(STATE.current.days) || 0;
+    var _periodTxt = (prod === 'pro_90') ? '90 дней'
+      : (days === 7 ? '7 дней' : '30 дней');
+    if (nameEl) {
+      nameEl.textContent = (PLAN_SHORT[prod] || planTitle(prod, days))
+        + ' · ' + _periodTxt;
+    }
+    if (periodEl) periodEl.textContent = _periodTxt;
+    if (priceEl) priceEl.textContent = price.toLocaleString('ru-RU');
     if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub(price);
+    if (noteEl) {
+      noteEl.textContent = pct
+        ? ('Скидка ' + pct + '% · вместо ' + rub2(base) + '. Без автосписаний.')
+        : 'Без автосписаний. Отменить нечего — второго платежа не будет.';
+    }
   }
 
   function paintPaid(days) {
