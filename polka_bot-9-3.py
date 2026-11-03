@@ -21182,6 +21182,12 @@ async def _collector_inline_loop():
     except Exception as e:
         logger.warning(f"сборщик не импортирован: {e}")
         return
+    # Серверный режим: не даём сборщику спать внутри прохода (см.
+    # block_cool_down) — иначе проход висит часами и pass_running не гаснет.
+    try:
+        collector.NO_BLOCK_SLEEP = True
+    except Exception:
+        pass
     logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
                 f"{COLLECTOR_MAX_CATEGORIES} категорий")
     first = True
