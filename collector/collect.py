@@ -2796,6 +2796,10 @@ def order_targets(targets: list, state: dict, day: str, limit: int) -> list:
     return ordered
 
 
+PASS_STATS = {'targets': 0, 'pages_ok': 0, 'pages_failed': 0,
+              'skipped_recent': 0, 'blocked': False, 'sent': 0}
+
+
 def run_once(cfg: dict) -> int:
     """Один проход сбора: цели → страницы → отправка.
 
@@ -2811,6 +2815,8 @@ def run_once(cfg: dict) -> int:
     """
     server, token = cfg['server'], cfg['token']
     total_sent = 0
+    PASS_STATS.update({'targets': 0, 'pages_ok': 0, 'pages_failed': 0,
+                       'skipped_recent': 0, 'blocked': False, 'sent': 0})
     targets = list(cfg.get('targets', []))
     if not targets:
         # На сервере config.json нет — иначе сборщик шёл бы в пустоту
@@ -2870,10 +2876,13 @@ def run_once(cfg: dict) -> int:
                 continue
             if (now_ts - last_ts) >= _min_interval * 60:
                 fresh_enough.append(t)
+        PASS_STATS['skipped_recent'] = len(targets) - len(fresh_enough)
         if fresh_enough:
             targets = fresh_enough
 
     picked = order_targets(targets, state, day, limit)
+    PASS_STATS['targets'] = len(picked)
+
     picked_urls = {str(t.get('url') or '') for t in picked}
     n_today = 0
     for t in targets:
@@ -2928,6 +2937,7 @@ def run_once(cfg: dict) -> int:
             print(f"\n→ {source}: {url}")
             try:
                 html = fetch(url, prefer_scraper=('q=' in url))
+                PASS_STATS['pages_ok'] = int(PASS_STATS.get('pages_ok') or 0) + 1
             except Blocked as exc:
                 # Поиск по словам Авито отдаёт неохотно. Прежде чем уходить,
                 # пробуем ту же страницу без q=: раздел отдаётся чаще, а слова
@@ -2955,6 +2965,8 @@ def run_once(cfg: dict) -> int:
                     except Exception as exc2:
                         print(f"  ⛔ {str(exc2)[:80]}")
                 if html is None:
+                    PASS_STATS['pages_failed'] = int(PASS_STATS.get('pages_failed') or 0) + 1
+                    PASS_STATS['blocked'] = True
                     blocked_streak += 1
                     # Собираем, что успели: отправка идёт постранично.
                     save_targets_state(state)
@@ -3061,6 +3073,7 @@ def run_once(cfg: dict) -> int:
             state[tkey] = st
 
     save_targets_state(state)
+    PASS_STATS['sent'] = int(total_sent or 0)
     return total_sent
 
 

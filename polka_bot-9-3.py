@@ -21286,6 +21286,18 @@ async def _collector_inline_loop():
             try:
                 sent = await asyncio.wait_for(
                     asyncio.to_thread(collector.run_once, cfg), timeout=540)
+                try:
+                    _st = dict(getattr(collector, 'PASS_STATS', {}) or {})
+                    if _st:
+                        logger.info(
+                            "Сбор: целей %s, страниц ок %s, ошибок %s, "
+                            "пропущено свежих %s, блок %s, отправлено %s",
+                            _st.get('targets'), _st.get('pages_ok'),
+                            _st.get('pages_failed'), _st.get('skipped_recent'),
+                            _st.get('blocked'), _st.get('sent'))
+                        _setting_set('collector.last_pass', json.dumps(_st)[:400])
+                except Exception:
+                    pass
             except asyncio.TimeoutError:
                 logger.warning("Сбор: проход длится больше 9 минут — прерываю")
                 _setting_set('collector_pass_running', '0')
