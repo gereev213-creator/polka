@@ -27986,6 +27986,64 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     return 'failed:retry_after'
 
 
+async def _maybe_offer_pack(app, user_id: int) -> None:
+    """Один раз предлагает пакет «3 поиска за 29 ₽» после первой находки.
+
+    Это момент максимальной готовности платить: человек только что увидел
+    реальную находку. Раньше оффер жил только на экране тарифов, куда он
+    мог не зайти никогда.
+    """
+    uid = int(user_id)
+    try:
+        if str(_setting_get(f'offer29:{uid}') or ''):
+            return
+        plan = _user_plan(uid)
+        if str(plan.get('name') or '') != 'free':
+            return
+        if _purchased_slots(uid) > 0:
+            return
+        cur = db.conn.cursor()
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_matches WHERE user_id=? "
+                    "AND status='sent'", (uid,))
+        row = cur.fetchone()
+        n = int(row['n'] or 0) if row else 0
+    except Exception:
+        return
+    if n < 1 or n > 3:
+        return
+    text = (
+        "🎯 <b>Нашли для вас находку</b>\n\n"
+        "Если хотите вести несколько поисков одновременно — можно докупить "
+        "пакет: <b>3 поиска за 29 ₽</b> на 30 дней.\n\n"
+        "Текущий бесплатный поиск остаётся и продолжает работать. "
+        "Оплата картой или СБП, без подписок и автосписаний."
+    )
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("Открыть тарифы", web_app=WebAppInfo(url=_miniapp_url()))],
+        [InlineKeyboardButton("Остаться на бесплатном", callback_data="offer29_skip")],
+    ])
+    try:
+        await _send_html_safe(app.bot.send_message, chat_id=uid, text=text,
+                              reply_markup=kb)
+        _setting_set(f'offer29:{uid}', get_moscow_time().isoformat())
+        _plan_event(uid, 'offer29_shown', {'findings': n})
+    except Exception as e:
+        logger.warning(f"offer29: {e}")
+
+
+async def offer29_skip(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """«Остаться на бесплатном» — убираем оффер из сообщения."""
+    query = update.callback_query
+    try:
+        await query.answer()
+    except Exception:
+        pass
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+
+
 async def _hunt_deliver_rows(app, rows: List[Dict]) -> int:
     """Разбирает захваченную пачку: по одному сообщению или сводкой (C4).
 
@@ -28038,6 +28096,10 @@ async def _hunt_deliver_rows(app, rows: List[Dict]) -> int:
                 sent += 1
                 if ai_left > 0:
                     ai_left -= 1
+                try:
+                    asyncio.create_task(_maybe_offer_pack(app, user_id))
+                except Exception:
+                    pass
             elif result == 'blocked':
                 hunt_release([row], 'send_failed', 'bot_blocked')
             elif result == 'skipped':
@@ -38318,6 +38380,8 @@ def main():
     application.add_handler(CallbackQueryHandler(show_profile,               pattern="^profile$"))
     application.add_handler(CallbackQueryHandler(check_subscription_callback,pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(start_trial_callback,pattern="^start_trial$"))
+    application.add_handler(CallbackQueryHandler(offer29_skip,
+                                                pattern="^offer29_skip$"))
     application.add_handler(CallbackQueryHandler(survey_answer,
                                                 pattern=r"^survey:\d+:[a-z0-9_]+$"))
     application.add_handler(CallbackQueryHandler(skip_verification_callback, pattern="^skip_verification$"))
