@@ -60,16 +60,35 @@
     return 'руб/мес';
   }
 
-  function planTitle(days) {
+  // Витрина: три дешёвых входа вместо одной подписки. Плюс остаётся
+  // в бэкенде, но в чипах показываем именно их — так человеку проще
+  // решиться на первую покупку.
+  var VISIBLE_PRODUCTS = ['extra_search', 'pack_5', 'unlimited_30'];
+
+  function planTitle(product, days) {
+    if (product === 'extra_search') return 'Ещё 1 поиск';
+    if (product === 'pack_5') return '5 поисков';
+    if (product === 'unlimited_30') return '30 дней без лимита';
     if (Number(days) === 7) return 'Неделя';
     if (Number(days) === 90) return '90 дней';
     return 'Месяц';
+  }
+
+  function planUnit(product, days) {
+    if (product === 'extra_search' || product === 'pack_5') return '30 дней';
+    if (product === 'unlimited_30') return '30 дней';
+    return unitLabel(days);
   }
 
   // Кнопки тарифов внутри синей карточки: человек видит все варианты и
   // выбирает цену входа сам. Раньше всегда продавался месяц за 149 ₽.
   function renderPlanChips() {
     var wrap = document.getElementById('tarwrap');
+    var hint = document.getElementById('planHint');
+    if (hint) {
+      hint.textContent = 'Один поиск — бесплатно. Дополнительные поиски — от 19 ₽: '
+        + 'работают 30 дней. Или 30 дней без ограничения поисков за 99 ₽.';
+    }
     if (!wrap || !STATE.plans || !STATE.plans.length) return;
     var host = document.getElementById('planChipsBox');
     if (!host) {
@@ -78,11 +97,14 @@
       wrap.insertBefore(host, wrap.firstChild);
     }
     host.innerHTML = '';
-    STATE.plans.forEach(function (p) {
+    STATE.plans.filter(function (p) {
+      return VISIBLE_PRODUCTS.indexOf(String(p.product)) !== -1;
+    }).forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'planChip' + (STATE.current && p.product === STATE.current.product ? ' on' : '');
-      b.innerHTML = '<b>' + planTitle(p.days) + '</b><span>' + rub(p.amount) + '</span>';
+      b.innerHTML = '<b>' + planTitle(p.product, p.days) + '</b><span>'
+        + rub(p.amount) + ' · ' + planUnit(p.product, p.days) + '</span>';
       b.addEventListener('click', function () {
         STATE.current = p;
         Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('on'); });
@@ -100,7 +122,8 @@
     var base = Number(STATE.current.amount) || 0;
     var pct = Number(window.__promoPercent || 0);
     var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
-    var html = rub(price).replace(' \u20BD', ' <span>' + unitLabel(STATE.current.days) + '</span>');
+    var _unit = planUnit(STATE.current.product, STATE.current.days);
+    var html = rub(price).replace(' \u20BD', ' <span>' + _unit + '</span>');
     if (pct) {
       html += ' <span style="text-decoration:line-through;opacity:.6;font-size:12px">'
             + rub(base) + '</span>'
@@ -137,7 +160,7 @@
       var data = await window.PolkaAPI.api('/api/pay/plans');
       STATE.plans = data.plans || [];
       STATE.plan = data.plan || 'trial';
-      var wanted = String(data.default_product || 'plus_30');
+      var wanted = String(data.default_product || 'extra_search');
       STATE.current =
         STATE.plans.filter(function (p) { return p.product === wanted; })[0] ||
         STATE.plans.filter(function (p) { return p.product === 'plus_30'; })[0] ||

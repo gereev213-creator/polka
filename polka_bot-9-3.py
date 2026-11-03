@@ -24025,6 +24025,12 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'pay.paw_test': ('str', None, None, '0',
                      '1 — тестовый режим PayAnyWay, 0 — боевой. '
                      'Тестовый работает, только если включён в кабинете'),
+    'pay.rub_extra': ('str', None, None, '19',
+                      'Цена «+1 поиск на 30 дней», ₽'),
+    'pay.rub_pack5': ('str', None, None, '49',
+                      'Цена «5 поисков на 30 дней», ₽'),
+    'pay.rub_unlimited': ('str', None, None, '99',
+                          'Цена «30 дней без ограничений», ₽'),
     'pay.rub_week': ('str', None, None, '49',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_30': ('str', None, None, '149',
@@ -25143,6 +25149,10 @@ CISPAY_PLANS = {
     'plus_30': (30, 'pay.rub_30'),
     'plus_90': (90, 'pay.rub_90'),
     'week': (7, 'pay.rub_week'),
+    # Микро-покупки: вход дешевле подписки. Это проверка трёх цен.
+    'extra_search': (30, 'pay.rub_extra'),   # +1 слот на 30 дней
+    'pack_5': (30, 'pay.rub_pack5'),         # +5 слотов на 30 дней
+    'unlimited_30': (30, 'pay.rub_unlimited'),  # Плюс на 30 дней
     # совместимость с прежними именами
     'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
@@ -25687,8 +25697,44 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
             pass
         return {'ok': True, 'credited': False, 'status': 'test_paid'}
     days = int(pay.get('days') or 0)
-    expires = _grant_plus_days(int(pay['user_id']), days)
     now = get_moscow_time().isoformat()
+    product = str(pay.get('product') or '')
+    # Микро-покупки: не подписка, а слоты поисков на 30 дней.
+    if product in ('extra_search', 'pack_5'):
+        slots = 1 if product == 'extra_search' else 5
+        expires_slots = (get_moscow_time() + timedelta(days=30)).isoformat()
+        try:
+            cursor.execute(
+                "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                (int(pay['user_id']), slots, product, order_uuid, expires_slots, now))
+            cursor.execute("UPDATE payments SET status='paid', paid_at=?, checked_at=?, "
+                           "is_test=?, credited=1 WHERE order_uuid=?",
+                           (now, now, 1 if is_test else 0, order_uuid))
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f"slot purchase save: {e}")
+            return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:120]}
+        try:
+            if pay.get('promo_code'):
+                promo_mark_used(str(pay.get('promo_code')))
+        except Exception:
+            pass
+        _plan_event(int(pay['user_id']), 'slots_paid',
+                    {'product': product, 'slots': slots, 'amount': pay.get('amount')})
+        try:
+            _app = globals().get('_APP')
+            _bot = getattr(_app, 'bot', None) if _app is not None else None
+            _text = ("✅ <b>Поиски добавлены</b>\n\n"
+                     f"Добавили <b>{slots}</b> поиск(ов) — действуют 30 дней.\n\n"
+                     "Можно создавать новые: искать по нескольким запросам сразу.")
+            if _bot is not None:
+                await _bot.send_message(chat_id=int(pay['user_id']), text=_text,
+                                        parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.warning(f"slots notify: {e}")
+        return {'ok': True, 'credited': True, 'slots': slots, 'expires_at': expires_slots}
+    expires = _grant_plus_days(int(pay['user_id']), days)
     try:
         cursor.execute("UPDATE payments SET status='paid', paid_at=?, checked_at=?, "
                        "is_test=?, credited=1 WHERE order_uuid=?",
@@ -26166,7 +26212,10 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         _bucket = int(viewer or 0) % 2
     except Exception:
         _bucket = 0
-    _default_product = 'week' if _bucket == 0 else 'plus_30'
+    # A/B цен входа: половине показываем «+1 поиск за 19 ₽», половине
+    # «30 дней без ограничений за 99 ₽». Что выберут чаще — то и оставим
+    # главным предложением.
+    _default_product = 'extra_search' if _bucket == 0 else 'unlimited_30'
     if not any(str(p.get('product')) == _default_product for p in plans):
         _default_product = (plans[0].get('product') if plans else 'plus_30')
     # Воронка: экран тарифов открыт. Клиент дополнительно ничего слать не
@@ -26177,7 +26226,8 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         except Exception:
             pass
     return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
-                          'variant': 'week' if _default_product == 'week' else 'month',
+                          'variant': ('extra_search' if _default_product == 'extra_search'
+                                      else 'unlimited_30'),
                           'default_product': _default_product,
                           'enabled': cispay_enabled() or paw_enabled(),
                           'cispay_enabled': cispay_enabled(),
@@ -26348,6 +26398,22 @@ async def api_pay_paw_notify(request: aiohttp_web.Request) -> aiohttp_web.Respon
         logger.warning(f"paw notify {order_uuid}: {res}")
         return aiohttp_web.Response(text='FAIL')
     return aiohttp_web.Response(text='SUCCESS')
+
+
+def ensure_slot_purchases() -> None:
+    """Таблица докупленных поисков: +1 за 19 ₽, пакет 5 за 49 ₽."""
+    try:
+        db.conn.execute(
+            "CREATE TABLE IF NOT EXISTS slot_purchases ("
+            " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            " user_id INTEGER NOT NULL, slots INTEGER NOT NULL DEFAULT 1,"
+            " product TEXT DEFAULT '', order_uuid TEXT DEFAULT '',"
+            " expires_at TEXT, created_at TEXT)")
+        db.conn.execute("CREATE INDEX IF NOT EXISTS idx_slot_purchases_user "
+                        "ON slot_purchases(user_id, expires_at)")
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"ensure_slot_purchases: {e}")
 
 
 def ensure_monetization() -> None:
@@ -27288,9 +27354,24 @@ async def pause_expired_free_criteria_job(context=None) -> None:
         logger.exception(f"ttl pause job: {e}")
 
 
+def _purchased_slots(user_id: int) -> int:
+    """Сколько поисков человек докупил (и не истекли)."""
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT COALESCE(SUM(slots),0) AS n FROM slot_purchases "
+                    "WHERE user_id=? AND expires_at > ?",
+                    (int(user_id), get_moscow_time().isoformat()))
+        row = cur.fetchone()
+        return int((row['n'] if row else 0) or 0)
+    except Exception:
+        return 0
+
+
 def _criteria_limit(user_id: int) -> int:
     p = _user_plan(int(user_id))
     bonus = min(_referral_criteria_bonus(int(user_id)), int(cfg_get('ref.max_bonus')))
+    # Докупленные поиски: +1 за 19 ₽, пакет 5 за 49 ₽ (на 30 дней)
+    bonus += _purchased_slots(int(user_id))
     # «Критерий на сутки» за монеты — временный +1 слот (этап H4)
     try:
         exp = _setting_get(f'criterion_day:{int(user_id)}', '')
@@ -38123,6 +38204,7 @@ def main():
             logger.warning(f"ensure_chat_read_columns при старте: {_e}")
         ensure_requirements_json_backfill()
         ensure_hunt_dialogs()
+        ensure_slot_purchases()
         ensure_monetization()
         ensure_indexes()
         ensure_admin()
