@@ -21186,6 +21186,9 @@ async def _collector_inline_loop():
     # block_cool_down) — иначе проход висит часами и pass_running не гаснет.
     try:
         collector.NO_BLOCK_SLEEP = True
+        # Сбрасываем накопленный блок-бэкофф: сервер сам решает паузы,
+        # а старый счётчик заставлял сборщика спать минутами.
+        collector._BLOCK_BACKOFF[0] = 0
     except Exception:
         pass
     logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "

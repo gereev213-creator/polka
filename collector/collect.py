@@ -758,7 +758,13 @@ def _respect_rate_limit() -> None:
         # Растущая пауза после блокировок: чем чаще нас режут, тем медленнее
         # идём. Сбрасывается при успешной странице.
         need = random.randint(MIN_REQUEST_GAP, max(MIN_REQUEST_GAP, MAX_REQUEST_GAP))
-        need += min(600, _BLOCK_BACKOFF[0] * 60)
+        if NO_BLOCK_SLEEP:
+            # Серверный режим: не спим по 10 минут между запросами — из-за
+            # этого проход не успевал завершиться и висел pass_running=1.
+            # Паузу между проходами держит сам сервер (интервал + сторож).
+            need = min(need, 20)
+        else:
+            need += min(600, _BLOCK_BACKOFF[0] * 60)
         if _LAST_REQUEST_TS[0] and gap < need:
             time.sleep(need - gap)
     except Exception:
