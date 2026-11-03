@@ -7897,6 +7897,101 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return await show_onboarding(update, context)
         return await show_main_menu(update, context)
 
+# ── Опрос внутри бота: 2 вопроса, кнопки, бонус за ответ ─────────────────────
+# Внешнюю форму на 39 вопросов не заполнил никто за 10 часов. Здесь коротко:
+# два вопроса в чате, ответ в один тап, за ответ — +1 поиск на 7 дней.
+SURVEY_Q1 = {
+    'question': 'Помогите сделать ПОЛКУ лучше 🙏\n\n'
+                'Что больше всего мешает искать больше?',
+    'answers': [('Не нахожу нужное', 'not_found'),
+                ('Дорого', 'expensive'),
+                ('Хватает одного поиска', 'enough'),
+                ('Не понял, как пользоваться', 'unclear')],
+}
+SURVEY_Q2 = {
+    'question': 'Сколько был бы готов платить за дополнительный поиск?',
+    'answers': [('19 ₽ — норм', 'p19'),
+                ('49 ₽ — если реально находит', 'p49'),
+                ('99 ₽/мес без лимита', 'p99'),
+                ('Не готов платить', 'never')],
+}
+
+
+def _survey_done(user_id: int) -> bool:
+    try:
+        return bool(_setting_get(f'survey.done:{int(user_id)}'))
+    except Exception:
+        return False
+
+
+async def _survey_send_question(update, context, num: int) -> None:
+    data = SURVEY_Q1 if num == 1 else SURVEY_Q2
+    rows = [[InlineKeyboardButton(text, callback_data=f'survey:{num}:{code}')]
+            for text, code in data['answers']]
+    txt = data['question']
+    try:
+        q = update.callback_query
+        if q is not None:
+            await q.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(rows))
+            return
+    except Exception:
+        pass
+    await update.message.reply_text(txt, reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def survey_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Ответ на вопрос опроса: сохраняем и либо задаём второй, либо благодарим."""
+    query = update.callback_query
+    user = update.effective_user
+    try:
+        await query.answer()
+    except Exception:
+        pass
+    parts = str(query.data or '').split(':')
+    if len(parts) != 3:
+        return
+    num, code = parts[1], parts[2]
+    try:
+        _plan_event(int(user.id), f'survey_q{num}', {'answer': code})
+    except Exception:
+        pass
+    try:
+        _setting_set(f'survey.q{num}:{int(user.id)}', code)
+    except Exception:
+        pass
+    try:
+        await query.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
+    if num == '1':
+        await _survey_send_question(update, context, 2)
+        return
+    # Второй ответ — финал: благодарим и даём бонус (+1 поиск на 7 дней).
+    try:
+        _setting_set(f'survey.done:{int(user.id)}', get_moscow_time().isoformat())
+    except Exception:
+        pass
+    bonus_text = ''
+    try:
+        _exp = (get_moscow_time() + timedelta(days=7)).isoformat()
+        cur = db.conn.cursor()
+        cur.execute("INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                    " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                    (int(user.id), 1, 'survey_bonus', '', _exp,
+                     get_moscow_time().isoformat()))
+        db.conn.commit()
+        bonus_text = '\n\n🎁 В подарок: <b>+1 поиск на 7 дней</b> — можно создать прямо сейчас.'
+        _plan_event(int(user.id), 'survey_bonus', {'slots': 1})
+    except Exception as e:
+        logger.warning(f"survey bonus: {e}")
+    try:
+        await query.message.reply_text(
+            "Спасибо! Это правда помогает." + bonus_text,
+            parse_mode=ParseMode.HTML)
+    except Exception:
+        pass
+
+
 async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Кнопка «Активировать бесплатный период» в приветствии.
 
@@ -33993,6 +34088,59 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                               'cispay_enabled': cispay_enabled(),
                               'paw_enabled': paw_enabled()})
 
+    if action == 'survey_test':
+        who = int((body or {}).get('user') or (ADMIN_USER_IDS[0] if ADMIN_USER_IDS else 0))
+        if who not in ADMIN_USER_IDS:
+            return _miniapp_json({'ok': False, 'error': 'test_only_admin'}, status=403)
+        kb = {'inline_keyboard': [[{'text': t, 'callback_data': f'survey:1:{c}'}]
+                                  for t, c in SURVEY_Q1['answers']]}
+        await _tg_send_html(who, SURVEY_Q1['question'], kb)
+        return _miniapp_json({'ok': True, 'sent_to': who})
+
+    if action == 'survey_stats':
+        rows = {}
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT name, COUNT(*) AS n FROM events "
+                        "WHERE name IN ('survey_q1','survey_q2','survey_done','survey_bonus') "
+                        "GROUP BY name")
+            rows = {str(r['name']): int(r['n']) for r in cur.fetchall()}
+        except Exception as e:
+            rows = {'error': str(e)[:120]}
+        answered = []
+        try:
+            cur.execute("SELECT key, value FROM settings WHERE key LIKE 'survey.done:%'")
+            answered = [{'user': k.split(':')[1], 'at': v} for k, v in cur.fetchall()]
+        except Exception:
+            pass
+        return _miniapp_json({'ok': True, 'events': rows, 'answered': len(answered)})
+
+    if action == 'survey_send':
+        # Отправляем опрос тем, у кого есть поиск и кто ещё не отвечал.
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT DISTINCT user_id FROM hunt_criteria")
+            uids = [int(r['user_id']) for r in cur.fetchall()]
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
+        try:
+            blocked = _blocked_user_ids()
+        except Exception:
+            blocked = set()
+        kb = {'inline_keyboard': [[{'text': t, 'callback_data': f'survey:1:{c}'}]
+                                  for t, c in SURVEY_Q1['answers']]}
+        sent = skipped = 0
+        for uid in uids:
+            if uid in blocked or _survey_done(uid):
+                skipped += 1
+                continue
+            if await _tg_send_html(uid, SURVEY_Q1['question'], kb):
+                sent += 1
+            await asyncio.sleep(0.06)
+        logger.info(f"опрос разослан: {sent}, пропущено {skipped}")
+        return _miniapp_json({'ok': True, 'sent': sent, 'skipped': skipped,
+                              'cohort': len(uids)})
+
     if action == 'notify_cohort':
         # Текст фиксированный (см. ниже), чтобы нельзя было случайно
         # разослать что попало. dry=1 — только посчитать получателей.
@@ -37955,6 +38103,8 @@ def main():
     application.add_handler(CallbackQueryHandler(show_profile,               pattern="^profile$"))
     application.add_handler(CallbackQueryHandler(check_subscription_callback,pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(start_trial_callback,pattern="^start_trial$"))
+    application.add_handler(CallbackQueryHandler(survey_answer,
+                                                pattern=r"^survey:\d+:[a-z0-9_]+$"))
     application.add_handler(CallbackQueryHandler(skip_verification_callback, pattern="^skip_verification$"))
     application.add_handler(CallbackQueryHandler(templates_menu,             pattern="^templates_menu$"))
     application.add_handler(CallbackQueryHandler(my_chats,                   pattern="^my_chats$"))
