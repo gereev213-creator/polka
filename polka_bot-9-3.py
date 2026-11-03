@@ -21100,6 +21100,40 @@ def _details_failed_ids(need: List[Dict], items: List[Dict]) -> List[str]:
     return out
 
 
+_COLLECTOR_TASK = None
+
+
+async def _collector_watchdog() -> None:
+    """Перезапускает сбор, если проход завис дольше 25 минут.
+
+    Было: поток сбора вис внутри сетевого вызова, флаг pass_running
+    оставался '1', и находки не приходили часами. Обычный таймаут прохода
+    не спасал, если зависание было до него. Сторож раз в 5 минут смотрит
+    на время старта прохода и перезапускает задачу целиком.
+    """
+    await asyncio.sleep(120)
+    while True:
+        try:
+            running = str(_setting_get('collector_pass_running') or '') == '1'
+            try:
+                started = int(cfg_get('collector_pass_started_ts') or 0)
+            except Exception:
+                started = 0
+            stale = (started > 0 and (_time.time() - started) > 25 * 60)
+            if running and stale and _COLLECTOR_TASK is not None:
+                logger.warning("Сбор: проход висит >25 мин — перезапускаю задачу сбора")
+                _COLLECTOR_TASK.cancel()
+                await asyncio.sleep(2)
+                _setting_set('collector_pass_running', '0')
+                globals()['_COLLECTOR_TASK'] = asyncio.create_task(
+                    _collector_inline_loop())
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            logger.warning(f"collector watchdog: {e}")
+        await asyncio.sleep(300)
+
+
 async def _collector_inline_loop():
     """Собирает находки в этом же процессе — без второго интерпретатора."""
     if not COLLECTOR_ENABLED or not COLLECTOR_INLINE:
@@ -38711,7 +38745,8 @@ def main():
             await site.start()
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
             asyncio.ensure_future(_collector_loop())
-            asyncio.ensure_future(_collector_inline_loop())
+            globals()['_COLLECTOR_TASK'] = asyncio.ensure_future(_collector_inline_loop())
+            asyncio.ensure_future(_collector_watchdog())
             globals()['_HUNT_WAKE'] = asyncio.Event()
             asyncio.ensure_future(_hunt_delivery_loop())
             asyncio.ensure_future(_hunt_catchup_loop())

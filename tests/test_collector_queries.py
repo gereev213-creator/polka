@@ -58,6 +58,9 @@ check('находка уходит без описания по таймауту
 check('есть проверка ссылки с сервера', "action == 'fetch_test'" in SRC)
 check('проход сборщика с таймаутом', 'timeout=540' in SRC)
 check('зависший проход сбрасывается', 'прошлый проход висел >25 мин' in SRC)
+check('есть сторож сбора', 'async def _collector_watchdog(' in SRC)
+check('сторож перезапускает задачу', "_COLLECTOR_TASK.cancel()" in SRC)
+check('сторож запущен при старте', "asyncio.ensure_future(_collector_watchdog())" in SRC)
 
 print()
 if fail:
