@@ -24120,12 +24120,12 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'pay.paw_test': ('str', None, None, '0',
                      '1 — тестовый режим PayAnyWay, 0 — боевой. '
                      'Тестовый работает, только если включён в кабинете'),
-    'pay.rub_extra': ('str', None, None, '19',
-                      'Цена «+1 поиск на 30 дней», ₽'),
-    'pay.rub_pack5': ('str', None, None, '49',
-                      'Цена «5 поисков на 30 дней», ₽'),
-    'pay.rub_unlimited': ('str', None, None, '99',
-                          'Цена «30 дней без ограничений», ₽'),
+    'pay.rub_extra': ('str', None, None, '29',
+                      'Цена «Мини: 3 поиска на 30 дней», ₽'),
+    'pay.rub_pack5': ('str', None, None, '59',
+                      'Цена «Пакет: 10 поисков на 30 дней», ₽'),
+    'pay.rub_unlimited': ('str', None, None, '140',
+                          'Цена «Безлимит: 30 дней без ограничений», ₽'),
     'pay.rub_week': ('str', None, None, '49',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_30': ('str', None, None, '149',
@@ -25796,7 +25796,7 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
     product = str(pay.get('product') or '')
     # Микро-покупки: не подписка, а слоты поисков на 30 дней.
     if product in ('extra_search', 'pack_5'):
-        slots = 1 if product == 'extra_search' else 5
+        slots = 3 if product == 'extra_search' else 10
         expires_slots = (get_moscow_time() + timedelta(days=30)).isoformat()
         try:
             cursor.execute(
@@ -26891,6 +26891,18 @@ def _user_plan(user_id: int) -> Dict:
                 'criteria_limit': int(cfg_get('plus.max_criteria')), 'delay_min': 0,
                 'deep_check': True, 'price': int(cfg_get('plus.price_rub')),
                 'show_price': int(cfg_get('plus.price_display_old'))}
+    # Пакеты поисков дают не только слоты, но и скорость: находки без
+    # задержки, пока пакет действует. Конкуренты продают именно скорость
+    # мониторинга — и это понятная ценность.
+    try:
+        _paid_slots = _purchased_slots(int(user_id))
+    except Exception:
+        _paid_slots = 0
+    if _paid_slots > 0:
+        return {'name': 'free', 'trial_days_left': 0,
+                'criteria_limit': int(cfg_get('free.max_criteria')) + _paid_slots,
+                'delay_min': 0, 'deep_check': True, 'price': 0,
+                'show_price': 0, 'paid_slots': _paid_slots}
     # A/B: часть бесплатных видит другой лимит (J2)
     free_limit = int(cfg_get('free.max_criteria'))
     alt = cfg_ab_free_limit()

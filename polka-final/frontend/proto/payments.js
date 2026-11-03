@@ -66,17 +66,18 @@
   var VISIBLE_PRODUCTS = ['extra_search', 'pack_5', 'unlimited_30'];
 
   function planTitle(product, days) {
-    if (product === 'extra_search') return 'Ещё 1 поиск';
-    if (product === 'pack_5') return '5 поисков';
-    if (product === 'unlimited_30') return '30 дней без лимита';
+    if (product === 'extra_search') return 'Мини · 3 поиска';
+    if (product === 'pack_5') return 'Пакет · 10 поисков';
+    if (product === 'unlimited_30') return 'Безлимит · 30 дней';
     if (Number(days) === 7) return 'Неделя';
     if (Number(days) === 90) return '90 дней';
     return 'Месяц';
   }
 
   function planUnit(product, days) {
-    if (product === 'extra_search' || product === 'pack_5') return '30 дней';
-    if (product === 'unlimited_30') return '30 дней';
+    if (product === 'extra_search') return '3 поиска · 30 дней';
+    if (product === 'pack_5') return '10 поисков · 30 дней';
+    if (product === 'unlimited_30') return 'без лимита · 30 дней';
     return unitLabel(days);
   }
 
@@ -86,8 +87,8 @@
     var wrap = document.getElementById('tarwrap');
     var hint = document.getElementById('planHint');
     if (hint) {
-      hint.textContent = 'Один поиск — бесплатно. Дополнительные поиски — от 19 ₽: '
-        + 'работают 30 дней. Или 30 дней без ограничения поисков за 99 ₽.';
+      hint.textContent = 'Один поиск — бесплатно. Пакеты поисков — от 29 ₽: '
+        + 'больше поисков и находки без задержки. Безлимит на 30 дней — 140 ₽.';
     }
     if (!wrap || !STATE.plans || !STATE.plans.length) return;
     var host = document.getElementById('planChipsBox');
