@@ -34146,48 +34146,44 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
 
     if action == 'fetch_test':
-        # Проверка ссылки Авито С СЕРВЕРА. Обычный fetch() ходит с ретраями
-        # и может занять минуты, блокируя цикл событий (был случай: healthcheck
-        # Amvera перезапустил контейнер). Поэтому — один быстрый запрос в
-        # отдельном потоке с жёстким таймаутом.
+        # Проверка ссылки Авито С СЕРВЕРА тем же способом, каким её берёт
+        # сборщик (пул отпечатков curl_cffi). Обычный urllib Авито режет по
+        # 439 даже на разделе — им проверять бессмысленно. Всё в потоке,
+        # чтобы не блокировать цикл событий, и с жёстким таймаутом.
         url = str((body or {}).get('url') or '')
         if not url.startswith('https://www.avito.ru/'):
             return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
 
         def _probe() -> Dict:
             import time as _t
-            import urllib.request as _u
-            import urllib.error as _ue
+            import sys as _sys
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if _p not in _sys.path:
+                _sys.path.insert(0, _p)
+            import collect as _collector
             t0 = _t.time()
-            hdr = {'User-Agent': ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
-                                  'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36'),
-                   'Accept': 'text/html,application/xhtml+xml',
-                   'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.8'}
+            out = {'url': url, 'cffi': _collector._cffi is not None,
+                   'proxy': bool(getattr(_collector, 'PROXY', ''))}
             try:
-                req = _u.Request(url, headers=hdr)
-                with _u.urlopen(req, timeout=25) as r:
-                    raw = r.read(400000)
-                    text = raw.decode('utf-8', 'replace')
-                    low = text.lower()
-                    markers = [m for m in ('доступ ограничен', 'captcha', 'проблема с ip',
-                                           'подтвердите, что вы не робот') if m in low]
-                    return {'status': int(getattr(r, 'status', 200)),
-                            'len': len(raw), 'blocked': bool(markers),
-                            'markers': markers[:2],
-                            'items_hint': low.count('data-marker="item"'),
-                            'sec': round(_t.time() - t0, 1)}
-            except _ue.HTTPError as e:
-                return {'status': int(e.code), 'len': 0, 'blocked': True,
-                        'sec': round(_t.time() - t0, 1)}
+                html = _collector.fetch(url, timeout=25)
+                items = []
+                try:
+                    items = _collector.parse_page(html) or []
+                except Exception:
+                    pass
+                out.update({'ok': True, 'len': len(html), 'items': len(items),
+                            'sec': round(_t.time() - t0, 1),
+                            'first': [str(i.get('title', ''))[:40] for i in items[:3]]})
             except Exception as e:
-                return {'error': f'{type(e).__name__}: {e}'[:150],
-                        'sec': round(_t.time() - t0, 1)}
+                out.update({'ok': False, 'blocked': True,
+                            'error': f'{type(e).__name__}: {e}'[:160],
+                            'sec': round(_t.time() - t0, 1)})
+            return out
 
         try:
-            res = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=35)
+            res = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=120)
         except asyncio.TimeoutError:
-            res = {'error': 'timeout', 'blocked': True}
-        res['url'] = url
+            res = {'ok': False, 'timeout': True, 'url': url}
         return _miniapp_json({'ok': True, 'probe': res})
 
     if action == 'plans_debug':
