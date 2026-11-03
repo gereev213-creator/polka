@@ -21266,13 +21266,30 @@ async def _collector_inline_loop():
             # только если процесс умер ВО ВРЕМЯ сбора — это и есть признак
             # настоящего падения, в отличие от обычного перезапуска
             # при деплое.
+            # Если прошлый проход «завис» (сборщик ждал Авито бесконечно),
+            # сбрасываем флаг: иначе сбор стоит часами, а люди не получают
+            # находок. Старше 25 минут — считаем зависшим.
+            try:
+                _prev_start = int(cfg_get('collector_pass_started_ts') or 0)
+            except Exception:
+                _prev_start = 0
+            if str(_setting_get('collector_pass_running') or '') == '1' and _prev_start:
+                if _time.time() - _prev_start > 25 * 60:
+                    logger.warning("Сбор: прошлый проход висел >25 мин — сбрасываю флаг")
+                    _setting_set('collector_pass_running', '0')
             _setting_set('collector_pass_running', '1')
+            _setting_set('collector_pass_started_ts', str(int(_time.time())))
             # collect.py завершает себя кодом 3, когда Авито отдаёт 429.
             # SystemExit, поднятый в отдельном потоке, убивает ВЕСЬ процесс:
             # бот падал, перезапускался, снова получал 429 и падал опять.
             # Ловим здесь и превращаем в обычную паузу.
             try:
-                sent = await asyncio.to_thread(collector.run_once, cfg)
+                sent = await asyncio.wait_for(
+                    asyncio.to_thread(collector.run_once, cfg), timeout=540)
+            except asyncio.TimeoutError:
+                logger.warning("Сбор: проход длится больше 9 минут — прерываю")
+                _setting_set('collector_pass_running', '0')
+                sent = 0
             except SystemExit as _se:
                 _collector_inline_loop._last_blocked = True
                 # 439/429 — блокировка Авито. Раньше мы ждали обычные 5 минут

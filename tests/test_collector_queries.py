@@ -56,6 +56,8 @@ check('квота запросов в час до 200', "'collector.req_cap'" in
 check('ожидание описания 2 часа', "'hunt.desc_wait_hours'" in SRC)
 check('находка уходит без описания по таймауту', "reason='desc_timeout'" in SRC)
 check('есть проверка ссылки с сервера', "action == 'fetch_test'" in SRC)
+check('проход сборщика с таймаутом', 'timeout=540' in SRC)
+check('зависший проход сбрасывается', 'прошлый проход висел >25 мин' in SRC)
 
 print()
 if fail:
