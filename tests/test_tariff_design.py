@@ -49,9 +49,9 @@ check('цены в строках', "class=\"pp\"" in PAY)
 check('подпись выбранного плана с периодом', "+ ' · ' + _periodTxt" in PAY)
 
 # спокойный стиль
-check('нейтральный фон тарифов', '#s-tariffs .scroll{background:#f4f5f7}' in TPL)
-check('белые карточки с тонкой рамкой', '#s-tariffs .trial{background:#fff;border:1px solid #e6e8ee' in TPL)
-check('акцент только на кнопке', 'background:#2f6fed' in TPL)
+check('фон приложения, а не серый', '#s-tariffs .scroll{background:transparent}' in TPL)
+check('карточки в стиле .card', '#s-tariffs .trial{background:#fff;border-radius:24px;box-shadow:var(--sh)' in TPL)
+check('акцент только на кнопке', 'background:var(--grad)' in TPL)
 check('собранная страница содержит новый дизайн', 'class="card plan-card"' in IDX)
 
 print()
