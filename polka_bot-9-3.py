@@ -34232,6 +34232,23 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                               'cispay_enabled': cispay_enabled(),
                               'paw_enabled': paw_enabled()})
 
+    if action == 'send_to_user':
+        # Точечное сообщение одному человеку (не рассылка). Нужно, чтобы
+        # ответить живому лиду на его действие: например, человек дошёл до
+        # оплаты и не завершил её. Текст берём из запроса, но только у админа.
+        try:
+            uid = int((body or {}).get('user') or 0)
+            text = str((body or {}).get('text') or '')
+        except Exception:
+            uid, text = 0, ''
+        if not uid or not text:
+            return _miniapp_json({'ok': False, 'error': 'user_and_text_required'}, status=400)
+        kb = {'inline_keyboard': [[
+            {'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}]]}
+        ok_sent = await _tg_send_html(uid, text[:3500], kb)
+        _plan_event(uid, 'admin_dm', {'ok': bool(ok_sent)})
+        return _miniapp_json({'ok': bool(ok_sent), 'to': uid})
+
     if action == 'survey_test':
         who = int((body or {}).get('user') or (ADMIN_USER_IDS[0] if ADMIN_USER_IDS else 0))
         if who not in ADMIN_USER_IDS:
