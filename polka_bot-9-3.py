@@ -24217,6 +24217,10 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                       'Цена «Пакет: 10 поисков на 30 дней», ₽'),
     'pay.rub_unlimited': ('str', None, None, '140',
                           'Цена «Безлимит: 30 дней без ограничений», ₽'),
+    'pay.rub_pro30': ('str', None, None, '490',
+                      'Цена «PRO 30 дней» (20 поисков + подборка), ₽'),
+    'pay.rub_pro90': ('str', None, None, '1290',
+                      'Цена «PRO 90 дней» (20 поисков + подборки), ₽'),
     'pay.rub_week': ('str', None, None, '49',
                      'Цена «Плюса» на 7 дней, ₽ (0 — не показывать)'),
     'pay.rub_30': ('str', None, None, '149',
@@ -25339,6 +25343,11 @@ CISPAY_PLANS = {
     'extra_search': (30, 'pay.rub_extra'),   # +1 слот на 30 дней
     'pack_5': (30, 'pay.rub_pack5'),         # +5 слотов на 30 дней
     'unlimited_30': (30, 'pay.rub_unlimited'),  # Плюс на 30 дней
+    # PRO для перекупов: рынок платит 500–2500 ₽/мес за скорость и объём
+    # (Avtoringer 500/1300/2500 ₽, Autodrom 500 ₽/нед). PRO = 20 поисков,
+    # приоритет проверки и ручная подборка раз в неделю.
+    'pro_30': (30, 'pay.rub_pro30'),
+    'pro_90': (90, 'pay.rub_pro90'),
     # совместимость с прежними именами
     'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
@@ -25885,6 +25894,42 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
     days = int(pay.get('days') or 0)
     now = get_moscow_time().isoformat()
     product = str(pay.get('product') or '')
+    # PRO: «Плюс» на срок + дополнительные слоты на тот же срок.
+    if product in ('pro_30', 'pro_90'):
+        _pro_days = 30 if product == 'pro_30' else 90
+        _slots = 10 if product == 'pro_30' else 20
+        _exp = (get_moscow_time() + timedelta(days=_pro_days)).isoformat()
+        _expires_plus = _grant_plus_days(int(pay['user_id']), _pro_days)
+        try:
+            cursor.execute(
+                "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                (int(pay['user_id']), _slots, product, order_uuid, _exp, now))
+            cursor.execute("UPDATE payments SET status='paid', paid_at=?, checked_at=?, "
+                           "is_test=?, credited=1 WHERE order_uuid=?",
+                           (now, now, 1 if is_test else 0, order_uuid))
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f"pro save: {e}")
+            return {'ok': False, 'error': 'save_failed', 'detail': str(e)[:120]}
+        _plan_event(int(pay['user_id']), 'pro_paid',
+                    {'product': product, 'days': _pro_days, 'slots': _slots,
+                     'amount': pay.get('amount')})
+        try:
+            _app = globals().get('_APP')
+            _bot = getattr(_app, 'bot', None) if _app is not None else None
+            if _bot is not None:
+                await _bot.send_message(
+                    chat_id=int(pay['user_id']),
+                    text=("<b>PRO активирован</b> ✅\n\n"
+                          f"До {_expires_plus} — до 20 поисков и приоритетная проверка.\n"
+                          "Раз в неделю пришлю ручную подборку лучших находок. "
+                          "Если нужна помощь с фильтрами — просто ответьте здесь."),
+                    parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.warning(f"pro notify: {e}")
+        return {'ok': True, 'credited': True, 'pro_days': _pro_days,
+                'slots': _slots, 'expires_at': _expires_plus}
     # Микро-покупки: не подписка, а слоты поисков на 30 дней.
     if product in ('extra_search', 'pack_5'):
         slots = 3 if product == 'extra_search' else 10

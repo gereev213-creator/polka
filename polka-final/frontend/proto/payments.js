@@ -63,12 +63,15 @@
   // Витрина: три дешёвых входа вместо одной подписки. Плюс остаётся
   // в бэкенде, но в чипах показываем именно их — так человеку проще
   // решиться на первую покупку.
-  var VISIBLE_PRODUCTS = ['extra_search', 'pack_5', 'unlimited_30'];
+  var VISIBLE_PRODUCTS = ['extra_search', 'pack_5', 'unlimited_30',
+                          'pro_30', 'pro_90'];
 
   function planTitle(product, days) {
     if (product === 'extra_search') return 'Мини · 3 поиска';
     if (product === 'pack_5') return 'Пакет · 10 поисков';
     if (product === 'unlimited_30') return 'Безлимит · 30 дней';
+    if (product === 'pro_30') return 'PRO · 30 дней';
+    if (product === 'pro_90') return 'PRO · 90 дней';
     if (Number(days) === 7) return 'Неделя';
     if (Number(days) === 90) return '90 дней';
     return 'Месяц';
@@ -78,6 +81,8 @@
     if (product === 'extra_search') return '3 поиска · 30 дней';
     if (product === 'pack_5') return '10 поисков · 30 дней';
     if (product === 'unlimited_30') return 'без лимита · 30 дней';
+    if (product === 'pro_30') return '20 поисков + подборка';
+    if (product === 'pro_90') return '20 поисков + подборки';
     return unitLabel(days);
   }
 
@@ -87,8 +92,9 @@
     var wrap = document.getElementById('tarwrap');
     var hint = document.getElementById('planHint');
     if (hint) {
-      hint.textContent = 'Один поиск — бесплатно. Пакеты поисков — от 29 ₽: '
-        + 'больше поисков и находки без задержки. Безлимит на 30 дней — 140 ₽.';
+      hint.textContent = 'Один поиск — бесплатно. Пакеты — от 29 ₽. '
+        + 'Безлимит на 30 дней — 140 ₽. Для перекупов — PRO: 20 поисков, '
+        + 'приоритетная проверка и ручная подборка находок.';
     }
     if (!wrap || !STATE.plans || !STATE.plans.length) return;
     var host = document.getElementById('planChipsBox');
