@@ -22761,6 +22761,33 @@ def _llm_match_sync(ad: Dict, crit: Dict) -> Optional[bool]:
         return None
 
 
+def _norm_city(value: str) -> str:
+    """«Санкт-Петербург» → «санкт петербург»: для сравнения городов."""
+    text = " ".join(str(value or '').lower().replace('ё', 'е').split())
+    for junk in ('г.', 'город', 'россия', 'рф'):
+        text = text.replace(junk, ' ')
+    return " ".join(text.split())
+
+
+def _cities_match(want: str, have: str) -> bool:
+    """Совпадает ли город объявления с городом поиска.
+
+    Если у объявления город не указан — это НЕ повод отбрасывать лот:
+    раньше так терялись почти все находки (сборщик не заполнял город).
+    Лучше показать и пометить «город не указан», чем молча выбросить.
+    """
+    have_n = _norm_city(have)
+    if not have_n:
+        return True
+    want_n = _norm_city(want)
+    if not want_n:
+        return True
+    if want_n == have_n:
+        return True
+    # «петербург» / «санкт петербург», «нижний новгород» / «нижний»
+    return want_n in have_n or have_n in want_n
+
+
 def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 hidden: bool = False, already_sent: bool = False,
                 deep_check: bool = True) -> Decision:
@@ -22812,7 +22839,8 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             and not any(h in str(crit.get('category') or '').lower()
                         for h in HUNT_ACCESSORY_CATEGORY_HINTS)):
         return no('accessory_category')
-    if crit.get('city') and str(crit['city']) != str(ad.get('city') or ''):
+    _want_city = str(crit.get('city') or '').strip()
+    if _want_city and not _cities_match(_want_city, str(ad.get('city') or '')):
         return no('city_mismatch')
 
     # Для критериев из ссылки слова берём из search_q: query там может быть
@@ -34231,6 +34259,32 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, 'plans': plans, 'prices': prices,
                               'cispay_enabled': cispay_enabled(),
                               'paw_enabled': paw_enabled()})
+
+    if action == 'recompute_crit':
+        # Пересчитать решения одного поиска (после исправления правил).
+        # Например, раньше лот с НЕИЗВЕСТНЫМ городом отбрасывался как
+        # «другой город» — теперь это не так, и старые отказы надо пересчитать.
+        try:
+            crit_id = int((body or {}).get('crit_id') or 0)
+            limit_ads = int((body or {}).get('limit_ads') or 300)
+        except Exception:
+            crit_id, limit_ads = 0, 300
+        if not crit_id:
+            return _miniapp_json({'ok': False, 'error': 'crit_id_required'}, status=400)
+        reset = str((body or {}).get('reset_city') or '0') == '1'
+        try:
+            if reset:
+                cur = db.conn.cursor()
+                cur.execute("DELETE FROM hunt_matches WHERE crit_id=? AND status='rejected' "
+                            "AND reject_reason='city_mismatch'", (crit_id,))
+                db.conn.commit()
+            n = await asyncio.to_thread(hunt_matches_recompute,
+                                        None, crit_id, limit_ads, False)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'crit_id': crit_id,
+                              'limit_ads': limit_ads, 'processed': n})
 
     if action == 'send_to_user':
         # Точечное сообщение одному человеку (не рассылка). Нужно, чтобы
