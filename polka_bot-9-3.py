@@ -33976,6 +33976,23 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         _setting_set(key, value)
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
 
+    if action == 'plans_debug':
+        # Что реально отдаётся в витрину тарифов: видно цены и продукты.
+        # Нужно, когда в приложении показывается не та цена.
+        try:
+            plans = cispay_plans_public()
+        except Exception as e:
+            plans = [{'error': str(e)[:120]}]
+        prices = {}
+        for _prod, (_days, _key) in CISPAY_PLANS.items():
+            try:
+                prices[_prod] = _cispay_price(_key)
+            except Exception:
+                prices[_prod] = None
+        return _miniapp_json({'ok': True, 'plans': plans, 'prices': prices,
+                              'cispay_enabled': cispay_enabled(),
+                              'paw_enabled': paw_enabled()})
+
     if action == 'notify_cohort':
         # Текст фиксированный (см. ниже), чтобы нельзя было случайно
         # разослать что попало. dry=1 — только посчитать получателей.
