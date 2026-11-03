@@ -21247,6 +21247,16 @@ async def _collector_inline_loop():
             except Exception:
                 _check_every = 60
             cfg['check_interval_min'] = max(5, _check_every)
+            # Режим «поиск по запросу» и число целей за проход — из настроек:
+            # можно включать/выключать без деплоя.
+            try:
+                cfg['search_by_query'] = str(cfg_get('collector.search_by_query') or '0')
+            except Exception:
+                cfg['search_by_query'] = '0'
+            try:
+                cfg['max_targets'] = int(cfg_get('collector.targets') or 4)
+            except Exception:
+                cfg['max_targets'] = 4
             _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
                 crit_targets[:_pass_no % max(1, len(crit_targets))]
             cfg['targets'] = _rotated[:_limit] + base_targets[:1]
@@ -23589,6 +23599,24 @@ def hunt_flush_stale_pending(minutes: int = 0) -> int:
             "            AND COALESCE(a.desc_attempts,0) >= ?)",
             (now.isoformat(), before, HUNT_DESC_MAX_TRIES))
         n = int(cursor.rowcount or 0)
+        # Отдельный случай: описание так и не пришло (сборщик в блоке, текст
+        # недоступен). Раньше такие висели в pending_details вечно, и человек
+        # вообще не получал находку. Через N часов отправляем с пометкой
+        # «не проверено» — лучше показать лот, чем промолчать.
+        try:
+            _wait_h = int(cfg_get('hunt.desc_wait_hours') or 0)
+        except Exception:
+            _wait_h = 2
+        if _wait_h > 0:
+            _cut = (now - timedelta(hours=_wait_h)).isoformat()
+            cursor.execute(
+                "UPDATE hunt_matches SET status='ready', reason='desc_timeout', "
+                "unverified=1, updated_at=? "
+                "WHERE status='pending_details' AND created_at < ? "
+                "AND EXISTS (SELECT 1 FROM ads a WHERE a.id = hunt_matches.ad_id "
+                "            AND COALESCE(a.desc_attempts,0) = 0)",
+                (now.isoformat(), _cut))
+            n += int(cursor.rowcount or 0)
         db.conn.commit()
         return n
     except Exception as e:
@@ -24045,7 +24073,13 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                           '0 — отправлять как обычно'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
-    'collector.targets': ('int', 1, 5, 1, 'Целей за проход сборщика'),
+    'collector.targets': ('int', 1, 10, 4, 'Целей за проход сборщика'),
+    'collector.req_cap': ('int', 1, 200, 30,
+                          'Запросов к Авито в час (лимит площадки)'),
+    'collector.search_by_query': ('str', None, None, '0',
+                                 '1 — искать по тексту запроса (q=), 0 — обходить раздел'),
+    'hunt.desc_wait_hours': ('int', 0, 48, 2,
+                        'Через сколько часов отправлять находку без описания (0 — ждать), '),
     'contest.max_tickets': ('int', 1, 20, 5, 'Максимум билетов с человека'),
     'contest.fixed': ('str', 0, 0, '', 'Известные места (JSON, скрыто)'),
     'contest.sent': ('str', 0, 0, '', 'Итоги конкурса отправлены'),
@@ -28908,9 +28942,37 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                        "COALESCE(search_path,'') AS search_path, "
                        "COALESCE(search_q,'') AS search_q, "
                        "COALESCE(search_filters,'') AS search_filters, "
-                       "COALESCE(search_user,'') AS search_user "
+                       "COALESCE(search_user,'') AS search_user, "
+                       "created_at, "
+                       "(SELECT COUNT(*) FROM hunt_matches hm "
+                       " WHERE hm.crit_id=hunt_criteria.id) AS match_n, "
+                       "(SELECT COUNT(*) FROM hunt_matches hm "
+                       " WHERE hm.crit_id=hunt_criteria.id AND hm.status='sent') AS sent_n "
                        "FROM hunt_criteria WHERE active=1")
         rows = [dict(r) for r in cursor.fetchall()]
+        # Приоритет для сборщика: 3 — свежий поиск без находок (проверить
+        # первым), 2 — поиск без находок, 1 — создан меньше суток назад,
+        # 0 — обычный. Раньше очередь была чисто круговой, и новый человек
+        # ждал своей проверки часами.
+        _now = get_moscow_time()
+        for row in rows:
+            try:
+                _created = _safe_isoparse(str(row.get('created_at') or ''))
+            except Exception:
+                _created = None
+            _age_h = ((_now - _created).total_seconds() / 3600.0
+                      if _created else 999.0)
+            if int(row.get('sent_n') or 0) == 0 and _age_h <= 6:
+                _prio = 3
+            elif int(row.get('match_n') or 0) == 0:
+                _prio = 2
+            elif _age_h <= 24:
+                _prio = 1
+            else:
+                _prio = 0
+            row['priority'] = _prio
+        rows.sort(key=lambda r: (-int(r.get('priority') or 0),
+                                 str(r.get('created_at') or '')))
         # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
         #   private_only=true  → user=1 (только частные)
         #   private_only=false → без user (все)
@@ -34082,6 +34144,36 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         value = str((body or {}).get('value') if (body or {}).get('value') is not None else '')
         _setting_set(key, value)
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
+
+    if action == 'fetch_test':
+        # Проверка ссылки Авито С СЕРВЕРА: до включения режима q= надо
+        # убедиться, что площадка отдаёт поиск по тексту, а не 439.
+        url = str((body or {}).get('url') or '')
+        if not url.startswith('https://www.avito.ru/'):
+            return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
+        try:
+            import sys as _sys
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if _p not in _sys.path:
+                _sys.path.insert(0, _p)
+            import collect as _collector
+            try:
+                html = _collector.fetch(url, timeout=25, prefer_scraper=True)
+            except Exception as e:
+                return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200],
+                                      'url': url})
+            items = []
+            try:
+                items = _collector.parse_page(html) or []
+            except Exception as e:
+                return _miniapp_json({'ok': True, 'url': url, 'len': len(html),
+                                      'parse_error': str(e)[:120]})
+            return _miniapp_json({'ok': True, 'url': url, 'len': len(html),
+                                  'items': len(items),
+                                  'first': [it.get('title', '')[:40] for it in items[:3]]})
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
 
     if action == 'plans_debug':
         # Что реально отдаётся в витрину тарифов: видно цены и продукты.

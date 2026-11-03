@@ -59,6 +59,56 @@ from html.parser import HTMLParser
 # критерия отсеиваются на сервере. Так работает то, что площадка отдаёт.
 SEARCH_BY_QUERY = os.environ.get('POLKA_SEARCH_BY_QUERY', '0') != '0'
 
+
+def query_mode(cfg: dict = None) -> bool:
+    """Искать по тексту запроса (q=) или обходить раздел целиком.
+
+    Сервер передаёт решение в cfg['search_by_query'] (настройка
+    collector.search_by_query), чтобы включать режим без перезапуска.
+    Без этой настройки остаётся прежнее поведение из окружения.
+    """
+    val = (cfg or {}).get('search_by_query')
+    if val is None or val == '':
+        return SEARCH_BY_QUERY
+    return str(val).strip().lower() not in ('0', 'false', 'no', 'off', '')
+
+
+# Города → путь Авито. Для критериев с городом ищем в его регионе, а не по
+# всей России: раньше сборщик всегда шёл по /all, и у объявлений не было
+# города — фильтр «город» потом отбрасывал всё подряд.
+CITY_SLUG_SEARCH = {
+    'москва': 'moskva', 'санкт-петербург': 'sankt-peterburg',
+    'санкт петербург': 'sankt-peterburg', 'спб': 'sankt-peterburg',
+    'петербург': 'sankt-peterburg', 'казань': 'kazan',
+    'екатеринбург': 'ekaterinburg', 'новосибирск': 'novosibirsk',
+    'нижний новгород': 'nizhniy_novgorod', 'челябинск': 'chelyabinsk',
+    'самара': 'samara', 'омск': 'omsk', 'ростов-на-дону': 'rostov-na-donu',
+    'ростов на дону': 'rostov-na-donu', 'уфа': 'ufa', 'красноярск': 'krasnoyarsk',
+    'воронеж': 'voronezh', 'пермь': 'perm', 'волгоград': 'volgograd',
+    'краснодар': 'krasnodar', 'саратов': 'saratov', 'тюмень': 'tyumen',
+    'тольятти': 'tolyatti', 'ижевск': 'izhevsk', 'барнаул': 'barnaul',
+    'ульяновск': 'ulyanovsk', 'иркутск': 'irkutsk', 'хабаровск': 'habarovsk',
+    'ярославль': 'yaroslavl', 'владивосток': 'vladivostok', 'махачкала': 'mahachkala',
+    'томск': 'tomsk', 'оренбург': 'orenburg', 'кемерово': 'kemerovo',
+    'новокузнецк': 'novokuzneck', 'рязань': 'ryazan', 'набережные челны': 'naberezhnye_chelny',
+    'астрахань': 'astrahan', 'пенза': 'penza', 'липецк': 'lipeck',
+    'киров': 'kirov', 'чебоксары': 'cheboksary', 'калининград': 'kaliningrad',
+    'тула': 'tula', 'курск': 'kursk', 'ставрополь': 'stavropol',
+    'сочи': 'sochi', 'чита': 'chita', 'сургут': 'surgut', 'волгодонск': 'volgodonsk',
+    'воткинск': 'votkinsk', 'сарапул': 'sarapul', 'глазов': 'glazov', 'можга': 'mozhga',
+}
+
+
+def city_slug_search(city: str) -> str:
+    """«Санкт-Петербург» → sankt-peterburg. Пусто — город не указан/неизвестен."""
+    c = " ".join(str(city or '').strip().lower().split())
+    if not c or c in ('любой', 'any', 'россия', 'рф', 'все города'):
+        return ''
+    if c in CITY_SLUG_SEARCH:
+        return CITY_SLUG_SEARCH[c]
+    base = (CITY_SLUG_SEARCH.get(c) or '')
+    return base
+
 USER_AGENT = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Safari/537.36")
 
@@ -2108,19 +2158,35 @@ def user_targets(server: str, token: str, cfg: dict = None) -> dict:
                 if word in BRAND_CATEGORY:
                     slug = BRAND_CATEGORY[word]
                     break
-        if not slug:
+        _qmode = query_mode(cfg)
+        if not slug and not _qmode:
             continue
-        slug = CATEGORY_SUBSTITUTE.get(slug, slug)
+        slug = CATEGORY_SUBSTITUTE.get(slug or '', slug or '')
         try:
             pmin = int(crit.get('min_price') or 0)
             pmax = int(crit.get('max_price') or 0)
         except Exception:
             pmin, pmax = 0, 0
-        url = (f"https://www.avito.ru/all/{slug}"
-               + (f"?pmax={pmax}&s=104" if pmax else "?s=104"))
+        # Город в пути: иначе объявления приходят без города, и сервер
+        # отбрасывает их по фильтру «город». «Любой» → /all.
+        _city_part = city_slug_search(crit.get('city')) or 'all'
+        _params = []
+        if _qmode:
+            _params.append('q=' + quote_plus(query))
+        _params.append('s=104')
+        if pmax:
+            _params.append(f'pmax={pmax}')
+        if pmin:
+            _params.append(f'pmin={pmin}')
+        _tail = '&'.join(_params)
+        if slug:
+            url = f"https://www.avito.ru/{_city_part}/{slug}?{_tail}"
+        else:
+            url = f"https://www.avito.ru/{_city_part}?{_tail}"
         grouped.setdefault(uid, []).append({
-            'url': url, 'city': '', 'category': query,
+            'url': url, 'city': str(crit.get('city') or ''), 'category': query,
             'query': query, 'crit_id': crit.get('id'),
+            'priority': int(crit.get('priority') or 0),
         })
     return {u: v[:per_user] for u, v in grouped.items()}
 
@@ -2135,7 +2201,11 @@ def rotation_batch(server: str, token: str, pass_no: int, limit: int,
     grouped = user_targets(server, token, cfg)
     if not grouped:
         return []
-    users = sorted(grouped)
+    # Сначала пользователи, у которых есть свежий поиск без находок.
+    # Раньше очередь была чисто круговой, и новый человек мог ждать часы.
+    def _prio(u):
+        return max((int(t.get('priority') or 0) for t in grouped[u]), default=0)
+    users = sorted(grouped, key=lambda u: (-_prio(u), u))
     picked = []
     for i in range(min(limit, len(users))):
         user = users[(pass_no + i) % len(users)]
@@ -2204,7 +2274,25 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
             pmax = int(crit.get('max_price') or 0)
         except Exception:
             pmax = 0
-        if SEARCH_BY_QUERY:
+        _qmode = query_mode(cfg)
+        _custom_template = bool(os.environ.get('POLKA_URL_TEMPLATE')
+                               or (cfg or {}).get('url_template'))
+        _city_slug = city_slug_search(crit.get('city'))
+        if _qmode and not _custom_template:
+            # Город в пути: ищем в регионе человека, а не по всей России.
+            # Раньше сборщик всегда шёл по /all, у объявлений не было города,
+            # и фильтр по городу потом отбрасывал всё подряд.
+            _city_part = _city_slug or 'all'
+            if slug:
+                template_here = (f"https://www.avito.ru/{_city_part}/{slug}"
+                                 "?q={query}&s=104&pmin={pmin}&pmax={pmax}")
+            else:
+                # Категория не узнана — ищем запрос по всей площадке (или
+                # по региону). Это спасает запросы вроде «Питбайк»,
+                # «Black Yak», которых нет в справочнике категорий.
+                template_here = (f"https://www.avito.ru/{_city_part}"
+                                 "?q={query}&s=104&pmin={pmin}&pmax={pmax}")
+        elif _qmode:
             template_here = template
         else:
             # Проверенный рабочий вид: раздел + сортировка по дате + цена.
@@ -2316,10 +2404,16 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
                         # Одна страница на критерий: три страницы на цель
                         # давали 15 запросов за проход и гарантированный 439.
                         'query': query, 'page': 1,
+                        'city': str(crit.get('city') or ''),
+                        'priority': int(crit.get('priority') or 0),
                         'pages': int(os.environ.get('POLKA_CRITERIA_PAGES', '2') or 2)})
         built += 1
     if built:
-        mode = ("Авито ищет по тексту запроса (q=)" if SEARCH_BY_QUERY
+        # Новые поиски проверяем первыми: человек только что создал поиск,
+        # и ждать 4–7 часов своей очереди — верный способ его потерять.
+        # priority приходит с сервера (3 — новый без находок, 0 — старый).
+        targets.sort(key=lambda t: -int(t.get('priority') or 0))
+        mode = ("Авито ищет по тексту запроса (q=)" if query_mode(cfg)
                 else "раздел Авито + отсев по словам на сервере")
         print(f"  Целей из критериев: {built} — {mode}")
     if no_query:
