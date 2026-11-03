@@ -122,19 +122,27 @@
   }
 
   function paintPlans() {
-    var node = priceNode();
-    if (!node || !STATE.current || !STATE.current.amount) return;
+    // Цена пишется в кнопку; отдельного узла #priceNow может не быть вовсе,
+    // поэтому он не должен блокировать отрисовку (раньше кнопка оставалась
+    // голой «Оплатить» без суммы).
+    if (!STATE.current || !STATE.current.amount) return;
     var base = Number(STATE.current.amount) || 0;
     var pct = Number(window.__promoPercent || 0);
     var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
-    var _unit = planUnit(STATE.current.product, STATE.current.days);
-    var html = rub(price).replace(' \u20BD', ' <span>' + _unit + '</span>');
-    if (pct) {
-      html += ' <span style="text-decoration:line-through;opacity:.6;font-size:12px">'
-            + rub(base) + '</span>'
-            + ' <b style="color:#8ef0b1">−' + pct + '%</b>';
+    // Цена показывается ТОЛЬКО в кнопке — раньше она дублировалась рядом
+    // («Оплатить 140 ₽» и следом «140 без лимита · 30 дней») и перекрывала
+    // плашку. Отдельная строка нужна лишь для промо: зачёркнутая старая цена.
+    var node = priceNode();
+    if (node) {
+      if (pct) {
+        node.style.display = 'inline';
+        node.innerHTML = '<s>' + rub(base) + '</s> <b style="color:#1a8f4c">−'
+          + pct + '%</b>';
+      } else {
+        node.style.display = 'none';
+        node.innerHTML = '';
+      }
     }
-    node.innerHTML = html;
     var btn = document.getElementById('payBtn');
     if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub(price);
   }

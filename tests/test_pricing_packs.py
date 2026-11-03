@@ -60,6 +60,10 @@ check('платные пакеты дают скорость', "if _paid_slots >
 check('подсказка в тарифах', 'Пакеты поисков — от 29 ₽' in TPL)
 check('подсказка на проде', 'Пакеты поисков — от 29 ₽' in IDX)
 
+check('цена не дублируется рядом с кнопкой', 'id="priceNow"' not in TPL)
+check('кнопка сама показывает сумму', "btn.textContent = 'Оплатить ' + rub(price)" in PAY)
+check('нет осиротевшего html в paintPlans', 'node.innerHTML = html' not in PAY)
+
 print()
 if fail:
     print(f'ИТОГ: ПРОВАЛЕНО {fail}, прошло {ok}')
