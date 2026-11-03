@@ -18,6 +18,7 @@ ROOT = os.path.join(HERE, '..')
 SRC = open(os.path.join(ROOT, 'polka_bot-9-3.py'), encoding='utf-8').read()
 TPL = open(os.path.join(ROOT, 'polka-final/frontend/proto/template.html'), encoding='utf-8').read()
 IDX = open(os.path.join(ROOT, 'polka-final/frontend/proto/index.html'), encoding='utf-8').read()
+ADP = open(os.path.join(ROOT, 'polka-final/frontend/proto/adapter.js'), encoding='utf-8').read()
 
 ok = 0
 fail = 0
@@ -34,8 +35,8 @@ def check(name, cond, extra=''):
 
 
 # 1) АКБ: чип в форме, разбор требования в критерий
-check('чип «АКБ от 85%» в форме', 'АКБ от 85%' in TPL)
-check('чип есть в собранной странице', 'АКБ от 85%' in IDX)
+check('чип «АКБ от 85%» в форме', 'АКБ от 85%' in ADP)
+check('чип есть в собранной странице', 'АКБ от 85%' in ADP)
 check('сервер разбирает АКБ в battery_min', "req_json['battery_min']" in SRC)
 check('значение по умолчанию 85', '_bat = 85' in SRC)
 
