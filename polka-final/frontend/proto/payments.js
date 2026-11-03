@@ -97,9 +97,13 @@
       wrap.insertBefore(host, wrap.firstChild);
     }
     host.innerHTML = '';
-    STATE.plans.filter(function (p) {
+    var visible = STATE.plans.filter(function (p) {
       return VISIBLE_PRODUCTS.indexOf(String(p.product)) !== -1;
-    }).forEach(function (p) {
+    });
+    // Старый кеш ответа/скрипта не должен оставлять человека без выбора:
+    // если новых офферов нет — показываем то, что пришло.
+    if (!visible.length) visible = STATE.plans.slice();
+    visible.forEach(function (p) {
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'planChip' + (STATE.current && p.product === STATE.current.product ? ' on' : '');
@@ -157,7 +161,8 @@
 
   async function loadPlans() {
     try {
-      var data = await window.PolkaAPI.api('/api/pay/plans');
+      // ?t= — чтобы WebView не отдал старый ответ из кеша
+      var data = await window.PolkaAPI.api('/api/pay/plans?t=' + Date.now());
       STATE.plans = data.plans || [];
       STATE.plan = data.plan || 'trial';
       var wanted = String(data.default_product || 'extra_search');
