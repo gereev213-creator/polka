@@ -20523,7 +20523,9 @@ async def free_retry_24h(test_user: int = 0, dry: bool = True) -> Dict:
     Каждому: слот link_trial_24h продлеваем/выдаём на 24 часа от сейчас.
     """
     from datetime import timedelta as _td
-    SKIP = {412862759}  # #156 — активно работает, не трогаем
+    # #156 — активно работает, не трогаем; 28634641 — тестовый критерий,
+    # который мы сами создали для проверки лимитов (удалим отдельно).
+    SKIP = {412862759, 28634641}
     out: Dict = {'ok': True, 'dry': bool(dry), 'test_user': int(test_user),
                  'users': 0, 'sent': 0, 'skipped': 0, 'errors': [], 'details': []}
     rows = []
@@ -35036,6 +35038,27 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'user': uid, 'slots': slots, 'days': days})
+
+    if action == 'del_crit':
+        # Удаление критерия по id (обслуживание: тестовые/битые поиски,
+        # которые человек не создавал, не должны висеть у него в приложении).
+        try:
+            cid = int((body or {}).get('id') or 0)
+        except Exception:
+            cid = 0
+        if not cid:
+            return _miniapp_json({'ok': False, 'error': 'id_required'}, status=400)
+        try:
+            cur = db.conn.cursor()
+            cur.execute("DELETE FROM hunt_matches WHERE crit_id=?", (cid,))
+            m = int(cur.rowcount or 0)
+            cur.execute("DELETE FROM hunt_criteria WHERE id=?", (cid,))
+            c = int(cur.rowcount or 0)
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:160]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'criteria': c, 'matches': m})
 
     if action == 'pause_manual_criteria':
         # Ручной поиск убран из продукта: активные словесные критерии
