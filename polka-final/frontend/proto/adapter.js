@@ -935,7 +935,8 @@ function paintEmpty(count) {
       const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
       // Ссылка с Авито — точный режим. Если она есть, слова и цена не нужны:
       // сборщик пойдёт ровно по выбранному человеку разделу.
-      const linkEl0 = document.getElementById('avitoLink');
+      const linkEl0 = document.getElementById('searchLink')
+        || document.getElementById('avitoLink');
       const link0 = linkEl0 ? String(linkEl0.value || '').trim() : '';
       if (q.length < 2 && !link0) return;
       // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
@@ -974,7 +975,7 @@ function paintEmpty(count) {
         // даже без набора фильтров f=. Старый эндпоинт — как запасной.
         try {
           const res = await window.PolkaAPI.api('/api/hunt', {
-            method: 'POST', body: JSON.stringify({ search_link: link }),
+            method: 'POST', body: JSON.stringify({ search_link: link, query: q }),
           });
           ok = !!(res && (res.ok !== false));
         } catch (e) {
@@ -1006,7 +1007,8 @@ function paintEmpty(count) {
         });
       }
       if (ok) {
-        const lk = document.getElementById('avitoLink'); if (lk) lk.value = '';
+        const lk = document.getElementById('searchLink')
+          || document.getElementById('avitoLink'); if (lk) lk.value = '';
         form.reset();
         document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on'));
         if (sampleBox) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; }

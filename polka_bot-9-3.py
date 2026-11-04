@@ -22892,8 +22892,12 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             and not any(h in str(crit.get('category') or '').lower()
                         for h in HUNT_ACCESSORY_CATEGORY_HINTS)):
         return no('accessory_category')
+    # Критерий из ссылки: выдача уже отфильтрована Авито (раздел, q, цена,
+    # фильтры площадки). Не применяем свои слова/город, иначе снова теряем
+    # всё — именно на этом ломались ссылочные поиски раньше.
+    _from_link = bool(int(crit.get('from_link') or 0))
     _want_city = str(crit.get('city') or '').strip()
-    if _want_city and not _cities_match(_want_city, str(ad.get('city') or '')):
+    if (not _from_link) and _want_city and not _cities_match(_want_city, str(ad.get('city') or '')):
         return no('city_mismatch')
 
     # Для критериев из ссылки слова берём из search_q: query там может быть
@@ -22902,6 +22906,14 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     if _crit_query != str(crit.get('query') or ''):
         crit = dict(crit)
         crit['query'] = _crit_query
+    # Критерий из ссылки БЕЗ текстового запроса: Авито уже отфильтровал
+    # выдачу своими фильтрами, и проверять слова заголовка не по чему.
+    # Обнуляем запрос, чтобы проверки слов пропустили лот (цену, фото и
+    # прочее по-прежнему проверяем).
+    if int(crit.get('from_link') or 0) and not str(crit.get('search_q') or '').strip():
+        crit = dict(crit)
+        crit['query'] = ''
+        crit['search_q'] = ''
     title = str(ad.get('title') or '').lower()
     # Критерий создан из ссылки человека: отбор уже сделал Авито своим
     # набором фильтров. Наши проверки по словам заголовка здесь только
@@ -28583,6 +28595,30 @@ AVITO_LINK_VALUE_RE = re.compile(r'^[\w.,:\- ]{1,100}$')
 AVITO_LINK_SKIP = {'f', 'q', 'pmin', 'pmax', 'user', 's', 'p', 'cd', 'localPriority'}
 
 
+_AVITO_SLUG_CITY = {
+    'moskva': 'Москва', 'sankt-peterburg': 'Санкт-Петербург', 'kazan': 'Казань',
+    'ekaterinburg': 'Екатеринбург', 'novosibirsk': 'Новосибирск',
+    'nizhniy_novgorod': 'Нижний Новгород', 'chelyabinsk': 'Челябинск',
+    'samara': 'Самара', 'omsk': 'Омск', 'rostov-na-donu': 'Ростов-на-Дону',
+    'ufa': 'Уфа', 'krasnoyarsk': 'Красноярск', 'voronezh': 'Воронеж',
+    'perm': 'Пермь', 'volgograd': 'Волгоград', 'krasnodar': 'Краснодар',
+    'saratov': 'Саратов', 'tyumen': 'Тюмень', 'izhevsk': 'Ижевск',
+    'barnaul': 'Барнаул', 'ulyanovsk': 'Ульяновск', 'irkutsk': 'Иркутск',
+    'habarovsk': 'Хабаровск', 'yaroslavl': 'Ярославль', 'vladivostok': 'Владивосток',
+    'tomsk': 'Томск', 'orenburg': 'Оренбург', 'kemerovo': 'Кемерово',
+    'ryazan': 'Рязань', 'astrahan': 'Астрахань', 'penza': 'Пенза',
+    'lipeck': 'Липецк', 'kirov': 'Киров', 'cheboksary': 'Чебоксары',
+    'kaliningrad': 'Калининград', 'tula': 'Тула', 'kursk': 'Курск',
+    'stavropol': 'Ставрополь', 'sochi': 'Сочи', 'chita': 'Чита',
+    'surgut': 'Сургут', 'tolyatti': 'Тольятти', 'naberezhnye_chelny': 'Набережные Челны',
+}
+
+
+def collector_city_slugs() -> Dict[str, str]:
+    """Город → слаг Авито (обратный словарь для критериев из ссылки)."""
+    return {name: slug for slug, name in _AVITO_SLUG_CITY.items()}
+
+
 def parse_avito_search_link(url: Any) -> Dict[str, Any]:
     """Разбирает ссылку поиска Авито. Без сети и без побочных эффектов.
 
@@ -29106,37 +29142,53 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                               'max_price': max_price, 'requirements': req})
 
     if method == 'POST' and str((body or {}).get('search_link') or '').strip():
-        # Ссылка с Авито больше не создаёт «точный режим». Причина: ссылки
-        # вида m.avito.ru/...?context=… не разбираются в слова — критерий
-        # получал запрос «товар», матчил всю базу (400 решений) и присылал
-        # одну случайную находку. Теперь: пытаемся вытащить слова; если
-        # получилось — создаём ОБЫЧНЫЙ поиск по словам; если нет — честно
-        # просим написать запрос словами.
+        # ПОИСК ПО ССЫЛКЕ (как у Avito Hunter): человек копирует адрес своей
+        # выдачи с Авито — со всеми фильтрами — и мы следим именно за ней.
+        # Ссылка разбирается на путь раздела, q, цену и «только частные»;
+        # сборщик открывает очищенную версию адреса, а фильтры площадки
+        # (состояние, бренд и т.п.) применяет сам Авито в этой ссылке.
         link = parse_avito_search_link((body or {}).get('search_link'))
-        q = str(link.get('q') or '').strip()[:100] if link.get('ok') else ''
-        useless = q.lower() in ('', 'товар', 'товары', 'объявление', 'объявления') or len(q) < 3
-        if not link.get('ok') or useless:
+        if not link.get('ok'):
             return _miniapp_json({
                 'ok': False, 'error': 'link_unsupported',
-                'detail': 'Ссылки с Авито больше не поддерживаются. Напишите, '
-                          'что ищете, словами — например «куртка зимняя мужская» '
-                          'или «iphone 15 pro».'},
+                'detail': str(link.get('error') or 'Ссылка не подошла') +
+                          '. Откройте поиск на Авито и скопируйте адрес из строки браузера.'},
                 status=400)
+        q_link = str(link.get('q') or '').strip()[:100]
+        name = str((body or {}).get('query') or '').strip()[:100]
+        q = q_link or name or 'Поиск с Авито'
+        if len(q) < 2:
+            q = 'Поиск с Авито'
+        # Город: в ссылке он в пути, в критерий пишем человекочитаемое имя,
+        # если можем распознать (иначе пусто — фильтр по городу не ставим).
+        _region = str(link.get('region') or '').strip().lower()
+        city_name = ''
+        try:
+            for _name, _slug in (collector_city_slugs() or {}).items():
+                if _slug == _region:
+                    city_name = _name
+                    break
+        except Exception:
+            city_name = ''
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), q,
-            str((body or {}).get('category') or ''), str((body or {}).get('city') or ''),
-            int(link.get('max_price') or 0), 0, int(link.get('min_price') or 0), 0, 0,
-            'private' if str(link.get('user') or '') == '1' else 'any', '',
-            None, '', 0, '', '', '', None)
+            str((body or {}).get('category') or ''), city_name,
+            int(link.get('max_price') or 0), 0, int(link.get('min_price') or 0),
+            0, int(link.get('with_photo') or 0),
+            'any', '', None, '', 0, '', '', '',
+            {'ok': True, 'path': str(link.get('path') or ''),
+             'q': q_link, 'filters': str(link.get('filters') or ''),
+             'user': str(link.get('user') or '')})
         if crit_id == -1:
             return _miniapp_json({'ok': False, 'error': 'limit',
                                   'detail': 'Оформите «Плюс»: на бесплатном доступен '
                                             'один активный поиск.'}, status=402)
         if not crit_id:
-            return _miniapp_json({'ok': False, 'error': 'duplicate'}, status=409)
+            return _miniapp_json({'ok': False, 'error': 'duplicate',
+                                  'detail': 'Такой поиск уже есть'}, status=409)
         return _miniapp_json({'ok': True, 'id': crit_id, 'query': q,
-                              'converted': True,
-                              'detail': 'Создали обычный поиск по словам из ссылки'})
+                              'converted': True, 'link': True,
+                              'detail': 'Следим за вашей ссылкой с Авито'})
 
     # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
     # страницы — он авторизуется токеном, а не initData
