@@ -3154,6 +3154,7 @@ def run_once(cfg: dict) -> int:
             # Первый успешный проход — снимок выдачи: запоминаем его и ничего
             # не шлём. Дальше шлём только новые id. Ровно это и есть
             # «парсер открыл ссылку, посмотрел, появилась ли находка».
+            pending_seen = []
             if target.get('link') and items:
                 _st = dict(state.get(tkey) or {})
                 _ids = [str(it.get('external_id') or '') for it in items
@@ -3169,20 +3170,27 @@ def run_once(cfg: dict) -> int:
                 _seen = set(_st.get('seen_ids') or [])
                 _new_items = [it for it in items
                               if str(it.get('external_id') or '') not in _seen]
-                _seen_list = list(_st.get('seen_ids') or [])
-                _seen_list.extend(str(it.get('external_id') or '')
-                                  for it in _new_items if it.get('external_id'))
-                _st['seen_ids'] = _seen_list[-LINK_SEEN_KEEP:]
-                state[tkey] = _st
-                save_targets_state(state)
                 if not _new_items:
                     print(f"  новых лотов нет (в выдаче {len(items)})")
                     continue
                 print(f"  новых лотов: {len(_new_items)} из {len(items)}")
                 items = _new_items
+                # «Уже видели» отмечаем ТОЛЬКО после успешной отправки.
+                # Иначе упавший запрос к серверу (503 во время деплоя,
+                # пропавшая сеть) съедал находку навсегда: лот запоминали
+                # как виденный, а сервер о нём не узнавал.
+                pending_seen = [str(it.get('external_id') or '') for it in items
+                                if it.get('external_id')]
             try:
                 stats = push(server, token, source, items,
                              crit_ids=target.get('crit_ids') or [])
+                if target.get('link') and pending_seen:
+                    _st = dict(state.get(tkey) or {})
+                    _seen_now = list(_st.get('seen_ids') or [])
+                    _seen_now.extend(pending_seen)
+                    _st['seen_ids'] = _seen_now[-LINK_SEEN_KEEP:]
+                    state[tkey] = _st
+                    save_targets_state(state)
                 print(f"  отправлено: принято {stats.get('accepted')}, "
                       f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
                 total_sent += int(stats.get('accepted') or 0)
