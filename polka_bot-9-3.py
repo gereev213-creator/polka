@@ -20499,6 +20499,110 @@ LINK_ONLY_MIGRATION_TEXT = (
 )
 
 
+FREE_RETRY_TEXT = (
+    "🔓 <b>Бесплатные 24 часа снова доступны</b>\n\n"
+    "Ваш бесплатный поиск встал на паузу — по правилу сервиса бесплатно "
+    "поиск работает 24 часа.\n\n"
+    "Теперь можно следить за <b>ссылкой со своей выдачи на Авито</b>: "
+    "скопируйте адрес из строки браузера, вставьте в «Новый поиск» — "
+    "и мы 24 часа бесплатно будем присылать только новые объявления "
+    "из вашей выдачи.\n\n"
+    "<b>Как получить ссылку:</b>\n"
+    "1. Откройте Авито и выставьте фильтры — город, цена, состояние.\n"
+    "2. Скопируйте адрес из строки браузера.\n"
+    "3. Вставьте его в ПОЛКЕ в «Новый поиск».\n\n"
+    "🎁 24 часа мониторинга уже начислены — просто вставьте ссылку."
+)
+
+
+async def free_retry_24h(test_user: int = 0, dry: bool = True) -> Dict:
+    """Тем, у кого бесплатный поиск встал: 24 часа на поиск по ссылке.
+
+    Кому: у кого нет ни одного активного критерия (поиск «стоял») и была
+    хотя бы одна пауза. Пользователя с поиском #156 не трогаем.
+    Каждому: слот link_trial_24h продлеваем/выдаём на 24 часа от сейчас.
+    """
+    from datetime import timedelta as _td
+    SKIP = {412862759}  # #156 — активно работает, не трогаем
+    out: Dict = {'ok': True, 'dry': bool(dry), 'test_user': int(test_user),
+                 'users': 0, 'sent': 0, 'skipped': 0, 'errors': [], 'details': []}
+    rows = []
+    try:
+        cur = db.conn.cursor()
+        cur.execute(
+            "SELECT c.user_id AS user_id, COUNT(*) AS n, "
+            "GROUP_CONCAT(DISTINCT COALESCE(NULLIF(c.paused_reason,''),'paused')) AS why "
+            "FROM hunt_criteria c WHERE c.active=0 GROUP BY c.user_id ORDER BY c.user_id")
+        all_rows = [dict(r) for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT user_id FROM hunt_criteria WHERE active=1")
+        active_users = {int(r['user_id']) for r in cur.fetchall()}
+    except Exception as e:
+        out.update({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]})
+        return out
+    for r in all_rows:
+        uid = int(r.get('user_id') or 0)
+        if not uid:
+            continue
+        if test_user:
+            if uid == int(test_user):
+                rows.append(r)
+            continue
+        if uid in SKIP or uid in ADMIN_USER_IDS:
+            out['skipped'] += 1
+            continue
+        if uid in active_users:
+            # У человека уже есть активный поиск — ему не «вставали».
+            out['skipped'] += 1
+            continue
+        try:
+            if str(_setting_get(f'free_retry_24h_sent:{uid}', '') or ''):
+                out['skipped'] += 1
+                continue
+        except Exception:
+            pass
+        rows.append(r)
+    out['users'] = len(rows)
+    out['details'] = [{'user_id': int(t['user_id']), 'paused': int(t.get('n') or 0),
+                       'why': str(t.get('why') or '')[:60]} for t in rows[:200]]
+    if dry or not rows:
+        return out
+    kb = {'inline_keyboard': [
+        [{'text': '🎬 Как получить ссылку — видео',
+          'callback_data': 'tutorial:link'}],
+        [{'text': 'Вставить ссылку',
+          'web_app': {'url': f"{_miniapp_url()}/?screen=newsearch"}}],
+    ]}
+    for t in rows:
+        uid = int(t['user_id'])
+        try:
+            _now = get_moscow_time()
+            _until = (_now + _td(hours=24)).isoformat()
+            cur.execute(
+                "SELECT id FROM slot_purchases WHERE user_id=? AND product='link_trial_24h' "
+                "AND expires_at > ? ORDER BY id DESC LIMIT 1",
+                (uid, _now.isoformat()))
+            _slot = cur.fetchone()
+            if _slot:
+                cur.execute("UPDATE slot_purchases SET expires_at=? WHERE id=?",
+                            (_until, int(_slot['id'])))
+            else:
+                cur.execute(
+                    "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                    " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                    (uid, 1, 'link_trial_24h', '', _until, _now.isoformat()))
+            db.conn.commit()
+            ok = await _tg_send_html(uid, FREE_RETRY_TEXT, kb)
+            if ok:
+                out['sent'] += 1
+                _setting_set(f'free_retry_24h_sent:{uid}', _now.isoformat())
+            else:
+                out['errors'].append(f'u{uid}: send_failed')
+            await asyncio.sleep(0.06)
+        except Exception as e:
+            out['errors'].append(f'u{uid}: {type(e).__name__}: {e}'[:120])
+    return out
+
+
 async def link_only_migration(test_user: int = 0, dry: bool = True) -> Dict:
     """Рассылка «ручной поиск убран» + 24 часа мониторинга бесплатно.
 
@@ -34847,6 +34951,16 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
+
+    if action == 'free_retry_24h':
+        # Второй шанс тем, у кого бесплатный поиск встал: 24 часа по ссылке.
+        dry = str((body or {}).get('dry') or '1') != '0'
+        try:
+            test_user = int((body or {}).get('user') or 0)
+        except Exception:
+            test_user = 0
+        res = await free_retry_24h(test_user=test_user, dry=dry)
+        return _miniapp_json(res)
 
     if action == 'link_only_migration':
         # Перевод пользователей с ручных поисков на ссылки.
