@@ -2103,10 +2103,14 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     segs = path.split('/')
     if len(segs) > 2:
         path = '/'.join(segs[:2])
-    # Городской путь (/izhevsk/...) Авито отдаёт только браузеру и отвечает
-    # 439 с серверного IP и через прокси. Заменяем город на «all»: выдача
-    # шире, зато доступна, а город и цену отсеиваем сами.
-    if len(segs) >= 2 and segs[0] not in ('all', 'rossiya'):
+    # Владелец смотрит на конкурента: тот просто открывает ссылку с
+    # фильтрами, включая город. Мы тоже стараемся сохранить регион, а не
+    # резать на «all»: иначе в находки попадают другие города. Если Авито
+    # ответит 439, сборщик попробует вариант без региона (fallback).
+    _keep_region = (cfg or {}).get('link_keep_region')
+    if _keep_region is None:
+        _keep_region = True
+    if not _keep_region and len(segs) >= 2 and segs[0] not in ('all', 'rossiya'):
         path = 'all/' + segs[1]
     filters = str(crit.get('filters') or '')
     if len(filters) > 1500 or not LINK_FILTERS_RE.match(filters):

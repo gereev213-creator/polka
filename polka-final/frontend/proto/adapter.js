@@ -929,6 +929,31 @@ function paintEmpty(count) {
         } catch (_) { }
       });
     }
+    // Ссылка — главный вход: остальные поля (слова, цена, город, фильтры)
+    // по умолчанию скрыты, чтобы человек не думал, что нужно заполнять всё.
+    // Кнопка «Искать словами» показывает их обратно.
+    try {
+      const allFields = [...form.querySelectorAll('.field')];
+      const wordFields = allFields.slice(1);
+      let wordMode = false;
+      const toggle = document.createElement('button');
+      toggle.type = 'button';
+      toggle.className = 'chip';
+      toggle.style.cssText = 'margin:2px 0 12px;align-self:flex-start';
+      toggle.textContent = 'Искать словами вместо ссылки';
+      wordFields.forEach((f) => { f.style.display = 'none'; });
+      if (allFields[0] && allFields[0].parentNode) {
+        allFields[0].parentNode.insertBefore(toggle, allFields[0].nextSibling);
+      }
+      toggle.addEventListener('click', () => {
+        wordMode = !wordMode;
+        wordFields.forEach((f) => { f.style.display = wordMode ? '' : 'none'; });
+        toggle.textContent = wordMode
+          ? 'Скрыть поля и следить по ссылке'
+          : 'Искать словами вместо ссылки';
+      });
+    } catch (e) { }
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const q = ($('q') && $('q').value || '').trim();
