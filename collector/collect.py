@@ -2945,13 +2945,21 @@ def run_once(cfg: dict) -> int:
         _min_interval = int(cfg.get('check_interval_min') or CHECK_INTERVAL_MIN)
     except Exception:
         _min_interval = CHECK_INTERVAL_MIN
-    # Браузерный режим: страница открывается 20–40 с, критериев у людей
-    # немного, и каждый поиск должен проверяться в КАЖДОМ проходе — иначе
-    # человек создал критерий и ждёт его час-два, а «находки» приходят
-    # с опозданием. Поэтому в браузере обходим все цели и снимаем часовую
-    # отсечку: 17 запросов за ~15 минут для живого браузера — нормальный темп.
+    # Браузерный режим: ссылки клиентов проверяем В КАЖДОМ проходе (за них
+    # платят), а словесные поиски — порциями. Раньше гнали все 38 критериев
+    # за проход: проход длился 40+ минут, и находка по ссылке опаздывала на
+    # эти же 40 минут — при обещанной проверке раз в 5 минут. Теперь проход
+    # короткий, и ссылка проверяется каждые несколько минут.
     if AVITO_PROFILE:
-        limit = max(limit, len(targets))
+        _link_t = [t for t in targets if t.get('link')]
+        _word_t = [t for t in targets if not t.get('link')]
+        try:
+            _per_pass = int(cfg.get('word_targets_per_pass') or 6)
+        except Exception:
+            _per_pass = 6
+        _word_t = sorted(_word_t, key=lambda t: target_sort_key(t, state, day))
+        targets = _link_t + _word_t[:max(0, _per_pass)]
+        limit = 0
         _min_interval = 0
     if _min_interval > 0:
         now_ts = time.time()
@@ -3486,8 +3494,17 @@ def main() -> int:
             raise
         print(f"\nПроход завершён, принято новых: {sent}")
         # Раз в проход смотрим, что уже ушло — так копится статистика
-        # «за сколько часов уходит такая цена»
-        check_listings(cfg['server'], cfg['token'], limit=8)
+        # «за сколько часов уходит такая цена».
+        # На ноутбуке это можно выключить (check_listings=0): 8 страниц лотов
+        # с паузами 45–90 с растягивают проход на 10 минут и палят IP —
+        # а находки важнее статистики «продано».
+        try:
+            _cl_passes = int(cfg.get('check_listings') if cfg.get('check_listings')
+                             is not None else 1)
+        except Exception:
+            _cl_passes = 1
+        if _cl_passes:
+            check_listings(cfg['server'], cfg['token'], limit=8)
         if not args.loop:
             return 0
         wait = max(30, args.every - int(time.time() - started))

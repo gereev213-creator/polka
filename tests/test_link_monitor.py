@@ -49,6 +49,10 @@ check('чужие объявления к ссылке не примеряютс
 check('ссылка сама себе фильтр', "return Decision(True, 'ok', 'по ссылке')" in SRC)
 check('новая ссылка не матчится со старой базой',
       'ссылочный — находки придёт сборщик' in SRC)
+check('в проходе все ссылки, словесные — порцией',
+      "word_targets_per_pass" in COL and "_link_t = [t for t in targets" in COL)
+check('дорогая проверка «продано» отключается настройкой',
+      "cfg.get('check_listings')" in COL)
 
 print()
 if fail:
