@@ -3319,6 +3319,12 @@ def main() -> int:
     ap.add_argument('--loop', action='store_true', help='работать постоянно')
     ap.add_argument('--every', type=int, default=900, help='пауза между проходами, сек')
     args = ap.parse_args()
+    # Настройка «не спать после блокировки» — из config.json, чтобы на
+    # домашнем IP сборщик не уходил в 90-минутный отдых.
+    try:
+        globals()['NO_BLOCK_SLEEP'] = bool(load_config(args.config).get('no_block_sleep'))
+    except Exception:
+        pass
 
     if args.selftest:
         return selftest()
@@ -3341,8 +3347,7 @@ def main() -> int:
         token_d = os.environ.get('POLKA_INGEST_TOKEN') or cfg_d['token']
         mode = 'постоянно' if args.loop else 'один проход'
         print(f"Режим «только описания» ({mode}), по {limit_d or 'HUNT_DESC_PER_PASS'} карточек")
-        globals()['NO_BLOCK_SLEEP'] = bool((cfg or {}).get('no_block_sleep'))
-    return details_only_loop(server_d, token_d, limit=limit_d,
+        return details_only_loop(server_d, token_d, limit=limit_d,
                                  loop=bool(args.loop),
                                  every=max(120, int(args.every)))
 
