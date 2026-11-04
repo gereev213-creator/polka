@@ -29252,7 +29252,11 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 _created = None
             _age_h = ((_now - _created).total_seconds() / 3600.0
                       if _created else 999.0)
-            if int(row.get('sent_n') or 0) == 0 and _age_h <= 6:
+            if int(row.get('from_link') or 0):
+                # Ссылочные поиски — платная функция: проверяем их в первую
+                # очередь, чтобы новые лоты приходили быстро.
+                _prio = 5
+            elif int(row.get('sent_n') or 0) == 0 and _age_h <= 6:
                 _prio = 3
             elif int(row.get('match_n') or 0) == 0:
                 _prio = 2
@@ -34434,6 +34438,65 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         value = str((body or {}).get('value') if (body or {}).get('value') is not None else '')
         _setting_set(key, value)
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
+
+    if action == 'link_test':
+        # Проверка модели «как у Avito Hunter»: открываем ссылку поиска так
+        # же, как сборщик, парсим карточки и говорим, сколько из них новые.
+        url = str((body or {}).get('url') or '')
+        parsed = parse_avito_search_link(url)
+        if not parsed.get('ok'):
+            return _miniapp_json({'ok': False, 'error': parsed.get('error')}, status=400)
+
+        def _probe_link() -> Dict:
+            import sys as _sys
+            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
+            if _p not in _sys.path:
+                _sys.path.insert(0, _p)
+            import collect as _collector
+            crit = {'filter_url': str(parsed.get('filter_url') or url),
+                    'search_path': str(parsed.get('path') or ''),
+                    'search_q': str(parsed.get('q') or ''),
+                    'filters': str(parsed.get('filters') or ''),
+                    'min_price': int(parsed.get('min_price') or 0),
+                    'max_price': int(parsed.get('max_price') or 0),
+                    'user': str(parsed.get('user') or '')}
+            built = _collector.link_search_url(crit)
+            out = {'built_url': built, 'parsed': {k: parsed.get(k) for k in
+                   ('path', 'q', 'min_price', 'max_price', 'user', 'region')}}
+            if not built:
+                out['error'] = 'ссылка не собирается в безопасный вид'
+                return out
+            try:
+                html = _collector.fetch(built, timeout=30, prefer_scraper=True)
+            except Exception as e:
+                out['error'] = f'{type(e).__name__}: {e}'[:160]
+                return out
+            items = []
+            try:
+                items = _collector.parse_page(html) or []
+            except Exception as e:
+                out['parse_error'] = str(e)[:120]
+            ext = [str(i.get('external_id') or '') for i in items if i.get('external_id')]
+            known = 0
+            try:
+                cur = db.conn.cursor()
+                for chunk_start in range(0, len(ext), 200):
+                    chunk = ext[chunk_start:chunk_start + 200]
+                    marks = ','.join('?' for _ in chunk)
+                    cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE external_id IN ({marks})",
+                                tuple(chunk))
+                    known += int((cur.fetchone() or {'n': 0})['n'] or 0)
+            except Exception as e:
+                out['db_error'] = str(e)[:120]
+            out.update({'ok': True, 'items': len(items), 'known': known,
+                        'new': max(0, len(items) - known), 'html_len': len(html)})
+            return out
+
+        try:
+            res = await asyncio.wait_for(asyncio.to_thread(_probe_link), timeout=180)
+        except asyncio.TimeoutError:
+            res = {'ok': False, 'error': 'timeout'}
+        return _miniapp_json({'ok': True, 'probe': res})
 
     if action == 'fetch_test':
         # Проверка ссылки Авито С СЕРВЕРА тем же способом, каким её берёт
