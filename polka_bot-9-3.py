@@ -22913,10 +22913,22 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # выдачу своими фильтрами, и проверять слова заголовка не по чему.
     # Обнуляем запрос, чтобы проверки слов пропустили лот (цену, фото и
     # прочее по-прежнему проверяем).
-    if int(crit.get('from_link') or 0) and not str(crit.get('search_q') or '').strip():
-        crit = dict(crit)
-        crit['query'] = ''
-        crit['search_q'] = ''
+    if int(crit.get('from_link') or 0):
+        # Ссылка только что создана: первая проверка страницы неизбежно
+        # состоит из «старых» лотов. Не заваливаем человека десятками
+        # сообщений — первые 10 минут после создания ссылки считаем
+        # прогревом: карточки сохраняем, но находками не помечаем.
+        try:
+            _crit_dt = _safe_isoparse(str(crit.get('created_at') or ''))
+            _ad_dt = _safe_isoparse(str(ad.get('created_at') or ''))
+            if _crit_dt and _ad_dt and (_ad_dt - _crit_dt).total_seconds() < 600:
+                return no('warmup')
+        except Exception:
+            pass
+        if not str(crit.get('search_q') or '').strip():
+            crit = dict(crit)
+            crit['query'] = ''
+            crit['search_q'] = ''
     title = str(ad.get('title') or '').lower()
     # Критерий создан из ссылки человека: отбор уже сделал Авито своим
     # набором фильтров. Наши проверки по словам заголовка здесь только

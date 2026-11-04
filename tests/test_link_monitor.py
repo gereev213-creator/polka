@@ -33,6 +33,7 @@ check('ссылочные поиски в приоритете', "_prio = 5" in 
 check('сравнение с базой по external_id', "FROM ads WHERE external_id IN" in SRC)
 check('считает новые карточки', "'new': max(0, len(items) - known)" in SRC)
 check('запуск в потоке без блокировки', 'asyncio.to_thread(_probe_link)' in SRC)
+check('прогрев ссылки без завала старыми', "return no('warmup')" in SRC)
 
 print()
 if fail:
