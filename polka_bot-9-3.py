@@ -29222,6 +29222,16 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         if not crit_id:
             return _miniapp_json({'ok': False, 'error': 'duplicate',
                                   'detail': 'Такой поиск уже есть'}, status=409)
+        # Исходный адрес сохраняем отдельно: в браузерном режиме сборщик
+        # открывает ИМЕННО его (с городом и f=). Без этого ссылочный поиск
+        # не создавал цель вообще.
+        try:
+            _cur = db.conn.cursor()
+            _cur.execute("UPDATE hunt_criteria SET filter_url=? WHERE id=?",
+                         (str((body or {}).get('search_link') or '')[:2000], crit_id))
+            db.conn.commit()
+        except Exception as _e:
+            logger.warning(f"link_url save: {_e}")
         return _miniapp_json({'ok': True, 'id': crit_id, 'query': q,
                               'converted': True, 'link': True,
                               'detail': 'Следим за вашей ссылкой с Авито'})

@@ -3341,7 +3341,8 @@ def main() -> int:
         token_d = os.environ.get('POLKA_INGEST_TOKEN') or cfg_d['token']
         mode = 'постоянно' if args.loop else 'один проход'
         print(f"Режим «только описания» ({mode}), по {limit_d or 'HUNT_DESC_PER_PASS'} карточек")
-        return details_only_loop(server_d, token_d, limit=limit_d,
+        globals()['NO_BLOCK_SLEEP'] = bool((cfg or {}).get('no_block_sleep'))
+    return details_only_loop(server_d, token_d, limit=limit_d,
                                  loop=bool(args.loop),
                                  every=max(120, int(args.every)))
 
