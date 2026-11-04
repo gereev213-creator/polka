@@ -21189,6 +21189,9 @@ async def _collector_inline_loop():
         # Сбрасываем накопленный блок-бэкофф: сервер сам решает паузы,
         # а старый счётчик заставлял сборщика спать минутами.
         collector._BLOCK_BACKOFF[0] = 0
+        # Режим q= держим в модуле сборщика в актуальном состоянии: от него
+        # зависит, сохраняет ли ссылочный поиск текст запроса (q=) в адресе.
+        collector.SEARCH_BY_QUERY = str(cfg_get('collector.search_by_query') or '0') == '1'
     except Exception:
         pass
     logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
