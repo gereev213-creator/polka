@@ -14,6 +14,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.join(HERE, '..')
 SRC = open(os.path.join(ROOT, 'polka_bot-9-3.py'), encoding='utf-8').read()
 PAY = open(os.path.join(ROOT, 'polka-final/frontend/proto/payments.js'), encoding='utf-8').read()
+TPL = open(os.path.join(ROOT, 'polka-final/frontend/proto/template.html'), encoding='utf-8').read()
 
 ok = 0
 fail = 0
@@ -29,26 +30,31 @@ def check(name, cond, extra=''):
         print(f'FAIL {name} {extra}')
 
 
-check('продукт 1 ссылка', "'link_1_30': (30, 'pay.rub_link1')" in SRC)
-check('продукт 2 ссылки', "'link_2_30': (30, 'pay.rub_link2')" in SRC)
-check('продукт 3 ссылки', "'link_3_30': (30, 'pay.rub_link3')" in SRC)
-check('продукт 5 ссылок на 90 дней', "'link_5_90': (90, 'pay.rub_link5')" in SRC)
-check('цена 1 ссылки 459 ₽ (как у Hunter)',
-      "'pay.rub_link1': ('str', None, None, '459'" in SRC)
-check('цена 2 ссылок 729 ₽', "'pay.rub_link2': ('str', None, None, '729'" in SRC)
-check('цена 3 ссылок 999 ₽', "'pay.rub_link3': ('str', None, None, '999'" in SRC)
-check('цена 5 ссылок 1 490 ₽', "'pay.rub_link5': ('str', None, None, '1490'" in SRC)
-check('ссылки дают слоты', "_LINK_SLOTS = {'link_1_30': 1" in SRC)
-check('5 ссылок дают 5 слотов', "'link_5_90': 5}" in SRC)
-check('срок слотов из продукта', '_slot_days = int(CISPAY_PLANS[product][0])' in SRC)
+check('матрица цен в коде', 'LINK_PRICES = {' in SRC)
+check('1 ссылка 7 дней — 169 ₽ (как у Hunter)', "(1, 7): 169" in SRC)
+check('1 ссылка 14 дней — 259 ₽', "(1, 14): 259" in SRC)
+check('1 ссылка 30 дней — 459 ₽ (как у Hunter)', "(1, 30): 459" in SRC)
+check('2 ссылки 30 дней — 729 ₽', "(2, 30): 729" in SRC)
+check('3 ссылки 30 дней — 999 ₽', "(3, 30): 999" in SRC)
+check('1 ссылка 90 дней — 1 290 ₽', "(1, 90): 1290" in SRC)
+check('5 ссылок только на 90 дней — 3 490 ₽', "(5, 90): 3490" in SRC)
+check('все комбинации — продукты оплаты',
+      "CISPAY_PLANS[f'link_{_lk_n}_{_lk_d}'] = (_lk_d," in SRC)
+check('цена комбинации перекрывается настройкой',
+      "key = f'pay.rub_link_{int(links)}_{int(days)}'" in SRC)
+check('конструктор для клиента — матрица',
+      'def link_matrix_public()' in SRC and "'link_matrix': link_matrix_public()" in SRC)
+check('начисление по ссылкам и сроку из продукта',
+      'slots, _slot_days = _link_combo' in SRC)
 check('подтверждение про ссылки', 'Мониторинг ссылок подключён' in SRC)
-check('группа в витрине', "'Мониторинг ссылок с Авито'" in PAY)
-check('подписи ссылок', "'1 ссылка'" in PAY or "link_1_30: '1 ссылка'" in PAY)
-check('5 ссылок в витрине', "'link_5_90'" in PAY)
-check('проверка раз в 5 минут в описании', 'проверка раз в 5 минут' in PAY)
-check('скорость бесплатных 30 минут', "'link.check_free_min': ('int', 5, 1440, 30" in SRC)
-check('скорость платных 5 минут', "'link.check_paid_min': ('int', 1, 1440, 5" in SRC)
-check('сборщику отдаём интервал проверки', "row['check_interval_min'] = _link_check_min" in SRC)
+check('разбор продукта link_N_D', 'def link_combo_of(product: Any)' in SRC)
+# фронтенд: конструктор
+check('в приложении конструктор ссылок', 'link_matrix' in PAY)
+check('чипы «сколько ссылок» и «срок»',
+      "chipRow('Сколько ссылок'" in PAY and "chipRow('Срок'" in PAY)
+check('цена и кнопка пересчитываются', 'Оплатить ' in PAY and 'paintPlans' in PAY)
+check('экономия за 90 дней', 'savingsFor' in PAY)
+check('бесплатно — 1 ссылка', 'Бесплатно' in TPL and '1 ссылка' in TPL)
 
 print()
 if fail:

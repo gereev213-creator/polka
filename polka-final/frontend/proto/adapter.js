@@ -631,6 +631,8 @@ function paintEmpty(count) {
     try {
       const data = await window.PolkaAPI.api('/api/pay/plans');
       plans = data.plans || data.items || [];
+      // Кнопку оплаты и выбор тарифа теперь ведёт payments.js (конструктор
+      // «ссылки × срок»); здесь только запоминаем базовую сумму для промо.
       const payBtn = $('payBtn');
       if (payBtn && plans.length) {
         const main = plans.find((p) => p.product === 'plus_30') || plans[0];
@@ -638,33 +640,10 @@ function paintEmpty(count) {
           mainAmount = Number(main.amount) || 0;
           applyPromoPrice();
         }
-        payBtn.onclick = () => buy(plans.find((p) => p.product === 'plus_30') || plans[0]);
       }
-      // Раньше любой план кроме trial подписывался «Плюс активен», и
-      // бесплатные пользователи видели активный Плюс, которого у них нет.
-      const plan = String(data.plan || '').toLowerCase();
-      const isPlus = plan === 'plus' || plan === 'pro' || data.plus_active === true;
-      const title = $('trialTitle');
-      const badge = $('trialBadge');
-      if (title) {
-        if (isPlus) {
-          title.textContent = 'Плюс активен';
-          if (badge) badge.textContent = 'Активно';
-        } else if (plan === 'trial') {
-          title.textContent = 'Бесплатный доступ';
-          if (badge) badge.textContent = 'Активно';
-        } else {
-          // Число берём у сервера, а не из головы: раньше здесь было
-          // захардкожено «2 поиска», хотя бесплатный тариф — один.
-          title.textContent = 'Бесплатный тариф';
-          if (badge) {
-            const lim = Number(data.criteria_limit || data.free_max_criteria || 1);
-            const word = lim === 1 ? 'поиск' : (lim >= 2 && lim <= 4 ? 'поиска' : 'поисков');
-            // Продаём мониторинг ссылок: свободный слот — это «1 ссылка».
-            badge.textContent = lim === 1 ? '1 ссылка' : (lim + ' ' + word);
-          }
-        }
-      }
+      // Плашка бесплатного доступа и бейдж — зона payments.js (конструктор):
+      // здесь ничего не перезаписываем, иначе «0 ₽ / 1 ссылка» превращается
+      // в «1 поиск» сразу после загрузки планов.
     } catch (e) { }
   }
 

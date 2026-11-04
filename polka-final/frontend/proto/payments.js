@@ -43,7 +43,10 @@
 
   var STATE = {
     plans: [],          // [{product, amount, days}]
-    current: null,      // выбранный план
+    matrix: [],         // конструктор: [{links, days, amount, per_month, product}]
+    current: null,      // выбранная комбинация «ссылки × срок»
+    links: 1,
+    days: 30,
     orderUuid: null,    // id заказа на сервере
     provider: null,     // 'paw' | 'cispay'
     polling: false,
@@ -60,145 +63,208 @@
     return 'руб/мес';
   }
 
-  // Витрина: три дешёвых входа вместо одной подписки. Плюс остаётся
-  // в бэкенде, но в чипах показываем именно их — так человеку проще
-  // решиться на первую покупку.
-  // Витрина = продукт, который мы продаём: мониторинг ссылок с Авито.
-  // Старые пакеты «Плюса» остаются в бэкенде, но человеку не показываются —
-  // 11 тарифов в списке не давали выбрать ни один.
-  var VISIBLE_PRODUCTS = ['link_1_30', 'link_2_30', 'link_3_30', 'link_5_90'];
-
-  function planTitle(product, days) {
-    if (product === 'extra_search') return 'Мини · 3 поиска';
-    if (product === 'pack_5') return 'Пакет · 10 поисков';
-    if (product === 'unlimited_30') return 'Безлимит · 30 дней';
-    if (product === 'pro_30') return 'PRO · 30 дней';
-    if (product === 'pro_90') return 'PRO · 90 дней';
-    if (Number(days) === 7) return 'Неделя';
-    if (Number(days) === 90) return '90 дней';
-    return 'Месяц';
-  }
-
-  function planUnit(product, days) {
-    if (product === 'extra_search') return '3 поиска · 30 дней';
-    if (product === 'pack_5') return '10 поисков · 30 дней';
-    if (product === 'unlimited_30') return 'без лимита · 30 дней';
-    if (product === 'pro_30') return '20 поисков + подборка';
-    if (product === 'pro_90') return '20 поисков + подборки';
-    if (product === 'link_1_30') return '1 ссылка · 30 дней';
-    if (product === 'link_2_30') return '2 ссылки · 30 дней';
-    if (product === 'link_3_30') return '3 ссылки · 30 дней';
-    if (product === 'link_5_90') return '5 ссылок · 90 дней';
-    return unitLabel(days);
-  }
-
-  // Группы витрины: сначала PRO для перекупов, ниже — обычные варианты.
-  var PLAN_GROUPS = [
-    ['Мониторинг ссылок с Авито', ['link_1_30', 'link_2_30', 'link_3_30']],
-    ['Для перекупов', ['link_5_90']],
-  ];
-
-  var PLAN_META = {
-    pro_30: '20 поисков · приоритетная проверка · подборка раз в неделю',
-    pro_90: '20 поисков · приоритетная проверка · подборки 3 месяца',
-    link_1_30: '1 поисковая ссылка · проверка раз в 5 минут',
-    link_2_30: '2 поисковые ссылки · проверка раз в 5 минут',
-    link_3_30: '3 поисковые ссылки · проверка раз в 5 минут',
-    link_5_90: '5 ссылок · проверка раз в 5 минут · приоритет · 90 дней',
-    unlimited_30: 'без ограничения поисков · находки без задержки',
-    pack_5: '10 поисков · 30 дней',
-    extra_search: '3 поиска · 30 дней',
-  };
-  var PLAN_SHORT = {
-    pro_30: 'PRO', pro_90: 'PRO', unlimited_30: 'Безлимит',
-    link_1_30: '1 ссылка', link_2_30: '2 ссылки', link_3_30: '3 ссылки',
-    link_5_90: '5 ссылок',
-    pack_5: 'Пакет', extra_search: 'Мини', week: 'Неделя', plus_30: 'Месяц',
-    plus_90: '90 дней',
-  };
+  // ── Конструктор мониторинга ссылок: «сколько ссылок × на сколько дней» ──
+  // Цены и допустимые комбинации приходят с сервера (link_matrix), чтобы
+  // не держать прайс в двух местах: на сервере и в приложении.
 
   function rub2(n) {
     var v = Math.round(Number(n) || 0);
     return v.toLocaleString('ru-RU') + ' \u20BD';
   }
 
-  function renderPlanChips() {
-    var wrap = document.getElementById('tarwrap');
-    if (!wrap || !STATE.plans || !STATE.plans.length) return;
-    var host = document.getElementById('planChipsBox');
-    if (!host) {
-      host = document.createElement('div');
-      host.id = 'planChipsBox';
-      wrap.insertBefore(host, wrap.firstChild);
+  function matrix() { return STATE.matrix || []; }
+
+  function combosFor(links) {
+    return matrix().filter(function (x) { return Number(x.links) === Number(links); });
+  }
+
+  function comboFor(links, days) {
+    var same = combosFor(links);
+    for (var i = 0; i < same.length; i += 1) {
+      if (Number(same[i].days) === Number(days)) return same[i];
     }
-    host.innerHTML = '';
-    var visible = {};
-    STATE.plans.forEach(function (pl) {
-      if (VISIBLE_PRODUCTS.indexOf(String(pl.product)) !== -1) visible[pl.product] = pl;
+    // Срок недоступен для этого количества ссылок — берём ближайший
+    // доступный, чтобы экран никогда не оставался без выбора.
+    for (var j = 0; j < same.length; j += 1) {
+      if (Number(same[j].days) === 30) return same[j];
+    }
+    return same[0] || null;
+  }
+
+  function availableLinks() {
+    var seen = {};
+    var out = [];
+    matrix().forEach(function (x) {
+      var n = Number(x.links);
+      if (!seen[n]) { seen[n] = 1; out.push(n); }
     });
-    // Старый кеш ответа не должен оставлять человека без выбора.
-    if (!Object.keys(visible).length) {
-      STATE.plans.forEach(function (pl) { visible[pl.product] = pl; });
+    return out.sort(function (a, b) { return a - b; });
+  }
+
+  function availableDays(links) {
+    var seen = {};
+    var out = [];
+    combosFor(links).forEach(function (x) {
+      var d = Number(x.days);
+      if (!seen[d]) { seen[d] = 1; out.push(d); }
+    });
+    return out.sort(function (a, b) { return a - b; });
+  }
+
+  // Экономия к оплате того же числа ссылок по 30 дней за 3 месяца.
+  var matrixFind = function (links, days) {
+    var m = matrix();
+    for (var i = 0; i < m.length; i += 1) {
+      if (Number(m[i].links) === Number(links)
+          && Number(m[i].days) === Number(days)) return m[i];
     }
-    PLAN_GROUPS.forEach(function (group) {
-      var items = group[1].map(function (k) { return visible[k]; }).filter(Boolean);
-      if (!items.length) return;
-      var sec = document.createElement('div');
-      sec.className = 'sect';
-      sec.textContent = group[0];
-      host.appendChild(sec);
-      items.forEach(function (pl) {
+    return null;
+  };
+
+  function savingsFor(combo) {
+    if (!combo) return 0;
+    var n = Number(combo.links);
+    var d = Number(combo.days);
+    if (d !== 90) return 0;
+    var month = matrixFind(n, 30);
+    if (!month || !month.amount) return 0;
+    var full = Number(month.amount) * 3;
+    if (full <= 0) return 0;
+    var pct = Math.round((1 - Number(combo.amount) / full) * 100);
+    return pct > 0 ? pct : 0;
+  }
+
+  function daysWord(days) {
+    var d = Number(days);
+    if (d === 7) return '7 дней';
+    if (d === 14) return '14 дней';
+    if (d === 30) return '30 дней';
+    return String(d) + ' дней';
+  }
+
+  function renderPlanChips() {
+    var host = document.getElementById('planChipsBox');
+    if (!host) return;
+    host.innerHTML = '';
+    if (!matrix().length) {
+      host.innerHTML = '<div class="clabel">Тарифы не загрузились — потяни экран вниз</div>';
+      return;
+    }
+    if (!STATE.current) {
+      STATE.current = comboFor(STATE.links || 1, STATE.days || 30);
+      if (STATE.current) {
+        STATE.links = Number(STATE.current.links);
+        STATE.days = Number(STATE.current.days);
+      }
+    }
+
+    function chipRow(label, values, selected, onPick, smallOf, offFn, labelOf) {
+      var wrap = document.createElement('div');
+      wrap.className = 'cfield';
+      var lab = document.createElement('div');
+      lab.className = 'clabel';
+      lab.textContent = label;
+      wrap.appendChild(lab);
+      var row = document.createElement('div');
+      row.className = 'crow';
+      values.forEach(function (val) {
         var b = document.createElement('button');
         b.type = 'button';
-        b.className = 'planChip'
-          + (STATE.current && pl.product === STATE.current.product ? ' on' : '');
-        var title = PLAN_SHORT[pl.product] || planTitle(pl.product, pl.days);
-        var tag = (String(pl.product).indexOf('pro_') === 0
-                   || pl.product === 'link_5_90')
-          ? '<span class="tag">для перекупов</span>' : '';
-        var meta = PLAN_META[pl.product] || planUnit(pl.product, pl.days);
-        b.innerHTML = '<span class="pn"><b>' + title + tag + '</b><i>' + meta
-          + '</i></span><span class="pp">' + rub2(pl.amount) + '</span>';
-        b.addEventListener('click', function () {
-          STATE.current = pl;
-          Array.prototype.forEach.call(host.querySelectorAll('.planChip'), function (c) {
-            c.classList.remove('on');
-          });
-          b.classList.add('on');
-          paintPlans();
-          showBalanceButton();
+        var off = offFn ? offFn(val) : false;
+        b.className = 'cchip' + (Number(val) === Number(selected) ? ' on' : '')
+          + (off ? ' off' : '');
+        var small = smallOf ? smallOf(val) : '';
+        var text = labelOf ? labelOf(val) : val;
+        b.innerHTML = '<span>' + text + '</span>'
+          + (small ? '<small>' + small + '</small>' : '');
+        b.addEventListener('click', function (e) {
+          if (e) { e.preventDefault(); e.stopPropagation(); }
+          if (off) return;
+          onPick(val);
         });
-        host.appendChild(b);
+        row.appendChild(b);
       });
+      wrap.appendChild(row);
+      host.appendChild(wrap);
+    }
+
+    var counts = availableLinks();
+    var days = availableDays(STATE.links);
+    if (days.indexOf(Number(STATE.days)) === -1) STATE.days = days[0] || 30;
+
+    chipRow('Сколько ссылок', counts, STATE.links, function (val) {
+      STATE.links = Number(val);
+      var combo = comboFor(STATE.links, STATE.days);
+      if (!combo) return;
+      STATE.current = combo;
+      STATE.days = Number(combo.days);
+      renderPlanChips();
+      paintPlans();
+      showBalanceButton();
+    }, function (val) {
+      return Number(val) === 5 ? 'PRO' : '';
+    });
+
+    chipRow('Срок', days, STATE.days, function (val) {
+      STATE.days = Number(val);
+      STATE.current = comboFor(STATE.links, STATE.days);
+      if (!STATE.current) return;
+      STATE.days = Number(STATE.current.days);
+      renderPlanChips();
+      paintPlans();
+      showBalanceButton();
+    }, function (val) {
+      var combo = comboFor(STATE.links, val);
+      var save = savingsFor(combo);
+      return save > 0 ? ('\u2212' + save + '%') : '';
+    }, null, function (val) {
+      return String(val) + ' дн';
     });
   }
 
   function paintPlans() {
-    // Цена живёт в одном месте — в карточке выбранного тарифа.
     if (!STATE.current || !STATE.current.amount) return;
     var base = Number(STATE.current.amount) || 0;
     var pct = Number(window.__promoPercent || 0);
     var price = pct ? Math.max(1, Math.round(base * (100 - pct) / 100)) : base;
     var prod = String(STATE.current.product || '');
-    var nameEl = document.getElementById('planName');
-    var periodEl = document.getElementById('planPeriod');
     var priceEl = document.getElementById('planPrice');
+    var periodEl = document.getElementById('planPeriod');
+    var saveEl = document.getElementById('planSave');
     var noteEl = document.getElementById('planNote');
     var btn = document.getElementById('payBtn');
     var days = Number(STATE.current.days) || 0;
-    var _periodTxt = (prod === 'pro_90' || prod === 'link_5_90') ? '90 дней'
-      : (days === 7 ? '7 дней' : '30 дней');
-    if (nameEl) {
-      nameEl.textContent = (PLAN_SHORT[prod] || planTitle(prod, days))
-        + ' · ' + _periodTxt;
+    var perMonth = Number(STATE.current.per_month) || (days ? Math.round(base * 30 / days) : 0);
+    if (priceEl) {
+      priceEl.textContent = price.toLocaleString('ru-RU') + ' \u20BD';
+      // Промокод — на самой цене, чтобы скидка была видна в момент выбора.
+      if (pct) {
+        priceEl.innerHTML = price.toLocaleString('ru-RU') + ' \u20BD'
+          + ' <span class="pp-old">' + rub2(base) + '</span>';
+      }
     }
-    if (periodEl) periodEl.textContent = _periodTxt;
-    if (priceEl) priceEl.textContent = price.toLocaleString('ru-RU');
-    if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub(price);
+    if (periodEl) {
+      periodEl.textContent = daysWord(days)
+        + (perMonth ? ' \u00B7 \u2248' + perMonth.toLocaleString('ru-RU') + ' \u20BD/мес' : '');
+    }
+    if (saveEl) {
+      var save = savingsFor(STATE.current);
+      if (save > 0) {
+        var month = matrixFind(STATE.current.links, 30);
+        var money = month ? Math.max(0, Number(month.amount) * 3 - base) : 0;
+        saveEl.style.display = 'inline-flex';
+        saveEl.textContent = '\u2212' + save + '%'
+          + (money ? (' \u00B7 \u044D\u043A\u043E\u043D\u043E\u043C\u0438\u044F ' + rub2(money)) : '')
+          + ' \u043A \u0442\u0440\u0451\u043C \u043C\u0435\u0441\u044F\u0446\u0430\u043C \u043F\u043E 30 \u0434\u043D\u0435\u0439';
+      } else {
+        saveEl.style.display = 'none';
+      }
+    }
+    if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub2(price);
     if (noteEl) {
       noteEl.textContent = pct
-        ? ('Скидка ' + pct + '% · вместо ' + rub2(base) + '. Без автосписаний.')
-        : 'Без автосписаний. Отменить нечего — второго платежа не будет.';
+        ? ('Скидка ' + pct + '% \u00B7 вместо ' + rub2(base) + ' \u00B7 без автосписаний')
+        : 'Проверка каждые 5 минут \u00B7 находки в Telegram \u00B7 без автосписаний';
     }
   }
 
@@ -228,12 +294,16 @@
       // ?t= — чтобы WebView не отдал старый ответ из кеша
       var data = await window.PolkaAPI.api('/api/pay/plans?t=' + Date.now());
       STATE.plans = data.plans || [];
+      STATE.matrix = data.link_matrix || [];
       STATE.plan = data.plan || 'trial';
-      var wanted = String(data.default_product || 'extra_search');
-      STATE.current =
-        STATE.plans.filter(function (p) { return p.product === wanted; })[0] ||
-        STATE.plans.filter(function (p) { return p.product === 'plus_30'; })[0] ||
-        STATE.plans[0] || null;
+      // По умолчанию — 1 ссылка на 30 дней (459 ₽): самый понятный вход.
+      STATE.links = 1;
+      STATE.days = 30;
+      STATE.current = comboFor(1, 30) || (STATE.matrix[0] || null);
+      if (STATE.current) {
+        STATE.links = Number(STATE.current.links);
+        STATE.days = Number(STATE.current.days);
+      }
       renderPlanChips();
       paintPlans();
       showBalanceButton();
@@ -245,12 +315,12 @@
         const title = document.getElementById('trialTitle');
         if (title) title.textContent = 'Плюс активен';
       } else {
-        // ВАРИАНТ A: бесплатный доступ — один поиск без ограничения по
-        // времени. Никаких таймеров и «пробных периодов».
+        // Бесплатно — одна ссылка: демо мониторинга. Скорость, за которую
+        // платят, появляется после оплаты (проверка 5 минут вместо 30).
         const badge = document.getElementById('trialBadge');
         const title = document.getElementById('trialTitle');
-        if (badge) badge.textContent = '1 поиск';
-        if (title) title.textContent = 'Бесплатный доступ';
+        if (badge) badge.textContent = '0 \u20BD';
+        if (title) title.textContent = 'Бесплатно \u2014 1 ссылка';
       }
       wirePayButton();
       return STATE.plans;

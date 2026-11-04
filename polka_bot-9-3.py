@@ -19200,22 +19200,29 @@ async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Resp
     except Exception:
         body = {}
     product = str((body or {}).get('product') or 'plus_30')
-    price_map = {'plus_week': ('week', 7), 'week': ('week', 7),
-                 'plus_30': ('plus_30', 30), 'plus_90': ('plus_90', 90)}
-    _, days = price_map.get(product, ('plus_30', 30))
-    # Цена — та же, что в счёте: из настроек (pay.rub_week / pay.rub_30 /
-    # pay.rub_90). Раньше читалась несуществующая таблица pay_plans, и для
-    # 90 дней списывалось 149 ₽ вместо 349 ₽ — прямая потеря денег.
-    price = 0
-    try:
-        _prod_key = str(product)
-        if _prod_key not in CISPAY_PLANS:
-            _prod_key = 'plus_30' if days >= 30 else 'week'
-        price = int(round(_cispay_price(CISPAY_PLANS[_prod_key][1])))
-    except Exception:
+    # Балансом можно купить и «Плюс», и мониторинг ссылок: для конструктора
+    # цена и срок берутся из той же матрицы, что и в счёте.
+    _link_combo = link_combo_of(product)
+    if _link_combo:
+        days = int(_link_combo[1])
+        price = link_combo_price(*_link_combo)
+    else:
+        price_map = {'plus_week': ('week', 7), 'week': ('week', 7),
+                     'plus_30': ('plus_30', 30), 'plus_90': ('plus_90', 90)}
+        _, days = price_map.get(product, ('plus_30', 30))
+        # Цена — та же, что в счёте: из настроек (pay.rub_week / pay.rub_30 /
+        # pay.rub_90). Раньше читалась несуществующая таблица pay_plans, и для
+        # 90 дней списывалось 149 ₽ вместо 349 ₽ — прямая потеря денег.
         price = 0
-    if not price:
-        price = 149 if days >= 30 else 49
+        try:
+            _prod_key = str(product)
+            if _prod_key not in CISPAY_PLANS:
+                _prod_key = 'plus_30' if days >= 30 else 'week'
+            price = int(round(_cispay_price(CISPAY_PLANS[_prod_key][1])))
+        except Exception:
+            price = 0
+        if not price:
+            price = 149 if days >= 30 else 49
     try:
         cur = db.conn.cursor()
         cur.execute("SELECT balance FROM referral_balance WHERE user_id=?", (int(viewer_id),))
@@ -19244,6 +19251,23 @@ async def api_pay_with_balance(request: aiohttp_web.Request) -> aiohttp_web.Resp
                     {'product': product, 'amount': price, 'days': days})
     except Exception:
         pass
+    if _link_combo:
+        # Мониторинг ссылок: выдаём слоты на выбранный срок, а не «Плюс».
+        _slots, _slot_days = _link_combo
+        _now = get_moscow_time()
+        try:
+            cur.execute(
+                "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                (int(viewer_id), _slots, product, '',
+                 (_now + timedelta(days=_slot_days)).isoformat(), _now.isoformat()))
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f'balance link slots: {e}')
+        return _miniapp_json({'ok': True, 'paid': True, 'slots': _slots,
+                              'days': _slot_days, 'balance': balance - price,
+                              'expires_at': (_now + timedelta(days=_slot_days)).isoformat(),
+                              'plan': 'free'})
     expires = ''
     try:
         expires = _grant_plus_days(int(viewer_id), days) or ''
@@ -24310,14 +24334,9 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                       'Цена «Пакет: 10 поисков на 30 дней», ₽'),
     'pay.rub_unlimited': ('str', None, None, '140',
                           'Цена «Безлимит: 30 дней без ограничений», ₽'),
-    'pay.rub_link1': ('str', None, None, '459',
-                      'Цена «Мониторинг 1 ссылки, 30 дней», ₽ (как у Avito Hunter)'),
-    'pay.rub_link2': ('str', None, None, '729',
-                      'Цена «Мониторинг 2 ссылок, 30 дней», ₽'),
-    'pay.rub_link3': ('str', None, None, '999',
-                      'Цена «Мониторинг 3 ссылок, 30 дней», ₽'),
-    'pay.rub_link5': ('str', None, None, '1490',
-                      'Цена «Мониторинг 5 ссылок, 90 дней» (PRO для перекупов), ₽'),
+    # Цены мониторинга ссылок живут в LINK_PRICES (конструктор «ссылки ×
+    # срок»). Перекрыть конкретную комбинацию можно настройкой вида
+    # pay.rub_link_3_90 — она читается link_combo_price().
     # Скорость мониторинга — то, за что платят: бесплатно проверяем реже.
     'link.check_free_min': ('int', 5, 1440, 30,
                             'Как часто проверять ссылку на бесплатном, минут'),
@@ -25487,6 +25506,60 @@ CISPAY_PLANS = {
 }
 
 
+# ── Мониторинг ссылок: конструктор «ссылки × срок» ─────────────────────────
+# Цены 30 дней — как у Avito Hunter (459/729/999). Короткие сроки — их же
+# входные 169/259. 90 дней — со скидкой к трём месячным. Пять ссылок
+# продаём только на 90 дней: это апселл для перекупов.
+LINK_PRICES = {
+    (1, 7): 169, (1, 14): 259, (1, 30): 459, (1, 90): 1290,
+    (2, 7): 269, (2, 14): 419, (2, 30): 729, (2, 90): 1990,
+    (3, 7): 369, (3, 14): 579, (3, 30): 999, (3, 90): 2690,
+    (5, 90): 3490,
+}
+LINK_COUNTS = (1, 2, 3, 5)
+LINK_TERMS = (7, 14, 30, 90)
+
+
+def link_combo_of(product: Any) -> Optional[tuple]:
+    """Разбирает продукт link_<ссылок>_<дней> → (ссылки, дни)."""
+    m = re.match(r'^link_(\d{1,2})_(\d{1,3})$', str(product or ''))
+    if not m:
+        return None
+    combo = (int(m.group(1)), int(m.group(2)))
+    return combo if combo in LINK_PRICES else None
+
+
+def link_combo_price(links: int, days: int) -> int:
+    """Цена комбинации; настройка pay.rub_link_N_D перекрывает матрицу."""
+    key = f'pay.rub_link_{int(links)}_{int(days)}'
+    try:
+        val = int(round(float(str(cfg_get(key) or '0').replace(',', '.').strip())))
+    except Exception:
+        val = 0
+    if val > 0:
+        return val
+    return int(LINK_PRICES.get((int(links), int(days)), 0))
+
+
+# Все комбинации регистрируем как продукты оплаты: счёт создаётся ровно на
+# выбранную человеком пару «ссылки × срок».
+for (_lk_n, _lk_d) in LINK_PRICES:
+    CISPAY_PLANS[f'link_{_lk_n}_{_lk_d}'] = (_lk_d, f'linkcombo_{_lk_n}_{_lk_d}')
+
+
+def link_matrix_public() -> List[Dict]:
+    """Матрица для конструктора на клиенте: что выбрать и сколько стоит."""
+    out = []
+    for (n, d) in sorted(LINK_PRICES, key=lambda x: (x[0], x[1])):
+        amount = link_combo_price(n, d)
+        if amount <= 0:
+            continue
+        out.append({'links': int(n), 'days': int(d), 'amount': int(amount),
+                    'product': f'link_{n}_{d}',
+                    'per_month': int(round(amount * 30.0 / d))})
+    return out
+
+
 def ensure_payments() -> None:
     """Таблица платежей: кто, за что, сколько, UUID счёта и статус."""
     try:
@@ -25570,6 +25643,14 @@ def cispay_enabled() -> bool:
 
 
 def _cispay_price(key: str) -> float:
+    k = str(key or '')
+    # Конструктор ссылок: цена считается матрицей, а не строкой в настройках.
+    if k.startswith('linkcombo_'):
+        try:
+            _n, _d = (int(x) for x in k.split('_')[1:3])
+            return float(link_combo_price(_n, _d))
+        except Exception:
+            return 0.0
     try:
         return float(str(cfg_get(key) or '0').replace(',', '.').strip())
     except Exception:
@@ -26062,18 +26143,15 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
             logger.warning(f"pro notify: {e}")
         return {'ok': True, 'credited': True, 'pro_days': _pro_days,
                 'slots': _slots, 'expires_at': _expires_plus}
-    # Микро-покупки и мониторинг ссылок: слоты поисков на 30 дней.
-    _LINK_SLOTS = {'link_1_30': 1, 'link_2_30': 2, 'link_3_30': 3,
-                   'link_5_90': 5}
-    if product in ('extra_search', 'pack_5') or product in _LINK_SLOTS:
-        if product in _LINK_SLOTS:
-            slots = _LINK_SLOTS[product]
+    # Микро-покупки и мониторинг ссылок: слоты поисков на выбранный срок.
+    # Мониторинг — конструктор «ссылки × срок»: ссылки и дни закодированы в
+    # продукте link_<ссылок>_<дней>.
+    _link_combo = link_combo_of(product)
+    if product in ('extra_search', 'pack_5') or _link_combo:
+        if _link_combo:
+            slots, _slot_days = _link_combo
         else:
             slots = 3 if product == 'extra_search' else 10
-        _slot_days = 30
-        try:
-            _slot_days = int(CISPAY_PLANS[product][0]) or 30
-        except Exception:
             _slot_days = 30
         expires_slots = (get_moscow_time() + timedelta(days=_slot_days)).isoformat()
         try:
@@ -26098,7 +26176,7 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
         try:
             _app = globals().get('_APP')
             _bot = getattr(_app, 'bot', None) if _app is not None else None
-            if product in _LINK_SLOTS:
+            if _link_combo:
                 _text = ("✅ <b>Мониторинг ссылок подключён</b>\n\n"
                          f"Ссылок в работе: <b>{slots}</b>, на {_slot_days} дней.\n\n"
                          "Вставьте ссылку с Авито в форму «Новый поиск» — "
@@ -26605,6 +26683,9 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
         except Exception:
             pass
     return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
+                          'link_matrix': link_matrix_public(),
+                          'free_links': 1,
+                          'free_check_min': int(cfg_get('link.check_free_min') or 30),
                           'variant': ('extra_search' if _default_product == 'extra_search'
                                       else 'unlimited_30'),
                           'default_product': _default_product,

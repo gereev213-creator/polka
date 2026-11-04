@@ -764,7 +764,24 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 .planChip.on{box-shadow:0 0 0 2px var(--blue),var(--sh)}
 .planChip.on .pp{color:var(--blue)}
 .sect{font-size:11px;font-weight:870;color:var(--mut);letter-spacing:.03em;margin:16px 4px 8px}
+/* Конструктор мониторинга ссылок: «сколько ссылок × срок» → цена */
+.cfield{margin:0 0 14px}
+.cfield:last-of-type{margin-bottom:4px}
+.clabel{font-size:10.5px;font-weight:870;color:var(--mut);letter-spacing:.06em;text-transform:uppercase;margin:0 2px 8px}
+.crow{display:flex;gap:8px}
+.cchip{flex:1;min-width:0;height:46px;border:1.5px solid #E3E9F2;background:#F7FAFE;border-radius:15px;font:inherit;color:var(--ink);font-size:14.5px;font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:0 4px;cursor:pointer}
+.cchip small{font-size:9.5px;font-weight:800;color:var(--mut);line-height:1}
+.cchip.on{background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 6px 16px rgba(51,115,250,.28)}
+.cchip.on small{color:rgba(255,255,255,.9)}
+.cchip.off{opacity:.35;pointer-events:none}
+.cprice{display:flex;align-items:flex-end;gap:10px;margin:8px 2px 0;flex-wrap:wrap}
+.cprice .sum{font-size:34px;font-weight:870;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.cprice .pp-old{font-size:14px;font-weight:750;color:var(--mut);text-decoration:line-through;margin-left:8px}
+.cprice .per{font-size:12px;font-weight:750;color:var(--mut);padding-bottom:4px;line-height:1.25;flex:1;min-width:120px}
+#s-tariffs .scroll{padding-top:2px}
+.csave{display:none;background:var(--pale);color:var(--deep);font-size:11px;font-weight:850;padding:6px 10px;border-radius:999px;margin:10px 2px 12px}
 #s-tariffs .plan-card{background:#fff;border-radius:24px;box-shadow:var(--sh);color:var(--ink);padding:18px;margin-top:14px;min-height:0;height:auto;position:relative}
+#s-tariffs .plan-card #payBtn{margin-top:6px}
 .plan-name{font-size:15px;font-weight:870;color:var(--ink);margin-bottom:12px}
 #s-tariffs .pay.primary{width:100%;height:50px;border:0;border-radius:18px;background:var(--grad);color:#fff;font-size:15px;font-weight:870;letter-spacing:0;text-transform:none;box-shadow:none}
 .plan-note{font-size:11px;line-height:1.4;color:var(--mut);font-weight:650;text-align:center;margin-top:10px}
@@ -973,16 +990,17 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
-<div id="photoThumbs"></div>
-<div class="card trial"><b id="trialTitle">Бесплатный доступ</b><span class="actv" id="trialBadge">1 ссылка</span></div>
-<div class="newHint" id="planHint">Цены за период тарифа. Оплата картой или СБП, без автосписаний.</div>
-<div class="tarwrap" id="tarwrap"><div id="planChipsBox"></div></div>
+<div class="card trial"><b id="trialTitle">Бесплатно — 1 ссылка</b><span class="actv" id="trialBadge">0 ₽</span></div>
+<div class="newHint" id="planHint">Следим за твоей выдачей на Авито и присылаем новые лоты в Telegram.</div>
 <div class="card plan-card" id="planCard">
-  <div class="plan-name" id="planName">Безлимит</div>
-  <button class="pay primary" id="payBtn" onclick="activatePlus()">Оплатить</button>
-  <div class="plan-note" id="planNote">Без автосписаний. Отменить нечего — второго платежа не будет.</div>
+  <div class="plan-name" id="planName">Мониторинг ссылок с Авито</div>
+  <div id="planChipsBox"></div>
+  <div class="cprice"><div class="sum" id="planPrice">459 ₽</div><div class="per" id="planPeriod">30 дней · ≈459 ₽/мес</div></div>
+  <div class="csave" id="planSave"></div>
+  <button class="pay primary" id="payBtn" onclick="activatePlus()">Оплатить 459 ₽</button>
+  <div class="plan-note" id="planNote">Проверка каждые 5 минут · находки в Telegram · без автосписаний</div>
 </div>
-<div class="card benefits"><h3 class="bTitle">Что входит</h3><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span><span class="btext"><b>Несколько поисков одновременно</b><i>Бесплатно — один поиск без ограничения по времени.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span><span class="btext"><b>Находки приходят сразу</b><i>На платных пакетах задержка доставки снимается.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span><span class="btext"><b>Оценка выгоды по каждому лоту</b><i>Сравнение с медианой рынка и насколько дешевле.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-plane"/></svg></span><span class="btext"><b>Всё в Telegram</b><i>Сообщение со ссылкой и ценой — без отдельных приложений.</i></span></div></div>
+<div class="card benefits"><h3 class="bTitle">Что входит в мониторинг</h3><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span><span class="btext"><b>Проверка каждые 5 минут</b><i>Бесплатно — раз в 30 минут: можно попробовать.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span><span class="btext"><b>Находки приходят сразу</b><i>Новый лот по твоей ссылке — сообщением в Telegram.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span><span class="btext"><b>Без лимита находок</b><i>Сколько поймали — столько и прислали.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-plane"/></svg></span><span class="btext"><b>Ссылку можно поменять</b><i>Фильтры и город задаются на Авито — в самой ссылке.</i></span></div></div>
 <button class="card acc" id="promoBtn"><b>Введи промокод</b><span class="chev"><svg width="15" height="15"><use href="#i-d"/></svg></span></button>
 <div class="promoform" id="promoform"><span class="codebox"><span class="okic" id="okic"><svg width="11" height="11"><use href="#i-check"/></svg></span><input id="code" placeholder="Промокод" autocomplete="off"><span class="off" id="off"></span></span><button class="apply" onclick="applyPromo()">Применить</button></div>
 <p class="pmsg" id="pmsg">Промокод не найден</p>
