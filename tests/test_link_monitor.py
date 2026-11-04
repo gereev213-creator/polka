@@ -50,9 +50,14 @@ check('ссылка сама себе фильтр', "return Decision(True, 'ok'
 check('новая ссылка не матчится со старой базой',
       'ссылочный — находки придёт сборщик' in SRC)
 check('в проходе все ссылки, словесные — порцией',
-      "word_targets_per_pass" in COL and "_link_t = [t for t in targets" in COL)
+      "word_targets_per_pass" in COL and "_link_t = []" in COL
+      and "_word_t = [t for t in targets" in COL)
 check('дорогая проверка «продано» отключается настройкой',
       "cfg.get('check_listings')" in COL)
+check('скорость ссылки по тарифу: 30 минут бесплатно / 5 платно',
+      'link.check_free_min' in SRC and 'link.check_paid_min' in SRC)
+check('сборщик уважает интервал проверки ссылки',
+      'check_interval_min' in COL and "ссылок на паузе по тарифу" in COL)
 
 print()
 if fail:

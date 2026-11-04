@@ -24310,12 +24310,19 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                       'Цена «Пакет: 10 поисков на 30 дней», ₽'),
     'pay.rub_unlimited': ('str', None, None, '140',
                           'Цена «Безлимит: 30 дней без ограничений», ₽'),
-    'pay.rub_link1': ('str', None, None, '349',
-                      'Цена «Мониторинг 1 ссылки, 30 дней», ₽'),
-    'pay.rub_link2': ('str', None, None, '599',
+    'pay.rub_link1': ('str', None, None, '459',
+                      'Цена «Мониторинг 1 ссылки, 30 дней», ₽ (как у Avito Hunter)'),
+    'pay.rub_link2': ('str', None, None, '729',
                       'Цена «Мониторинг 2 ссылок, 30 дней», ₽'),
-    'pay.rub_link3': ('str', None, None, '899',
+    'pay.rub_link3': ('str', None, None, '999',
                       'Цена «Мониторинг 3 ссылок, 30 дней», ₽'),
+    'pay.rub_link5': ('str', None, None, '1490',
+                      'Цена «Мониторинг 5 ссылок, 90 дней» (PRO для перекупов), ₽'),
+    # Скорость мониторинга — то, за что платят: бесплатно проверяем реже.
+    'link.check_free_min': ('int', 5, 1440, 30,
+                            'Как часто проверять ссылку на бесплатном, минут'),
+    'link.check_paid_min': ('int', 1, 1440, 5,
+                            'Как часто проверять ссылку на платном, минут'),
     'pay.rub_pro30': ('str', None, None, '490',
                       'Цена «PRO 30 дней» (20 поисков + подборка), ₽'),
     'pay.rub_pro90': ('str', None, None, '1290',
@@ -25240,6 +25247,24 @@ async def api_legal_consent(request: aiohttp_web.Request) -> aiohttp_web.Respons
     return _miniapp_json({'ok': True, 'consent_at': at})
 
 
+def _link_check_min(user_id: int) -> int:
+    """Как часто проверять ссылку этого человека: скорость — платная функция.
+
+    Бесплатно — раз в 30 минут (демо: видно, что работает, но перекупу мало).
+    Пробный период, «Плюс» и купленные слоты — раз в 5 минут.
+    """
+    try:
+        plan = _user_plan(int(user_id))
+        fast = max(1, int(cfg_get('link.check_paid_min') or 5))
+        if plan.get('name') in ('trial', 'plus'):
+            return fast
+        if int(plan.get('paid_slots') or 0) > 0:
+            return fast
+        return max(1, int(cfg_get('link.check_free_min') or 30))
+    except Exception:
+        return 30
+
+
 def collector_word_filters() -> Dict:
     """Узкие наборы по словам критерия: «macbook» → Apple-фильтры, «rtx» → свои.
 
@@ -25452,6 +25477,9 @@ CISPAY_PLANS = {
     'link_1_30': (30, 'pay.rub_link1'),
     'link_2_30': (30, 'pay.rub_link2'),
     'link_3_30': (30, 'pay.rub_link3'),
+    # PRO для перекупов: 5 ссылок на 90 дней. У Hunter такого нет —
+    # это наш апселл для тех, кто мониторит много запросов.
+    'link_5_90': (90, 'pay.rub_link5'),
     # совместимость с прежними именами
     'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
@@ -26035,13 +26063,19 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
         return {'ok': True, 'credited': True, 'pro_days': _pro_days,
                 'slots': _slots, 'expires_at': _expires_plus}
     # Микро-покупки и мониторинг ссылок: слоты поисков на 30 дней.
-    _LINK_SLOTS = {'link_1_30': 1, 'link_2_30': 2, 'link_3_30': 3}
+    _LINK_SLOTS = {'link_1_30': 1, 'link_2_30': 2, 'link_3_30': 3,
+                   'link_5_90': 5}
     if product in ('extra_search', 'pack_5') or product in _LINK_SLOTS:
         if product in _LINK_SLOTS:
             slots = _LINK_SLOTS[product]
         else:
             slots = 3 if product == 'extra_search' else 10
-        expires_slots = (get_moscow_time() + timedelta(days=30)).isoformat()
+        _slot_days = 30
+        try:
+            _slot_days = int(CISPAY_PLANS[product][0]) or 30
+        except Exception:
+            _slot_days = 30
+        expires_slots = (get_moscow_time() + timedelta(days=_slot_days)).isoformat()
         try:
             cursor.execute(
                 "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
@@ -26066,7 +26100,7 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
             _bot = getattr(_app, 'bot', None) if _app is not None else None
             if product in _LINK_SLOTS:
                 _text = ("✅ <b>Мониторинг ссылок подключён</b>\n\n"
-                         f"Ссылок в работе: <b>{slots}</b>, на 30 дней.\n\n"
+                         f"Ссылок в работе: <b>{slots}</b>, на {_slot_days} дней.\n\n"
                          "Вставьте ссылку с Авито в форму «Новый поиск» — "
                          "будем следить за новыми объявлениями по ней.")
             else:
@@ -29300,6 +29334,13 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 # Ссылочные поиски — платная функция: проверяем их в первую
                 # очередь, чтобы новые лоты приходили быстро.
                 _prio = 5
+                # Скорость — то, за что платят: бесплатно 30 минут,
+                # на платном — 5. Сборщик пропустит ссылку, если проверял её
+                # слишком недавно.
+                try:
+                    row['check_interval_min'] = _link_check_min(row['user_id'])
+                except Exception:
+                    row['check_interval_min'] = 0
             elif int(row.get('sent_n') or 0) == 0 and _age_h <= 6:
                 _prio = 3
             elif int(row.get('match_n') or 0) == 0:

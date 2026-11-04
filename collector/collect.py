@@ -2422,6 +2422,9 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
                       'category': crit.get('category') or '',
                       'query': query, 'page': 1, 'direct': True,
                       'link': True, 'priority': int(crit.get('priority') or 5),
+                      # Скорость — платная функция: сервер говорит, как часто
+                      # проверять эту ссылку (бесплатно 30, платно 5 минут).
+                      'check_interval_min': int(crit.get('check_interval_min') or 0),
                       'crit_id': _cid,
                       'crit_ids': [_cid] if _cid else [],
                       # Проверки слов/цены не нужны: выдачу уже отфильтровал
@@ -2951,7 +2954,28 @@ def run_once(cfg: dict) -> int:
     # эти же 40 минут — при обещанной проверке раз в 5 минут. Теперь проход
     # короткий, и ссылка проверяется каждые несколько минут.
     if AVITO_PROFILE:
-        _link_t = [t for t in targets if t.get('link')]
+        _now_ts = time.time()
+        _link_t = []
+        _too_early = 0
+        for _t in targets:
+            if not _t.get('link'):
+                continue
+            _need = int(_t.get('check_interval_min') or 0)
+            _st = state.get(str(_t.get('url') or '')) or {}
+            _last = str(_st.get('last_run') or '')
+            if _need > 0 and _last:
+                try:
+                    _last_ts = time.mktime(time.strptime(_last[:19],
+                                                         '%Y-%m-%dT%H:%M:%S'))
+                    if (_now_ts - _last_ts) < _need * 60:
+                        _too_early += 1
+                        continue
+                except Exception:
+                    pass
+            _link_t.append(_t)
+        if _too_early:
+            print(f"  ссылок на паузе по тарифу: {_too_early} "
+                  f"(бесплатные проверяются раз в 30 минут)")
         _word_t = [t for t in targets if not t.get('link')]
         try:
             _per_pass = int(cfg.get('word_targets_per_pass') or 6)

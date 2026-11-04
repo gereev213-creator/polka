@@ -63,9 +63,10 @@
   // Витрина: три дешёвых входа вместо одной подписки. Плюс остаётся
   // в бэкенде, но в чипах показываем именно их — так человеку проще
   // решиться на первую покупку.
-  var VISIBLE_PRODUCTS = ['link_1_30', 'link_2_30', 'link_3_30',
-                          'extra_search', 'pack_5', 'unlimited_30',
-                          'pro_30', 'pro_90'];
+  // Витрина = продукт, который мы продаём: мониторинг ссылок с Авито.
+  // Старые пакеты «Плюса» остаются в бэкенде, но человеку не показываются —
+  // 11 тарифов в списке не давали выбрать ни один.
+  var VISIBLE_PRODUCTS = ['link_1_30', 'link_2_30', 'link_3_30', 'link_5_90'];
 
   function planTitle(product, days) {
     if (product === 'extra_search') return 'Мини · 3 поиска';
@@ -87,14 +88,14 @@
     if (product === 'link_1_30') return '1 ссылка · 30 дней';
     if (product === 'link_2_30') return '2 ссылки · 30 дней';
     if (product === 'link_3_30') return '3 ссылки · 30 дней';
+    if (product === 'link_5_90') return '5 ссылок · 90 дней';
     return unitLabel(days);
   }
 
   // Группы витрины: сначала PRO для перекупов, ниже — обычные варианты.
   var PLAN_GROUPS = [
     ['Мониторинг ссылок с Авито', ['link_1_30', 'link_2_30', 'link_3_30']],
-    ['Для перекупов', ['pro_30', 'pro_90']],
-    ['Обычные варианты', ['unlimited_30', 'pack_5', 'extra_search']],
+    ['Для перекупов', ['link_5_90']],
   ];
 
   var PLAN_META = {
@@ -103,6 +104,7 @@
     link_1_30: '1 поисковая ссылка · проверка раз в 5 минут',
     link_2_30: '2 поисковые ссылки · проверка раз в 5 минут',
     link_3_30: '3 поисковые ссылки · проверка раз в 5 минут',
+    link_5_90: '5 ссылок · проверка раз в 5 минут · приоритет · 90 дней',
     unlimited_30: 'без ограничения поисков · находки без задержки',
     pack_5: '10 поисков · 30 дней',
     extra_search: '3 поиска · 30 дней',
@@ -110,6 +112,7 @@
   var PLAN_SHORT = {
     pro_30: 'PRO', pro_90: 'PRO', unlimited_30: 'Безлимит',
     link_1_30: '1 ссылка', link_2_30: '2 ссылки', link_3_30: '3 ссылки',
+    link_5_90: '5 ссылок',
     pack_5: 'Пакет', extra_search: 'Мини', week: 'Неделя', plus_30: 'Месяц',
     plus_90: '90 дней',
   };
@@ -150,7 +153,8 @@
         b.className = 'planChip'
           + (STATE.current && pl.product === STATE.current.product ? ' on' : '');
         var title = PLAN_SHORT[pl.product] || planTitle(pl.product, pl.days);
-        var tag = (String(pl.product).indexOf('pro_') === 0)
+        var tag = (String(pl.product).indexOf('pro_') === 0
+                   || pl.product === 'link_5_90')
           ? '<span class="tag">для перекупов</span>' : '';
         var meta = PLAN_META[pl.product] || planUnit(pl.product, pl.days);
         b.innerHTML = '<span class="pn"><b>' + title + tag + '</b><i>' + meta
@@ -182,7 +186,7 @@
     var noteEl = document.getElementById('planNote');
     var btn = document.getElementById('payBtn');
     var days = Number(STATE.current.days) || 0;
-    var _periodTxt = (prod === 'pro_90') ? '90 дней'
+    var _periodTxt = (prod === 'pro_90' || prod === 'link_5_90') ? '90 дней'
       : (days === 7 ? '7 дней' : '30 дней');
     if (nameEl) {
       nameEl.textContent = (PLAN_SHORT[prod] || planTitle(prod, days))

@@ -41,9 +41,11 @@ check('цена только в кнопке (нет priceNow)', 'id="priceNow"'
 check('ссылка на удалённый termsBtn не падает', "if(_termsBtn)" in TPL)
 
 # витрина
-check('PRO в списке видимых', "'pro_30', 'pro_90']" in PAY)
+check('витрина — только мониторинг ссылок',
+      "VISIBLE_PRODUCTS = ['link_1_30', 'link_2_30', 'link_3_30', 'link_5_90']" in PAY)
 check('группа «Для перекупов»', "'Для перекупов'" in PAY)
-check('группа «Обычные варианты»', "'Обычные варианты'" in PAY)
+check('группа «Мониторинг ссылок с Авито»', "'Мониторинг ссылок с Авито'" in PAY)
+check('старые пакеты убраны из витрины', "'unlimited_30', 'pack_5'" not in PAY)
 check('метка PRO', "'<span class=\"tag\">для перекупов</span>'" in PAY or 'для перекупов</span>' in PAY)
 check('цены в строках', "class=\"pp\"" in PAY)
 check('подпись выбранного плана с периодом', "+ ' · ' + _periodTxt" in PAY)
