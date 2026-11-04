@@ -27557,6 +27557,17 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
                 report['details'].append(
                     f"id{r['id']} u{uid} plan={plan} — пропуск (платный)")
                 continue
+            # Оплатил слоты — 24-часовой лимит на него не действует:
+            # без этой проверки оплаченный мониторинг вставал на паузу
+            # через сутки после создания поиска.
+            try:
+                _paid_slots_ttl = int(_purchased_slots(uid) or 0)
+            except Exception:
+                _paid_slots_ttl = 0
+            if _paid_slots_ttl > 0:
+                report['details'].append(
+                    f"id{r['id']} u{uid} — оплачено ({_paid_slots_ttl} сл.), не паузим")
+                continue
             ext = int(r.get('ext') or 0)
             trial_started = ''
             try:

@@ -45,6 +45,9 @@ check('24 часа считаются от якоря пользователя',
 check('TTL-цикл проверяет каждые 5 минут', 'await asyncio.sleep(300)' in SRC)
 check('после оплаты поиск разблокируется',
       '_paid_slots <= 0' in SRC and 'Бесплатные 24 часа закончились' in SRC)
+check('оплаченные слоты снимают 24-часовой лимит',
+      'оплачено ({_paid_slots_ttl} сл.), не паузим' in SRC
+      or 'if _paid_slots_ttl > 0:' in SRC)
 check('аудит лимитов доступен админу',
       "action == 'limits_probe'" in SRC and "action == 'grant_link_slots'" in SRC)
 check('якорь ставится сразу при создании поиска',
