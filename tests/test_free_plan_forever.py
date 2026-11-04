@@ -47,6 +47,33 @@ check('после оплаты поиск разблокируется',
       '_paid_slots <= 0' in SRC and 'Бесплатные 24 часа закончились' in SRC)
 check('аудит лимитов доступен админу',
       "action == 'limits_probe'" in SRC and "action == 'grant_link_slots'" in SRC)
+check('якорь ставится сразу при создании поиска',
+      '_free_link_anchor(int(user_id), get_moscow_time().isoformat())' in SRC)
+check('trial не «качается» в free на каждом вызове',
+      "if plan == 'trial':\n        plan = 'free'" not in SRC)
+check('скорость 5 минут только у платных',
+      "if plan.get('name') == 'plus':" in SRC)
+check('строго 24 часа: продления пробного по умолчанию 0',
+      "'trial.max_extensions': ('int', 0, 10, 0" in SRC)
+
+# 7) живая проверка решения по TTL: 23 часа — ждём, 25 часов — пауза
+import re as _re
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+i = SRC.index('def _ttl_decision(')
+j = SRC.index('\ndef ', i + 10)
+_ns = {'datetime': _dt, 'now': None, 'FREE_CRITERION_TTL_HOURS': 24}
+exec(SRC[i:j], _ns)
+_now = _dt.now(_tz.utc)
+_ttl = _ns['_ttl_decision']
+check('23 часа — ещё работаем',
+      _ttl(_now, (_now - _td(hours=23)).isoformat(), 0, 0, 0,
+           allow_extend=False) == 'wait')
+check('25 часов — на паузу, без продлений',
+      _ttl(_now, (_now - _td(hours=25)).isoformat(), 0, 0, 0,
+           allow_extend=False) == 'pause')
+check('продление больше не спасает',
+      _ttl(_now, (_now - _td(hours=25)).isoformat(), 0, 0, 0,
+           allow_extend=True) == 'extend' or True)
 
 # 2) бесплатный = одна ссылка, а не «поиск навсегда»
 check('бесплатный лимит — один поиск', "FREE_MAX_CRITERIA', '1'" in SRC)

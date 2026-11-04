@@ -24403,7 +24403,8 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
-    'trial.max_extensions': ('int', 0, 10, 3, 'Продлений теста, если находок не было'),
+    'trial.max_extensions': ('int', 0, 10, 0,
+                             'Продлений пробного, если находок не было (0 — строго 24 часа)'),
     # ВАРИАНТ A: бесплатный поиск не встаёт на паузу через сутки.
     # 0 — никогда (текущее правило), N — ставить на паузу через N часов.
     # Оставлено на будущее, если захотим вернуть ограничение по времени.
@@ -25453,7 +25454,9 @@ def _link_check_min(user_id: int) -> int:
     try:
         plan = _user_plan(int(user_id))
         fast = max(1, int(cfg_get('link.check_paid_min') or 5))
-        if plan.get('name') in ('trial', 'plus'):
+        # Быстрая проверка — только у платных («Плюс» или купленные слоты).
+        # Бесплатные 24 часа — честно раз в 30 минут, как написано в тарифах.
+        if plan.get('name') == 'plus':
             return fast
         if int(plan.get('paid_slots') or 0) > 0:
             return fast
@@ -27362,13 +27365,10 @@ def _user_plan(user_id: int) -> Dict:
     user = db.get_user(int(user_id)) or {}
     plan = str(user.get('plan') or '')
     now = get_moscow_time()
-    # ВАРИАНТ A: «пробный» больше не отдельный план — это бесплатный доступ.
-    if plan == 'trial':
-        plan = 'free'
-        try:
-            db.update_user(int(user_id), plan='free')
-        except Exception:
-            pass
+    # Пробный период (24 часа с первого входа) — стабильное состояние:
+    # раньше здесь trial сразу переводился в free, а ниже снова включался,
+    # из-за чего два подряд вызова _user_plan возвращали разные лимиты
+    # (то задержка 0, то 10 минут; то скорость 5, то 30 минут).
     # Активная подписка важнее поля users.plan: после оплаты оно может
     # остаться 'trial', и человек получал лимиты пробного вместо Плюса.
     _sub_active = _plus_subscription(int(user_id))
@@ -29176,6 +29176,13 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             logger.warning(f"filter_url save: {_e}")
     db.conn.commit()
     crit_id = cursor.lastrowid
+    # Бесплатные 24 часа считаем от ПЕРВОГО поиска человека. Якорь ставим
+    # сразу при создании: иначе удаление и пересоздание поиска сбрасывали
+    # бы лимит, и можно было бы получать «24 часа» бесконечно.
+    try:
+        _free_link_anchor(int(user_id), get_moscow_time().isoformat())
+    except Exception as _anchor_err:
+        logger.warning(f"free anchor: {_anchor_err}")
     # K4: медиана ТОЛЬКО этого критерия — один запрос вместо прохода по всем.
     # Полный пересчёт ушёл в фон с дебаунсом и цикл событий не держит.
     try:
