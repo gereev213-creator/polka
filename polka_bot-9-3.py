@@ -22927,7 +22927,13 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             _toks = [t for t in _toks if not t.endswith(('yy', 'iy'))][-4:]
             if _toks:
                 _tlow = title
-                if not any(t in _tlow for t in _toks):
+                # Требуем ВСЕ осмысленные слова модели (iphone, 17, pro):
+                # «любое из» пропускало чужие лоты с цифрой или брендом.
+                _strong = [t for t in _toks if not t.isdigit()]
+                _nums = [t for t in _toks if t.isdigit()]
+                if any(t not in _tlow for t in _strong):
+                    return no('title_words')
+                if any(t not in _tlow for t in _nums):
                     return no('title_words')
         except Exception:
             pass
