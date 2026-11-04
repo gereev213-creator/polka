@@ -20386,6 +20386,16 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
         # Откат (K8): старое поведение — синхронно в обработчике
         stats = ingest_findings(items, source, crit_ids)
     _touch_collector(source)
+    # Диагностика версии сборщика: новая версия помечает партию ссылки
+    # crit_ids. Если в /api/diag last_crit_ids так и остаётся 0 — на ноуте
+    # ещё старый collect.py.
+    try:
+        _INGEST_STATS['last_crit_ids'] = len(crit_ids)
+        if crit_ids:
+            _INGEST_STATS['link_pushes'] = int(_INGEST_STATS.get('link_pushes') or 0) + 1
+            _INGEST_STATS['last_link_at'] = get_moscow_time().isoformat()
+    except Exception:
+        pass
     took_ms = int((_time.monotonic() - started) * 1000)
     _INGEST_STATS['last_ms'] = took_ms
     _INGEST_STATS['last_n'] = len(items)
@@ -34799,6 +34809,21 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             test_user = 0
         res = await link_only_migration(test_user=test_user, dry=dry)
         return _miniapp_json(res)
+
+    if action == 'pause_manual_criteria':
+        # Ручной поиск убран из продукта: активные словесные критерии
+        # останавливаем, чтобы людям не приходили находки «по-старому».
+        try:
+            cur = db.conn.cursor()
+            cur.execute(
+                "UPDATE hunt_criteria SET active=0, paused_reason='link_only' "
+                "WHERE active=1 AND COALESCE(from_link,'') IN ('','0')")
+            n = int(cur.rowcount or 0)
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False,
+                                  'error': f'{type(e).__name__}: {e}'[:200]}, status=500)
+        return _miniapp_json({'ok': True, 'paused': n})
 
     if action == 'send_tutorial':
         # Проверка видео-инструкции: отправляем ролик одному человеку.
