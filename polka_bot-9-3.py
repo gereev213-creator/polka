@@ -24282,6 +24282,12 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                       'Цена «Пакет: 10 поисков на 30 дней», ₽'),
     'pay.rub_unlimited': ('str', None, None, '140',
                           'Цена «Безлимит: 30 дней без ограничений», ₽'),
+    'pay.rub_link1': ('str', None, None, '349',
+                      'Цена «Мониторинг 1 ссылки, 30 дней», ₽'),
+    'pay.rub_link2': ('str', None, None, '599',
+                      'Цена «Мониторинг 2 ссылок, 30 дней», ₽'),
+    'pay.rub_link3': ('str', None, None, '899',
+                      'Цена «Мониторинг 3 ссылок, 30 дней», ₽'),
     'pay.rub_pro30': ('str', None, None, '490',
                       'Цена «PRO 30 дней» (20 поисков + подборка), ₽'),
     'pay.rub_pro90': ('str', None, None, '1290',
@@ -25413,6 +25419,11 @@ CISPAY_PLANS = {
     # приоритет проверки и ручная подборка раз в неделю.
     'pro_30': (30, 'pay.rub_pro30'),
     'pro_90': (90, 'pay.rub_pro90'),
+    # Мониторинг поисковых ссылок — по модели Avito Hunter (у них 1 ссылка
+    # 30 дней стоит 459 ₽, 2 — 729, 3 — 999). Берём чуть ниже рынка.
+    'link_1_30': (30, 'pay.rub_link1'),
+    'link_2_30': (30, 'pay.rub_link2'),
+    'link_3_30': (30, 'pay.rub_link3'),
     # совместимость с прежними именами
     'plus_week': (7, 'pay.rub_week'),
     'plus_month': (30, 'pay.rub_month'),
@@ -25995,9 +26006,13 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
             logger.warning(f"pro notify: {e}")
         return {'ok': True, 'credited': True, 'pro_days': _pro_days,
                 'slots': _slots, 'expires_at': _expires_plus}
-    # Микро-покупки: не подписка, а слоты поисков на 30 дней.
-    if product in ('extra_search', 'pack_5'):
-        slots = 3 if product == 'extra_search' else 10
+    # Микро-покупки и мониторинг ссылок: слоты поисков на 30 дней.
+    _LINK_SLOTS = {'link_1_30': 1, 'link_2_30': 2, 'link_3_30': 3}
+    if product in ('extra_search', 'pack_5') or product in _LINK_SLOTS:
+        if product in _LINK_SLOTS:
+            slots = _LINK_SLOTS[product]
+        else:
+            slots = 3 if product == 'extra_search' else 10
         expires_slots = (get_moscow_time() + timedelta(days=30)).isoformat()
         try:
             cursor.execute(
@@ -26021,9 +26036,15 @@ async def paw_payment_done(order_uuid: str, is_test: int = 0, amount: float = 0.
         try:
             _app = globals().get('_APP')
             _bot = getattr(_app, 'bot', None) if _app is not None else None
-            _text = ("✅ <b>Поиски добавлены</b>\n\n"
-                     f"Добавили <b>{slots}</b> поиск(ов) — действуют 30 дней.\n\n"
-                     "Можно создавать новые: искать по нескольким запросам сразу.")
+            if product in _LINK_SLOTS:
+                _text = ("✅ <b>Мониторинг ссылок подключён</b>\n\n"
+                         f"Ссылок в работе: <b>{slots}</b>, на 30 дней.\n\n"
+                         "Вставьте ссылку с Авито в форму «Новый поиск» — "
+                         "будем следить за новыми объявлениями по ней.")
+            else:
+                _text = ("✅ <b>Поиски добавлены</b>\n\n"
+                         f"Добавили <b>{slots}</b> поиск(ов) — действуют 30 дней.\n\n"
+                         "Можно создавать новые: искать по нескольким запросам сразу.")
             if _bot is not None:
                 await _bot.send_message(chat_id=int(pay['user_id']), text=_text,
                                         parse_mode=ParseMode.HTML)
