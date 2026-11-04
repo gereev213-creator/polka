@@ -34475,7 +34475,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                     'min_price': int(parsed.get('min_price') or 0),
                     'max_price': int(parsed.get('max_price') or 0),
                     'user': str(parsed.get('user') or '')}
-            built = _collector.link_search_url(crit)
+            built = _collector.link_search_url(crit, {'search_by_query': '1'})
             out = {'built_url': built, 'parsed': {k: parsed.get(k) for k in
                    ('path', 'q', 'min_price', 'max_price', 'user', 'region')}}
             if not built:

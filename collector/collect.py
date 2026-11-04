@@ -2128,8 +2128,11 @@ def link_search_url(crit: dict, cfg: dict = None) -> str:
     query = " ".join(str(crit.get('search_q') or crit.get('query') or '').split())[:80]
     # С q= Авито отвечает 439 почти всегда, поэтому по умолчанию открываем
     # раздел. Слова применяет сервер при отборе.
+    # Режим q= берём из cfg (настройка сервера) или из модуля: так ссылка
+    # не зависит от рассинхрона глобальной переменной.
+    _with_q = query_mode(cfg)
     template = ("https://www.avito.ru/{path}?q={query}&s=104&pmin={pmin}&pmax={pmax}"
-                if SEARCH_BY_QUERY else
+                if _with_q else
                 "https://www.avito.ru/{path}?s=104&pmin={pmin}&pmax={pmax}")
     url = (template.replace('{path}', path)
            .replace('{query}', quote_plus(query))
@@ -2348,7 +2351,7 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # Раньше адрес собирался заново из слов критерия: получался другой
         # запрос, и приходили не те объявления, что человек видел на Авито.
         # Критерий из ссылки Авито: путь, q и фильтры берем из ссылки как есть.
-        link_url = link_search_url(crit)
+        link_url = link_search_url(crit, cfg)
         if link_url:
             if link_url in seen:
                 continue
