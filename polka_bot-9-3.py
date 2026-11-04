@@ -29303,6 +29303,22 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             except Exception:
                 _req = {}
             row['user'] = '1' if _req.get('private_only') else ''
+            # Ссылочный поиск без сохранённого адреса: собираем исходную
+            # ссылку из разобранных частей (путь + фильтры f= + сортировка
+            # по дате). Так браузерный сборщик откроет именно её.
+            try:
+                if int(row.get('from_link') or 0) and not str(row.get('filter_url') or ''):
+                    _p = str(row.get('search_path') or '').strip('/')
+                    if _p:
+                        _qs = []
+                        if row.get('search_filters'):
+                            _qs.append('f=' + str(row['search_filters']))
+                        _qs.append('s=104')
+                        if row.get('search_user'):
+                            _qs.append('user=' + str(row['search_user']))
+                        row['filter_url'] = 'https://www.avito.ru/' + _p + '?' + '&'.join(_qs)
+            except Exception as _e:
+                logger.warning(f"link url synth: {_e}")
             # Фильтры из ссылки человека отдаём сборщику под именем, которое
             # он уже понимает: он подставит их в адрес Авито как есть.
             row['filters'] = str(row.get('filter_blob') or '')
