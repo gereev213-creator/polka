@@ -319,7 +319,7 @@
         // платят, появляется после оплаты (проверка 5 минут вместо 30).
         const badge = document.getElementById('trialBadge');
         const title = document.getElementById('trialTitle');
-        if (badge) badge.textContent = '0 \u20BD';
+        if (badge) badge.textContent = '24 \u0447\u0430\u0441\u0430';
         if (title) title.textContent = 'Бесплатно \u2014 1 ссылка';
       }
       wirePayButton();
