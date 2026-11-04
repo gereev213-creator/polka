@@ -32,7 +32,7 @@ def check(name, cond, extra=''):
 
 check('есть вход «Ссылка с Авито»', 'id="searchLink"' in TPL and 'id="searchLink"' in IDX)
 check('разбор ссылки на сервере', 'def parse_avito_search_link(' in SRC)
-check('создание критерия из ссылки', 'search_link: link, query: q' in ADP)
+check('создание критерия из ссылки', 'url: link' in ADP and '/api/hunt/from-link' in ADP)
 check('ссылки больше не отбиваются как неподдержанные',
       'Ссылки с Авито больше не поддерживаются' not in SRC
       and 'Следим за вашей ссылкой с Авито' in SRC)

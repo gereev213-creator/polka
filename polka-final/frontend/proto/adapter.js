@@ -996,22 +996,25 @@ function paintEmpty(count) {
       const link = link0;
       let ok = false;
       if (link) {
-        // Сначала новый разбор ссылки: он принимает любую ссылку поиска,
-        // даже без набора фильтров f=. Старый эндпоинт — как запасной.
+        // СНАЧАЛА from-link: ссылка — это адрес, а не «поиск с Авито».
+        // Он принимает любую ссылку поиска (даже без f=), хранит точный
+        // адрес и дедуплицирует по нему — значит можно добавить вторую и
+        // третью ссылку, не получая «такой поиск уже есть». Старый
+        // эндпоинт пытаемся вторым, только если новый не ответил.
         try {
-          const res = await window.PolkaAPI.api('/api/hunt', {
-            method: 'POST', body: JSON.stringify({ search_link: link, query: q }),
+          const res2 = await window.PolkaAPI.api('/api/hunt/from-link', {
+            method: 'POST', body: JSON.stringify({ url: link }),
           });
-          ok = !!(res && (res.ok !== false));
+          ok = !!(res2 && (res2.ok !== false));
         } catch (e) {
           ok = false;
         }
         if (!ok) {
           try {
-            const res2 = await window.PolkaAPI.api('/api/hunt/from-link', {
-              method: 'POST', body: JSON.stringify({ url: link }),
+            const res = await window.PolkaAPI.api('/api/hunt', {
+              method: 'POST', body: JSON.stringify({ search_link: link, query: q }),
             });
-            ok = !!(res2 && (res2.ok !== false));
+            ok = !!(res && (res.ok !== false));
           } catch (e) {
             ok = false;
             if (window.PolkaNotify) window.PolkaNotify('Ссылка не подошла — нужна ссылка поиска с Авито');

@@ -39,10 +39,10 @@ checks = [
     ("вкладки убраны", 'chat-tabs' not in JSX),
     ("клиент зовёт эндпоинт", 'huntFromLink' in API),
     # Живой мини-апп — proto/: в React-сборку смотрит только админка.
-    ("поле ссылки в живом мини-аппе", 'id="avitoLink"' in TPL),
-    ("плашки разбора ссылки", 'id="linkChips"' in TPL),
+    ("поле ссылки в живом мини-аппе", 'id="searchLink"' in TPL),
+    ("плашки разбора ссылки", '#linkChips' in TPL and 'getElementById(\'linkChips\')' in ADP),
     ("ссылка отправляется без слов", 'q.length < 2 && !link0' in ADP),
-    ("новый разбор ссылки первым", "search_link: link" in ADP),
+    ("новый разбор ссылки первым", ADP.index("/api/hunt/from-link") < ADP.index("search_link: link")),
     # Ручной режим расширен: словами теперь ищет сам Авито (q=), поэтому
     # человеку нужны цена от/до, город, состояние, минус-слова, выгода и фото.
     ("поле цены от", 'id="minprice"' in TPL),
