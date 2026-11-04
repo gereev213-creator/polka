@@ -938,121 +938,64 @@ function paintEmpty(count) {
         } catch (_) { }
       });
     }
-    // Ссылка — главный вход: остальные поля (слова, цена, город, фильтры)
-    // по умолчанию скрыты, чтобы человек не думал, что нужно заполнять всё.
-    // Кнопка «Искать словами» показывает их обратно.
-    try {
-      const allFields = [...form.querySelectorAll('.field')];
-      const wordFields = allFields.slice(1);
-      let wordMode = false;
-      const toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'chip';
-      toggle.style.cssText = 'margin:2px 0 12px;align-self:flex-start';
-      toggle.textContent = 'Искать словами вместо ссылки';
-      wordFields.forEach((f) => { f.style.display = 'none'; });
-      if (allFields[0] && allFields[0].parentNode) {
-        allFields[0].parentNode.insertBefore(toggle, allFields[0].nextSibling);
-      }
-      toggle.addEventListener('click', () => {
-        wordMode = !wordMode;
-        wordFields.forEach((f) => { f.style.display = wordMode ? '' : 'none'; });
-        toggle.textContent = wordMode
-          ? 'Скрыть поля и следить по ссылке'
-          : 'Искать словами вместо ссылки';
-      });
-    } catch (e) { }
-
+    // В ПОЛКЕ остался один способ создать поиск — ссылка со своей выдачи
+    // на Авито. Ручной (словесный) поиск убран: он часто промахивался, а
+    // список полей только путал.
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const q = ($('q') && $('q').value || '').trim();
-      const raw = ($('maxprice') && $('maxprice').value || '').replace(/[^0-9]/g, '');
-      // Ссылка с Авито — точный режим. Если она есть, слова и цена не нужны:
-      // сборщик пойдёт ровно по выбранному человеку разделу.
-      const linkEl0 = document.getElementById('searchLink')
+      const linkEl = document.getElementById('searchLink')
         || document.getElementById('avitoLink');
-      const link0 = linkEl0 ? String(linkEl0.value || '').trim() : '';
-      if (q.length < 2 && !link0) return;
-      // Выбранные критерии и минус-слова уходят в критерий: по ним отбирает сервер
-      const sellerEl = document.querySelector('#sellerChips [data-seller].on');
-      const seller = sellerEl ? String(sellerEl.getAttribute('data-seller') || 'any') : 'any';
-      const chips = [...document.querySelectorAll('#searchForm .chip.on')]
-        .map((b) => (b.getAttribute('data-req') || '').trim()).filter(Boolean);
-      const sizeEl = document.getElementById('sizeInput');
-      const sizeVal = sizeEl ? String(sizeEl.value || '').trim().slice(0, 12) : '';
-      if (sizeVal) chips.push('размер ' + sizeVal);
-      if (seller === 'private') chips.push('только частник');
-
-      // Новые условия поиска
-      const condEl = document.querySelector('#condChips [data-cond].on');
-      const condition = condEl ? String(condEl.getAttribute('data-cond') || 'any') : 'any';
-      const discEl = document.querySelector('#discChips [data-disc].on');
-      const minDiscount = discEl ? Number(discEl.getAttribute('data-disc') || 0) : 0;
-      const photoEl = document.getElementById('photoChip');
-      const withPhoto = !!(photoEl && photoEl.classList.contains('on'));
-      const minRaw = (($('minprice') && $('minprice').value) || '').replace(/[^0-9]/g, '');
-      // Полей «город», «минус-слова», «состояние» может не быть — берём пусто.
-
-      const cityEl = $('city');
-      const city = cityEl ? String(cityEl.value || '').trim() : '';
-      const exclEl = $('exclude');
-      const exclude = exclEl ? String(exclEl.value || '').trim().slice(0, 200) : '';
-      const minus = [...document.querySelectorAll('#searchForm input')]
-        .map((i) => (i.placeholder || '').includes('запчасти') ? i.value.trim() : '')
-        .filter(Boolean).join(',');
-      // Если человек вставил ссылку с Авито — идём точно по ней: там уже
-      // его фильтры, и сборщику не нужно перебирать всю категорию.
-      const link = link0;
+      const link = linkEl ? String(linkEl.value || '').trim() : '';
+      if (!link) {
+        if (window.PolkaNotify) {
+          window.PolkaNotify('Вставьте ссылку из строки браузера Авито — поиск теперь только по ссылке');
+        }
+        if (linkEl) { try { linkEl.focus(); } catch (_) { } }
+        return;
+      }
+      if (!/avito\.ru/i.test(link)) {
+        if (window.PolkaNotify) {
+          window.PolkaNotify('Это не похоже на ссылку Авито. Откройте поиск на Авито и скопируйте адрес из строки браузера');
+        }
+        return;
+      }
+      const btn = form.querySelector('[type="submit"]') || document.querySelector('[form="searchForm"]');
+      const oldBtn = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Запускаем…'; }
       let ok = false;
-      if (link) {
-        // СНАЧАЛА from-link: ссылка — это адрес, а не «поиск с Авито».
-        // Он принимает любую ссылку поиска (даже без f=), хранит точный
-        // адрес и дедуплицирует по нему — значит можно добавить вторую и
-        // третью ссылку, не получая «такой поиск уже есть». Старый
-        // эндпоинт пытаемся вторым, только если новый не ответил.
+      let detail = '';
+      try {
+        const res = await window.PolkaAPI.api('/api/hunt/from-link', {
+          method: 'POST', body: JSON.stringify({ url: link }),
+        });
+        ok = !!(res && (res.ok !== false));
+        if (!ok && res && res.detail) detail = String(res.detail);
+      } catch (err) {
+        ok = false;
+        detail = (err && err.message) || '';
+      }
+      if (!ok) {
+        // Запасной старый маршрут — только если новый не ответил.
         try {
-          const res2 = await window.PolkaAPI.api('/api/hunt/from-link', {
-            method: 'POST', body: JSON.stringify({ url: link }),
+          const res = await window.PolkaAPI.api('/api/hunt', {
+            method: 'POST', body: JSON.stringify({ search_link: link }),
           });
-          ok = !!(res2 && (res2.ok !== false));
-        } catch (e) {
+          ok = !!(res && (res.ok !== false));
+          if (!ok && res && res.detail) detail = String(res.detail);
+        } catch (err) {
           ok = false;
         }
-        if (!ok) {
-          try {
-            const res = await window.PolkaAPI.api('/api/hunt', {
-              method: 'POST', body: JSON.stringify({ search_link: link, query: q }),
-            });
-            ok = !!(res && (res.ok !== false));
-          } catch (e) {
-            ok = false;
-            if (window.PolkaNotify) window.PolkaNotify('Ссылка не подошла — нужна ссылка поиска с Авито');
-          }
+      }
+      if (btn) { btn.disabled = false; btn.textContent = oldBtn || 'Запустить поиск'; }
+      if (!ok) {
+        if (window.PolkaNotify) {
+          window.PolkaNotify(detail || 'Ссылка не подошла — скопируйте адрес поиска на Авито из строки браузера');
         }
+        return;
       }
-      if (!ok && !link) {
-        ok = await window.PolkaAPI.createSearch({
-          query: q,
-          max_price: Number(raw) || 0,
-          min_price: Number(minRaw) || 0,
-          city: city,
-          condition: condition,
-          with_photo: withPhoto ? 1 : 0,
-          min_discount: minDiscount,
-          requirements: chips.join(', '),
-          exclude: exclude || minus,
-        });
-      }
-      if (ok) {
-        const lk = document.getElementById('searchLink')
-          || document.getElementById('avitoLink'); if (lk) lk.value = '';
-        form.reset();
-        document.querySelectorAll('#searchForm .chip.on').forEach((c) => c.classList.remove('on'));
-        if (sampleBox) { sampleBox.classList.remove('show'); sampleBox.innerHTML = ''; }
-        const _df = document.getElementById('dynFilters');
-        if (_df) _df.style.display = 'none';
-        if (typeof go === 'function') go('searches');
-      }
+      if (linkEl) linkEl.value = '';
+      form.reset();
+      if (typeof go === 'function') go('searches');
     });
   }
 

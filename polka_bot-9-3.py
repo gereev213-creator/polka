@@ -20458,6 +20458,112 @@ async def send_link_tutorial(user_id: int) -> Dict:
     return out
 
 
+async def tutorial_link_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка «Как получить ссылку — видео»: присылаем ролик в чат."""
+    q = update.callback_query
+    if q is None:
+        return
+    try:
+        await q.answer()
+    except Exception:
+        pass
+    try:
+        await send_link_tutorial(int(q.from_user.id))
+    except Exception as e:
+        logger.warning(f"tutorial callback: {e}")
+
+
+LINK_ONLY_MIGRATION_TEXT = (
+    "🔗 <b>ПОЛКА теперь ищет только по ссылке</b>\n\n"
+    "Мы убрали ручной поиск по словам: он часто промахивался, и вы ждали "
+    "находок в тишине. Теперь всё точнее: вы копируете ссылку со своей "
+    "выдачи на Авито — со всеми фильтрами и городом — а мы следим ровно "
+    "за ней и присылаем только новые объявления.\n\n"
+    "🎁 Начислили вам <b>24 часа мониторинга бесплатно</b>.\n\n"
+    "<b>Как получить ссылку:</b>\n"
+    "1. Откройте Авито и выставьте фильтры — город, цена, состояние, "
+    "дата публикации.\n"
+    "2. Скопируйте адрес из строки браузера.\n"
+    "3. Вставьте его в ПОЛКЕ в «Новый поиск».\n\n"
+    "Если что-то непонятно — нажмите «Видео», там 1 минута."
+)
+
+
+async def link_only_migration(test_user: int = 0, dry: bool = True) -> Dict:
+    """Рассылка «ручной поиск убран» + 24 часа мониторинга бесплатно.
+
+    Кому: у кого есть хотя бы один критерий, созданный вручную (from_link=0).
+    Каждому — один слот на 24 часа и сообщение с шагами, как получить ссылку.
+    Повторно не отправляем: отметка link_only_migrated:<uid>.
+    """
+    out: Dict = {'ok': True, 'dry': bool(dry), 'test_user': int(test_user),
+                 'users': 0, 'sent': 0, 'skipped': 0, 'errors': [], 'details': []}
+    rows = []
+    try:
+        cur = db.conn.cursor()
+        cur.execute(
+            "SELECT c.user_id AS user_id, COUNT(*) AS n, "
+            "GROUP_CONCAT(DISTINCT substr(c.query,1,28)) AS qs "
+            "FROM hunt_criteria c WHERE COALESCE(c.from_link,0)=0 "
+            "GROUP BY c.user_id ORDER BY c.user_id")
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        out.update({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]})
+        return out
+    targets = []
+    for r in rows:
+        uid = int(r.get('user_id') or 0)
+        if not uid:
+            continue
+        if test_user:
+            if uid == int(test_user):
+                targets.append(r)
+            continue
+        try:
+            if str(_setting_get(f'link_only_migrated:{uid}', '') or ''):
+                out['skipped'] += 1
+                continue
+        except Exception:
+            pass
+        targets.append(r)
+    out['users'] = len(targets)
+    out['details'] = [{'user_id': int(t['user_id']),
+                       'criteria': int(t.get('n') or 0),
+                       'queries': str(t.get('qs') or '')[:80]}
+                      for t in targets[:200]]
+    if dry or not targets:
+        return out
+    kb = {'inline_keyboard': [
+        [{'text': '🎬 Как получить ссылку — видео',
+          'callback_data': 'tutorial:link'}],
+        [{'text': 'Вставить ссылку',
+          'web_app': {'url': f"{_miniapp_url()}/?screen=newsearch"}}],
+    ]}
+    for t in targets:
+        uid = int(t['user_id'])
+        try:
+            if not test_user:
+                _now = get_moscow_time()
+                cur.execute(
+                    "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                    " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                    (uid, 1, 'link_trial_24h', '',
+                     (_now + timedelta(hours=24)).isoformat(), _now.isoformat()))
+                db.conn.commit()
+            ok = await _tg_send_html(uid, LINK_ONLY_MIGRATION_TEXT, kb)
+            if ok:
+                out['sent'] += 1
+                if not test_user:
+                    _setting_set(f'link_only_migrated:{uid}',
+                                 get_moscow_time().isoformat())
+            else:
+                out['errors'].append(f'u{uid}: send_failed')
+            await asyncio.sleep(0.06)
+        except Exception as e:
+            out['errors'].append(f'u{uid}: {type(e).__name__}: {e}'[:120])
+    return out
+
+
 async def api_tutorial_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/tutorial/link — прислать в чат видео «как получить ссылку»."""
     viewer_id = _miniapp_viewer(request)
@@ -29586,9 +29692,13 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
         except Exception:
             return _miniapp_err('bad_json', 400)
         raw_query = ' '.join(str((body or {}).get('query') or '').split())
-        if len(raw_query) < 2:
-            return _miniapp_json({'error': 'query_too_short',
-                                  'detail': 'Напишите хотя бы два символа'}, status=400)
+        # Ручной (словесный) поиск убран: продукт — только ссылка с Авито.
+        # Старые приложения могли прислать query — отвечаем понятной причиной.
+        return _miniapp_json({
+            'ok': False, 'error': 'link_only',
+            'detail': 'Поиски создаются только по ссылке с Авито. Откройте '
+                      'Авито, выставьте фильтры и вставьте адрес из строки '
+                      'браузера в «Новый поиск».'}, status=400)
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, viewer_id, raw_query,
             str((body or {}).get('category') or ''),
@@ -34680,6 +34790,16 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
 
+    if action == 'link_only_migration':
+        # Перевод пользователей с ручных поисков на ссылки.
+        dry = str((body or {}).get('dry') or '1') != '0'
+        try:
+            test_user = int((body or {}).get('user') or 0)
+        except Exception:
+            test_user = 0
+        res = await link_only_migration(test_user=test_user, dry=dry)
+        return _miniapp_json(res)
+
     if action == 'send_tutorial':
         # Проверка видео-инструкции: отправляем ролик одному человеку.
         try:
@@ -38908,6 +39028,7 @@ def main():
     application.add_handler(CallbackQueryHandler(show_profile,               pattern="^profile$"))
     application.add_handler(CallbackQueryHandler(check_subscription_callback,pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(start_trial_callback,pattern="^start_trial$"))
+    application.add_handler(CallbackQueryHandler(tutorial_link_callback,pattern="^tutorial:link$"))
     application.add_handler(CallbackQueryHandler(offer29_skip,
                                                 pattern="^offer29_skip$"))
     application.add_handler(CallbackQueryHandler(survey_answer,

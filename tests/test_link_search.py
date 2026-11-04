@@ -47,6 +47,15 @@ check('короткая инструкция шагами',
       'id="linkSteps"' in TPL and 'class="step"' in TPL)
 check('кнопка видео-инструкции', 'id="linkTutorialBtn"' in TPL
       and 'linkTutorialBtn' in ADP)
+# Ручной (словесный) поиск убран — продукт только по ссылке
+check('в форме нет переключателя «искать словами»',
+      'Искать словами вместо ссылки' not in ADP
+      and 'Искать словами вместо ссылки' not in TPL)
+check('API отвечает link_only на ручной поиск', "'error': 'link_only'" in SRC)
+check('перевод пользователей на ссылки', 'link_only_migration' in SRC
+      and 'link_trial_24h' in SRC)
+check('в рассылке кнопка видео', 'tutorial:link' in SRC)
+check('24 часа мониторинга в рассылке', '24 часа мониторинга бесплатно' in SRC)
 check('эндпоинт видео-инструкции', "'/api/tutorial/link'" in SRC)
 check('бот отправляет ролик в чат', 'async def send_link_tutorial(' in SRC
       and 'tutorial-link.mp4' in SRC)

@@ -41,7 +41,8 @@ checks = [
     # Живой мини-апп — proto/: в React-сборку смотрит только админка.
     ("поле ссылки в живом мини-аппе", 'id="searchLink"' in TPL),
     ("плашки разбора ссылки", '#linkChips' in TPL and 'getElementById(\'linkChips\')' in ADP),
-    ("ссылка отправляется без слов", 'q.length < 2 && !link0' in ADP),
+    ("форма отправляет только ссылку", "const link = linkEl ? String(linkEl.value || '').trim() : ''" in ADP
+     and "'/api/hunt/from-link'" in ADP),
     ("новый разбор ссылки первым", ADP.index("/api/hunt/from-link") < ADP.index("search_link: link")),
     # Ручной режим расширен: словами теперь ищет сам Авито (q=), поэтому
     # человеку нужны цена от/до, город, состояние, минус-слова, выгода и фото.
