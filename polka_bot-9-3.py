@@ -22914,6 +22914,23 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # Обнуляем запрос, чтобы проверки слов пропустили лот (цену, фото и
     # прочее по-прежнему проверяем).
     if int(crit.get('from_link') or 0):
+        # Ссылка: Авито уже отфильтровал выдачу, но восстановленный адрес
+        # иногда отдаёт соседние модели. Сверяем заголовок с моделью из
+        # пути ссылки (например, iphone_17_pro): хотя бы одно слово модели
+        # (кроме цвета) должно быть в заголовке.
+        try:
+            _path = str(crit.get('search_path') or '').lower()
+            _toks = [t for t in re.split(r'[/_\-]+', _path)
+                     if len(t) >= 2 and t not in (
+                         'all', 'rossiya', 'telefony', 'mobilnye', 'apple',
+                         'noutbuki', 'kompyutery', 'odezhda', 'obuv')]
+            _toks = [t for t in _toks if not t.endswith(('yy', 'iy'))][-4:]
+            if _toks:
+                _tlow = title
+                if not any(t in _tlow for t in _toks):
+                    return no('title_words')
+        except Exception:
+            pass
         # Ссылка только что создана: первая проверка страницы неизбежно
         # состоит из «старых» лотов. Не заваливаем человека десятками
         # сообщений — первые 10 минут после создания ссылки считаем
