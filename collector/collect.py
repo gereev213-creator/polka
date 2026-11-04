@@ -3076,7 +3076,10 @@ def run_once(cfg: dict) -> int:
                 # Сервер отвечает, по каким карточкам нужно описание: отбор
                 # по требованиям словами без него работает вслепую (этап A3)
                 need = stats.get('need_details') or []
-                details_left = int(cfg.get('details_per_pass') or DETAILS_PER_PASS)
+                _dpp = cfg.get('details_per_pass')
+                if _dpp is None:
+                    _dpp = os.environ.get('POLKA_DETAILS_PER_PASS', str(DETAILS_PER_PASS))
+                details_left = max(0, int(_dpp or 0))
                 if need and details_left > 0:
                     _slice = need[:details_left]
                     print(f"  карточек на разбор: {len(_slice)} из {len(need)}")
