@@ -37,9 +37,16 @@ def check(name, cond, extra=''):
 check('настройка free.ttl_hours есть', "'free.ttl_hours'" in SRC)
 check('по умолчанию 24 часа', "'free.ttl_hours': ('int', 0, 720, 24" in SRC)
 check('авто-пауза учитывает настройку', "if _ttl_hours <= 0:" in SRC)
-check('компенсация работает и на free-плане',
-      "allow_extend=(plan in ('trial', 'free'))" in SRC)
-check('продление не бесконечное', "trial.max_extensions" in SRC)
+check('лимит привязан к человеку, а не к поиску',
+      'def _free_link_anchor(' in SRC and 'free_link_started:' in SRC)
+check('строго без продлений', 'allow_extend=False' in SRC)
+check('24 часа считаются от якоря пользователя',
+      '_ttl_decision(now, _anchor, 0, findings, 0,' in SRC)
+check('TTL-цикл проверяет каждые 5 минут', 'await asyncio.sleep(300)' in SRC)
+check('после оплаты поиск разблокируется',
+      '_paid_slots <= 0' in SRC and 'Бесплатные 24 часа закончились' in SRC)
+check('аудит лимитов доступен админу',
+      "action == 'limits_probe'" in SRC and "action == 'grant_link_slots'" in SRC)
 
 # 2) бесплатный = одна ссылка, а не «поиск навсегда»
 check('бесплатный лимит — один поиск', "FREE_MAX_CRITERIA', '1'" in SRC)

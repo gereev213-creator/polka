@@ -27483,6 +27483,28 @@ def _ttl_decision(now, created_at, ext_hours: int, findings: int,
     return 'pause'
 
 
+def _free_link_anchor(user_id: int, created_at: str) -> str:
+    """Когда у человека начались бесплатные 24 часа.
+
+    Якорь хранится за пользователем (настройка free_link_started:<uid>),
+    иначе удаление поиска и создание нового сбрасывали бы лимит — можно
+    было бы бесконечно получать «24 часа бесплатно».
+    """
+    key = f'free_link_started:{int(user_id or 0)}'
+    try:
+        saved = str(_setting_get(key, '') or '')
+    except Exception:
+        saved = ''
+    if saved:
+        return saved
+    anchor = str(created_at or '') or get_moscow_time().isoformat()
+    try:
+        _setting_set(key, anchor)
+    except Exception:
+        pass
+    return anchor
+
+
 def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
     """Сутки бесплатного поиска: продлить, если находок не было, иначе пауза.
 
@@ -27543,9 +27565,11 @@ def pause_expired_free_criteria(report: Optional[Dict] = None) -> int:
             except Exception:
                 trial_started = ''
             findings = _user_findings_since(uid, trial_started or str(r.get('created_at')))
-            decision = _ttl_decision(now, r.get('created_at'), ext, findings,
-                                     max_ext_hours,
-                                     allow_extend=(plan in ('trial', 'free')))
+            # Строго 24 часа от первого бесплатного поиска человека.
+            # Продлений нет: хочешь дальше — оплачивай мониторинг.
+            _anchor = _free_link_anchor(uid, r.get('created_at'))
+            decision = _ttl_decision(now, _anchor, 0, findings, 0,
+                                     allow_extend=False)
             report['details'].append(
                 f"id{r['id']} u{uid} plan={plan} ext={ext} находок={findings} "
                 f"→ {decision} at={str(r.get('created_at'))[:16]}")
@@ -29352,11 +29376,17 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 row = cursor.fetchone()
                 reason = str(row['pr'] or '') if row else ''
                 plan = str(_user_plan(int(viewer_id)).get('name') or '')
-                if plan in ('free', 'trial') and reason == 'ttl':
+                try:
+                    _paid_slots = int(_purchased_slots(int(viewer_id)) or 0)
+                except Exception:
+                    _paid_slots = 0
+                # Бесплатные сутки вышли — вернуть поиск можно только
+                # оплатой (купленный слот), но не «заменой» поиска.
+                if plan in ('free', 'trial') and reason == 'ttl' and _paid_slots <= 0:
                     return _miniapp_json(
                         {'ok': False, 'error': 'limit',
-                         'detail': 'Чтобы вести второй поиск, оформите «Плюс» '
-                                   'или замените текущий.'},
+                         'detail': 'Бесплатные 24 часа закончились. Оформите '
+                                   'мониторинг в «Тарифах» — поиск разблокируется.'},
                         status=402)
                 limit = _criteria_limit(int(viewer_id))
                 cursor.execute("SELECT COUNT(*) AS n FROM hunt_criteria "
@@ -32810,7 +32840,7 @@ async def _ttl_pause_loop(bot) -> None:
     срабатывают), поэтому критичное для денег действие держим на asyncio —
     так же, как пересчёт находок, который работает.
     """
-    await asyncio.sleep(90)
+    await asyncio.sleep(30)
     while True:
         rep: Dict = {}
         try:
@@ -32828,7 +32858,7 @@ async def _ttl_pause_loop(bot) -> None:
                                                 row.get('id') or 0)
         except Exception as e:
             logger.exception(f"ttl pause loop: {e}")
-        await asyncio.sleep(900)
+        await asyncio.sleep(300)
 
 
 async def _admin_digest_loop(bot) -> None:
@@ -34809,6 +34839,71 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             test_user = 0
         res = await link_only_migration(test_user=test_user, dry=dry)
         return _miniapp_json(res)
+
+    if action == 'limits_probe':
+        # Аудит лимитов одного пользователя: план, слоты, скорость ссылки,
+        # бесплатный якорь и когда его поиск встанет на паузу.
+        try:
+            uid = int((body or {}).get('user') or 0)
+        except Exception:
+            uid = 0
+        if not uid:
+            return _miniapp_json({'ok': False, 'error': 'user_required'}, status=400)
+        try:
+            plan = _user_plan(uid)
+            cur = db.conn.cursor()
+            cur.execute("SELECT id, created_at, active, COALESCE(paused_reason,'') pr, "
+                        "COALESCE(from_link,'') fl FROM hunt_criteria WHERE user_id=? "
+                        "ORDER BY id", (uid,))
+            crits = [dict(r) for r in cur.fetchall()]
+            anchor = ''
+            for c in crits:
+                anchor = _free_link_anchor(uid, c.get('created_at'))
+                break
+            pause_at = ''
+            if anchor:
+                try:
+                    _a = _safe_isoparse(anchor)
+                    if _a is not None:
+                        pause_at = (_a + timedelta(hours=FREE_CRITERION_TTL_HOURS)).isoformat()
+                except Exception:
+                    pass
+            return _miniapp_json({
+                'ok': True, 'user': uid,
+                'plan': plan.get('name'), 'delay_min': plan.get('delay_min'),
+                'deep_check': plan.get('deep_check'),
+                'criteria_limit': _criteria_limit(uid),
+                'purchased_slots': _purchased_slots(uid),
+                'link_check_min': _link_check_min(uid),
+                'free_anchor': anchor, 'pause_at': pause_at,
+                'criteria': crits[:20],
+            })
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+
+    if action == 'grant_link_slots':
+        # Начислить слоты мониторинга вручную (поддержка/тесты оплаты).
+        try:
+            uid = int((body or {}).get('user') or 0)
+            slots = max(1, int((body or {}).get('slots') or 1))
+            days = max(1, int((body or {}).get('days') or 7))
+        except Exception:
+            return _miniapp_json({'ok': False, 'error': 'bad_args'}, status=400)
+        if not uid:
+            return _miniapp_json({'ok': False, 'error': 'user_required'}, status=400)
+        try:
+            _now = get_moscow_time()
+            db.conn.execute(
+                "INSERT INTO slot_purchases (user_id, slots, product, order_uuid,"
+                " expires_at, created_at) VALUES (?,?,?,?,?,?)",
+                (uid, slots, f'manual_{slots}_{days}', '',
+                 (_now + timedelta(days=days)).isoformat(), _now.isoformat()))
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'user': uid, 'slots': slots, 'days': days})
 
     if action == 'pause_manual_criteria':
         # Ручной поиск убран из продукта: активные словесные критерии
