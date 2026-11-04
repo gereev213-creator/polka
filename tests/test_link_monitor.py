@@ -56,6 +56,11 @@ check('дорогая проверка «продано» отключается
       "cfg.get('check_listings')" in COL)
 check('скорость ссылки по тарифу: 30 минут бесплатно / 5 платно',
       'link.check_free_min' in SRC and 'link.check_paid_min' in SRC)
+check('сборщик игнорирует словесные цели (только ссылки)',
+      'POLKA_LINK_ONLY' in COL
+      and "_links_only = [t for t in targets if t.get('link')]" in COL)
+check('сборщик чистит состояние удалённых поисков',
+      'Состояние: убрал' in COL and '_stale' in COL)
 check('сборщик уважает интервал проверки ссылки',
       'check_interval_min' in COL and "ссылок на паузе по тарифу" in COL)
 

@@ -2924,6 +2924,27 @@ def run_once(cfg: dict) -> int:
         # приносили в базу случайные товары (аудио, планшеты), и они попадали
         # в ленту как находки по чужому критерию.
         targets = list(from_crit)
+        # Продукт — только мониторинг ссылок. Старые словесные критерии не
+        # тратят проход: их на сервере больше нельзя создать, а если какой-то
+        # остался активным — просто пропускаем.
+        if str(os.environ.get('POLKA_LINK_ONLY', '1')) == '1':
+            _links_only = [t for t in targets if t.get('link')]
+            if len(_links_only) != len(targets):
+                print(f"  только ссылки: словесных целей пропущено "
+                      f"{len(targets) - len(_links_only)}")
+            targets = _links_only
+            if not targets:
+                # Сервер ответил (критерии получены), но активных ссылок нет —
+                # значит все поиски удалены/на паузе: чистим их состояние.
+                try:
+                    _st = load_targets_state()
+                    if _st:
+                        save_targets_state({})
+                        print(f"Состояние: убрал {len(_st)} удалённых поисков")
+                except Exception as _st_err:
+                    print(f"  ⚠ состояние не почистил: {str(_st_err)[:60]}")
+                print("Ссылочных поисков нет — искать нечего, жду следующий проход")
+                return 0
         print(f"Цели: только критерии ({len(targets)}), общие разделы отключены")
     elif str(os.environ.get('POLKA_USE_STATIC_TARGETS', '0')) != '1':
         # Активных критериев нет: все поиски на паузе или удалены. Раньше
@@ -2938,6 +2959,19 @@ def run_once(cfg: dict) -> int:
     # остальные попадут в следующий проход.
     day = _today()
     state = load_targets_state()
+    # Удалённые и приостановленные поиски больше не должны занимать место
+    # в targets_state.json (там копятся seen_ids по 3000 штук на ссылку).
+    # Чистим всё, чего нет в текущем списке активных целей.
+    try:
+        _valid_urls = {str(t.get('url') or '') for t in targets if t.get('url')}
+        _stale = [k for k in list(state.keys()) if k not in _valid_urls]
+        for _k in _stale:
+            state.pop(_k, None)
+        if _stale:
+            save_targets_state(state)
+            print(f"Состояние: убрал {len(_stale)} удалённых поисков")
+    except Exception as _state_err:
+        print(f"  ⚠ состояние не почистил: {str(_state_err)[:60]}")
     # По умолчанию одна цель за проход: страница Авито весит ~3,5 МБ, а
     # лимиты площадки срабатывают уже на втором запросе подряд.
     limit = int(cfg.get('max_targets') or 1)
