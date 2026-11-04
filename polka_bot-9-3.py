@@ -20504,7 +20504,7 @@ async def link_only_migration(test_user: int = 0, dry: bool = True) -> Dict:
         cur.execute(
             "SELECT c.user_id AS user_id, COUNT(*) AS n, "
             "GROUP_CONCAT(DISTINCT substr(c.query,1,28)) AS qs "
-            "FROM hunt_criteria c WHERE COALESCE(c.from_link,0)=0 "
+            "FROM hunt_criteria c WHERE COALESCE(c.from_link,'') IN ('','0') "
             "GROUP BY c.user_id ORDER BY c.user_id")
         rows = [dict(r) for r in cur.fetchall()]
     except Exception as e:
