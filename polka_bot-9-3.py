@@ -20410,6 +20410,66 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     return _miniapp_json({'ok': True, 'source': source, 'pushed': pushed, **stats})
 
 
+# ── Видео-инструкция «как получить ссылку с Авито» ─────────────────────────
+# Ролик лежит в собранном фронтенде (proto/tutorial-link.mp4 → dist).
+# Первый показ отправляем Telegram по URL, дальше храним file_id и
+# переиспользуем — так не зависим от внешнего хостинга.
+LINK_TUTORIAL_FILE = 'tutorial-link.mp4'
+LINK_TUTORIAL_CAPTION = (
+    "🎬 <b>Как получить ссылку для мониторинга</b>\n\n"
+    "1. Откройте Авито и выставьте любые фильтры: город, цена, "
+    "состояние, дата публикации.\n"
+    "2. Скопируйте адрес из строки браузера.\n"
+    "3. Вставьте его в ПОЛКЕ в «Новый поиск» — и всё, следим за вашей "
+    "выдачей и присылаем только новые объявления.\n\n"
+    "<i>Бесплатно — одна ссылка на 24 часа.</i>"
+)
+
+
+async def send_link_tutorial(user_id: int) -> Dict:
+    """Отправляет человеку видео-инструкцию в чат. Возвращает статус."""
+    out: Dict = {'ok': False, 'used': '', 'file_id': ''}
+    try:
+        _app = globals().get('_APP')
+        _bot = getattr(_app, 'bot', None) if _app is not None else None
+        if _bot is None:
+            out['error'] = 'bot_not_ready'
+            return out
+        file_id = str(_setting_get('tutorial.link_file_id', '') or '')
+        base = str(cfg_get('public.base_url')
+                   or os.environ.get('PUBLIC_BASE_URL')
+                   or 'https://polka-mini-app-nikicev2009.mia0.amvera.tech').rstrip('/')
+        source = file_id or (base + '/' + LINK_TUTORIAL_FILE)
+        out['used'] = 'file_id' if file_id else 'url'
+        msg = await _bot.send_video(
+            chat_id=int(user_id), video=source,
+            caption=LINK_TUTORIAL_CAPTION, parse_mode=ParseMode.HTML,
+            supports_streaming=True)
+        vid = getattr(msg, 'video', None)
+        if vid is not None and getattr(vid, 'file_id', ''):
+            out['file_id'] = str(vid.file_id)
+            if not file_id:
+                _setting_set('tutorial.link_file_id', out['file_id'])
+        out['ok'] = True
+        _plan_event(int(user_id), 'link_tutorial', {'source': out['used']})
+    except Exception as e:
+        out['error'] = f'{type(e).__name__}: {e}'[:200]
+        logger.warning(f"link tutorial send {user_id}: {e}")
+    return out
+
+
+async def api_tutorial_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/tutorial/link — прислать в чат видео «как получить ссылку»."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    res = await send_link_tutorial(int(viewer_id))
+    if not res.get('ok'):
+        return _miniapp_json({'ok': False, 'error': res.get('error') or 'send_failed'},
+                             status=502)
+    return _miniapp_json({'ok': True, 'sent': True})
+
+
 async def api_findings_stats(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/findings/stats — что собралось, по источникам и категориям."""
     cursor = db.conn.cursor()
@@ -34620,6 +34680,17 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
 
+    if action == 'send_tutorial':
+        # Проверка видео-инструкции: отправляем ролик одному человеку.
+        try:
+            who = int((body or {}).get('user') or 0)
+        except Exception:
+            who = 0
+        if not who:
+            return _miniapp_json({'ok': False, 'error': 'user_required'}, status=400)
+        res = await send_link_tutorial(who)
+        return _miniapp_json({'ok': bool(res.get('ok')), **res})
+
     if action == 'set_link_url':
         # Ремонт ссылочного поиска: адрес не сохранился (критерий создан до
         # фикса), поэтому сборщик не мог открыть именно выдачу человека.
@@ -38435,6 +38506,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/pay/invoice', api_pay_invoice)
     app.router.add_get('/api/referral', api_referral)
     app.router.add_post('/api/pay/with-balance', api_pay_with_balance)
+    app.router.add_post('/api/tutorial/link', api_tutorial_link)
     app.router.add_post('/api/promo/redeem', api_promo_redeem)
     app.router.add_get('/api/hunt/templates', api_hunt_templates)
     app.router.add_post('/api/hunt/templates/use', api_hunt_template_use)

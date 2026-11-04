@@ -833,6 +833,35 @@ function paintEmpty(count) {
     if (!form || form.__wired) return;
     form.__wired = true;
 
+    // Видео-инструкция «как получить ссылку»: бот присылает ролик в чат.
+    try {
+      const tutBtn = $('linkTutorialBtn');
+      if (tutBtn && !tutBtn.__wired) {
+        tutBtn.__wired = true;
+        tutBtn.addEventListener('click', async (e) => {
+          e.preventDefault(); e.stopPropagation();
+          if (tutBtn.disabled) return;
+          const oldHtml = tutBtn.innerHTML;
+          tutBtn.disabled = true;
+          tutBtn.innerHTML = '<span class="tbPlay">⏳</span> Отправляю видео в чат…';
+          let ok = false;
+          try {
+            const res = await window.PolkaAPI.api('/api/tutorial/link', {
+              method: 'POST', body: '{}',
+            });
+            ok = !!(res && res.ok);
+          } catch (err) { ok = false; }
+          tutBtn.disabled = false;
+          tutBtn.innerHTML = oldHtml;
+          if (window.PolkaNotify) {
+            window.PolkaNotify(ok
+              ? 'Видео отправил в чат — посмотрите инструкцию там'
+              : 'Не удалось отправить видео. Напишите в поддержку @suppolka');
+          }
+        });
+      }
+    } catch (_) { }
+
     // ── Примеры находок до создания поиска ───────────────────────────────
     // Пока человек печатает запрос, показываем, что по нему уже есть на
     // Авито. Иначе он создаёт поиск, сутки ждёт тишины и уходит: 23 из 30

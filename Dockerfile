@@ -11,6 +11,8 @@ RUN npm run build
 # адаптер связывает его с нашим API (лоты, поиск, избранное).
 # React-сборка остаётся для админки: сохраняем до подмены точки входа
 RUN cp dist/index.html dist/react.html && cp proto/index.html dist/index.html && cp proto/adapter.js dist/adapter.js && cp proto/payments.js dist/payments.js && cp proto/admin.js dist/admin.js && cp proto/keyboard.js dist/keyboard.js && cp proto/telegram-safe.js dist/telegram-safe.js && cp proto/telegram-web-app.js dist/telegram-web-app.js && cp proto/menu.js dist/menu.js && cp proto/menu-bind.js dist/menu-bind.js && mkdir -p dist/legal && cp proto/legal/*.html dist/legal/
+# Видео-инструкция «как получить ссылку»: бот отправляет ролик в чат по URL.
+RUN cp proto/tutorial-link.mp4 dist/tutorial-link.mp4
 
 FROM python:3.13-slim
 

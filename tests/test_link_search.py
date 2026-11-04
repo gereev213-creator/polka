@@ -41,7 +41,15 @@ check('критерий из ссылки не режется словами', "
 check('город не применяется к ссылкам', "return Decision(True, 'ok', 'по ссылке')" in SRC)
 check('ссылка хранит исходный адрес', "row['filter_url'] = str(row.get('filter_url') or '')" in SRC)
 check('есть словарь город-слаг', 'def collector_city_slugs(' in SRC)
-check('подсказка про копирование адреса', 'скопируйте адрес из строки браузера' in TPL)
+check('подсказка про копирование адреса',
+      'Скопируйте адрес из строки браузера' in TPL)
+check('короткая инструкция шагами',
+      'id="linkSteps"' in TPL and 'class="step"' in TPL)
+check('кнопка видео-инструкции', 'id="linkTutorialBtn"' in TPL
+      and 'linkTutorialBtn' in ADP)
+check('эндпоинт видео-инструкции', "'/api/tutorial/link'" in SRC)
+check('бот отправляет ролик в чат', 'async def send_link_tutorial(' in SRC
+      and 'tutorial-link.mp4' in SRC)
 
 print()
 if fail:
