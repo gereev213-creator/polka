@@ -660,7 +660,8 @@ function paintEmpty(count) {
           if (badge) {
             const lim = Number(data.criteria_limit || data.free_max_criteria || 1);
             const word = lim === 1 ? 'поиск' : (lim >= 2 && lim <= 4 ? 'поиска' : 'поисков');
-            badge.textContent = lim + ' ' + word;
+            // Продаём мониторинг ссылок: свободный слот — это «1 ссылка».
+            badge.textContent = lim === 1 ? '1 ссылка' : (lim + ' ' + word);
           }
         }
       }
