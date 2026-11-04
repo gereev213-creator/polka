@@ -38,12 +38,13 @@ print('2) из фильтров достали:', facts)
 assert facts['price_to'] == 35000, facts
 assert facts['battery_from'] == 80, facts
 
-# решение по объявлению, которое раньше отсеивалось словами заголовка
+# решение по объявлению: для ссылки его принимает сам Авито, мы не спорим
 i = SRC.index('def evaluate_ad(')
 j = SRC.index('\ndef ', i + 10)
 eval_src = SRC[i:j]
-print('3) ссылка не отменяет проверку слов:', "filter_url" not in eval_src)
-assert "if str(crit.get('filter_url')" not in eval_src
-assert "search_q" in eval_src
+print('3) ссылка — готовое решение:', "return Decision(True, 'ok', 'по ссылке')" in eval_src)
+assert "return Decision(True, 'ok', 'по ссылке')" in eval_src
+assert "filter_url" not in eval_src
+assert "from_link" in eval_src
 
 print('\nживая ссылка: разбор, цена, АКБ и доверие фильтрам — всё сходится')

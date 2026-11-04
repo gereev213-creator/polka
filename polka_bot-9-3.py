@@ -20007,7 +20007,8 @@ def _ad_fingerprint(title: str, price: int, photos) -> str:
     return hashlib.md5(f"{norm}|{photo}|{bucket}".encode()).hexdigest()
 
 
-def ingest_findings(items: List[Dict], source: str) -> Dict:
+def ingest_findings(items: List[Dict], source: str,
+                    crit_ids: Optional[List[int]] = None) -> Dict:
     """Принимает находки от сборщика: дедуп, вставка, пересчёт скидок.
 
     Этап K3: пакетный режим. Раньше на каждую карточку шло по два SELECT, и на
@@ -20019,7 +20020,8 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         source = 'other'
     cursor = db.conn.cursor()
     now = get_moscow_time().isoformat()
-    stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'price_drop': 0}
+    stats = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [],
+             'all_ids': [], 'price_drop': 0}
 
     # ── 1. Разбор и проверка партии (без обращений к базе)
     prepared: List[Dict] = []
@@ -20116,6 +20118,7 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
     for pp in prepared:
         known = known_ext.get(pp['ext'])
         if known:
+            stats['all_ids'].append(int(known['id']))
             # Этап D8: то же объявление подешевело — это новость, а не дубль
             _price_drop(cursor, int(known['id']), int(known['price'] or 0), pp['price'],
                         known['last_drop_notice_at'], now, stats)
@@ -20125,6 +20128,7 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         if exact_key in exact_ids or exact_key in seen_exact:
             kept = exact_ids.get(exact_key)
             if kept:
+                stats['all_ids'].append(int(kept))
                 try:
                     cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
                                    "VALUES (?,?,?,?)", (kept, source, pp['ext'], now))
@@ -20136,6 +20140,7 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         fp_known = known_fp.get(pp['fp'])
         if fp_known or pp['fp'] in seen_fp:
             if fp_known:
+                stats['all_ids'].append(int(fp_known['id']))
                 try:
                     cursor.execute("INSERT INTO ads_dupes (ad_id, source, external_id, seen_at) "
                                    "VALUES (?,?,?,?)",
@@ -20176,6 +20181,7 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
                 for row in cursor.fetchall():
                     inserted.append((int(row['id']), str(row['external_id'])))
             stats['ids'] = [i for i, _e in inserted]
+            stats['all_ids'].extend(int(i) for i, _e in inserted)
             price_by_ext = {pp['ext']: pp['price'] for pp in prepared}
             try:
                 cursor.executemany("INSERT INTO ads_price_history (ad_id, price, seen_at) "
@@ -20194,20 +20200,32 @@ def ingest_findings(items: List[Dict], source: str) -> Dict:
         pass
 
     # ── 5. Медианы — в фон с дебаунсом (K4); решения — по новым строкам
+    # Ссылочная партия: решения считаем ТОЛЬКО для критериев, чью ссылку
+    # открывал сборщик, и для ВСЕХ карточек партии (в том числе уже известных
+    # базе). Иначе новый лот, который есть в базе по другому поиску, не стал
+    # бы находкой по ссылке, а чужой лот мог бы попасть в чужой поиск.
+    if crit_ids:
+        _all = sorted({int(i) for i in (stats.get('all_ids') or []) if i})
+        for _cid in crit_ids:
+            try:
+                hunt_matches_recompute(ad_ids=_all, crit_id=int(_cid))
+            except Exception as e:
+                logger.error(f"hunt_matches ingest link {_cid}: {e}")
     if stats['accepted']:
         schedule_medians(categories=changed_categories, criteria=True)
-        try:
-            # Ограничиваем порцию: при массовом приёме пересчёт всех подряд
-            # держал бы цикл событий, а приложение в это время не отвечает
-            # Не больше 25 объявлений на партию: пересчёт идёт ПОД ТОЙ ЖЕ
-            # блокировкой записи, и при 100 объявлениях он держал её
-            # секундами. Из-за этого запросы приёма выстраивались в
-            # очередь — в статистике были вызовы по 93 секунды, а всё
-            # приложение в это время не отвечало. Остальное подхватит
-            # фоновый проход (он вызывается отдельно и порциями).
-            hunt_matches_recompute(ad_ids=(stats.get('ids') or [])[:25])
-        except Exception as e:
-            logger.error(f"hunt_matches ingest: {e}")
+        if not crit_ids:
+            try:
+                # Ограничиваем порцию: при массовом приёме пересчёт всех подряд
+                # держал бы цикл событий, а приложение в это время не отвечает
+                # Не больше 25 объявлений на партию: пересчёт идёт ПОД ТОЙ ЖЕ
+                # блокировкой записи, и при 100 объявлениях он держал её
+                # секундами. Из-за этого запросы приёма выстраивались в
+                # очередь — в статистике были вызовы по 93 секунды, а всё
+                # приложение в это время не отвечало. Остальное подхватит
+                # фоновый проход (он вызывается отдельно и порциями).
+                hunt_matches_recompute(ad_ids=(stats.get('ids') or [])[:25])
+            except Exception as e:
+                logger.error(f"hunt_matches ingest: {e}")
         try:
             stats['need_details'] = hunt_need_details(stats.get('ids') or [])
         except Exception as e:
@@ -20298,6 +20316,21 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     items = (body or {}).get('items') or []
     if not isinstance(items, list):
         return _miniapp_err('bad_items', 400)
+    # Партия со страницы ссылки: сборщик говорит, каким поискам её примерять.
+    # Без этого списка ссылочные критерии не трогаем вовсе (см. recompute):
+    # лот из чужой выдачи находкой по чужой ссылке не является.
+    crit_ids: List[int] = []
+    try:
+        _cids = (body or {}).get('crit_ids') or []
+        if isinstance(_cids, (int, str)):
+            _cids = [_cids]
+        for _c in _cids:
+            _c = int(_c)
+            if _c > 0 and _c not in crit_ids:
+                crit_ids.append(_c)
+        crit_ids = crit_ids[:20]
+    except Exception:
+        crit_ids = []
     started = _time.monotonic()
     # Ограничение размера партии НА СЕРВЕРЕ: сборщик уже шлёт по 400 карточек,
     # но если придёт старый сборщик или ручной запрос на десятки тысяч — один
@@ -20305,25 +20338,29 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     # по 93 секунды) и приложение переставало отвечать. Режем на порции сами.
     MAX_INGEST_CHUNK = 400
     if len(items) > MAX_INGEST_CHUNK:
-        total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'need_details': []}
+        total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [],
+                 'all_ids': [], 'need_details': []}
         logger.info(f"ingest {source}: большая партия {len(items)} — режу на порции "
                     f"по {MAX_INGEST_CHUNK}")
         for start in range(0, len(items), MAX_INGEST_CHUNK):
             part = await asyncio.to_thread(_db_locked, ingest_findings,
-                                           items[start:start + MAX_INGEST_CHUNK], source)
+                                           items[start:start + MAX_INGEST_CHUNK], source,
+                                           crit_ids)
             for key in ('accepted', 'duplicate', 'skipped'):
                 total[key] += int(part.get(key) or 0)
             total['ids'].extend(part.get('ids') or [])
+            total['all_ids'].extend(part.get('all_ids') or [])
             total['need_details'].extend(part.get('need_details') or [])
         stats = total
     elif os.environ.get('INGEST_ASYNC', '1') == '1':
         # Этап K2: разбор, дедуп и вставка — в рабочем потоке. Синхронный
         # вызов блокировал цикл событий: пока шла партия, не отвечали ни
         # лента, ни бот, и человек видел «плохое подключение к интернету».
-        stats = await asyncio.to_thread(_db_locked, ingest_findings, items, source)
+        stats = await asyncio.to_thread(_db_locked, ingest_findings, items, source,
+                                        crit_ids)
     else:
         # Откат (K8): старое поведение — синхронно в обработчике
-        stats = ingest_findings(items, source)
+        stats = ingest_findings(items, source, crit_ids)
     _touch_collector(source)
     took_ms = int((_time.monotonic() - started) * 1000)
     _INGEST_STATS['last_ms'] = took_ms
@@ -20338,7 +20375,10 @@ async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Respo
     # базе, и всё это время приложение не могло получить ответ — висело на
     # загрузке. Теперь отвечаем сразу, а рассылка идёт параллельно.
     pushed = 0
-    if stats['accepted']:
+    # Ссылочная партия может не добавить новых строк в ads (лот уже был в
+    # базе по другому поиску), но находкой по этой ссылке он быть обязан —
+    # поэтому будим рассылку и после scoped-пересчёта.
+    if stats['accepted'] or crit_ids:
         try:
             hunt_wake()
         except Exception as e:
@@ -22849,17 +22889,9 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
                 deep_check: bool = True) -> Decision:
     """Подходит ли объявление под критерий. Без SQL и без сети.
 
-    # Критерий из ссылки: фильтры заданы НА АВИТО, страница уже отдала
-    # ровно то, что человек выбрал. Ничего не проверяем и не пересчитываем —
-    # иначе мы спорим с площадкой и режем её же результат.
-    # Доверяем ТОЛЬКО ссылке нового формата: у неё сохранён путь (search_path),
-    # и сборщик открывает именно его. Старый filter_url такого пути не даёт,
-    # а правило по нему принимало ВСЁ подряд — так по критерию «iphone 17 pro»
-    # в ленту ушли рубашки и джинсы.
-    # Критерий из ссылки больше НЕ проходит без проверки слов: когда Авито
-    # блокирует поиск по q=, сборщик откатывается на весь раздел, и в
-    # находки шло всё подряд («Платье вечернее» по критерию «фен dyson»).
-    # Слова проверяем как обычно; если слов в критерии нет — пропускаем.
+    Критерий из ссылки Авито — особый случай: отбор уже сделал сам Авито,
+    открыв ровно ту выдачу, которую человек скопировал. Поэтому для него
+    решение принимается сразу (см. ниже), без наших слов/города/цены.
 
     require_description=True — окончательное решение: если критерий опирается
     на описание, а описания нет, объявление НЕ считается подходящим (статус
@@ -22876,6 +22908,15 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return no('hidden')
     if already_sent:
         return no('already_sent')
+    # Критерий из ссылки человека: открываем РОВНО его выдачу на Авито.
+    # Что площадка положила на страницу — то и находка: и модель, и цвет,
+    # и цена, и город, и состояние уже отфильтрованы его ссылкой. Любые
+    # наши проверки поверх (слова, город, цена, категория) только портили
+    # дело: сборщик откатывался на широкий раздел, и в ленту шли чужие
+    # лоты — 442 сообщения по ссылке на iPhone 17 Pro. Доверяем ссылке.
+    if int(crit.get('from_link') or 0):
+        # reason 'ok' — чтобы находка шла обычной очередью доставки.
+        return Decision(True, 'ok', 'по ссылке')
     if int(crit.get('with_photo') or 0):
         photos = str(ad.get('photos') or '')
         if photos in ('', '[]', 'null'):
@@ -22895,69 +22936,11 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
             and not any(h in str(crit.get('category') or '').lower()
                         for h in HUNT_ACCESSORY_CATEGORY_HINTS)):
         return no('accessory_category')
-    # Критерий из ссылки: выдача уже отфильтрована Авито (раздел, q, цена,
-    # фильтры площадки). Не применяем свои слова/город, иначе снова теряем
-    # всё — именно на этом ломались ссылочные поиски раньше.
-    _from_link = bool(int(crit.get('from_link') or 0))
     _want_city = str(crit.get('city') or '').strip()
-    if (not _from_link) and _want_city and not _cities_match(_want_city, str(ad.get('city') or '')):
+    if _want_city and not _cities_match(_want_city, str(ad.get('city') or '')):
         return no('city_mismatch')
 
-    # Для критериев из ссылки слова берём из search_q: query там может быть
-    # названием раздела («Красота и здоровье»), а не товаром.
-    _crit_query = str(crit.get('search_q') or '').strip() or str(crit.get('query') or '')
-    if _crit_query != str(crit.get('query') or ''):
-        crit = dict(crit)
-        crit['query'] = _crit_query
-    # Критерий из ссылки БЕЗ текстового запроса: Авито уже отфильтровал
-    # выдачу своими фильтрами, и проверять слова заголовка не по чему.
-    # Обнуляем запрос, чтобы проверки слов пропустили лот (цену, фото и
-    # прочее по-прежнему проверяем).
-    if int(crit.get('from_link') or 0):
-        # Ссылка: Авито уже отфильтровал выдачу, но восстановленный адрес
-        # иногда отдаёт соседние модели. Сверяем заголовок с моделью из
-        # пути ссылки (например, iphone_17_pro): хотя бы одно слово модели
-        # (кроме цвета) должно быть в заголовке.
-        try:
-            _path = str(crit.get('search_path') or '').lower()
-            _toks = [t for t in re.split(r'[/_\-]+', _path)
-                     if len(t) >= 2 and t not in (
-                         'all', 'rossiya', 'telefony', 'mobilnye', 'apple',
-                         'noutbuki', 'kompyutery', 'odezhda', 'obuv')]
-            _toks = [t for t in _toks if not t.endswith(('yy', 'iy'))][-4:]
-            if _toks:
-                _tlow = title
-                # Требуем ВСЕ осмысленные слова модели (iphone, 17, pro):
-                # «любое из» пропускало чужие лоты с цифрой или брендом.
-                _strong = [t for t in _toks if not t.isdigit()]
-                _nums = [t for t in _toks if t.isdigit()]
-                if any(t not in _tlow for t in _strong):
-                    return no('title_words')
-                if any(t not in _tlow for t in _nums):
-                    return no('title_words')
-        except Exception:
-            pass
-        # Ссылка только что создана: первая проверка страницы неизбежно
-        # состоит из «старых» лотов. Не заваливаем человека десятками
-        # сообщений — первые 10 минут после создания ссылки считаем
-        # прогревом: карточки сохраняем, но находками не помечаем.
-        try:
-            _crit_dt = _safe_isoparse(str(crit.get('created_at') or ''))
-            _ad_dt = _safe_isoparse(str(ad.get('created_at') or ''))
-            if _crit_dt and _ad_dt and (_ad_dt - _crit_dt).total_seconds() < 600:
-                return no('warmup')
-        except Exception:
-            pass
-        if not str(crit.get('search_q') or '').strip():
-            crit = dict(crit)
-            crit['query'] = ''
-            crit['search_q'] = ''
     title = str(ad.get('title') or '').lower()
-    # Критерий создан из ссылки человека: отбор уже сделал Авито своим
-    # набором фильтров. Наши проверки по словам заголовка здесь только
-    # вредят: они выкидывали подходящие объявления. Доверяем площадке,
-    # оставляя проверки цены, фото и города.
-    # (ссылка больше не отменяет проверку слов — см. выше)
 
     # Где искать слова критерия. По умолчанию и в описании: важное часто
     # написано не в заголовке («АКБ 100 %», «без сколов», «полный комплект»).
@@ -23422,6 +23405,13 @@ def hunt_matches_recompute(ad_ids: Optional[List[int]] = None, crit_id: Optional
     except Exception as e:
         logger.error(f"hunt_matches criteria: {e}")
         return 0
+    if not crit_id:
+        # Ссылочные поиски получают находки только со СВОЕЙ страницы:
+        # сборщик присылает их отдельной партией с crit_ids. Примерять к ним
+        # чужие объявления нельзя — лот из выдачи другого человека не
+        # является находкой по этой ссылке (именно так и прилетели 442
+        # сообщения по ссылке на iPhone 17 Pro).
+        crits = [c for c in crits if not int(c.get('from_link') or 0)]
     if not crits:
         return 0
     try:
@@ -28881,7 +28871,11 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             if int(c.get('id') or 0) == int(crit_id):
                 crit_row = c
                 break
-        if crit_row:
+        # Ссылочный поиск начинается с «снимка» выдачи в сборщике: старые
+        # лоты не находки. Примерить к нему уже собранную базу нельзя —
+        # это объявления из других поисков, и человек получил бы чужие
+        # находки (именно так и вышло: 442 сообщения по ссылке на iPhone).
+        if crit_row and not int(crit_row.get('from_link') or 0):
             # Этап B: сначала записываем решения по уже собранным объявлениям,
             # потом отправляем те, что готовы (раньше выборка была отдельной
             # и расходилась с рассылкой). Порция небольшая и только по тем,
@@ -28893,6 +28887,8 @@ def add_criterion(user_id: int, query: str, category: str = '', city: str = '',
             if ready:
                 logger.info(f"критерий {crit_id}: сразу отправляю {len(ready)} находок")
                 hunt_wake()
+        elif crit_row:
+            logger.info(f"критерий {crit_id}: ссылочный — находки придёт сборщик")
     except Exception as e:
         logger.warning(f"первичная отправка по критерию: {e}")
     return crit_id
@@ -29326,20 +29322,23 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             except Exception:
                 _req = {}
             row['user'] = '1' if _req.get('private_only') else ''
-            # Ссылочный поиск без сохранённого адреса: собираем исходную
-            # ссылку из разобранных частей (путь + фильтры f= + сортировка
-            # по дате). Так браузерный сборщик откроет именно её.
+            # Ссылочный поиск без сохранённого адреса (критерий создан до
+            # фикса): собираем адрес из пути ЦЕЛИКОМ, не обрезая до раздела.
+            # Модель и фильтры закодированы в самом пути ссылки Авито, так
+            # что браузер откроет ту же выдачу. f= сюда НЕ подставляем:
+            # search_filters — это хвост вида «&radius=0», а не набор f=.
             try:
                 if int(row.get('from_link') or 0) and not str(row.get('filter_url') or ''):
                     _p = str(row.get('search_path') or '').strip('/')
-                    if _p:
-                        _qs = []
-                        if row.get('search_filters'):
-                            _qs.append('f=' + str(row['search_filters']))
-                        _qs.append('s=104')
-                        if row.get('search_user'):
-                            _qs.append('user=' + str(row['search_user']))
-                        row['filter_url'] = 'https://www.avito.ru/' + _p + '?' + '&'.join(_qs)
+                    if _p and re.match(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){1,8}$', _p):
+                        _qs = ['s=104']
+                        _extra = str(row.get('search_filters') or '').strip().lstrip('&')
+                        if _extra:
+                            _qs.append(_extra)
+                        if str(row.get('search_user') or '') == '1':
+                            _qs.append('user=1')
+                        row['filter_url'] = ('https://www.avito.ru/' + _p
+                                             + '?' + '&'.join(_qs))
             except Exception as _e:
                 logger.warning(f"link url synth: {_e}")
             # Фильтры из ссылки человека отдаём сборщику под именем, которое
@@ -34489,6 +34488,36 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'converted': fixed, 'paused': paused})
+
+    if action == 'set_link_url':
+        # Ремонт ссылочного поиска: адрес не сохранился (критерий создан до
+        # фикса), поэтому сборщик не мог открыть именно выдачу человека.
+        # Пишем точный адрес и, если попросили, снимаем старые «отказы»,
+        # которые копились от чужой выдачи.
+        try:
+            crit_id = int((body or {}).get('crit_id') or 0)
+        except Exception:
+            crit_id = 0
+        url = str((body or {}).get('url') or '').strip()
+        if not crit_id or not url.startswith('http') or 'avito.ru' not in url:
+            return _miniapp_json({'ok': False, 'error': 'crit_id_and_url_required'},
+                                 status=400)
+        try:
+            cur = db.conn.cursor()
+            cur.execute("UPDATE hunt_criteria SET filter_url=?, from_link=1 WHERE id=?",
+                        (url[:2000], crit_id))
+            changed = int(cur.rowcount or 0)
+            reset = 0
+            if str((body or {}).get('reset') or '0') == '1':
+                cur.execute("DELETE FROM hunt_matches WHERE crit_id=? AND "
+                            "status IN ('rejected','pending_details')", (crit_id,))
+                reset = int(cur.rowcount or 0)
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False,
+                                  'error': f'{type(e).__name__}: {e}'[:200]}, status=500)
+        return _miniapp_json({'ok': True, 'crit_id': crit_id, 'url': url[:2000],
+                              'changed': changed, 'reset_matches': reset})
 
     if action == 'set_setting':
         # Правка настройки по admin-токену: нужно, когда значение в базе

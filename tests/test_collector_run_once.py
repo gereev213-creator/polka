@@ -23,6 +23,9 @@ COLLECT = os.path.join(HERE, '..', 'collector', 'collect.py')
 spec = importlib.util.spec_from_file_location('collect', COLLECT)
 collect = importlib.util.module_from_spec(spec)
 sys.argv = ['collect.py', '--selftest']
+# В тесте цели заданы статически в cfg: без флага сборщик не имеет права
+# ходить по разделам, когда критериев нет (исправление «качал в пустоту»).
+os.environ['POLKA_USE_STATIC_TARGETS'] = '1'
 spec.loader.exec_module(collect)
 
 # ── Окружение без сети и без задержек ─────────────────────────────────────
@@ -49,11 +52,13 @@ collect.load_targets_state = lambda: dict(STATE)
 collect.save_targets_state = lambda st: STATE.update(st)
 
 PUSHED = []
+PUSHED_CRITS = []
 
 
 def make_push():
-    def push(server, token, source, items):
+    def push(server, token, source, items, crit_ids=None):
         PUSHED.append([i.get('title') for i in items])
+        PUSHED_CRITS.append(list(crit_ids or []))
         return {'accepted': len(items), 'duplicate': 0, 'skipped': 0,
                 'ids': [], 'need_details': []}
     return push
@@ -75,6 +80,7 @@ T2 = {'url': 'https://www.avito.ru/izhevsk/noutbuki', 'city': 'Ижевск'}
 
 def reset():
     PUSHED.clear()
+    PUSHED_CRITS.clear()
     STATE.clear()
     collect.parse_page = parse
     collect.push = make_push()

@@ -28,12 +28,27 @@ def check(name, cond, extra=''):
 
 
 check('есть проверка ссылки', "action == 'link_test'" in SRC)
-check('сборщик собирает безопасную ссылку', 'link_search_url(' in COL)
+check('сборщик открывает ссылку человека как есть', '_browser_link_url' in COL
+      and 'return _browser_link_url(crit)' in COL)
+check('ссылка не обрезается до раздела в браузере',
+      'if AVITO_PROFILE:' in COL and '_browser_link_url(crit)' in COL)
+check('первый проход — снимок выдачи без отправки',
+      'первый проход по ссылке: запомнил' in COL)
+check('сборщик помнит уже виденные лоты', 'LINK_SEEN_KEEP' in COL
+      and "'seen_ids'" in COL)
+check('в партию уходит список критериев ссылки', "payload['crit_ids'] = crit_ids" in COL)
+check('страница ссылки — только первая, без наших pmin/pmax',
+      "if target.get('link'):\n        return [url]" in COL)
+check('без q= сборщик ссылку не подменяет на раздел',
+      "and not target.get('link')" in COL)
 check('ссылочные поиски в приоритете', "_prio = 5" in SRC)
-check('сравнение с базой по external_id', "FROM ads WHERE external_id IN" in SRC)
-check('считает новые карточки', "'new': max(0, len(items) - known)" in SRC)
-check('запуск в потоке без блокировки', 'asyncio.to_thread(_probe_link)' in SRC)
-check('прогрев ссылки без завала старыми', "return no('warmup')" in SRC)
+check('сервер примеряет партию только к её критериям',
+      "hunt_matches_recompute(ad_ids=_all, crit_id=int(_cid))" in SRC)
+check('чужие объявления к ссылке не примеряются',
+      "crits = [c for c in crits if not int(c.get('from_link') or 0)]" in SRC)
+check('ссылка сама себе фильтр', "return Decision(True, 'ok', 'по ссылке')" in SRC)
+check('новая ссылка не матчится со старой базой',
+      'ссылочный — находки придёт сборщик' in SRC)
 
 print()
 if fail:

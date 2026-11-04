@@ -37,8 +37,9 @@ check('ссылки больше не отбиваются как неподде
       'Ссылки с Авито больше не поддерживаются' not in SRC
       and 'Следим за вашей ссылкой с Авито' in SRC)
 check('критерий хранит from_link', 'from_link=1' in SRC)
-check('ссылки без q не режутся по словам', "crit['query'] = ''" in SRC)
-check('город не применяется к ссылкам', 'if (not _from_link) and _want_city' in SRC)
+check('критерий из ссылки не режется словами', "return Decision(True, 'ok', 'по ссылке')" in SRC)
+check('город не применяется к ссылкам', "return Decision(True, 'ok', 'по ссылке')" in SRC)
+check('ссылка хранит исходный адрес', "row['filter_url'] = str(row.get('filter_url') or '')" in SRC)
 check('есть словарь город-слаг', 'def collector_city_slugs(' in SRC)
 check('подсказка про копирование адреса', 'скопируйте адрес из строки браузера' in TPL)
 

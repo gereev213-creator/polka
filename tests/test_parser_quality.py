@@ -16,8 +16,8 @@ ev = BOT[i:j]
 checks = [
     # мусор: страховка «ни одного слова запроса»
     ('страховка по словам в отборе', '_any_word' in ev),
-    ('слова для ссылок берутся из search_q', "crit.get('search_q')" in ev),
-    ('нет доверия ссылке без проверки', "return Decision(True, 'direct_link'" not in ev),
+    ('ссылка — единственный фильтр', "return Decision(True, 'ok', 'по ссылке')" in ev),
+    ('нет отсева по словам модели из пути', "_strong = [t for t in _toks" not in ev),
     # 429: пауза между запросами и одна попытка
     ('пауза между запросами к Авито', 'MIN_REQUEST_GAP' in COL and '_respect_rate_limit' in COL),
     ('одна попытка при блоке', 'POLKA_MAX_ATTEMPTS' in COL),

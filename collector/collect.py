@@ -1710,14 +1710,21 @@ def parse_page(html: str) -> list:
 
 
 # ── Отправка на сервер ──────────────────────────────────────────────────────
-def push(server: str, token: str, source: str, items: list) -> dict:
+def push(server: str, token: str, source: str, items: list,
+         crit_ids: list = None) -> dict:
     """Отправка находок на сервер.
+
+    crit_ids — для лотов, найденных по ссылке человека: сервер примеряет их
+    ТОЛЬКО к этим критериям. Иначе лот из чужой выдачи мог попасть в чужой
+    поиск: объявления со страницы одного человека не должны становиться
+    находками другого.
 
     Идёт через curl_cffi: у системного Python на macOS нет корневых
     сертификатов, и обычный urllib падал с CERTIFICATE_VERIFY_FAILED — из-за
     этого находки собирались, но НЕ доходили до сервера и до бота.
     """
     url = f"{server.rstrip('/')}/api/ingest"
+    crit_ids = [int(c) for c in (crit_ids or []) if str(c).strip().isdigit()]
     # Партию режем на порции. Раньше всё накопленное уходило ОДНИМ запросом:
     # на живой базе такой запрос занимал до 19.8 секунды, и всё это время
     # сервер не отвечал — приложение «зависало». Порция 400 карточек
@@ -1726,14 +1733,18 @@ def push(server: str, token: str, source: str, items: list) -> dict:
     if len(items) > CHUNK:
         total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [], 'need_details': []}
         for start in range(0, len(items), CHUNK):
-            part = push(server, token, source, items[start:start + CHUNK])
+            part = push(server, token, source, items[start:start + CHUNK],
+                        crit_ids=crit_ids)
             for key in ('accepted', 'duplicate', 'skipped'):
                 total[key] += int(part.get(key) or 0)
             total['ids'].extend(part.get('ids') or [])
             total['need_details'].extend(part.get('need_details') or [])
             time.sleep(1.0)
         return total
-    body = json.dumps({'source': source, 'items': items}).encode()
+    payload = {'source': source, 'items': items}
+    if crit_ids:
+        payload['crit_ids'] = crit_ids
+    body = json.dumps(payload).encode()
     headers = {'Content-Type': 'application/json', 'X-Ingest-Token': token}
     if _cffi is not None:
         r = _cffi.post(url, data=body, headers=headers, timeout=60)
@@ -2080,20 +2091,57 @@ def matches_local(ad: dict, flt: dict) -> bool:
 
 # Критерий из ссылки Авито: путь, фильтры и продавец берём как есть (после проверки),
 # q только из самой ссылки: название критерия не должно сужать выдачу.
-LINK_PATH_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){0,5}$')
+LINK_PATH_RE = re.compile(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){1,8}$')
 LINK_FILTERS_RE = re.compile(r'^(?:&[A-Za-z0-9_\[\]]+=[A-Za-z0-9_%.,:+\-]*)*$')
+# Сколько «уже виденных» id помнить на одну ссылку. ~50 карточек за проход,
+# 3000 — это недели истории; больше не нужно, старые лоты и так отсекает
+# сервер по отметке «уже отправляли».
+LINK_SEEN_KEEP = 3000
+
+
+def _browser_link_url(crit: dict) -> str:
+    """Адрес, который браузер открывает КАК ЕСТЬ — ровно выдача человека.
+
+    Никакой «Ссылка поиска» не собирается из слов критерия: модель, цвет,
+    цена, город и состояние уже закодированы в адресе, который человек
+    скопировал с Авито. Открываем его целиком и сравниваем найденные лоты
+    с тем, что уже видели, — это и есть весь парсер.
+    """
+    original = str(crit.get('filter_url') or '').strip()
+    if original.startswith('http') and 'avito.ru' in original:
+        # Телефон копирует m.avito.ru — на десктопном профиле надёжнее www:
+        # та же выдача, но знакомая сборщику разметка.
+        try:
+            from urllib.parse import urlsplit, urlunsplit
+            sp = urlsplit(original)
+            if sp.netloc.lower().startswith('m.'):
+                original = urlunsplit((sp.scheme, 'www.' + sp.netloc[2:],
+                                       sp.path, sp.query, sp.fragment))
+        except Exception:
+            pass
+        return original
+    # Старый критерий: адрес не сохранился, но путь из ссылки есть —
+    # открываем ровно его, а не обрезаем до раздела. Сортировку по дате и
+    # остатки фильтров сохраняем.
+    path = str(crit.get('search_path') or '').strip().strip('/')
+    if not LINK_PATH_RE.match(path):
+        return ''
+    qs = ['s=104']
+    extra = str(crit.get('search_filters') or '').strip()
+    if extra:
+        qs.append(extra.lstrip('&'))
+    if str(crit.get('search_user') or '') == '1':
+        qs.append('user=1')
+    return 'https://www.avito.ru/' + path + '?' + '&'.join(qs)
+
 
 def link_search_url(crit: dict, cfg: dict = None) -> str:
-    """Ссылка поиска для критерия, созданного из ссылки Авито. Пусто, если данные
-    не проходят проверку (тогда цель не создаётся: лучше пропустить, чем искать не то)."""
-    # Браузерный режим умеет то, чего не умеют HTTP-запросы: он открывает
-    # ссылку человека ЦЕЛИКОМ — с подразделом, фильтрами f= и городом.
-    # Поэтому здесь возвращаем исходный адрес, а не собираем «чистую» ссылку:
-    # именно за это человек и заплатил, когда копировал свою выдачу.
+    """Ссылка поиска для критерия, созданного из ссылки Авито. Пусто, если данных
+    нет (тогда цель не создаётся: лучше пропустить, чем искать не то)."""
+    # Браузерный режим открывает ссылку человека ЦЕЛИКОМ: именно за это он
+    # заплатил, когда копировал свою выдачу с Авито.
     if AVITO_PROFILE:
-        original = str(crit.get('filter_url') or '').strip()
-        if original.startswith('http') and 'avito.ru' in original:
-            return original
+        return _browser_link_url(crit)
     path = str(crit.get('search_path') or '').strip().strip('/')
     if not LINK_PATH_RE.match(path):
         return ''
@@ -2263,6 +2311,7 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         return []
     targets = []
     seen = set()
+    link_targets = {}
     built = 0
     no_query = 0
     no_slug = 0
@@ -2357,17 +2406,29 @@ def targets_from_criteria(server: str, token: str, cfg: dict = None) -> list:
         # Критерий из ссылки Авито: путь, q и фильтры берем из ссылки как есть.
         link_url = link_search_url(crit, cfg)
         if link_url:
+            # Один и тот же адрес у нескольких людей — открываем один раз,
+            # а находки примеряем ко ВСЕМ их поискам.
+            _same = link_targets.get(link_url)
+            if _same is not None:
+                _cid = int(crit.get('id') or 0)
+                if _cid and _cid not in _same['crit_ids']:
+                    _same['crit_ids'].append(_cid)
+                continue
             if link_url in seen:
                 continue
             seen.add(link_url)
-            _q_words = [w for w in str(crit.get('search_q') or '').lower().split() if len(w) > 2]
-            targets.append({'url': link_url,
-                            'category': crit.get('category') or '',
-                            'query': query, 'page': 1, 'direct': True,
-                            'link': True,
-                            'local': [{'price_to': int(crit.get('max_price') or 0),
-                                       'price_from': int(crit.get('min_price') or 0),
-                                       'words': _q_words[:2]}]})
+            _cid = int(crit.get('id') or 0)
+            target = {'url': link_url,
+                      'category': crit.get('category') or '',
+                      'query': query, 'page': 1, 'direct': True,
+                      'link': True, 'priority': int(crit.get('priority') or 5),
+                      'crit_id': _cid,
+                      'crit_ids': [_cid] if _cid else [],
+                      # Проверки слов/цены не нужны: выдачу уже отфильтровал
+                      # Авито по ссылке. Свои фильтры только теряли находки.
+                      'local': []}
+            link_targets[link_url] = target
+            targets.append(target)
             built += 1
             continue
         # У аксессуаров нет аккумулятора и их не «вскрывают»: фильтр товара
@@ -2717,6 +2778,11 @@ def target_urls(target: dict, cfg: dict) -> list:
     url = str(target.get('url') or '')
     if not url.startswith('http'):
         return []
+    # Ссылка человека открывается ровно как есть: страница 1, без наших
+    # pmin/pmax и без p=2. Новые лоты приходят сверху — этого достаточно,
+    # а лишний запрос к Авито только злит площадку.
+    if target.get('link'):
+        return [url]
     pages = int(target.get('pages') or cfg.get('pages') or 1)
     pages = max(1, min(pages, 3))
     # Поиск по тексту (q=) второй страницы не отдаёт — приходит пустая выдача.
@@ -2807,9 +2873,12 @@ def target_sort_key(target: dict, state: dict, day: str):
     и проверяются реже — но всё равно проверяются, за счёт ротации.
     """
     st = state.get(str(target.get('url') or '')) or {}
+    # priority задаёт сервер: ссылочные поиски — платные, их проверяем
+    # первыми (как и обещали в тарифах).
+    prio = -int(target.get('priority') or 0)
     fresh = 1 if int(st.get('finds') or 0) > 0 else 0
     ran_today = 1 if str(st.get('day') or '') == day else 0
-    return (-fresh, ran_today, str(st.get('last_run') or ''))
+    return (prio, -fresh, ran_today, str(st.get('last_run') or ''))
 
 
 def order_targets(targets: list, state: dict, day: str, limit: int) -> list:
@@ -2960,14 +3029,20 @@ def run_once(cfg: dict) -> int:
             _tried_plain = False
             print(f"\n→ {source}: {url}")
             try:
-                html = fetch(url, prefer_scraper=('q=' in url))
+                # Ссылку человека открываем в браузере как есть: скрапер
+                # вернул бы не ту выдачу, а q= здесь — часть его ссылки.
+                html = fetch(url, prefer_scraper=('q=' in url
+                                                  and not target.get('link')))
                 PASS_STATS['pages_ok'] = int(PASS_STATS.get('pages_ok') or 0) + 1
             except Blocked as exc:
                 # Поиск по словам Авито отдаёт неохотно. Прежде чем уходить,
                 # пробуем ту же страницу без q=: раздел отдаётся чаще, а слова
                 # критерия отсеиваются уже на сервере.
+                # Для ссылки человека так нельзя: без q= это уже ДРУГАЯ
+                # выдача, и в находки пойдёт всё подряд. Лучше пропустить
+                # проход и вернуться к точной ссылке позже.
                 html = None
-                if 'q=' in url and not _tried_plain:
+                if 'q=' in url and not _tried_plain and not target.get('link'):
                     _tried_plain = True
                     # Пересобираем адрес нормально: вырезание регуляркой
                     # оставляло «?» потерянным, и получался невалидный
@@ -3067,8 +3142,39 @@ def run_once(cfg: dict) -> int:
                 else:
                     print("  ⚠ разбор ничего не дал — возможно, изменилась вёрстка сайта")
                 continue
+            # Ссылка человека: отправляем ТОЛЬКО то, чего ещё не видели.
+            # Первый успешный проход — снимок выдачи: запоминаем его и ничего
+            # не шлём. Дальше шлём только новые id. Ровно это и есть
+            # «парсер открыл ссылку, посмотрел, появилась ли находка».
+            if target.get('link') and items:
+                _st = dict(state.get(tkey) or {})
+                _ids = [str(it.get('external_id') or '') for it in items
+                        if it.get('external_id')]
+                if not _st.get('baseline'):
+                    _st['baseline'] = 1
+                    _st['seen_ids'] = _ids[-LINK_SEEN_KEEP:]
+                    state[tkey] = _st
+                    save_targets_state(state)
+                    print(f"  первый проход по ссылке: запомнил {len(_ids)} лотов, "
+                          f"отправлю только новые")
+                    continue
+                _seen = set(_st.get('seen_ids') or [])
+                _new_items = [it for it in items
+                              if str(it.get('external_id') or '') not in _seen]
+                _seen_list = list(_st.get('seen_ids') or [])
+                _seen_list.extend(str(it.get('external_id') or '')
+                                  for it in _new_items if it.get('external_id'))
+                _st['seen_ids'] = _seen_list[-LINK_SEEN_KEEP:]
+                state[tkey] = _st
+                save_targets_state(state)
+                if not _new_items:
+                    print(f"  новых лотов нет (в выдаче {len(items)})")
+                    continue
+                print(f"  новых лотов: {len(_new_items)} из {len(items)}")
+                items = _new_items
             try:
-                stats = push(server, token, source, items)
+                stats = push(server, token, source, items,
+                             crit_ids=target.get('crit_ids') or [])
                 print(f"  отправлено: принято {stats.get('accepted')}, "
                       f"дублей {stats.get('duplicate')}, пропущено {stats.get('skipped')}")
                 total_sent += int(stats.get('accepted') or 0)

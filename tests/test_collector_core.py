@@ -71,8 +71,8 @@ check('отбор: чужое слово отклоняется',
 u = collect.link_search_url({'search_path': 'moskva/telefony/apple/iphone_15_pro-ASgB',
                              'search_q': 'iphone 15 pro', 'user': '1',
                              'max_price': 50000, 'min_price': 0})
-check('цель: глубокий путь обрезан до раздела, город заменён на all',
-      '/all/telefony?' in u, u)
+check('цель: глубокий путь обрезан до раздела, регион сохранён',
+      '/moskva/telefony?' in u, u)
 check('цель: адрес без служебных параметров',
       'q=' not in u and 'cd=1' not in u and 'localPriority' not in u
       and 'user=' not in u and 'f=' not in u, u)
