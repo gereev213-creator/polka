@@ -80,6 +80,18 @@ check('платная проверка раз в минуту',
 check('в интерфейсе «каждую минуту»',
       'каждую минуту' in TPL and 'каждую минуту' in PAY)
 check('сборщик ходит по кругу каждую минуту', '--every 60' in BAT)
+# Если ID продавца неизвестен — заявка сборщику, потом автоскрытие
+check('заявка на уточнение продавца', 'seller_block_requests' in SRC
+      and 'Уточняю продавца' in SRC)
+check('эндпоинт заявок для сборщика', "'/api/ingest/block-requests'" in SRC
+      and 'fetch_block_requests' in COL)
+check('сборщик приносит ID со страницы объявления',
+      "'seller_id': seller.get('seller_id', '')" in COL
+      and 'seller_id' in COL)
+check('после уточнения продавец скрывается с подтверждением',
+      'Продавец скрыт' in SRC and '_block_ready' in SRC)
+check('в находке есть город из поиска, если в карточке пусто',
+      "ad['city'] = _fallback_city" in SRC)
 check('сборщик уважает интервал проверки ссылки',
       'check_interval_min' in COL and "ссылок на паузе по тарифу" in COL)
 

@@ -3014,6 +3014,21 @@ class Database:
                 UNIQUE(user_id, seller_key)
             )
         ''')
+        # Заявки «уточнить продавца»: нажали «не показывать продавца», но ID
+        # продавца ещё неизвестен — сборщик откроет карточку и принесёт его
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS seller_block_requests (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                ad_id INTEGER NOT NULL,
+                external_id TEXT DEFAULT '',
+                state TEXT DEFAULT 'pending',
+                attempts INTEGER DEFAULT 0,
+                created_at TEXT,
+                updated_at TEXT,
+                UNIQUE(user_id, ad_id)
+            )
+        ''')
         # НОВАЯ ТАБЛИЦА: Использование промокодов
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS promocode_uses (
@@ -20504,8 +20519,22 @@ async def block_seller_callback(update: Update, context: ContextTypes.DEFAULT_TY
     ad = db.get_ad(ad_id) or {}
     key = _ad_seller_key(ad)
     if not key:
+        # ID продавца в карточке не было — заказываем сборщику открыть
+        # объявление и принести его. Владелец ноутбука получит задание в
+        # ближайший проход (1–3 минуты), после чего продавец скроется сам.
         try:
-            await q.answer('Не смог определить продавца — скройте объявление кнопкой «Убрать»',
+            _now = get_moscow_time().isoformat()
+            ext = str(ad.get('external_id') or '')
+            db.conn.execute(
+                "INSERT OR REPLACE INTO seller_block_requests "
+                "(user_id, ad_id, external_id, state, attempts, created_at, updated_at) "
+                "VALUES (?,?,?,'pending',0,?,?)",
+                (uid, ad_id, ext, _now, _now))
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f"block seller request: {e}")
+        try:
+            await q.answer('Уточняю продавца — скрою его лоты в течение пары минут',
                            show_alert=True)
         except Exception:
             pass
@@ -28607,6 +28636,14 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     else:
         hours = int(ago)
         fresh = "только что" if hours == 0 else f"{hours} ч назад"
+    # Город: в карточке Авито его иногда нет — тогда показываем город из
+    # поиска (тот регион, который человек выбрал в ссылке), чтобы находка
+    # не приходила без географии.
+    if not str(ad.get('city') or '').strip():
+        _fallback_city = str(crit.get('city') or '').strip()
+        if _fallback_city:
+            ad = dict(ad)
+            ad['city'] = _fallback_city
     median = median_for_ad(ad, crit)
     diff = 0
     if median and median > price:
@@ -28896,6 +28933,54 @@ def mark_listing_state(source: str, external_id: str, state: str) -> Optional[Di
     return ad
 
 
+async def api_block_requests(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/ingest/block-requests — карточки, где надо узнать продавца.
+
+    Человек нажал «не показывать продавца», а ID в карточке не было: отдаём
+    сборщику 1–2 объявления, он откроет их на домашнем IP и пришлёт ID
+    продавца. Тогда блокировка сработает и на будущие лоты этого продавца.
+    """
+    expected = os.environ.get('INGEST_TOKEN', '')
+    if not expected:
+        return _miniapp_err('ingest_disabled', 503)
+    got = _ingest_token_ok(request)
+    if not hmac.compare_digest(str(got), str(expected)):
+        return _miniapp_err('forbidden', 403)
+    try:
+        limit = max(1, min(5, int(request.query.get('limit') or 2)))
+    except Exception:
+        limit = 2
+    items: List[Dict] = []
+    try:
+        cur = db.conn.cursor()
+        cur.execute(
+            "SELECT r.id, r.user_id, r.ad_id, r.external_id, r.attempts, "
+            "       a.source_url AS url "
+            "FROM seller_block_requests r LEFT JOIN ads a ON a.id=r.ad_id "
+            "WHERE r.state IN ('pending','sent') AND COALESCE(r.attempts,0) < 4 "
+            "AND (r.state='pending' OR COALESCE(r.updated_at,'') < ?) "
+            "ORDER BY r.id LIMIT ?",
+            ((get_moscow_time() - timedelta(minutes=10)).isoformat(), limit))
+        for row in cur.fetchall():
+            url = str(row['url'] or '')
+            if not url.startswith('http'):
+                cur.execute("UPDATE seller_block_requests SET state='failed', "
+                            "attempts=COALESCE(attempts,0)+1, updated_at=? WHERE id=?",
+                            (get_moscow_time().isoformat(), int(row['id'])))
+                continue
+            items.append({'request_id': int(row['id']), 'ad_id': int(row['ad_id']),
+                          'external_id': str(row['external_id'] or ''),
+                          'url': url})
+            cur.execute("UPDATE seller_block_requests SET state='sent', "
+                        "attempts=COALESCE(attempts,0)+1, updated_at=? WHERE id=?",
+                        (get_moscow_time().isoformat(), int(row['id'])))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"block requests: {e}")
+        return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
+    return _miniapp_json({'ok': True, 'items': items})
+
+
 async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/ingest/details — сборщик принёс описания и данные продавца.
 
@@ -28925,6 +29010,7 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
     cursor = db.conn.cursor()
     now = get_moscow_time().isoformat()
     updated, failed, touched = 0, 0, []
+    _block_ready: List[int] = []
     for raw in items[:100]:
         if not isinstance(raw, dict):
             continue
@@ -28963,9 +29049,11 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                                              ensure_ascii=False)
                 except Exception:
                     params_json = ''
+            _sid = str(raw.get('seller_id') or '').strip()[:40]
             cursor.execute(
                 "UPDATE ads SET description=?, description_lower=?, seller_type=?, "
                 "seller_name=?, seller_ads=?, "
+                "seller_external_id=COALESCE(NULLIF(?, ''), seller_external_id), "
                 "params_json=COALESCE(NULLIF(?,''), params_json), "
                 "condition=COALESCE(NULLIF(?, ''), condition), "
                 "size=COALESCE(NULLIF(?, ''), size), "
@@ -28974,11 +29062,33 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
                 (description, description.lower(),
                  str(raw.get('seller_type') or '')[:20],
                  str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
+                 _sid,
                  params_json,
                  str((params or {}).get('Состояние') or (params or {}).get('состояние') or '')[:40],
                  str((params or {}).get('Размер') or (params or {}).get('Размер одежды')
                      or (params or {}).get('Размер обуви') or '')[:30],
                  now, ad_id))
+            # Заявка «не показывать продавца»: ID теперь известен — скрываем
+            # продавца у всех, кто его просил, и пишем им подтверждение.
+            try:
+                _name = str(raw.get('seller_name') or '').strip()
+                _bkey = ('id:' + _sid) if _sid else (
+                    'name:' + re.sub(r'\s+', ' ', _name.lower())[:60] if _name else '')
+                if _bkey:
+                    cursor.execute("SELECT user_id FROM seller_block_requests "
+                                   "WHERE ad_id=? AND state IN ('pending','sent')", (ad_id,))
+                    _reqs = [int(r['user_id']) for r in cursor.fetchall()]
+                    for _u in _reqs:
+                        cursor.execute(
+                            "INSERT OR IGNORE INTO blocked_sellers "
+                            "(user_id, seller_key, seller_name, created_at) VALUES (?,?,?,?)",
+                            (_u, _bkey, _name[:60], now))
+                    if _reqs:
+                        cursor.execute("DELETE FROM seller_block_requests WHERE ad_id=?",
+                                       (ad_id,))
+                        _block_ready.extend(_reqs)
+            except Exception as _be:
+                logger.warning(f"block resolve: {_be}")
             updated += 1
             touched.append(ad_id)
         except Exception as e:
@@ -29007,6 +29117,18 @@ async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Respon
             logger.warning(f"details recompute: {e}")
     if ready_ids:
         hunt_wake()
+    if _block_ready:
+        try:
+            _app = _get_bot_app()
+            if _app:
+                for _u in sorted(set(_block_ready))[:20]:
+                    await _send_html_safe(
+                        _app.bot.send_message, chat_id=int(_u),
+                        text=("🚫 <b>Продавец скрыт</b>\n\n"
+                              "Больше не присылаю объявления этого продавца. "
+                              "Если передумаете — напишите в поддержку @suppolka."))
+        except Exception as _e:
+            logger.warning(f"block ready notify: {_e}")
     logger.info(f"ingest details {source}: описаний {updated}, неудач {failed}")
     return _miniapp_json({'ok': True, 'updated': updated, 'failed': failed,
                           'need_details': hunt_need_details()})
@@ -38985,6 +39107,7 @@ def create_api_app() -> aiohttp_web.Application:
     # ── Агрегатор находок ────────────────────────────────────────────────────
     app.router.add_post('/api/ingest', api_ingest_findings)
     app.router.add_post('/api/ingest/details', api_ingest_details)
+    app.router.add_get('/api/ingest/block-requests', api_block_requests)
     app.router.add_get('/api/ingest/need-details', api_ingest_need_details)
     app.router.add_post('/api/ingest/status', api_ingest_status)
     app.router.add_get('/api/ingest/checklist', api_ingest_checklist)

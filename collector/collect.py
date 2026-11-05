@@ -1612,11 +1612,17 @@ def parse_item_seller(html: str) -> dict:
     продавца, а не по всей странице: слово «компания» встречается и в тексте
     объявления, и тогда магазином ошибочно помечался частник.
     """
-    out = {'seller_type': '', 'seller_name': '', 'seller_ads': 0}
+    out = {'seller_type': '', 'seller_name': '', 'seller_ads': 0, 'seller_id': ''}
     raw = str(html or '')
     low = raw.lower()
     if not low:
         return out
+    # ID продавца со страницы объявления: по нему человек может скрыть
+    # продавца целиком, и это работает даже когда имя не отдаётся.
+    _sid_m = (re.search(r'"sellerId"\s*:\s*(\d+)', raw)
+              or re.search(r'"userId"\s*:\s*(\d+)', raw))
+    if _sid_m:
+        out['seller_id'] = _sid_m.group(1)
     seller_block = text_from_marker(raw, 'item-view/seller-info')
     seller_low = seller_block.lower()
     name = text_from_marker(raw, 'seller-info/name')
@@ -1692,6 +1698,7 @@ def parse_item_page(html: str) -> dict:
         'seller_type': seller['seller_type'],
         'seller_name': seller['seller_name'],
         'seller_ads': seller['seller_ads'],
+        'seller_id': seller.get('seller_id', ''),
         'params': params,
         'condition': low.get('состояние', ''),
         'size': low.get('размер') or low.get('размер одежды') or low.get('размер обуви') or '',
@@ -2763,6 +2770,7 @@ def collect_details(server: str, token: str, source: str, items: list,
                         'params': params,
                         'seller_type': data['seller_type'],
                         'seller_name': data['seller_name'],
+                        'seller_id': str(data.get('seller_id') or ''),
                         'seller_ads': int(data['seller_ads'] or 0)})
             who = ('магазин' if data['seller_type'] == 'company'
                    else 'частник' if data['seller_type'] == 'private' else 'продавец не определён')
@@ -3288,9 +3296,29 @@ def run_once(cfg: dict) -> int:
         if tkey:
             state[tkey] = st
 
+    # Заявки «не показывать продавца»: открываем 1–2 объявления, где ID
+    # продавца ещё неизвестен, и приносим его на сервер — тогда блокировка
+    # сработает и на будущие лоты этого продавца.
+    try:
+        _breqs = fetch_block_requests(server, token, 2)
+    except Exception as _be:
+        _breqs = []
+    if _breqs:
+        print(f"  заявки «скрыть продавца»: {len(_breqs)}")
+        try:
+            collect_details(server, token, 'avito', _breqs, pause=(8.0, 16.0))
+        except Exception as _be2:
+            print(f"  ✖ продавца не принёс: {str(_be2)[:100]}")
     save_targets_state(state)
     PASS_STATS['sent'] = int(total_sent or 0)
     return total_sent
+
+
+def fetch_block_requests(server: str, token: str, limit: int = 2) -> list:
+    """Заявки «не показывать продавца», где сервер не знает ID продавца."""
+    url = f"{server.rstrip('/')}/api/ingest/block-requests?limit={int(limit)}"
+    data = fetch_json(url, token)
+    return data.get('items') or []
 
 
 def fetch_need_details(server: str, token: str, limit: int = 0) -> list:
