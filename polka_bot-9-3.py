@@ -24484,6 +24484,56 @@ async def _send_html_safe(send, **kwargs) -> bool:
             return False
 
 
+def _ad_photo_url(ad: Dict) -> str:
+    """Первое фото объявления. photos приходит и списком, и JSON-строкой."""
+    raw = (ad or {}).get('photos')
+    items = raw if isinstance(raw, list) else []
+    if isinstance(raw, str) and raw.strip():
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                items = parsed
+        except Exception:
+            items = []
+    for u in items:
+        u = str(u or '')
+        if u.startswith('http'):
+            return u
+    return ''
+
+
+async def _send_ad_photo(app, chat_id: int, ad: Dict, caption: str, kb) -> bool:
+    """Отправляет находку ФОТОМ: ссылку пробуем напрямую, иначе качаем сами.
+
+    Telegram иногда не может скачать картинку с Авито по ссылке, и раньше
+    находка уходила текстом без фото. Теперь при неудаче сервер скачивает
+    картинку и отправляет её файлом.
+    """
+    url = _ad_photo_url(ad)
+    if not url:
+        return False
+    try:
+        await _send_html_safe(app.bot.send_photo, chat_id=chat_id, photo=url,
+                              caption=caption, reply_markup=kb)
+        return True
+    except Exception as e:
+        logger.warning(f'hunt photo url: {str(e)[:120]}')
+    try:
+        timeout = aiohttp.ClientTimeout(total=12)
+        async with aiohttp.ClientSession(timeout=timeout) as sess:
+            async with sess.get(url, headers={'User-Agent': 'Mozilla/5.0'}) as resp:
+                if resp.status != 200:
+                    return False
+                data = await resp.read()
+        if data and len(data) > 1000:
+            await app.bot.send_photo(chat_id=chat_id, photo=io.BytesIO(data),
+                                     caption=caption, reply_markup=kb)
+            return True
+    except Exception as e:
+        logger.warning(f'hunt photo bytes: {str(e)[:120]}')
+    return False
+
+
 def _ad_seller_key(ad: Dict) -> str:
     """Стабильный ключ продавца объявления: ID Авито, иначе нормализованное имя."""
     sid = str((ad or {}).get('seller_external_id') or '').strip()
@@ -28694,7 +28744,7 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
             # Кнопка в приложение: находка живёт в ленте Mini App, и человек
             # должен попадать туда прямо из уведомления, а не только на Авито.
             InlineKeyboardButton("Открыть в приложении",
-                                 web_app=WebAppInfo(url=_miniapp_url()))
+                                 web_app=WebAppInfo(url=f"{_miniapp_url()}/?ad={ad['id']}"))
         ], [
             InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте", url=str(ad['source_url']))
         ], [
@@ -28714,11 +28764,7 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
             # изображение — отправляем текстом, как раньше.
             _photo_sent = False
             try:
-                _ph = json.loads(str(ad.get('photos') or '[]'))
-                if isinstance(_ph, list) and _ph and str(_ph[0]).startswith('http'):
-                    _photo_sent = await _send_html_safe(
-                        app.bot.send_photo, chat_id=user_id, photo=str(_ph[0]),
-                        caption=text, reply_markup=kb)
+                _photo_sent = await _send_ad_photo(app, user_id, ad, text, kb)
             except Exception as _pe:
                 logger.warning(f'hunt photo: {_pe}')
             if not _photo_sent:

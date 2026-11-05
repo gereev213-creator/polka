@@ -1736,12 +1736,30 @@ function paintEmpty(count) {
     };
 
     window.PolkaProduct = function (id) {
+      const pools = [window.__rawLots || [], window.__favItems || [],
+                     window.__productPrev || []];
+      const known = pools.some((pool) => pool.some(
+        (x) => String(x.id) === String(id)));
       fill(id);
       try {
         if (typeof window.go === 'function') window.go('product');
       } catch (e) { }
       // Прототип мог перезаписать поля своим пустым состоянием — заполняем ещё раз
       setTimeout(() => fill(id), 120);
+      if (!known) {
+        // Пришли по кнопке из бота (?ad=ID): карточки нет в загруженных
+        // списках — тянем её с сервера и показываем именно этот товар.
+        try {
+          window.PolkaAPI.api('/api/ads/' + encodeURIComponent(id)).then((res) => {
+            const raw = res && (res.ad || res.item);
+            if (raw && raw.id) {
+              window.__productPrev = [raw];
+              fill(id);
+              setTimeout(() => fill(id), 150);
+            }
+          }).catch(() => { });
+        } catch (e) { }
+      }
     };
   } catch (e) { }
 })();
@@ -2739,7 +2757,43 @@ function paintEmpty(count) {
       return normalize(fromUrl) || normalize(fromTg) || '';
     }
 
+    // ?ad=<id> (или startapp=ad_<id>) — кнопка «Открыть в приложении» в
+    // находке должна открывать карточку ИМЕННО этого товара, а не главную.
+    function adFromUrl() {
+      let v = '';
+      try {
+        const p = new URLSearchParams(location.search);
+        v = p.get('ad') || p.get('ad_id') || '';
+      } catch (e) { }
+      if (!/^\d+$/.test(String(v))) {
+        try {
+          const sp = (window.Telegram && window.Telegram.WebApp
+            && window.Telegram.WebApp.initDataUnsafe
+            && window.Telegram.WebApp.initDataUnsafe.start_param) || '';
+          const m = /^ad[_-]?(\d+)$/i.exec(String(sp));
+          v = m ? m[1] : '';
+        } catch (e) { }
+      }
+      return /^\d+$/.test(String(v)) ? String(v) : '';
+    }
+
+    function jumpToAd() {
+      const id = adFromUrl();
+      if (!id) return false;
+      let n = 0;
+      const run = () => {
+        if (typeof window.PolkaProduct === 'function') {
+          try { window.PolkaProduct(id); return true; } catch (e) { return false; }
+        }
+        if (++n < 50) { setTimeout(run, 100); return false; }
+        return false;
+      };
+      run();
+      return true;
+    }
+
     function jump() {
+      if (jumpToAd()) return true;
       const screen = target();
       if (!screen || typeof window.go !== 'function') return false;
       const current = (document.querySelector('.screen.active') || {}).id;

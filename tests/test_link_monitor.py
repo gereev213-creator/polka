@@ -66,6 +66,8 @@ TPL = open(os.path.join(ROOT, 'polka-final/frontend/proto/template.html'),
 PAY = open(os.path.join(ROOT, 'polka-final/frontend/proto/payments.js'),
            encoding='utf-8').read()
 BAT = open(os.path.join(ROOT, 'collector/start-windows.bat'), encoding='utf-8').read()
+ADP = open(os.path.join(ROOT, 'polka-final/frontend/proto/adapter.js'),
+           encoding='utf-8').read()
 # Скрытие продавца: кнопка в находке, фильтр отправки, таблица блокировок
 check('в находке есть кнопка «не показывать продавца»',
       'Не показывать продавца' in SRC and 'callback_data=f"blk:' in SRC)
@@ -92,6 +94,14 @@ check('сборщик приносит ID со страницы объявлен
       and 'seller_id' in COL)
 check('после уточнения продавец скрывается с подтверждением',
       'Продавец скрыт' in SRC and '_block_ready' in SRC)
+check('находка приходит с фото (и списком, и JSON строкой)',
+      'def _ad_photo_url(' in SRC and 'isinstance(raw, list)' in SRC
+      and 'io.BytesIO(data)' in SRC)
+check('кнопка приложения ведёт на карточку товара',
+      '/?ad={ad' in SRC and 'jumpToAd' in ADP)
+check('карточка по ?ad= открывается', 'window.PolkaProduct(id)' in ADP)
+check('карточка догружается с сервера по id',
+      "window.PolkaAPI.api('/api/ads/' + encodeURIComponent(id))" in ADP)
 check('в находке есть город из поиска, если в карточке пусто',
       "ad['city'] = _fallback_city" in SRC)
 check('сборщик уважает интервал проверки ссылки',
