@@ -3002,7 +3002,8 @@ class Database:
             )
         ''')
         
-        # НОВАЯ ТАБЛИЦА: Использование промокодов
+        # Скрытые продавцы: человек нажал «не показывать продавца» — его лоты
+        # больше не приходят ни в чат, ни в ленту
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS blocked_sellers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -3011,7 +3012,10 @@ class Database:
                 seller_name TEXT DEFAULT '',
                 created_at TEXT,
                 UNIQUE(user_id, seller_key)
-            );
+            )
+        ''')
+        # НОВАЯ ТАБЛИЦА: Использование промокодов
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS promocode_uses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 promocode_id INTEGER,
