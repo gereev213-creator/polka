@@ -56,6 +56,19 @@ check('перевод пользователей на ссылки', 'link_only_
       and 'link_trial_24h' in SRC)
 check('в рассылке кнопка видео', 'tutorial:link' in SRC)
 check('24 часа мониторинга в рассылке', '24 часа мониторинга бесплатно' in SRC)
+# Цена для ссылочных поисков: Авито теряет фильтр цены при копировании ссылки
+check('в форме ссылки есть цена от/до',
+      'id="linkPriceFrom"' in TPL and 'id="linkPriceTo"' in TPL)
+check('форма отправляет цену в from-link',
+      'max_price: pTo' in ADP and "'/api/hunt/from-link'" in ADP)
+check('from-link принимает цену полями',
+      '_body_pmax' in SRC and '_pmax = _body_pmax or' in SRC)
+check('ссылочный поиск уважает границу цены',
+      'if _pmax and price > _pmax' in SRC and "no('price_to')" in SRC)
+check('предупреждение, если в ссылке нет цены',
+      'В ссылке не видно фильтра цены' in SRC)
+check('админ может поправить цену поиска',
+      "action == 'set_crit_price'" in SRC)
 check('эндпоинт видео-инструкции', "'/api/tutorial/link'" in SRC)
 check('бот отправляет ролик в чат', 'async def send_link_tutorial(' in SRC
       and 'tutorial-link.mp4' in SRC)

@@ -23221,6 +23221,21 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # дело: сборщик откатывался на широкий раздел, и в ленту шли чужие
     # лоты — 442 сообщения по ссылке на iPhone 17 Pro. Доверяем ссылке.
     if int(crit.get('from_link') or 0):
+        # Приложение Авито часто ТЕРЯЕТ фильтр цены, когда человек копирует
+        # ссылку: в адресе нет pmax, и раньше прилетали лоты дороже лимита.
+        # Поэтому границы, заданные в карточке поиска, соблюдаем и здесь.
+        try:
+            _pmin = int(crit.get('min_price') or 0)
+        except Exception:
+            _pmin = 0
+        try:
+            _pmax = int(crit.get('max_price') or 0)
+        except Exception:
+            _pmax = 0
+        if _pmax and price > _pmax:
+            return no('price_to')
+        if _pmin and price < _pmin:
+            return no('price_from')
         # reason 'ok' — чтобы находка шла обычной очередью доставки.
         return Decision(True, 'ok', 'по ссылке')
     if int(crit.get('with_photo') or 0):
@@ -29430,12 +29445,24 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
 
     try:
         facts = avito_blob_facts(parsed.get('filters') or '')
-        # Цену из ссылки кладём в сам критерий: иначе в карточке не видно
-        # «до 35 000 ₽», а сборщик не знает границу.
+        # Цена может прийти полями из формы: Авито теряет фильтр цены при
+        # копировании ссылки из приложения, поэтому человек может задать
+        # границы в ПОЛКЕ — они важнее того, что нашлось в URL.
+        try:
+            _body_pmax = int((body or {}).get('max_price') or 0)
+        except Exception:
+            _body_pmax = 0
+        try:
+            _body_pmin = int((body or {}).get('min_price') or 0)
+        except Exception:
+            _body_pmin = 0
+        _pmax = _body_pmax or int(facts.get('price_to') or 0)
+        _pmin = _body_pmin or int(facts.get('price_from') or 0)
+        # Цену из ссылки или формы кладём в сам критерий: иначе в карточке
+        # не видно «до 35 000 ₽», а сборщик не знает границу.
         crit_id = await asyncio.to_thread(
             _db_locked, add_criterion, int(viewer_id), query, category, city,
-            int(facts.get('price_to') or 0), 0,
-            int(facts.get('price_from') or 0), 0, 0, 'any', '', None, '', 0,
+            int(_pmax), 0, int(_pmin), 0, 0, 'any', '', None, '', 0,
             str(parsed.get('filters') or ''), url,
             json.dumps(facts.get('labels') or [], ensure_ascii=False))
     except Exception as e:
@@ -29464,11 +29491,16 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
         return _miniapp_json({'ok': False, 'error': 'duplicate',
                               'detail': 'Такой критерий уже есть'}, status=400)
     facts = avito_blob_facts(parsed.get('filters') or '')
+    _warn = ''
+    if not _pmax and not _pmin:
+        _warn = ('В ссылке не видно фильтра цены — если он нужен, укажите '
+                 '«Цена до» в карточке поиска.')
     return _miniapp_json({'ok': True, 'id': int(crit_id), 'query': query,
                           'city': city, 'category': category,
                           'filters': parsed.get('filters') or '',
                           'has_price': bool(parsed.get('has_price')),
-                          **facts})
+                          'price_from': int(_pmin), 'price_to': int(_pmax),
+                          'warn': _warn, **facts})
 
 
 async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Response:
@@ -35038,6 +35070,49 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:200]},
                                  status=500)
         return _miniapp_json({'ok': True, 'user': uid, 'slots': slots, 'days': days})
+
+    if action == 'set_crit_price':
+        # Обслуживание: у поиска из ссылки потерялся фильтр цены (Авито
+        # выкидывает pmax при копировании из приложения) — ставим границу
+        # на нашей стороне и дописываем pmax в адрес, чтобы Авито тоже резал.
+        try:
+            cid = int((body or {}).get('id') or 0)
+            pmax = int((body or {}).get('max_price') or 0)
+            pmin = int((body or {}).get('min_price') or 0)
+        except Exception:
+            return _miniapp_json({'ok': False, 'error': 'bad_args'}, status=400)
+        if not cid:
+            return _miniapp_json({'ok': False, 'error': 'id_required'}, status=400)
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT filter_url FROM hunt_criteria WHERE id=?", (cid,))
+            row = cur.fetchone()
+            if not row:
+                return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+            url = str(row['filter_url'] or '')
+            from urllib.parse import urlparse as _up, parse_qsl as _pql, urlencode as _ue
+            if url:
+                _parts = _up(url)
+                _qs = [(k, v) for k, v in _pql(_parts.query) if k not in ('pmax', 'pmin')]
+                if pmax:
+                    _qs.append(('pmax', str(pmax)))
+                if pmin:
+                    _qs.append(('pmin', str(pmin)))
+                url = _parts._replace(query=_ue(_qs)).geturl()
+            cur.execute("UPDATE hunt_criteria SET max_price=?, min_price=?, filter_url=? "
+                        "WHERE id=?", (pmax, pmin, url, cid))
+            # Уже отправленные «дороже лимита» находки больше не показываем.
+            if pmax:
+                cur.execute("UPDATE hunt_matches SET status='rejected', "
+                            "reject_reason='price' WHERE crit_id=? AND status='sent' "
+                            "AND ad_id IN (SELECT id FROM ads WHERE price > 0 AND price > ?)",
+                            (cid, pmax))
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:160]},
+                                 status=500)
+        return _miniapp_json({'ok': True, 'id': cid, 'max_price': pmax,
+                              'min_price': pmin, 'url': url})
 
     if action == 'del_crit':
         # Удаление критерия по id (обслуживание: тестовые/битые поиски,

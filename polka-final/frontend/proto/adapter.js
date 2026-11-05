@@ -959,17 +959,28 @@ function paintEmpty(count) {
         }
         return;
       }
+      // Цена от/до: Авито теряет фильтр цены при копировании ссылки из
+      // мобильного приложения, поэтому границы можно задать здесь — сервер
+      // отфильтрует находки сам и допишет pmax в адрес.
+      const fromEl = document.getElementById('linkPriceFrom');
+      const toEl = document.getElementById('linkPriceTo');
+      const pFrom = Number(String((fromEl && fromEl.value) || '').replace(/[^0-9]/g, '')) || 0;
+      const pTo = Number(String((toEl && toEl.value) || '').replace(/[^0-9]/g, '')) || 0;
       const btn = form.querySelector('[type="submit"]') || document.querySelector('[form="searchForm"]');
       const oldBtn = btn ? btn.textContent : '';
       if (btn) { btn.disabled = true; btn.textContent = 'Запускаем…'; }
       let ok = false;
       let detail = '';
+      let warn = '';
       try {
         const res = await window.PolkaAPI.api('/api/hunt/from-link', {
-          method: 'POST', body: JSON.stringify({ url: link }),
+          method: 'POST', body: JSON.stringify({
+            url: link, min_price: pFrom, max_price: pTo,
+          }),
         });
         ok = !!(res && (res.ok !== false));
         if (!ok && res && res.detail) detail = String(res.detail);
+        if (ok && res && res.warn) warn = String(res.warn);
       } catch (err) {
         ok = false;
         detail = (err && err.message) || '';
@@ -994,7 +1005,10 @@ function paintEmpty(count) {
         return;
       }
       if (linkEl) linkEl.value = '';
+      if (fromEl) fromEl.value = '';
+      if (toEl) toEl.value = '';
       form.reset();
+      if (warn && window.PolkaNotify) window.PolkaNotify(warn);
       if (typeof go === 'function') go('searches');
     });
   }
