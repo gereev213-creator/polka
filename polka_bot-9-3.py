@@ -25696,6 +25696,17 @@ def _link_check_min(user_id: int) -> int:
     try:
         plan = _user_plan(int(user_id))
         fast = max(1, int(cfg_get('link.check_paid_min') or 1))
+        # Разовый быстрый доступ (например, 12 часов на тест): человек
+        # хочет убедиться на живой скорости — даём ускоренную проверку,
+        # не меняя тариф и не выдавая платный план.
+        try:
+            _fast_until = str(_setting_get(f'link.fast_until:{int(user_id)}', '') or '')
+            if _fast_until:
+                _fu = _safe_isoparse(_fast_until)
+                if _fu is not None and _fu > get_moscow_time():
+                    return fast
+        except Exception:
+            pass
         # Быстрая проверка — только у платных («Плюс» или купленные слоты).
         # Бесплатные 24 часа — честно раз в 30 минут, как написано в тарифах.
         if plan.get('name') == 'plus':
@@ -35269,6 +35280,7 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                 'criteria_limit': _criteria_limit(uid),
                 'purchased_slots': _purchased_slots(uid),
                 'link_check_min': _link_check_min(uid),
+                'fast_until': str(_setting_get(f'link.fast_until:{uid}', '') or ''),
                 'free_anchor': anchor, 'pause_at': pause_at,
                 'criteria': crits[:20],
             })
@@ -35341,6 +35353,25 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                                  status=500)
         return _miniapp_json({'ok': True, 'id': cid, 'max_price': pmax,
                               'min_price': pmin, 'url': url})
+
+    if action == 'grant_fast_hours':
+        # Тестовый ускоренный режим: проверка ссылки каждую минуту N часов
+        # (для переговоров: клиент хочет убедиться на живой скорости).
+        try:
+            uid = int((body or {}).get('user') or 0)
+            hours = int((body or {}).get('hours') or 12)
+        except Exception:
+            return _miniapp_json({'ok': False, 'error': 'bad_args'}, status=400)
+        if not uid or hours <= 0:
+            return _miniapp_json({'ok': False, 'error': 'bad_args'}, status=400)
+        hours = min(hours, 72)
+        until = (get_moscow_time() + timedelta(hours=hours)).isoformat()
+        try:
+            _setting_set(f'link.fast_until:{uid}', until)
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=500)
+        _plan_event(uid, 'fast_granted', {'hours': hours, 'until': until})
+        return _miniapp_json({'ok': True, 'user': uid, 'hours': hours, 'until': until})
 
     if action == 'block_seller_manual':
         # Ручная блокировка продавца (тест/поддержка): user + key или name.

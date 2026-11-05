@@ -80,6 +80,8 @@ check('платная проверка раз в минуту',
 check('в интерфейсе «каждую минуту»',
       'каждую минуту' in TPL and 'каждую минуту' in PAY)
 check('сборщик ходит по кругу каждую минуту', '--every 60' in BAT)
+check('ускоренный режим на N часов',
+      'link.fast_until:' in SRC and "action == 'grant_fast_hours'" in SRC)
 # Если ID продавца неизвестен — заявка сборщику, потом автоскрытие
 check('заявка на уточнение продавца', 'seller_block_requests' in SRC
       and 'Уточняю продавца' in SRC)
