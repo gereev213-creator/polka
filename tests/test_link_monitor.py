@@ -112,6 +112,13 @@ check('сборщик разбирает ссылки резюме без под
       '\\d{7,}' in COL and 'Резюме и часть объявлений' in COL)
 check('сборщик пропускает карточки без цены в разбор',
       'if link and title:' in COL and "'price': parse_price(price.group(1)) if price else 0" in COL)
+check('парсер читает только основную выдачу, без рекомендаций',
+      'def serp_only(' in COL and 'RECOMMENDATION_MARKERS' in COL
+      and 'html = serp_only(html)' in COL)
+check('парсер не выбрасывает карточки без цены (резюме)',
+      "if not item.get('title') or not item.get('url'):" in COL)
+check('сборщик печатает регионы разобранной страницы',
+      'регионы:' in COL)
 check('находки из чужого региона отбрасываются',
       'def _crit_region(' in SRC and "return no('other_region')" in SRC)
 check('регион виден в тексте находки',

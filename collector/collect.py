@@ -1710,17 +1710,47 @@ def parse_item_page(html: str) -> dict:
     }
 
 
+RECOMMENDATION_MARKERS = (
+    'вам может понравиться', 'похожие объявления', 'смотрите также',
+    'объявления из других регионов', 'рекомендуем посмотреть',
+    'похожие предложения', 'вас также может заинтересовать',
+    'data-marker="pagination"', 'data-marker="serp-footer"',
+)
+
+
+def serp_only(html: str) -> str:
+    """Оставляет ТОЛЬКО основную выдачу, отрезая блоки рекомендаций.
+
+    Авито после выдачи подмешивает «Вам может понравиться», «Похожие
+    объявления», лоты из других регионов. Раньше парсер читал всю страницу
+    и присылал человеку чужие лоты (Москва вместо Ижевска). Рекомендации
+    идут после основной выдачи, поэтому режем страницу по первому маркеру.
+    """
+    raw = str(html or '')
+    low = raw.lower()
+    cut = len(raw)
+    for marker in RECOMMENDATION_MARKERS:
+        pos = low.find(marker)
+        # Маркер может встретиться в тексте объявления — отрезаем только
+        # если он реально во второй половине страницы.
+        if pos > len(raw) * 0.35 and pos < cut:
+            cut = pos
+    return raw[:cut] if cut < len(raw) else raw
+
+
 def parse_page(html: str) -> list:
     """Пробуем три способа по очереди и берём тот, что дал больше карточек."""
+    html = serp_only(html)
     # Микроразметка первая: проверено, что на живой выдаче Авито JSON-LD нет,
     # а данные лежат именно в itemProp
     results = [items_from_microdata(html), items_from_jsonld(html),
                items_from_initial_data(html), items_from_html(html)]
     best = max(results, key=len) if results else []
-    # Чистим: без цены и без ссылки карточка бесполезна
+    # Чистим: без заголовка и ссылки карточка бесполезна. Цена может быть
+    # нулевой — у резюме и вакансий её нет, и такие находки нужны.
     clean, seen = [], set()
     for item in best:
-        if not item.get('title') or not item.get('price') or not item.get('url'):
+        if not item.get('title') or not item.get('url'):
             continue
         key = item.get('external_id') or item['url']
         if key in seen:
@@ -3170,6 +3200,20 @@ def run_once(cfg: dict) -> int:
                 print(f"  ✖ не открылось: {exc}")
                 continue
             items = parse_page(html)
+            if target.get('link') and items:
+                _regs = {}
+                for _it in items:
+                    _u = str(_it.get('url') or '')
+                    try:
+                        from urllib.parse import urlsplit as _us
+                        _seg = [x for x in _us(_u).path.split('/') if x]
+                        _rj = _seg[0] if _seg else '?'
+                    except Exception:
+                        _rj = '?'
+                    _regs[_rj] = _regs.get(_rj, 0) + 1
+                _top = sorted(_regs.items(), key=lambda kv: -kv[1])[:4]
+                print("  карточек: %d, регионы: %s" % (
+                    len(items), ', '.join(f'{k} {v}' for k, v in _top)))
             # Страница без единой карточки — это не «пустая выдача», а
             # антибот-заглушка: Авито так отвечает на частые запросы.
             # Раньше такой проход считался успешным, и мы тратили трафик
