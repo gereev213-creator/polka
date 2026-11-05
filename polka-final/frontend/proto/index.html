@@ -1020,7 +1020,7 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
 <div class="card trial"><b id="trialTitle">Бесплатно — 1 ссылка</b><span class="actv" id="trialBadge">24 часа</span></div>
-<div class="newHint" id="planHint">Бесплатно — одна ссылка на 24 часа. Дальше — мониторинг от 169 ₽ за 7 дней: проверка каждую минуту.</div>
+<div class="newHint" id="planHint">Бесплатно — одна ссылка на 24 часа. Дальше — мониторинг от 169 ₽ за 7 дней: проверка каждую минуту. <b>Каждая секунда на счету.</b></div>
 <div class="card plan-card" id="planCard">
   <div class="plan-name" id="planName">Мониторинг ссылок с Авито</div>
   <div id="planChipsBox"></div>
@@ -1143,8 +1143,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261105151304"></script>
-<script src="adapter.js?v=20261105151304"></script><script src="payments.js?v=20261105151304"></script><script src="admin.js?v=20261105151304"></script><script src="keyboard.js?v=20261105151304"></script><script src="telegram-safe.js?v=20261105151304"></script><script>
+</script><script src="telegram-web-app.js?v=20261105180521"></script>
+<script src="adapter.js?v=20261105180521"></script><script src="payments.js?v=20261105180521"></script><script src="admin.js?v=20261105180521"></script><script src="keyboard.js?v=20261105180521"></script><script src="telegram-safe.js?v=20261105180521"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
