@@ -21516,7 +21516,7 @@ async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
         done += 1
         await asyncio.sleep(2.5)   # не долбим Авито
     # Неудачи тоже отправляем: сервер увеличит desc_attempts, и карточка
-    # не будет вечно висеть первой в очереди (иначе проход каждые 30 минут
+    # не будет вечно висеть первой в очереди (иначе проход каждые 5 минут
     # пытался открывать одну и ту же карточку).
     failed = [{'external_id': ext, 'state': 'failed'}
               for ext in _details_failed_ids(need, items)]
@@ -24759,7 +24759,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     # срок»). Перекрыть конкретную комбинацию можно настройкой вида
     # pay.rub_link_3_90 — она читается link_combo_price().
     # Скорость мониторинга — то, за что платят: бесплатно проверяем реже.
-    'link.check_free_min': ('int', 5, 1440, 30,
+    'link.check_free_min': ('int', 5, 1440, 5,
                             'Как часто проверять ссылку на бесплатном, минут'),
     'link.check_paid_min': ('int', 1, 1440, 1,
                             'Как часто проверять ссылку на платном, минут'),
@@ -25690,8 +25690,8 @@ async def api_legal_consent(request: aiohttp_web.Request) -> aiohttp_web.Respons
 def _link_check_min(user_id: int) -> int:
     """Как часто проверять ссылку этого человека: скорость — платная функция.
 
-    Бесплатно — раз в 30 минут (демо: видно, что работает, но перекупу мало).
-    Пробный период, «Плюс» и купленные слоты — раз в 5 минут.
+    Бесплатно — раз в 5 минут (демо: видно, что работает, но перекупу мало).
+    Пробный период — раз в 5 минут, «Плюс» и купленные слоты — в минуту.
     """
     try:
         plan = _user_plan(int(user_id))
@@ -25708,12 +25708,12 @@ def _link_check_min(user_id: int) -> int:
         except Exception:
             pass
         # Быстрая проверка — только у платных («Плюс» или купленные слоты).
-        # Бесплатные 24 часа — честно раз в 30 минут, как написано в тарифах.
+        # Бесплатные 24 часа — раз в 5 минут, как написано в тарифах.
         if plan.get('name') == 'plus':
             return fast
         if int(plan.get('paid_slots') or 0) > 0:
             return fast
-        return max(1, int(cfg_get('link.check_free_min') or 30))
+        return max(1, int(cfg_get('link.check_free_min') or 5))
     except Exception:
         return 30
 
@@ -27119,7 +27119,7 @@ async def api_pay_plans(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json({'ok': True, 'plans': plans, 'plan': user_plan,
                           'link_matrix': link_matrix_public(),
                           'free_links': 1,
-                          'free_check_min': int(cfg_get('link.check_free_min') or 30),
+                          'free_check_min': int(cfg_get('link.check_free_min') or 5),
                           'variant': ('extra_search' if _default_product == 'extra_search'
                                       else 'unlimited_30'),
                           'default_product': _default_product,
@@ -27917,7 +27917,7 @@ def _trial_expired_caption(query: str, stats: Dict) -> str:
         lines.append("Новых подходящих объявлений за сутки не появилось.")
     lines.append("")
     lines.append("Бесплатно поиск работает <b>24 часа</b>. На мониторинге ссылок "
-                 "он не встаёт на паузу: проверяем каждые 5 минут и присылаем "
+                 "он не встаёт на паузу: проверяем каждую минуту и присылаем "
                  "новые лоты. 1 ссылка — 459 ₽ за 30 дней, можно начать "
                  "с 7 дней за 169 ₽.")
     return "\n".join(lines)
@@ -30025,8 +30025,8 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
                 # Ссылочные поиски — платная функция: проверяем их в первую
                 # очередь, чтобы новые лоты приходили быстро.
                 _prio = 5
-                # Скорость — то, за что платят: бесплатно 30 минут,
-                # на платном — 5. Сборщик пропустит ссылку, если проверял её
+                # Скорость — то, за что платят: бесплатно 5 минут,
+                # на платном — 1. Сборщик пропустит ссылку, если проверял её
                 # слишком недавно.
                 try:
                     row['check_interval_min'] = _link_check_min(row['user_id'])
@@ -35719,10 +35719,10 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
             "Теперь можно вставить <b>ссылку со своей выдачи на Авито</b> — "
             "со всеми фильтрами, городом и ценой — и бот будет следить ровно "
             "за ней.\n\n"
-            "Бесплатно — <b>одна ссылка на 24 часа</b>: проверка каждые "
-            "30 минут и находки в этом чате.\n\n"
+            "Бесплатно — <b>одна ссылка на 24 часа</b>: проверка раз в "
+            "5 минут и находки в этом чате.\n\n"
             "Дальше — мониторинг: 1 ссылка 459 ₽ за 30 дней, проверка "
-            "каждые 5 минут и без паузы. Есть вход на 7 дней за 169 ₽."
+            "каждую минуту и без паузы. Есть вход на 7 дней за 169 ₽."
         )
         kb = {'inline_keyboard': [[
             {'text': 'Открыть Полку', 'web_app': {'url': _miniapp_url()}}]]}

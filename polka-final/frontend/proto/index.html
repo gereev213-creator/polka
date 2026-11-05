@@ -1020,16 +1020,16 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
 <div class="card trial"><b id="trialTitle">Бесплатно — 1 ссылка</b><span class="actv" id="trialBadge">24 часа</span></div>
-<div class="newHint" id="planHint">Бесплатно — одна ссылка на 24 часа. Дальше — мониторинг от 169 ₽ за 7 дней: проверка каждую минуту, <b>уведомление приходит за секунды.</b> Каждая секунда на счету.</div>
+<div class="newHint" id="planHint">Бесплатно — одна ссылка на 24 часа: проверка раз в 5 минут. Дальше — мониторинг от 169 ₽ за 7 дней: проверка каждую минуту. Каждая секунда на счету.</div>
 <div class="card plan-card" id="planCard">
   <div class="plan-name" id="planName">Мониторинг ссылок с Авито</div>
   <div id="planChipsBox"></div>
   <div class="cprice"><div class="sum" id="planPrice">459 ₽</div><div class="per" id="planPeriod">30 дней · ≈459 ₽/мес</div></div>
   <div class="csave" id="planSave"></div>
   <button class="pay primary" id="payBtn" onclick="activatePlus()">Оплатить 459 ₽</button>
-  <div class="plan-note" id="planNote">Проверка каждую минуту · находки в Telegram · без автосписаний</div>
+  <div class="plan-note" id="planNote">Проверка каждую секунду · находки в Telegram · без автосписаний</div>
 </div>
-<div class="card benefits"><h3 class="bTitle">Что входит в мониторинг</h3><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span><span class="btext"><b>Проверка каждую минуту</b><i>В бесплатные 24 часа — раз в 30 минут, на тарифе — каждую минуту.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span><span class="btext"><b>Находки приходят сразу</b><i>Новый лот по твоей ссылке — сообщением в Telegram.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span><span class="btext"><b>Без лимита находок</b><i>Сколько поймали — столько и прислали.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-plane"/></svg></span><span class="btext"><b>Ссылку можно поменять</b><i>Фильтры и город задаются на Авито — в самой ссылке.</i></span></div></div>
+<div class="card benefits"><h3 class="bTitle">Что входит в мониторинг</h3><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span><span class="btext"><b>Проверка каждую минуту.</b><i>В бесплатные 24 часа — раз в 5 минут, на тарифе — каждую минуту.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span><span class="btext"><b>Находки приходят сразу</b><i>Новый лот по твоей ссылке — сообщением в Telegram.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span><span class="btext"><b>Без лимита находок</b><i>Сколько поймали — столько и прислали.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-plane"/></svg></span><span class="btext"><b>Ссылку можно поменять</b><i>Фильтры и город задаются на Авито — в самой ссылке.</i></span></div></div>
 <button class="card acc" id="promoBtn"><b>Введи промокод</b><span class="chev"><svg width="15" height="15"><use href="#i-d"/></svg></span></button>
 <div class="promoform" id="promoform"><span class="codebox"><span class="okic" id="okic"><svg width="11" height="11"><use href="#i-check"/></svg></span><input id="code" placeholder="Промокод" autocomplete="off"><span class="off" id="off"></span></span><button class="apply" onclick="applyPromo()">Применить</button></div>
 <p class="pmsg" id="pmsg">Промокод не найден</p>
@@ -1143,8 +1143,8 @@ function fit(){/* приложение, а не макет: масштаб не 
 addEventListener('resize',fit);renderGrids();renderFavs();fit();setTimeout(()=>{if(cur==='loading')show('home')},1100);
 
 window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr;try{renderGrids()}catch(e){};try{renderFavs()}catch(e){};try{renderMarket()}catch(e){}};
-</script><script src="telegram-web-app.js?v=20261105181807"></script>
-<script src="adapter.js?v=20261105181807"></script><script src="payments.js?v=20261105181807"></script><script src="admin.js?v=20261105181807"></script><script src="keyboard.js?v=20261105181807"></script><script src="telegram-safe.js?v=20261105181807"></script><script>
+</script><script src="telegram-web-app.js?v=20261105182743"></script>
+<script src="adapter.js?v=20261105182743"></script><script src="payments.js?v=20261105182743"></script><script src="admin.js?v=20261105182743"></script><script src="keyboard.js?v=20261105182743"></script><script src="telegram-safe.js?v=20261105182743"></script><script>
   // Документы Сервиса: открываем внутри Telegram, иначе в новой вкладке
   window.openLegal = function (kind) {
     const base = location.origin;
