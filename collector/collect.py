@@ -1305,6 +1305,7 @@ def items_from_initial_data(html: str) -> list:
                     'external_id': str(node.get('id') or '') or external_id_from_url(str(url)),
                     'city': str(node.get('location') or node.get('geo') or '')[:100],
                     'seller_type': seller_type_from_node(node),
+                    'seller_id': str(node.get('sellerId') or node.get('userId') or '')[:40],
                 })
             for value in node.values():
                 walk(value)
@@ -1452,6 +1453,11 @@ def items_from_microdata(html: str) -> list:
         _sm = re.search(r'data-marker="seller-link/link"[^>]*>([^<]{2,60})<', chunk)
         if _sm:
             seller_name = unescape(_sm.group(1)).strip()[:60]
+        # ID продавца: по нему человек может скрыть продавца целиком.
+        _sid_m = (re.search(r'"sellerId"\s*:\s*(\d+)', chunk)
+                  or re.search(r'"seller_id"\s*:\s*(\d+)', chunk)
+                  or re.search(r'data-seller-id="(\d+)"', chunk))
+        seller_id = _sid_m.group(1) if _sid_m else ''
         if title:
             out.append({
                 'title': title[:200],
@@ -1463,6 +1469,7 @@ def items_from_microdata(html: str) -> list:
                 'hours_ago': ago,
                 'seller_type': seller_type,
                 'seller_name': seller_name,
+                'seller_id': seller_id,
             })
     return out
 
@@ -1489,6 +1496,8 @@ def items_from_html(html: str) -> list:
                 'external_id': external_id_from_url(url),
                 'city': unescape(city.group(1)).strip() if city else '',
                 'seller_type': seller_type_from_card(chunk),
+                'seller_id': (re.search(r'"sellerId"\s*:\s*(\d+)', chunk) or ['', ''])[1]
+                             if re.search(r'"sellerId"\s*:\s*(\d+)', chunk) else '',
             })
     return out
 

@@ -61,6 +61,25 @@ check('сборщик игнорирует словесные цели (толь
       and "_links_only = [t for t in targets if t.get('link')]" in COL)
 check('сборщик чистит состояние удалённых поисков',
       'Состояние: убрал' in COL and '_stale' in COL)
+TPL = open(os.path.join(ROOT, 'polka-final/frontend/proto/template.html'),
+            encoding='utf-8').read()
+PAY = open(os.path.join(ROOT, 'polka-final/frontend/proto/payments.js'),
+           encoding='utf-8').read()
+BAT = open(os.path.join(ROOT, 'collector/start-windows.bat'), encoding='utf-8').read()
+# Скрытие продавца: кнопка в находке, фильтр отправки, таблица блокировок
+check('в находке есть кнопка «не показывать продавца»',
+      'Не показывать продавца' in SRC and 'callback_data=f"blk:' in SRC)
+check('скрытый продавец не приходит в чат',
+      '_seller_blocked_for' in SRC and "hunt_release([row], 'rejected', 'seller_blocked')" in SRC)
+check('таблица заблокированных продавцов', 'CREATE TABLE IF NOT EXISTS blocked_sellers' in SRC)
+check('сборщик приносит ID продавца',
+      "'seller_id': seller_id" in COL and 'sellerId' in COL)
+# Скорость: платная проверка — раз в минуту
+check('платная проверка раз в минуту',
+      "'link.check_paid_min': ('int', 1, 1440, 1" in SRC)
+check('в интерфейсе «каждую минуту»',
+      'каждую минуту' in TPL and 'каждую минуту' in PAY)
+check('сборщик ходит по кругу каждую минуту', '--every 60' in BAT)
 check('сборщик уважает интервал проверки ссылки',
       'check_interval_min' in COL and "ссылок на паузе по тарифу" in COL)
 

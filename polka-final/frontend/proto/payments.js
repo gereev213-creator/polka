@@ -264,7 +264,7 @@
     if (noteEl) {
       noteEl.textContent = pct
         ? ('Скидка ' + pct + '% \u00B7 вместо ' + rub2(base) + ' \u00B7 без автосписаний')
-        : 'Проверка каждые 5 минут \u00B7 находки в Telegram \u00B7 без автосписаний';
+        : 'Проверка каждую минуту \u00B7 находки в Telegram \u00B7 без автосписаний';
     }
   }
 
@@ -316,7 +316,7 @@
         if (title) title.textContent = 'Плюс активен';
       } else {
         // Бесплатно — одна ссылка: демо мониторинга. Скорость, за которую
-        // платят, появляется после оплаты (проверка 5 минут вместо 30).
+        // платят, появляется после оплаты (проверка каждую минуту вместо 30).
         const badge = document.getElementById('trialBadge');
         const title = document.getElementById('trialTitle');
         if (badge) badge.textContent = '24 \u0447\u0430\u0441\u0430';

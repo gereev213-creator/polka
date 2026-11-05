@@ -2803,6 +2803,9 @@ class Database:
             # ── Находки из внешних источников (агрегатор) ───────────────────
             # Храним ТОЛЬКО публичное: без имён и телефонов продавцов.
             "ALTER TABLE ads ADD COLUMN source TEXT DEFAULT 'polka'",
+            # ID продавца с Авито (публичный числовой) — по нему человек может
+            # скрыть продавца: его лоты больше не придут в чат и ленту.
+            "ALTER TABLE ads ADD COLUMN seller_external_id TEXT",
             "ALTER TABLE ads ADD COLUMN source_url TEXT",
             "ALTER TABLE ads ADD COLUMN external_id TEXT",
             "ALTER TABLE ads ADD COLUMN market_median INTEGER",
@@ -3001,6 +3004,14 @@ class Database:
         
         # НОВАЯ ТАБЛИЦА: Использование промокодов
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS blocked_sellers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                seller_key TEXT NOT NULL,
+                seller_name TEXT DEFAULT '',
+                created_at TEXT,
+                UNIQUE(user_id, seller_key)
+            );
             CREATE TABLE IF NOT EXISTS promocode_uses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 promocode_id INTEGER,
@@ -20092,6 +20103,7 @@ def ingest_findings(items: List[Dict], source: str,
             # Характеристики и описание: приходят со страницы объявления и
             # нужны для отбора по состоянию, размеру и бренду.
             'seller_name': str(raw.get('seller_name') or '')[:80],
+            'seller_external_id': str(raw.get('seller_id') or '')[:40],
             'condition': str(raw.get('condition') or '')[:40],
             'size': str(raw.get('size') or '')[:20],
             'description': str(raw.get('description') or '')[:4000],
@@ -20179,7 +20191,7 @@ def ingest_findings(items: List[Dict], source: str,
         to_insert.append((pp['title'], pp['price'], json.dumps(pp['photos'], ensure_ascii=False),
                           pp['cat'], pp['city'], now, now, source, pp['url'], pp['ext'], now,
                           pp['ago'], pp['title_lower'], pp['age_estimated'], pp['fp'],
-                          pp['seller_type']))
+                          pp['seller_type'], pp['seller_external_id']))
         seen_ext.add(pp['ext'])
         seen_fp.add(pp['fp'])
         seen_exact.add(exact_key)
@@ -20193,8 +20205,9 @@ def ingest_findings(items: List[Dict], source: str,
                 INSERT INTO ads (user_id, title, description, price, photos, category, city,
                                  status, created_at, published_at, source, source_url,
                                  external_id, parsed_at, views, published_hours_ago,
-                                 title_lower, age_estimated, fingerprint, seller_type)
-                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
+                                 title_lower, age_estimated, fingerprint, seller_type,
+                                 seller_external_id)
+                VALUES (0, ?, '', ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)
             """, to_insert)
             stats['accepted'] = len(to_insert)
             inserted: List[tuple] = []
@@ -20466,6 +20479,55 @@ async def send_link_tutorial(user_id: int) -> Dict:
         out['error'] = f'{type(e).__name__}: {e}'[:200]
         logger.warning(f"link tutorial send {user_id}: {e}")
     return out
+
+
+async def block_seller_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Кнопка «Не показывать продавца»: скрываем все его лоты этому человеку."""
+    q = update.callback_query
+    if q is None:
+        return
+    try:
+        ad_id = int(str(q.data or '').split(':', 1)[1])
+    except Exception:
+        ad_id = 0
+    if not ad_id:
+        try:
+            await q.answer('Не получилось определить объявление')
+        except Exception:
+            pass
+        return
+    uid = int(q.from_user.id)
+    ad = db.get_ad(ad_id) or {}
+    key = _ad_seller_key(ad)
+    if not key:
+        try:
+            await q.answer('Не смог определить продавца — скройте объявление кнопкой «Убрать»',
+                           show_alert=True)
+        except Exception:
+            pass
+        return
+    try:
+        cur = db.conn.cursor()
+        cur.execute("INSERT OR IGNORE INTO blocked_sellers "
+                    "(user_id, seller_key, seller_name, created_at) VALUES (?,?,?,?)",
+                    (uid, key, str(ad.get('seller_name') or '')[:60],
+                     get_moscow_time().isoformat()))
+        db.conn.commit()
+    except Exception as e:
+        logger.warning(f"block seller: {e}")
+        try:
+            await q.answer('Не сохранилось, попробуйте ещё раз')
+        except Exception:
+            pass
+        return
+    try:
+        await q.answer('Больше не показываю объявления этого продавца')
+    except Exception:
+        pass
+    try:
+        await q.edit_message_reply_markup(reply_markup=None)
+    except Exception:
+        pass
 
 
 async def tutorial_link_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -24389,6 +24451,32 @@ async def _send_html_safe(send, **kwargs) -> bool:
             return False
 
 
+def _ad_seller_key(ad: Dict) -> str:
+    """Стабильный ключ продавца объявления: ID Авито, иначе нормализованное имя."""
+    sid = str((ad or {}).get('seller_external_id') or '').strip()
+    if sid:
+        return 'id:' + sid[:40]
+    name = str((ad or {}).get('seller_name') or '').strip().lower()
+    if name:
+        return 'name:' + re.sub(r'\s+', ' ', name)[:60]
+    return ''
+
+
+def _seller_blocked_for(user_id: int, ad: Dict) -> bool:
+    """Человек скрыл этого продавца — лот не должен приходить ни в чат, ни в ленту."""
+    key = _ad_seller_key(ad)
+    if not key:
+        return False
+    try:
+        cur = db.conn.cursor()
+        cur.execute("SELECT 1 FROM blocked_sellers WHERE user_id=? AND seller_key=? LIMIT 1",
+                    (int(user_id), key))
+        return cur.fetchone() is not None
+    except Exception as e:
+        logger.warning(f"blocked seller check: {e}")
+        return False
+
+
 def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
                      verdict: str = '', desc_checked: Optional[bool] = None,
                      price_drop: bool = False) -> str:
@@ -24640,7 +24728,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     # Скорость мониторинга — то, за что платят: бесплатно проверяем реже.
     'link.check_free_min': ('int', 5, 1440, 30,
                             'Как часто проверять ссылку на бесплатном, минут'),
-    'link.check_paid_min': ('int', 1, 1440, 5,
+    'link.check_paid_min': ('int', 1, 1440, 1,
                             'Как часто проверять ссылку на платном, минут'),
     'pay.rub_pro30': ('str', None, None, '490',
                       'Цена «PRO 30 дней» (20 поисков + подборка), ₽'),
@@ -25574,7 +25662,7 @@ def _link_check_min(user_id: int) -> int:
     """
     try:
         plan = _user_plan(int(user_id))
-        fast = max(1, int(cfg_get('link.check_paid_min') or 5))
+        fast = max(1, int(cfg_get('link.check_paid_min') or 1))
         # Быстрая проверка — только у платных («Плюс» или купленные слоты).
         # Бесплатные 24 часа — честно раз в 30 минут, как написано в тарифах.
         if plan.get('name') == 'plus':
@@ -28496,6 +28584,12 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
                 return 'skipped'
         except Exception:
             pass
+    # Скрытый продавец: его лоты не приходят ни в чат, ни в ленту.
+    try:
+        if _seller_blocked_for(int(user_id), ad):
+            return 'skipped'
+    except Exception:
+        pass
     price = int(ad.get('price') or 0)
     # Несвежее не присылаем: недельное объявление — не находка. Если даты
     # нет вовсе — присылаем (у большинства карточек её нет), см. HUNT_ALLOW_UNDATED.
@@ -28555,6 +28649,11 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
             # Убрать лот: человек посмотрел и понял — не то.
             # Больше не придёт ни в чат, ни в ленту приложения.
             InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
+        ], [
+            # Скрыть продавца целиком: перекупы часто не хотят видеть магазины
+            # и перекупщиков, которые заваливают выдачу.
+            InlineKeyboardButton("🚫 Не показывать продавца",
+                                 callback_data=f"blk:{ad['id']}")
         ]])
     for attempt in (1, 2):
         try:
@@ -28691,6 +28790,9 @@ async def _hunt_deliver_rows(app, rows: List[Dict]) -> int:
             ad = db.get_ad(int(row['ad_id']))
             if not ad or int(ad.get('price') or 0) <= 0:
                 hunt_release([row], 'rejected', 'ad_gone')
+                continue
+            if _seller_blocked_for(int(user_id), ad):
+                hunt_release([row], 'rejected', 'seller_blocked')
                 continue
             items.append((ad, crit, int(row.get('discount') or 0), row))
         if not items:
@@ -35114,6 +35216,41 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, 'id': cid, 'max_price': pmax,
                               'min_price': pmin, 'url': url})
 
+    if action == 'block_seller_manual':
+        # Ручная блокировка продавца (тест/поддержка): user + key или name.
+        try:
+            uid = int((body or {}).get('user') or 0)
+        except Exception:
+            uid = 0
+        key = str((body or {}).get('key') or '').strip()
+        name = str((body or {}).get('name') or '').strip()
+        if not uid or not (key or name):
+            return _miniapp_json({'ok': False, 'error': 'bad_args'}, status=400)
+        if not key:
+            key = 'name:' + name.lower()[:60]
+        try:
+            db.conn.execute("INSERT OR IGNORE INTO blocked_sellers "
+                            "(user_id, seller_key, seller_name, created_at) VALUES (?,?,?,?)",
+                            (uid, key, name, get_moscow_time().isoformat()))
+            db.conn.commit()
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=500)
+        return _miniapp_json({'ok': True, 'user': uid, 'key': key})
+
+    if action == 'blocked_sellers_list':
+        try:
+            uid = int((body or {}).get('user') or 0)
+        except Exception:
+            uid = 0
+        try:
+            cur = db.conn.cursor()
+            cur.execute("SELECT seller_key, seller_name, created_at FROM blocked_sellers "
+                        "WHERE user_id=? ORDER BY id DESC LIMIT 100", (uid,))
+            rows = [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=500)
+        return _miniapp_json({'ok': True, 'user': uid, 'items': rows})
+
     if action == 'del_crit':
         # Удаление критерия по id (обслуживание: тестовые/битые поиски,
         # которые человек не создавал, не должны висеть у него в приложении).
@@ -39379,6 +39516,7 @@ def main():
     application.add_handler(CallbackQueryHandler(check_subscription_callback,pattern="^check_subscription$"))
     application.add_handler(CallbackQueryHandler(start_trial_callback,pattern="^start_trial$"))
     application.add_handler(CallbackQueryHandler(tutorial_link_callback,pattern="^tutorial:link$"))
+    application.add_handler(CallbackQueryHandler(block_seller_callback,pattern="^blk:"))
     application.add_handler(CallbackQueryHandler(offer29_skip,
                                                 pattern="^offer29_skip$"))
     application.add_handler(CallbackQueryHandler(survey_answer,

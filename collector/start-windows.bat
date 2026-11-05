@@ -21,7 +21,7 @@ rem --- Проверку Авито ждём 2 минуты, потом идём
 set "POLKA_MANUAL_WAIT=120"
 rem --- Карточки объявлений не открываем: они палят IP ------------------------
 set "POLKA_DETAILS_PER_PASS=0"
-rem --- Ритм: проход ~5 минут, ссылки проверяются в каждом проходе ------------
+rem --- Ритм: проход раз в минуту, ссылки проверяются первыми -----------------
 set "POLKA_EVERY=300"
 
 where python >nul 2>&1
@@ -66,7 +66,7 @@ echo Link searches are checked first; new listings go to the app chat.
 echo.
 
 :loop
-python -u collect.py --loop --every 300
+python -u collect.py --loop --every 60
 echo.
 echo Collector stopped, restart in 20 seconds (Ctrl+C to exit).
 timeout /t 20 /nobreak >nul
