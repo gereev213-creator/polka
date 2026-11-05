@@ -1387,6 +1387,9 @@ def items_from_microdata(html: str) -> list:
         url = prop('url', 'href')
         if not url:
             m = re.search(r'href="(/[^"]+_\d{6,}[^"]*)"', chunk)
+            if not m:
+                # Резюме и часть объявлений: ссылка вида /8401065311 без текста
+                m = re.search(r'href="(/\d{7,})(?:\?|\")', chunk)
             url = m.group(1) if m else ''
         if url.startswith('/'):
             url = "https://www.avito.ru" + url
@@ -1480,17 +1483,19 @@ def items_from_html(html: str) -> list:
     for chunk in re.split(r'data-marker="item"', html)[1:]:
         chunk = chunk[:4000]
         link = re.search(r'href="(/[^"]+_\d{6,}[^"]*)"', chunk)
+        if not link:
+            link = re.search(r'href="(/\d{7,})(?:\?|\")', chunk)
         title = re.search(r'item-title[^>]*>([^<]{3,200})<', chunk) or \
             re.search(r'<h3[^>]*>([^<]{3,200})</h3>', chunk)
         price = re.search(r'item-price[^>]*>([^<]{0,40})<', chunk) or \
             re.search(r'(\d[\d\s]{2,})\s*₽', chunk)
         img = re.search(r'src="(https://[^"]+\.(?:jpg|jpeg|png|webp))"', chunk)
         city = re.search(r'geo-address[^>]*>([^<]{2,60})<', chunk)
-        if link and title and price:
+        if link and title:
             url = f"https://www.avito.ru{link.group(1)}"
             out.append({
                 'title': unescape(re.sub(r'\s+', ' ', title.group(1))).strip()[:200],
-                'price': parse_price(price.group(1)),
+                'price': parse_price(price.group(1)) if price else 0,
                 'url': url,
                 'photos': [img.group(1)] if img else [],
                 'external_id': external_id_from_url(url),

@@ -104,6 +104,14 @@ check('карточка догружается с сервера по id',
       "window.PolkaAPI.api('/api/ads/' + encodeURIComponent(id))" in ADP)
 check('в находке есть город из поиска, если в карточке пусто',
       "ad['city'] = _fallback_city" in SRC)
+# Резюме и вакансии: у них нет цены, но они тоже находки
+check('резюме/вакансии поддерживаются без цены',
+      'def _crit_is_resume(' in SRC and 'Резюме · цена не указана' in SRC
+      and 'if price <= 0 and not crit_ids:' in SRC)
+check('сборщик разбирает ссылки резюме без подчёркивания',
+      '\\d{7,}' in COL and 'Резюме и часть объявлений' in COL)
+check('сборщик пропускает карточки без цены в разбор',
+      'if link and title:' in COL and "'price': parse_price(price.group(1)) if price else 0" in COL)
 check('сборщик уважает интервал проверки ссылки',
       'check_interval_min' in COL and "ссылок на паузе по тарифу" in COL)
 

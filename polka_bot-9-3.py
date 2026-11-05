@@ -20097,7 +20097,12 @@ def ingest_findings(items: List[Dict], source: str,
             photos = [str(pp) for pp in photos if isinstance(pp, str) and pp.startswith('http')][:5]
         else:
             photos = []
-        if not title or price <= 0 or not url.startswith('http'):
+        if not title or not url.startswith('http'):
+            stats['skipped'] += 1
+            continue
+        # Резюме и вакансии на Авито без цены. В ссылочных партиях такие
+        # карточки принимаем: у человека в поиске резюме цены и не бывает.
+        if price <= 0 and not crit_ids:
             stats['skipped'] += 1
             continue
         if not ext:
@@ -23303,7 +23308,9 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
         return Decision(False, reason, _hunt_reason_label(reason))
 
     price = int(ad.get('price') or 0)
-    if price <= 0:
+    # Ссылка уже отфильтрована Авито: у резюме/вакансий цены не бывает,
+    # поэтому нулевую цену не считаем браком для поисков по ссылке.
+    if price <= 0 and not int(crit.get('from_link') or 0):
         return no('no_price')
     if hidden:
         return no('hidden')
@@ -24484,6 +24491,13 @@ async def _send_html_safe(send, **kwargs) -> bool:
             return False
 
 
+def _crit_is_resume(crit: Dict) -> bool:
+    """Поиск резюме или вакансий (HR): у таких карточек нет цены."""
+    hay = ' '.join(str((crit or {}).get(k) or '') for k in
+                   ('filter_url', 'search_path', 'query', 'category')).lower()
+    return any(w in hay for w in ('rezume', 'resume', 'vakans', 'вакан', 'резюме'))
+
+
 def _ad_photo_url(ad: Dict) -> str:
     """Первое фото объявления. photos приходит и списком, и JSON-строкой."""
     raw = (ad or {}).get('photos')
@@ -24574,7 +24588,8 @@ def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
         "",
         f"<b>{_hunt_escape(str(ad.get('title'))[:70])}</b>",
         "",
-        f"<b>{_money(ad.get('price') or 0)} ₽</b>",
+        ("<b>Резюме · цена не указана</b>" if int(ad.get('price') or 0) <= 0
+         else f"<b>{_money(ad.get('price') or 0)} ₽</b>"),
     ]
     if price_drop and int(ad.get('prev_price') or 0) > int(ad.get('price') or 0):
         # Этап D8: человек уже видел этот лот дороже — говорим прямо
@@ -28691,7 +28706,7 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     if ago is not None and int(ago) > HUNT_FRESH_HOURS:
         return 'skipped'
     if ago is None:
-        if not HUNT_ALLOW_UNDATED:
+        if not HUNT_ALLOW_UNDATED and not _crit_is_resume(crit):
             return 'skipped'
         fresh = "дата не указана"
     else:
@@ -28705,12 +28720,14 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
         if _fallback_city:
             ad = dict(ad)
             ad['city'] = _fallback_city
-    median = median_for_ad(ad, crit)
+    median = 0
     diff = 0
-    if median and median > price:
-        diff = median - price
-    elif (crit.get('mode') or 'any') != 'any':
-        return 'skipped'
+    if price > 0:
+        median = median_for_ad(ad, crit)
+        if median and median > price:
+            diff = median - price
+        elif (crit.get('mode') or 'any') != 'any':
+            return 'skipped'
     needs_desc = (_hunt_needs_description(crit)
                   and not str(ad.get('description') or '').strip())
     text = _hunt_match_text(ad, fresh, median, diff,
@@ -29708,8 +29725,14 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
         # Сначала человеческое имя из пути («iphone 15 pro»), потом название
         # категории. Раньше для ссылки без q= критерий назывался «Телефоны»,
         # и выглядело так, будто бот собирается присылать все телефоны.
-        query = (str(parsed.get('title_from_path') or '').strip()
-                 or HUNT_SLUG_TITLES.get(slug, '') or 'товар')
+        _low_path = str(parsed.get('slug') or '').lower() + ' ' + url.lower()
+        if 'rezume' in _low_path or 'resume' in _low_path or 'резюме' in _low_path:
+            query = 'Резюме'
+        elif 'vakans' in _low_path or 'вакан' in _low_path:
+            query = 'Вакансии'
+        else:
+            query = (str(parsed.get('title_from_path') or '').strip()
+                     or HUNT_SLUG_TITLES.get(slug, '') or 'товар')
     city = str(parsed.get('city') or '').replace('-', ' ').title()
     category = normalize_category(query)
 
