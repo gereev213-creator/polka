@@ -112,6 +112,8 @@ check('сборщик разбирает ссылки резюме без под
       '\\d{7,}' in COL and 'Резюме и часть объявлений' in COL)
 check('сборщик пропускает карточки без цены в разбор',
       'if link and title:' in COL and "'price': parse_price(price.group(1)) if price else 0" in COL)
+check('старые лоты не уходят после починки разбора',
+      'снимок был неполный' in COL and 'len(_seen) < 5 and len(_new_items) > 15' in COL)
 check('парсер читает только основную выдачу, без рекомендаций',
       'def serp_only(' in COL and 'RECOMMENDATION_MARKERS' in COL
       and 'html = serp_only(html)' in COL)

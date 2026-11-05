@@ -3294,6 +3294,18 @@ def run_once(cfg: dict) -> int:
                 _seen = set(_st.get('seen_ids') or [])
                 _new_items = [it for it in items
                               if str(it.get('external_id') or '') not in _seen]
+                # Защита от «первого настоящего разбора»: раньше страница
+                # разбиралась плохо (0 карточек), снимок вышел почти пустым.
+                # Теперь разбор починили — и все старые лоты выглядели новыми.
+                # Если запомнили мало, а пришло много — это не находки, это
+                # старый снимок: обновляем его и НИЧЕГО не отправляем.
+                if (len(_seen) < 5 and len(_new_items) > 15) or not _seen:
+                    _st['seen_ids'] = _ids[-LINK_SEEN_KEEP:]
+                    state[tkey] = _st
+                    save_targets_state(state)
+                    print(f"  снимок был неполный ({len(_seen)} лотов), "
+                          f"запомнил {len(_ids)} — старые не отправляю")
+                    continue
                 if not _new_items:
                     print(f"  новых лотов нет (в выдаче {len(items)})")
                     continue
