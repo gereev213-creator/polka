@@ -23323,6 +23323,15 @@ def evaluate_ad(ad: Dict, crit: Dict, require_description: bool = False,
     # дело: сборщик откатывался на широкий раздел, и в ленту шли чужие
     # лоты — 442 сообщения по ссылке на iPhone 17 Pro. Доверяем ссылке.
     if int(crit.get('from_link') or 0):
+        # Регион: страница выдачи Авито подмешивает «похожие» лоты из других
+        # городов. Человек выбрал Ижевск — из Москвы присылать нельзя.
+        try:
+            _want_reg = _crit_region(crit)
+            _ad_reg = _url_region(str(ad.get('source_url') or ''))
+            if _want_reg and _ad_reg and _want_reg != _ad_reg:
+                return no('other_region')
+        except Exception:
+            pass
         # Приложение Авито часто ТЕРЯЕТ фильтр цены, когда человек копирует
         # ссылку: в адресе нет pmax, и раньше прилетали лоты дороже лимита.
         # Поэтому границы, заданные в карточке поиска, соблюдаем и здесь.
@@ -24496,6 +24505,43 @@ def _crit_is_resume(crit: Dict) -> bool:
     hay = ' '.join(str((crit or {}).get(k) or '') for k in
                    ('filter_url', 'search_path', 'query', 'category')).lower()
     return any(w in hay for w in ('rezume', 'resume', 'vakans', 'вакан', 'резюме'))
+
+
+_REGION_NAMES = {
+    'moskva': 'Москва', 'sankt-peterburg': 'Санкт-Петербург', 'izhevsk': 'Ижевск',
+    'samara': 'Самара', 'kazan': 'Казань', 'ekaterinburg': 'Екатеринбург',
+    'novosibirsk': 'Новосибирск', 'krasnodar': 'Краснодар', 'rostov-na-donu': 'Ростов-на-Дону',
+    'nizhniy-novgorod': 'Нижний Новгород', 'chelyabinsk': 'Челябинск',
+    'ufa': 'Уфа', 'perm': 'Пермь', 'voronezh': 'Воронеж', 'volgograd': 'Волгоград',
+    'krasnoyarsk': 'Красноярск', 'omsk': 'Омск', 'tyumen': 'Тюмень',
+    'saratov': 'Саратов', 'tolyatti': 'Тольятти', 'tula': 'Тула', 'sochi': 'Сочи',
+}
+
+
+def _url_region(url: str) -> str:
+    """Регион из адреса Авито: /izhevsk/... → izhevsk. Пусто для all/rossiya."""
+    try:
+        from urllib.parse import urlsplit
+        segs = [x for x in urlsplit(str(url or '')).path.split('/') if x]
+    except Exception:
+        return ''
+    if not segs:
+        return ''
+    slug = segs[0].lower()
+    if slug in ('all', 'rossiya', 'rossiya_i_sng'):
+        return ''
+    return slug
+
+
+def _crit_region(crit: Dict) -> str:
+    """Регион, который человек выбрал в ссылке поиска ('' — вся Россия)."""
+    for key in ('filter_url', 'search_path'):
+        val = str((crit or {}).get(key) or '')
+        if val:
+            reg = _url_region(val if val.startswith('http') else 'https://www.avito.ru/' + val)
+            if reg:
+                return reg
+    return ''
 
 
 def _ad_photo_url(ad: Dict) -> str:
@@ -28716,10 +28762,16 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
     # поиска (тот регион, который человек выбрал в ссылке), чтобы находка
     # не приходила без географии.
     if not str(ad.get('city') or '').strip():
-        _fallback_city = str(crit.get('city') or '').strip()
-        if _fallback_city:
+        # Город берём из адреса самого объявления: раньше подставляли город
+        # из поиска, и лот из Москвы показывался как «Ижевск».
+        _reg = _url_region(str(ad.get('source_url') or ''))
+        _city_from_ad = _REGION_NAMES.get(_reg, '')
+        _crit_reg = _crit_region(crit)
+        if not _city_from_ad and _crit_reg and _reg == _crit_reg:
+            _city_from_ad = str(crit.get('city') or '').strip()
+        if _city_from_ad:
             ad = dict(ad)
-            ad['city'] = _fallback_city
+            ad['city'] = _city_from_ad
     median = 0
     diff = 0
     if price > 0:
@@ -29766,6 +29818,15 @@ async def api_hunt_from_link(request: aiohttp_web.Request) -> aiohttp_web.Respon
             _body_pmin = 0
         _pmax = _body_pmax or int(facts.get('price_to') or 0)
         _pmin = _body_pmin or int(facts.get('price_from') or 0)
+        # Часть ссылок кодирует цену прямо в пути: «do-10tr» = до 10 000 ₽
+        if not _pmax:
+            _m_up = re.search(r'do-(\d{1,6})(?:tr|k)?(?=[-/])', url, re.I)
+            if _m_up:
+                _pmax = int(_m_up.group(1)) * 1000
+        if not _pmin:
+            _m_low = re.search(r'ot-(\d{1,6})(?:tr|k)?(?=[-/])', url, re.I)
+            if _m_low:
+                _pmin = int(_m_low.group(1)) * 1000
         # Цену из ссылки или формы кладём в сам критерий: иначе в карточке
         # не видно «до 35 000 ₽», а сборщик не знает границу.
         crit_id = await asyncio.to_thread(
@@ -35416,12 +35477,33 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                             "reject_reason='price' WHERE crit_id=? AND status='sent' "
                             "AND ad_id IN (SELECT id FROM ads WHERE price > 0 AND price > ?)",
                             (cid, pmax))
+            # И чужие регионы: человек выбрал Ижевск — Москву в ленте не держим.
+            dropped_region = 0
+            try:
+                cur.execute("SELECT id, filter_url, search_path FROM hunt_criteria WHERE id=?",
+                            (cid,))
+                crow = cur.fetchone()
+                want_reg = _crit_region(dict(crow)) if crow else ''
+                if want_reg:
+                    cur.execute("SELECT id, ad_id FROM hunt_matches WHERE crit_id=? "
+                                "AND status='sent'", (cid,))
+                    for mr in cur.fetchall():
+                        ad = db.get_ad(int(mr['ad_id'])) or {}
+                        ad_reg = _url_region(str(ad.get('source_url') or ''))
+                        if ad_reg and ad_reg != want_reg:
+                            cur.execute("UPDATE hunt_matches SET status='rejected', "
+                                        "reject_reason='region' WHERE id=?",
+                                        (int(mr['id']),))
+                            dropped_region += 1
+            except Exception as _re:
+                logger.warning(f"set_crit_price region cleanup: {_re}")
             db.conn.commit()
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {e}'[:160]},
                                  status=500)
         return _miniapp_json({'ok': True, 'id': cid, 'max_price': pmax,
-                              'min_price': pmin, 'url': url})
+                              'min_price': pmin, 'url': url,
+                              'dropped_region': dropped_region})
 
     if action == 'grant_fast_hours':
         # Тестовый ускоренный режим: проверка ссылки каждую минуту N часов
