@@ -185,7 +185,8 @@ class SocksBridge:
             writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
             await writer.drain()
             await asyncio.gather(self._pipe(reader, w), self._pipe(r, writer))
-        except Exception:
+        except Exception as e:
+            log(f"мост: {type(e).__name__}: {str(e)[:120]}")
             try:
                 writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
                 await writer.drain()
