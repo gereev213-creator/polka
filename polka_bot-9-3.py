@@ -17916,176 +17916,37 @@ def _install_log_buffer():
 
 
 async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/diag/avito — доступен ли Авито С САМОГО СЕРВЕРА.
+    """GET /api/diag/avito?url=… — открывается ли ссылка с сервера.
 
-    Ключевой вопрос архитектуры: если с сервера Amvera Авито открывается,
-    сбор можно вести прямо здесь — без GitHub, расписаний и токенов,
-    а значит без перебоев. Если нет — нужен внешний запуск.
+    Ходит тем же путём, что и мониторинг: прокси, отпечаток браузера,
+    повторы со сменой IP. Возвращает число карточек основной выдачи.
     """
     if not await _admin_read_ok(request):
         return _miniapp_err('forbidden', 403)
-
-    out: Dict = {}
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    try:
-        import collect as collector
-    except Exception as e:
-        return _miniapp_json({'ok': False, 'stage': 'import', 'error': str(e)[:200]})
-
-    # Можно передать любую страницу Авито — инструмент для проверки
-    # точных запросов: категория, цена, размер, сортировка по дате.
+    import avito_live as _al
     url = str(request.query.get('url') or 'https://www.avito.ru/all/telefony?s=104')
-    if 'avito.ru' not in url:
-        return _miniapp_json({'ok': False, 'error': 'только avito.ru'})
-    out['url'] = url
-    # raw=1 — вернуть кусок настоящей разметки карточки. Нужно, чтобы
-    # разбирать продавца и описание по РЕАЛЬНОМУ HTML, а не по догадкам.
-    want_raw = str(request.query.get('raw') or '') == '1'
-    # Что именно требовать в заголовке — для проверки точности фильтра
-    need = [w.lower() for w in str(request.query.get('need') or '').split() if w.strip()]
+    target = _al.normalize_url(url)
+    if not target:
+        return _miniapp_json({'ok': False, 'error': 'только ссылка avito.ru'})
+    fetcher = _al.Fetcher()
+    t0 = time.time()
     try:
-        html = await asyncio.to_thread(collector.fetch, url)
-        _seller = _parse_seller(html)
-        if out is not None and (_seller.get('seller_type') or _seller.get('seller_name')):
-            out.update(_seller)
-        out['ok'] = True
-        out['bytes'] = len(html or '')
-        if want_raw:
-            # Считаем маркеры ПО ВСЕЙ странице: нужно понять, есть ли в выдаче
-            # описание и характеристики, или они только на странице объявления.
-            page = str(html or '').lower()
-            out['marks'] = {m: page.count(m.lower()) for m in (
-                'description', 'item-description', 'additionalproperty',
-                'состояние', 'цвет', 'аккумулятор', 'itemprop="description"',
-                'data-marker="item-description"', 'iva-item-description')}
-            # Что реально извлекает парсер из карточки — по составу полей
-            # Показываем, как именно выглядит описание в разметке —
-            # чтобы научить парсер его забирать.
-            try:
-                import re as _re
-                _m = _re.search(r'.{120}description.{200}', page, _re.S)
-                out['desc_context'] = _m.group(0) if _m else ''
-                _m2 = _re.search(r'.{80}аккумулятор.{120}', page, _re.S)
-                out['acc_context'] = _m2.group(0) if _m2 else ''
-            except Exception:
-                pass
-            out['parsed_keys'] = []
-            try:
-                _items = collector.parse_page(html) or []
-                if _items:
-                    out['parsed_keys'] = sorted(_items[0].keys())
-                    out['parsed_sample'] = {k: str(_items[0].get(k))[:90]
-                                            for k in list(_items[0].keys())[:12]}
-            except Exception as _e:
-                out['parsed_error'] = str(_e)[:120]
-            return _miniapp_json(out)
-        try:
-            items = collector.parse_page(html) or []
-            out['cards'] = len(items)
-            sample = []
-            matched = 0
-            for it in items:
-                title = str(it.get('title') or '')
-                low = title.lower()
-                if need:
-                    ok = True
-                    for w in need:
-                        if w.isdigit():
-                            if not re.search(r'(?<![0-9])' + re.escape(w) + r'(?![0-9])', low):
-                                ok = False
-                                break
-                        elif w not in low:
-                            ok = False
-                            break
-                    if not ok:
-                        continue
-                    matched += 1
-                sample.append({'title': title[:78], 'price': it.get('price')})
-            out['need'] = need
-            out['matched'] = matched if need else len(items)
-            out['sample'] = sample[:18]
-        except Exception as e:
-            out['cards_error'] = str(e)[:200]
-        try:
-            out['profile'] = getattr(collector, '_WORKING_PROFILE', None)
-        except Exception:
-            pass
+        html = await asyncio.wait_for(fetcher.get(target), timeout=300)
     except Exception as e:
-        out['ok'] = False
-        out['stage'] = 'fetch'
-        out['error'] = str(e)[:300]
-        out['error_type'] = type(e).__name__
-    return _miniapp_json(out)
+        return _miniapp_json({'ok': False, 'url': target,
+                              'error': f'{type(e).__name__}: {e}'[:200],
+                              'sec': round(time.time() - t0, 1)})
+    page = _al.parse_page(html)
+    return _miniapp_json({
+        'ok': True, 'url': target, 'bytes': len(html), 'cards': len(page.items),
+        'sec': round(time.time() - t0, 1),
+        'profile': os.environ.get('AVITO_IMPERSONATE', 'edge101'),
+        'proxies': len([p for p in os.environ.get('AVITO_PROXIES', '').split(',') if p.strip()]),
+        'sample': [{'id': i.id, 'title': i.title[:50], 'price': i.price,
+                    'region': i.url.split('/')[3] if i.url.count('/') > 3 else ''}
+                   for i in page.items[:5]],
+    })
 
-
-# ── Скрытые лоты ────────────────────────────────────────────────────────────
-# Человек посмотрел объявление и понял: не то. Просил убрать его из ленты и
-# из чата. Запоминаем это, чтобы лот не возвращался при следующем сборе.
-def ensure_hunt_matches():
-    """Таблица решений по находкам — источник истины для чата и ленты.
-
-    До неё лента собиралась своим SQL, а рассылка — своим кодом, и одно и то
-    же объявление могло быть в ленте и не прийти в чат без объяснения. Теперь
-    каждая пара (пользователь, объявление) хранит решение evaluate_ad: статус,
-    причину, скидку и состояние описания.
-
-    Идемпотентно: CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS.
-    """
-    cursor = db.conn.cursor()
-    try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS hunt_matches (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                crit_id INTEGER NOT NULL,
-                ad_id INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'pending_details',
-                reason TEXT DEFAULT '',
-                reject_reason TEXT DEFAULT '',
-                discount INTEGER DEFAULT 0,
-                desc_state TEXT DEFAULT '',
-                created_at TEXT,
-                updated_at TEXT,
-                delivery TEXT DEFAULT '',
-                send_attempts INTEGER DEFAULT 0,
-                send_error TEXT DEFAULT '',
-                fingerprint TEXT DEFAULT '',
-                unverified INTEGER DEFAULT 0,
-                deliver_after TEXT DEFAULT '',
-                unlocked_by_user INTEGER DEFAULT 0,
-                deep_check INTEGER DEFAULT 0,
-                notified_at TEXT,
-                UNIQUE(user_id, ad_id)
-            )
-        """)
-        cols = {r['name'] for r in cursor.execute("PRAGMA table_info(hunt_matches)").fetchall()}
-        if 'delivery' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN delivery TEXT DEFAULT ''")
-        if 'send_attempts' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_attempts INTEGER DEFAULT 0")
-        if 'send_error' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_error TEXT DEFAULT ''")
-        if 'fingerprint' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN fingerprint TEXT DEFAULT ''")
-        if 'unverified' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unverified INTEGER DEFAULT 0")
-        if 'deliver_after' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deliver_after TEXT DEFAULT ''")
-        if 'unlocked_by_user' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unlocked_by_user INTEGER DEFAULT 0")
-        if 'deep_check' not in cols:
-            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deep_check INTEGER DEFAULT 0")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_fp "
-                       "ON hunt_matches(user_id, fingerprint)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
-                       "ON hunt_matches(user_id, status)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_ad ON hunt_matches(ad_id)")
-        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_crit ON hunt_matches(crit_id)")
-        db.conn.commit()
-    except Exception as e:
-        logger.error(f"ensure_hunt_matches: {e}")
 
 
 def ensure_fingerprint_backfill(limit: int = 500) -> int:
@@ -18241,6 +18102,71 @@ def _ad_hours_ago(ad: Dict) -> Optional[int]:
             return int(hours)
     ago = ad.get('published_hours_ago')
     return None if ago is None else int(ago)
+
+
+def ensure_hunt_matches():
+    """Таблица решений по находкам — источник истины для чата и ленты.
+
+    До неё лента собиралась своим SQL, а рассылка — своим кодом, и одно и то
+    же объявление могло быть в ленте и не прийти в чат без объяснения. Теперь
+    каждая пара (пользователь, объявление) хранит решение evaluate_ad: статус,
+    причину, скидку и состояние описания.
+
+    Идемпотентно: CREATE TABLE IF NOT EXISTS + CREATE INDEX IF NOT EXISTS.
+    """
+    cursor = db.conn.cursor()
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS hunt_matches (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                crit_id INTEGER NOT NULL,
+                ad_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending_details',
+                reason TEXT DEFAULT '',
+                reject_reason TEXT DEFAULT '',
+                discount INTEGER DEFAULT 0,
+                desc_state TEXT DEFAULT '',
+                created_at TEXT,
+                updated_at TEXT,
+                delivery TEXT DEFAULT '',
+                send_attempts INTEGER DEFAULT 0,
+                send_error TEXT DEFAULT '',
+                fingerprint TEXT DEFAULT '',
+                unverified INTEGER DEFAULT 0,
+                deliver_after TEXT DEFAULT '',
+                unlocked_by_user INTEGER DEFAULT 0,
+                deep_check INTEGER DEFAULT 0,
+                notified_at TEXT,
+                UNIQUE(user_id, ad_id)
+            )
+        """)
+        cols = {r['name'] for r in cursor.execute("PRAGMA table_info(hunt_matches)").fetchall()}
+        if 'delivery' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN delivery TEXT DEFAULT ''")
+        if 'send_attempts' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_attempts INTEGER DEFAULT 0")
+        if 'send_error' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN send_error TEXT DEFAULT ''")
+        if 'fingerprint' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN fingerprint TEXT DEFAULT ''")
+        if 'unverified' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unverified INTEGER DEFAULT 0")
+        if 'deliver_after' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deliver_after TEXT DEFAULT ''")
+        if 'unlocked_by_user' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN unlocked_by_user INTEGER DEFAULT 0")
+        if 'deep_check' not in cols:
+            cursor.execute("ALTER TABLE hunt_matches ADD COLUMN deep_check INTEGER DEFAULT 0")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_fp "
+                       "ON hunt_matches(user_id, fingerprint)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_user "
+                       "ON hunt_matches(user_id, status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_ad ON hunt_matches(ad_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hunt_matches_crit ON hunt_matches(crit_id)")
+        db.conn.commit()
+    except Exception as e:
+        logger.error(f"ensure_hunt_matches: {e}")
 
 
 def ensure_description_lower(limit: int = 500) -> int:
@@ -19512,10 +19438,19 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
                        else ('пустая' if not str(v).strip() else f'задана ({len(str(v))} симв.)'))
         return info
     out['env_keys'] = _key_info('YANDEX_API_KEY', 'YANDEX_FOLDER_ID',
-                                'LLM_API_KEY', 'GROQ_API_KEY', 'INGEST_TOKEN')
+                                'LLM_API_KEY', 'GROQ_API_KEY')
     out['ai_ready'] = bool(LLM_API_KEY or GROQ_API_KEY)
-    out['collector_enabled'] = COLLECTOR_ENABLED
-    out['collector_inline'] = COLLECTOR_INLINE
+    try:
+        _lr = globals().get('_LIVE_RUNNER')
+        _w = _lr.watcher if _lr else None
+        out['avito_live'] = {
+            'on': bool(_lr),
+            'links': len(_lr.store.active_by_url()) if _lr else 0,
+            'proxies': len([p for p in os.environ.get('AVITO_PROXIES', '').split(',') if p.strip()]),
+            'blocked_links': len(_w._blocks) if _w else 0,
+        }
+    except Exception as _e:
+        out['avito_live'] = {'error': str(_e)[:80]}
     out['collector'] = collector_status()
     out['settings'] = {
         'collector_crashed': _setting_get('collector_crashed') or 'нет',
@@ -20315,8 +20250,6 @@ def _admin_read_token_ok(request) -> str:
     ADMIN_READ_TOKEN (или вход администратора в Mini App).
     """
     got = request.headers.get('X-Admin-Token', '')
-    if not got:
-        got = request.headers.get('X-Ingest-Token', '')
     if not got and os.environ.get('ALLOW_QUERY_TOKEN', '0') == '1':
         got = request.query.get('token', '')
     return str(got or '')
@@ -20342,119 +20275,6 @@ async def _admin_read_ok(request) -> bool:
         if int(_viewer or 0) in ADMIN_TELEGRAM_IDS:
             return True
     return False
-
-
-def _ingest_token_ok(request) -> str:
-    """Токен сборщика: только заголовок X-Ingest-Token (этап D9).
-
-    В query (?token=) он попадал в логи прокси, в историю и в реферреры —
-    поэтому по умолчанию query-токен не принимается. На переходный период
-    старый способ включается флагом ALLOW_QUERY_TOKEN=1.
-    """
-    got = request.headers.get('X-Ingest-Token', '')
-    if not got and os.environ.get('ALLOW_QUERY_TOKEN', '0') == '1':
-        got = request.query.get('token', '')
-    return str(got or '')
-
-
-async def api_ingest_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/ingest — приём находок от сборщика (запускается у вас локально).
-
-    Сбор идёт с домашнего IP, а не с сервера: Авито блокирует адреса
-    дата-центров, и при блокировке лёг бы весь сервис вместе с ботом.
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    try:
-        body = await request.json()
-    except Exception:
-        return _miniapp_err('bad_json', 400)
-    source = str((body or {}).get('source') or 'other').lower()
-    items = (body or {}).get('items') or []
-    if not isinstance(items, list):
-        return _miniapp_err('bad_items', 400)
-    # Партия со страницы ссылки: сборщик говорит, каким поискам её примерять.
-    # Без этого списка ссылочные критерии не трогаем вовсе (см. recompute):
-    # лот из чужой выдачи находкой по чужой ссылке не является.
-    crit_ids: List[int] = []
-    try:
-        _cids = (body or {}).get('crit_ids') or []
-        if isinstance(_cids, (int, str)):
-            _cids = [_cids]
-        for _c in _cids:
-            _c = int(_c)
-            if _c > 0 and _c not in crit_ids:
-                crit_ids.append(_c)
-        crit_ids = crit_ids[:20]
-    except Exception:
-        crit_ids = []
-    started = _time.monotonic()
-    # Ограничение размера партии НА СЕРВЕРЕ: сборщик уже шлёт по 400 карточек,
-    # но если придёт старый сборщик или ручной запрос на десятки тысяч — один
-    # такой запрос держал блокировку записи минутами (в статистике были вызовы
-    # по 93 секунды) и приложение переставало отвечать. Режем на порции сами.
-    MAX_INGEST_CHUNK = 400
-    if len(items) > MAX_INGEST_CHUNK:
-        total = {'accepted': 0, 'duplicate': 0, 'skipped': 0, 'ids': [],
-                 'all_ids': [], 'need_details': []}
-        logger.info(f"ingest {source}: большая партия {len(items)} — режу на порции "
-                    f"по {MAX_INGEST_CHUNK}")
-        for start in range(0, len(items), MAX_INGEST_CHUNK):
-            part = await asyncio.to_thread(_db_locked, ingest_findings,
-                                           items[start:start + MAX_INGEST_CHUNK], source,
-                                           crit_ids)
-            for key in ('accepted', 'duplicate', 'skipped'):
-                total[key] += int(part.get(key) or 0)
-            total['ids'].extend(part.get('ids') or [])
-            total['all_ids'].extend(part.get('all_ids') or [])
-            total['need_details'].extend(part.get('need_details') or [])
-        stats = total
-    elif os.environ.get('INGEST_ASYNC', '1') == '1':
-        # Этап K2: разбор, дедуп и вставка — в рабочем потоке. Синхронный
-        # вызов блокировал цикл событий: пока шла партия, не отвечали ни
-        # лента, ни бот, и человек видел «плохое подключение к интернету».
-        stats = await asyncio.to_thread(_db_locked, ingest_findings, items, source,
-                                        crit_ids)
-    else:
-        # Откат (K8): старое поведение — синхронно в обработчике
-        stats = ingest_findings(items, source, crit_ids)
-    _touch_collector(source)
-    # Диагностика версии сборщика: новая версия помечает партию ссылки
-    # crit_ids. Если в /api/diag last_crit_ids так и остаётся 0 — на ноуте
-    # ещё старый collect.py.
-    try:
-        _INGEST_STATS['last_crit_ids'] = len(crit_ids)
-        if crit_ids:
-            _INGEST_STATS['link_pushes'] = int(_INGEST_STATS.get('link_pushes') or 0) + 1
-            _INGEST_STATS['last_link_at'] = get_moscow_time().isoformat()
-    except Exception:
-        pass
-    took_ms = int((_time.monotonic() - started) * 1000)
-    _INGEST_STATS['last_ms'] = took_ms
-    _INGEST_STATS['last_n'] = len(items)
-    _INGEST_STATS['last_at'] = get_moscow_time().isoformat()
-    if took_ms > SLOW_REQUEST_MS:
-        logger.warning(f"ingest {source}: {len(items)} шт. заняли {took_ms} мс")
-    logger.info(f"ingest {source}: принято {stats['accepted']}, "
-                f"дублей {stats['duplicate']}, пропущено {stats['skipped']}")
-    # Рассылка уходит в ФОН. Раньше она выполнялась прямо в обработчике
-    # запроса: при отправке 300 находок сервер прогонял тысячи запросов к
-    # базе, и всё это время приложение не могло получить ответ — висело на
-    # загрузке. Теперь отвечаем сразу, а рассылка идёт параллельно.
-    pushed = 0
-    # Ссылочная партия может не добавить новых строк в ads (лот уже был в
-    # базе по другому поиску), но находкой по этой ссылке он быть обязан —
-    # поэтому будим рассылку и после scoped-пересчёта.
-    if stats['accepted'] or crit_ids:
-        try:
-            hunt_wake()
-        except Exception as e:
-            logger.warning(f"hunt notify start: {e}")
-    return _miniapp_json({'ok': True, 'source': source, 'pushed': pushed, **stats})
 
 
 # ── Видео-инструкция «как получить ссылку с Авито» ─────────────────────────
@@ -21375,53 +21195,6 @@ def _criterion_sell_speed(crit: Dict) -> Optional[int]:
     return int(round(sum(hours) / len(hours)))
 
 
-# ── Сборщик находок на сервере ──────────────────────────────────────────────
-# Раньше он запускался только на компьютере владельца, и продукт умирал,
-# стоило тому выключиться. Теперь это фоновый процесс рядом с ботом.
-# Блокировка Авито не ломает сервис: страдает только сбор находок, а бот,
-# подписки и приложение продолжают работать.
-# Сборщик на сервере ВЫКЛЮЧЕН и включать его не стоит.
-# Проверено дважды: с 16 категориями и с 6 — контейнер Amvera уходит в
-# перезапуск (сайт отвечает то 200, то 503) и сервис ложится. Ему не хватает
-# ресурсов на второй python-процесс рядом с rembg. Сбор идёт с Mac,
-# где памяти достаточно (служба com.polka.collector).
-# Сбор идёт НА САМОМ СЕРВЕРЕ, внутри процесса бота.
-#
-# Проверено: Авито доступен с Amvera — 50 карточек с категории, отпечаток
-# safari, полтора мегабайта страницы. Поэтому сбор здесь надёжнее внешнего:
-# не зависит ни от расписаний GitHub (они терялись), ни от чьего-то
-# включённого компьютера, ни от токенов.
-#
-# Раньше контейнер падал при сборе — но причина была не в Авито, а в
-# рассылке: она выполнялась прямо в обработчике запроса, блокировала
-# сервер, и Amvera перезапускала контейнер. Рассылка переведена в фон,
-# поэтому сбор теперь безопасен. На всякий случай работает предохранитель:
-# если контейнер всё-таки упадёт, сбор выключится сам и придёт уведомление.
-# ВНИМАНИЕ: старые переменные COLLECTOR_ENABLED и COLLECTOR_INLINE больше
-# не используются. Раньше они включали и выключали сбор, и в Amvera
-# осталась переменная с запретом — из-за неё сбор молча не запускался,
-# хотя код был готов. Теперь сбор включён всегда, а выключить его можно
-# только явной переменной POLKA_NO_COLLECTOR=1.
-_DISABLED_BY_ENV = os.environ.get('POLKA_NO_COLLECTOR', '') == '1'
-COLLECTOR_ENABLED = not _DISABLED_BY_ENV
-# Сколько категорий обходить на сервере (0 = все). Шесть — компромисс
-# между покрытием и памятью контейнера.
-COLLECTOR_MAX_CATEGORIES = os.environ.get('POLKA_MAX_CATEGORIES', '2')
-# 15 минут вместо 5: Авито начинает ограничивать при частых запросах,
-# а для находок этого достаточно — за 15 минут появляется 1–2 объявления.
-# Раз в 5 минут. Лот на Авито живёт минуты: перекуп должен успеть
-# позвонить первым, поэтому час ожидания бессмыслен.
-COLLECTOR_INTERVAL = int(os.environ.get('COLLECTOR_INTERVAL', '1800'))
-COLLECTOR_BLOCK_HOURS = float(os.environ.get('COLLECTOR_BLOCK_HOURS', '6'))
-
-
-# ── Сбор внутри процесса бота ───────────────────────────────────────────────
-# Раньше сборщик запускался ВТОРЫМ интерпретатором Python, и контейнер
-# Amvera уходил в перезапуск: не хватало памяти на два процесса. Теперь
-# сбор идёт в этом же процессе, в отдельном потоке — интерпретатор один.
-COLLECTOR_INLINE = not _DISABLED_BY_ENV
-
-
 def _setting_get(key: str, default: str = '') -> str:
     try:
         cur = db.conn.cursor()
@@ -21451,530 +21224,131 @@ def _setting_set(key: str, value: str):
         logger.warning(f"setting {key}: {e}")
 
 
-async def _notify_admins_collector_disabled(why: str):
-    app = _get_bot_app()
-    if not app:
-        return
-    for admin_id in ADMIN_USER_IDS:
-        try:
-            await app.bot.send_message(
-                chat_id=admin_id,
-                text=(" <b>Сбор находок выключен</b>\n\n" + why +
-                      "\n\nБот и приложение работают. Сбор возобновится сам "
-                      "через час. Если падения повторятся — снизьте нагрузку: "
-                      "<code>POLKA_MAX_CATEGORIES=1</code>"),
-                parse_mode=ParseMode.HTML)
-        except Exception:
-            pass
+# ── Мост: ссылочные поиски бота → быстрый мониторинг avito_live ─────────────
+# Новый парсер живёт в своей БД и отправляет находки сам. Этот цикл раз в 30 с
+# сверяет активные ссылочные поиски (hunt_criteria) со слежениями avito_live:
+# новый поиск → слежение, пауза/удаление/истёк пробный период → слежение выключается,
+# смена тарифа → меняется частота опроса (_link_check_min).
+_LIVE_CRIT_LIMITS: Dict[int, tuple] = {}
 
 
-async def _collector_details_pass(collector, cfg: Dict, limit: int = 4) -> int:
-    """Приносит описания и данные продавца для карточек, которым это нужно.
+def _live_item_filter(watch, item) -> bool:
+    """Граница цены из поиска: Авито часто теряет фильтр цены при копировании ссылки."""
+    lim = _LIVE_CRIT_LIMITS.get(int(getattr(watch, 'crit_id', 0) or 0))
+    if not lim or not item.price:
+        return True          # резюме и вакансии без цены пропускаем как есть
+    pmin, pmax = lim
+    if pmax and item.price > pmax:
+        return False
+    if pmin and item.price < pmin:
+        return False
+    return True
 
-    Без описания сервер не может проверить «частник / состояние / АКБ», и
-    человек получает лоты, которые не просил. Раньше этим занимался только
-    ноутбук, и в базе почти не было описаний (desc_state пустой у 4267 из
-    4267). Просим немного за проход и останавливаемся после двух блокировок.
+
+def _live_item_dict(item) -> Dict:
+    """Карточка avito_live → формат ingest_findings (общий конвейер находок)."""
+    try:
+        age = item.age()
+        hours = int(age / 3600.0) if age is not None else None
+    except Exception:
+        hours = None
+    return {
+        'title': str(getattr(item, 'title', '') or '')[:200],
+        'price': int(getattr(item, 'price', 0) or 0),
+        'url': str(getattr(item, 'url', '') or ''),
+        'external_id': str(getattr(item, 'id', '') or ''),
+        'city': str(getattr(item, 'location', '') or '')[:100],
+        'photos': [item.image] if getattr(item, 'image', None) else [],
+        'hours_ago': hours,
+        'seller_type': '',
+    }
+
+
+async def _live_ingest_sink(watch, item) -> None:
+    """Находка avito_live → общий конвейер: hunt_matches → бот и лента.
+
+    Раньше avito_live отправлял сам, и находки не попадали в «Находки» в
+    приложении. Теперь карточка идёт туда же, куда шли находки сборщика.
     """
     try:
-        need = await asyncio.to_thread(hunt_need_details, None, limit)
-    except Exception as e:
-        logger.warning(f"details queue: {e}")
-        return 0
-    if not need:
-        return 0
-    logger.info(f"details: открываю {len(need)} карточек")
-    items, blocked, done = [], 0, 0
-    for ad in need[:limit]:
-        # Очередь отдаёт поле 'url', а не 'source_url' (hunt_need_details
-        # собирает {'external_id','url','id'}). Раньше проход читал
-        # source_url, получал пусто и МОЛЧА пропускал все карточки — поэтому
-        # описаний так и не появилось.
-        url = str(ad.get('url') or ad.get('source_url') or '')
-        ext = str(ad.get('external_id') or '')
-        if not url.startswith('http') or not ext:
-            continue
+        stats = await asyncio.to_thread(
+            _db_locked, ingest_findings, [_live_item_dict(item)], 'avito',
+            [int(watch.crit_id)])
         try:
-            html = await asyncio.to_thread(collector.fetch_item, url, 25)
-        except Exception as e:
-            logger.info(f"details fetch: {e}")
-            html = ''
-        if not html:
-            blocked += 1
-            if blocked >= 2:
-                break
-            continue
-        try:
-            data = await asyncio.to_thread(collector.parse_item_page, html)
+            _INGEST_STATS['last_n'] = 1
+            _INGEST_STATS['last_at'] = get_moscow_time().isoformat()
+            _INGEST_STATS['last_crit_ids'] = 1
         except Exception:
+            pass
+        if stats.get('accepted') or stats.get('all_ids'):
+            hunt_wake()
+    except Exception as e:
+        logger.warning(f'avito_live ingest: {type(e).__name__}: {e}')
+
+
+def _live_collect_desired():
+    """Возвращает ({(user_id, url): (crit_id, interval_sec)}, {crit_id: (pmin, pmax)})."""
+    import avito_live as _al
+    sql = ("SELECT hc.id, hc.user_id, COALESCE(hc.filter_url,'') AS filter_url, "
+           "COALESCE(hc.search_path,'') AS search_path, "
+           "COALESCE(hc.search_filters,'') AS search_filters, "
+           "COALESCE(hc.search_user,'') AS search_user, COALESCE(hc.from_link,0) AS from_link, "
+           "COALESCE(hc.min_price,0) AS pmin, COALESCE(hc.max_price,0) AS pmax "
+           "FROM hunt_criteria hc ")
+    try:
+        rows = db.conn.execute(
+            sql + "LEFT JOIN users u ON u.user_id=hc.user_id "
+                  "WHERE COALESCE(hc.active,1)=1 AND COALESCE(u.platform,'telegram')<>'max'").fetchall()
+    except Exception:
+        rows = db.conn.execute(sql + "WHERE COALESCE(hc.active,1)=1").fetchall()
+    desired, limits, minutes = {}, {}, {}
+    for r in rows:
+        url = str(r['filter_url'] or '').strip()
+        if not url.lower().startswith('http'):
+            path = str(r['search_path'] or '').strip('/')
+            if not (int(r['from_link'] or 0) and path
+                    and re.match(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){1,8}$', path)):
+                continue          # поиск словами без ссылки: этим занимался старый сборщик
+            qs = []
+            extra = str(r['search_filters'] or '').strip().lstrip('&')
+            if extra:
+                qs.append(extra)
+            if str(r['search_user'] or '') == '1':
+                qs.append('user=1')
+            url = 'https://www.avito.ru/' + path + ('?' + '&'.join(qs) if qs else '')
+        norm = _al.normalize_url(url)
+        if not norm:
             continue
-        if not data:
-            continue
-        items.append({
-            'external_id': ext,
-            'description': str(data.get('description') or '')[:4000],
-            'seller_type': str(data.get('seller_type') or ''),
-            'seller_name': str(data.get('seller_name') or ''),
-            'seller_ads': int(data.get('seller_ads') or 0),
-            'state': 'ok' if str(data.get('description') or '') else 'failed',
-        })
-        done += 1
-        await asyncio.sleep(2.5)   # не долбим Авито
-    # Неудачи тоже отправляем: сервер увеличит desc_attempts, и карточка
-    # не будет вечно висеть первой в очереди (иначе проход каждые 5 минут
-    # пытался открывать одну и ту же карточку).
-    failed = [{'external_id': ext, 'state': 'failed'}
-              for ext in _details_failed_ids(need, items)]
-    if items or failed:
-        try:
-            await asyncio.to_thread(collector.push_details, cfg['server'],
-                                    cfg['token'], 'avito', items + failed)
-            logger.info(f"details: принесли {done} описаний, не удалось {len(failed)}")
-        except Exception as e:
-            logger.warning(f"details push: {e}")
-    return done
+        uid = int(r['user_id'])
+        if uid not in minutes:
+            try:
+                minutes[uid] = max(1, int(_link_check_min(uid)))
+            except Exception:
+                minutes[uid] = 5
+        desired[(uid, norm)] = (int(r['id']), minutes[uid] * 60)
+        limits[int(r['id'])] = (int(r['pmin'] or 0), int(r['pmax'] or 0))
+    return desired, limits
 
 
-def _details_failed_ids(need: List[Dict], items: List[Dict]) -> List[str]:
-    '''Какие карточки не удалось открыть — их помечаем failed.'''
-    ok_ids = {str(i.get('external_id')) for i in items}
-    out = []
-    for ad in need:
-        ext = str(ad.get('external_id') or '')
-        if ext and ext not in ok_ids:
-            out.append(ext)
-    return out
-
-
-_COLLECTOR_TASK = None
-
-
-async def _collector_watchdog() -> None:
-    """Перезапускает сбор, если проход завис дольше 25 минут.
-
-    Было: поток сбора вис внутри сетевого вызова, флаг pass_running
-    оставался '1', и находки не приходили часами. Обычный таймаут прохода
-    не спасал, если зависание было до него. Сторож раз в 5 минут смотрит
-    на время старта прохода и перезапускает задачу целиком.
-    """
-    await asyncio.sleep(120)
+async def _live_link_sync_loop() -> None:
+    await asyncio.sleep(15)
     while True:
         try:
-            running = str(_setting_get('collector_pass_running') or '') == '1'
-            try:
-                started = int(cfg_get('collector_pass_started_ts') or 0)
-            except Exception:
-                started = 0
-            stale = (started > 0 and (_time.time() - started) > 25 * 60)
-            if running and stale and _COLLECTOR_TASK is not None:
-                logger.warning("Сбор: проход висит >25 мин — перезапускаю задачу сбора")
-                _COLLECTOR_TASK.cancel()
-                await asyncio.sleep(2)
-                _setting_set('collector_pass_running', '0')
-                globals()['_COLLECTOR_TASK'] = asyncio.create_task(
-                    _collector_inline_loop())
+            runner = globals().get('_LIVE_RUNNER')
+            if runner is not None:
+                desired, limits = _live_collect_desired()
+                _LIVE_CRIT_LIMITS.clear()
+                _LIVE_CRIT_LIMITS.update(limits)
+                added, removed = await asyncio.to_thread(runner.store.sync_criteria, desired)
+                if added or removed:
+                    logger.info(f"avito_live: поиски синхронизированы, +{added} −{removed}, "
+                                f"активных ссылок: {len(desired)}")
         except asyncio.CancelledError:
             raise
         except Exception as e:
-            logger.warning(f"collector watchdog: {e}")
-        await asyncio.sleep(300)
+            logger.warning(f"avito_live sync: {type(e).__name__}: {e}")
+        await asyncio.sleep(30)
 
-
-async def _collector_inline_loop():
-    """Собирает находки в этом же процессе — без второго интерпретатора."""
-    if not COLLECTOR_ENABLED or not COLLECTOR_INLINE:
-        return
-    # Рантайм-переключатель: если сбор идёт на домашнем ноутбуке, серверный
-    # надо выключить, иначе они дублируют друг друга и жгут IP/лимиты.
-    # Настройка читается каждый проход, перезапуск не нужен.
-    if str(cfg_get('collector.inline') or '1') == '0':
-        logger.info("Серверный сбор выключен (collector.inline=0) — сбор на ноутбуке")
-        # Ждём, пока не включат обратно: настройку можно менять без рестарта.
-        while str(cfg_get('collector.inline') or '1') == '0':
-            await asyncio.sleep(300)
-        logger.info("Серверный сбор снова включён (collector.inline=1)")
-    # Защита от вечного падения: если прошлый запуск завершился аварийно
-    # с включённым сборщиком, второй раз не рискуем — иначе сервис будет
-    # перезапускаться по кругу и ляжет целиком.
-    # Отметка ставится НЕ при старте, а на время самого прохода. Поэтому
-    # обычный перезапуск при деплое её не оставляет, и предохранитель
-    # больше не принимает деплой за падение — раньше из-за этого при
-    # каждом обновлении приходило ложное «сбор выключен».
-    if _setting_get('collector_pass_running') == '1':
-        cooldown = _setting_get('collector_crashed')
-        hours = _hours_since(cooldown)
-        # Час, а не сутки: сутки тишины — слишком дорогая цена за один
-        # сбой. Предохранитель и так не даёт падать по кругу.
-        if hours is None or hours < 1:
-            _setting_set('collector_pass_running', '')
-            logger.warning(f"Контейнер падал во время сбора {hours} ч назад — пауза.")
-            await _notify_admins_collector_disabled(
-                "Контейнер упал ВО ВРЕМЯ сбора — выключаю его, чтобы сервис "
-                "не падал по кругу. Попробую снова через сутки.\n\n"
-                "Если это будет повторяться, уменьшите нагрузку: "
-                "POLKA_MAX_CATEGORIES=2")
-            return
-        logger.info("С прошлого падения прошли сутки — пробую сбор снова")
-        _setting_set('collector_pass_running', '')
-    token = os.environ.get('INGEST_TOKEN', '')
-    if not token:
-        logger.warning("Сборщик находок ждёт INGEST_TOKEN")
-        return
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-    if path not in sys.path:
-        sys.path.insert(0, path)
-    try:
-        import collect as collector
-    except Exception as e:
-        logger.warning(f"сборщик не импортирован: {e}")
-        return
-    # Серверный режим: не даём сборщику спать внутри прохода (см.
-    # block_cool_down) — иначе проход висит часами и pass_running не гаснет.
-    try:
-        collector.NO_BLOCK_SLEEP = True
-        # Сбрасываем накопленный блок-бэкофф: сервер сам решает паузы,
-        # а старый счётчик заставлял сборщика спать минутами.
-        collector._BLOCK_BACKOFF[0] = 0
-        # Режим q= держим в модуле сборщика в актуальном состоянии: от него
-        # зависит, сохраняет ли ссылочный поиск текст запроса (q=) в адресе.
-        collector.SEARCH_BY_QUERY = str(cfg_get('collector.search_by_query') or '0') == '1'
-    except Exception:
-        pass
-    logger.info(f"Сбор находок запущен внутри процесса: раз в {COLLECTOR_INTERVAL} с, "
-                f"{COLLECTOR_MAX_CATEGORIES} категорий")
-    first = True
-    while True:
-        try:
-            cfg = {
-                'server': f"http://127.0.0.1:{WEBAPP_PORT}",
-                'token': token,
-            }
-            # Цели: сначала страницы ПО КРИТЕРИЯМ — категория, цена и
-            # сортировка по дате, то есть фильтрует сам Авито. Именно они
-            # дают перекупу то, что он ищет, и именно их надо обходить
-            # часто. Плюс пара общих категорий — на случай находок, о
-            # которых человек не догадался.
-            # Пауза после блокировки: пока не истекла — не трогаем Авито вовсе.
-            try:
-                blocked = int(cfg_get('collector.blocked_until_ts') or 0)
-            except Exception:
-                blocked = 0
-            if blocked and blocked > _time.time():
-                left = int((blocked - _time.time()) / 60)
-                logger.info(f"Сбор на паузе после блокировки Авито: ещё {left} мин")
-                await asyncio.sleep(min(300, max(60, left * 60)))
-                continue
-            # Часовая квота запросов к Авито: чаще — гарантированный 429.
-            # Считаем по окну в 60 минут и храним в настройках.
-            try:
-                _hour_key = get_moscow_time().strftime('%Y-%m-%dT%H')
-                if str(_setting_get('collector.req_hour', '')) != _hour_key:
-                    _setting_set('collector.req_hour', _hour_key)
-                    _setting_set('collector.req_count', '0')
-                _req_count = int(cfg_get('collector.req_count') or 0)
-            except Exception:
-                _req_count = 0
-            _req_cap = int(cfg_get('collector.req_cap') or 4)
-            if _req_count >= _req_cap:
-                logger.info(f"Сбор ждёт: исчерпана часовая квота {_req_cap} запросов к Авито")
-                await asyncio.sleep(600)
-                continue
-
-            # Дневной лимит трафика: пробный прокси на 300 МБ, поэтому
-            # считаем расход и останавливаемся, когда дневная норма выбрана.
-            try:
-                _budget = float(cfg_get('collector.budget_mb_day') or 30)
-            except Exception:
-                _budget = 30.0
-            try:
-                _today_key = get_moscow_time().strftime('%Y-%m-%d')
-                if str(_setting_get('collector.used_day', '')) != _today_key:
-                    _setting_set('collector.used_day', _today_key)
-                    _setting_set('collector.used_mb', '0')
-                _used_mb = float(cfg_get('collector.used_mb') or 0)
-            except Exception:
-                _used_mb = 0.0
-            if _budget > 0 and _used_mb >= _budget:
-                logger.info(f"Сбор на паузе: дневной лимит трафика {_budget:.0f} МБ исчерпан")
-                await asyncio.sleep(1800)
-                continue
-
-            # Прокси из настроек: без него Авито блокирует серверный IP
-            try:
-                _proxy_val = str(_setting_get('collector.proxy', '') or '')
-                if _proxy_val:
-                    collector.PROXY = _proxy_val
-            except Exception:
-                pass
-            crit_targets = []
-            try:
-                # Ротация по пользователям: каждый проход проверяет ОДИН
-                # поиск одного человека, и очередь сама переходит дальше.
-                # Так при любом числе пользователей каждый получает свою
-                # долю внимания, а не только самый активный.
-                crit_targets = await asyncio.to_thread(
-                    collector.rotation_batch, cfg['server'], cfg['token'],
-                    int(_setting_get('collector.pass_no') or 0), 1)
-            except Exception as e:
-                logger.warning(f"цели по критериям: {e}")
-            try:
-                base_targets = collector.default_targets()
-            except Exception:
-                base_targets = []
-            # Авито блокирует за серию запросов: 19 критериев подряд — это
-            # гарантированный 439. Идём по кругу по 3 цели за проход, чтобы
-            # каждый критерий получал свой шанс, но не за один заход.
-            try:
-                _pass_no = int(_setting_get('collector.pass_no') or 0) + 1
-            except Exception:
-                _pass_no = 1
-            _setting_set('collector.pass_no', str(_pass_no))
-            # 1 цель за проход: страница Авито тяжёлая, а прокси у нас на 300 МБ
-            _limit = int(cfg_get('collector.targets') or 0) or int(
-    os.environ.get('POLKA_PASS_TARGETS', '2') or 2)
-            # Частота проверки одного поиска (минуты). Держим в настройках,
-            # чтобы менять без релиза: больше частота — больше трафика.
-            try:
-                _check_every = int(cfg_get('hunt.check_interval_min') or 60)
-            except Exception:
-                _check_every = 60
-            cfg['check_interval_min'] = max(5, _check_every)
-            # Режим «поиск по запросу» и число целей за проход — из настроек:
-            # можно включать/выключать без деплоя.
-            try:
-                cfg['search_by_query'] = str(cfg_get('collector.search_by_query') or '0')
-            except Exception:
-                cfg['search_by_query'] = '0'
-            try:
-                cfg['max_targets'] = int(cfg_get('collector.targets') or 4)
-            except Exception:
-                cfg['max_targets'] = 4
-            _rotated = crit_targets[_pass_no % max(1, len(crit_targets)):] + \
-                crit_targets[:_pass_no % max(1, len(crit_targets))]
-            cfg['targets'] = _rotated[:_limit] + base_targets[:1]
-            logger.info(f"Сбор: целей по критериям {len(crit_targets)}, "
-                        f"общих {len(cfg['targets']) - len(crit_targets)}")
-            # Отметка «сбор идёт». Снимается в finally ниже. Останется
-            # только если процесс умер ВО ВРЕМЯ сбора — это и есть признак
-            # настоящего падения, в отличие от обычного перезапуска
-            # при деплое.
-            # Если прошлый проход «завис» (сборщик ждал Авито бесконечно),
-            # сбрасываем флаг: иначе сбор стоит часами, а люди не получают
-            # находок. Старше 25 минут — считаем зависшим.
-            try:
-                _prev_start = int(cfg_get('collector_pass_started_ts') or 0)
-            except Exception:
-                _prev_start = 0
-            if str(_setting_get('collector_pass_running') or '') == '1' and _prev_start:
-                if _time.time() - _prev_start > 25 * 60:
-                    logger.warning("Сбор: прошлый проход висел >25 мин — сбрасываю флаг")
-                    _setting_set('collector_pass_running', '0')
-            _setting_set('collector_pass_running', '1')
-            _setting_set('collector_pass_started_ts', str(int(_time.time())))
-            # collect.py завершает себя кодом 3, когда Авито отдаёт 429.
-            # SystemExit, поднятый в отдельном потоке, убивает ВЕСЬ процесс:
-            # бот падал, перезапускался, снова получал 429 и падал опять.
-            # Ловим здесь и превращаем в обычную паузу.
-            try:
-                sent = await asyncio.wait_for(
-                    asyncio.to_thread(collector.run_once, cfg), timeout=540)
-                try:
-                    _st = dict(getattr(collector, 'PASS_STATS', {}) or {})
-                    if _st:
-                        logger.info(
-                            "Сбор: целей %s, страниц ок %s, ошибок %s, "
-                            "пропущено свежих %s, блок %s, отправлено %s",
-                            _st.get('targets'), _st.get('pages_ok'),
-                            _st.get('pages_failed'), _st.get('skipped_recent'),
-                            _st.get('blocked'), _st.get('sent'))
-                        _setting_set('collector.last_pass', json.dumps(_st)[:400])
-                except Exception:
-                    pass
-            except asyncio.TimeoutError:
-                logger.warning("Сбор: проход длится больше 9 минут — прерываю")
-                _setting_set('collector_pass_running', '0')
-                sent = 0
-            except SystemExit as _se:
-                _collector_inline_loop._last_blocked = True
-                # 439/429 — блокировка Авито. Раньше мы ждали обычные 5 минут
-                # и снова получали блок: сбор не работал часами. Теперь пауза
-                # растёт и сохраняется в настройке, чтобы перезапуск её не сбрасывал.
-                try:
-                    prev = int(cfg_get('collector.blocked_until_ts') or 0)
-                    # Пауза короче: одиночные блоки по конкретным URL теперь
-                    # не роняют проход, поэтому 90 минут простоя не нужны.
-                    wait_min = 30 if not prev or prev < _time.time() else 90
-                    # Если блоки идут подряд, IP уже «замечен» — нужен
-                    # длинный отдых, иначе площадка держит блок сутками.
-                    try:
-                        streak = int(cfg_get('collector.blocks_streak') or 0) + 1
-                    except Exception:
-                        streak = 1
-                    _setting_set('collector.blocks_streak', str(streak))
-                    if streak >= 3:
-                        wait_min = 180
-                        logger.warning(f"Блоки подряд ({streak}) — отдыхаю {wait_min} мин")
-                except Exception:
-                    wait_min = 45
-                _setting_set('collector.blocked_until_ts', str(int(_time.time() + wait_min * 60)))
-                logger.warning(
-                    f"Авито ограничил запросы (код {_se.code}) — пауза {wait_min} мин, "
-                    f"иначе блок только усиливается")
-                sent = 0
-            except BaseException as _be:
-                logger.warning(
-                    f"Сбор прерван: {type(_be).__name__}: {str(_be)[:140]}")
-                sent = 0
-            # Освобождаем память сразу после прохода: страницы Авито весят
-            # по 2,5 МБ, и на слабом тарифе они копились до перезапуска
-            try:
-                import gc
-                gc.collect()
-            except Exception:
-                pass
-            _collector_inline_loop._last_blocked = False
-            _setting_set('collector.blocks_streak', '0')
-            try:
-                _setting_set('collector.req_count', str(int(cfg_get('collector.req_count') or 0) + 1))
-            except Exception:
-                pass
-            # Описания и продавцы — ПОСЛЕ сбора и с таймаутом: раньше этот
-            # проход стоял в начале и подвешивал весь сбор (pass_running=1,
-            # объявления не приходили часами).
-            try:
-                await asyncio.wait_for(
-                    _collector_details_pass(collector, cfg, limit=3), timeout=150)
-            except asyncio.TimeoutError:
-                logger.warning("details pass: таймаут 150 с — пропускаю")
-            except Exception as _dpe:
-                logger.warning(f"details pass: {_dpe}")
-            try:
-                _mb = collector.FETCH_BYTES[0] / (1024 * 1024)
-                collector.FETCH_BYTES[0] = 0
-                try:
-                    _prev = float(cfg_get('collector.used_mb') or 0)
-                except Exception:
-                    _prev = 0.0
-                _setting_set('collector.used_mb', f"{_prev + _mb:.2f}")
-                # Статистика: сколько проходов реально получили страницу.
-                try:
-                    if int(sent or 0) > 0 or _mb > 0.05:
-                        _setting_set('collector.pass_ok',
-                                     str(int(cfg_get('collector.pass_ok') or 0) + 1))
-                    else:
-                        _setting_set('collector.pass_blocked',
-                                     str(int(cfg_get('collector.pass_blocked') or 0) + 1))
-                except Exception:
-                    pass
-                logger.info(f"Сбор находок: принято новых {sent}, скачано {_mb:.1f} МБ "
-                            f"(за сутки {_prev + _mb:.1f} из {_budget:.0f})")
-            except Exception:
-                logger.info(f"Сбор находок: принято новых {sent}")
-        except Exception as e:
-            logger.warning(f"Сбор находок: ошибка {e}")
-        finally:
-            _setting_set('collector_pass_running', '')
-        # Адаптивный темп без прокси: Авито блокирует по частоте запросов,
-        # поэтому после удачного прохода ускоряемся, после блока — замедляемся.
-        # Разброс в минус-плюс 20% сбивает ровный ритм, который площадка
-        # распознаёт как бота.
-        try:
-            cur = int(cfg_get('collector.interval_s') or 0) or COLLECTOR_INTERVAL
-        except Exception:
-            cur = COLLECTOR_INTERVAL
-        try:
-            blocked_now = getattr(_collector_inline_loop, '_last_blocked', False)
-        except Exception:
-            blocked_now = False
-        # Серверный режим: фиксированный интервал, без адаптивного
-        # умножения. После блокировок адаптив разгонял паузу до 25–40 минут,
-        # и новые объявления приходили слишком редко. 2–3 цели за проход
-        # укладываются в лимиты и без этого.
-        try:
-            _fixed = str(cfg_get('collector.fixed_interval') or '0') == '1'
-        except Exception:
-            _fixed = False
-        if _fixed:
-            nxt = max(180, int(cur))
-        elif blocked_now:
-            nxt = min(3600, max(600, int(cur * 1.7)))
-        else:
-            nxt = max(600, int(cur * 0.8))
-        _setting_set('collector.interval_s', str(nxt))
-        jitter = int(nxt * 0.2)
-        wait_s = nxt + int((_time.time() * 7) % max(1, jitter))
-        logger.info(f"Следующий проход сбора через {wait_s // 60} мин")
-        await asyncio.sleep(wait_s)
-
-
-async def _notify_admins_collector_blocked():
-    app = _get_bot_app()
-    if not app:
-        return
-    for admin_id in ADMIN_USER_IDS:
-        try:
-            await app.bot.send_message(
-                chat_id=admin_id,
-                text=(" <b>Авито заблокировал сбор с сервера</b>\n\n"
-                      "Бот и приложение работают, но новые находки не приходят. "
-                      f"Повторю попытку через {int(COLLECTOR_BLOCK_HOURS)} ч.\n\n"
-                      "Что можно сделать: подключить прокси или вернуться к запуску "
-                      "сборщика со своего компьютера."),
-                parse_mode=ParseMode.HTML)
-        except Exception as e:
-            logger.warning(f"admin notify blocked: {e}")
-
-
-async def _collector_loop():
-    """Держит сборщик находок запущенным прямо на сервере.
-
-    Через ОТДЕЛЬНЫЙ процесс. Не используется, когда включён сбор внутри
-    процесса: два сборщика одновременно — это двойная память и двойные
-    запросы к Авито, из-за чего контейнер и падал.
-    """
-    if COLLECTOR_INLINE:
-        logger.info("Сбор идёт внутри процесса, отдельный не запускаю")
-        return
-    if not COLLECTOR_ENABLED:
-        logger.info("Сборщик находок выключен (COLLECTOR_ENABLED=0)")
-        return
-    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector', 'collect.py')
-    if not os.path.exists(script):
-        logger.warning(f"Сборщик находок не найден: {script}")
-        return
-    token = os.environ.get('INGEST_TOKEN', '')
-    if not token:
-        logger.warning("Сборщик находок ждёт INGEST_TOKEN — принимать находки нечем")
-        return
-
-    logger.info(f"Сборщик находок запущен: раз в {COLLECTOR_INTERVAL} с")
-    backoff = 0
-    while True:
-        if backoff:
-            await asyncio.sleep(backoff)
-            backoff = 0
-        env = dict(os.environ)
-        # Внутри контейнера ходим к себе же, а не в интернет
-        env['POLKA_SERVER'] = f"http://127.0.0.1:{WEBAPP_PORT}"
-        env['POLKA_INGEST_TOKEN'] = token
-        env['POLKA_MAX_CATEGORIES'] = COLLECTOR_MAX_CATEGORIES
-        try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, script, '--loop', '--every', str(COLLECTOR_INTERVAL),
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT, env=env)
-            out, _ = await proc.communicate()
-            text = (out or b'').decode('utf-8', 'replace').strip()
-            if text:
-                logger.info("Сборщик находок: " + text[-1200:])
-            if proc.returncode == 3:
-                backoff = int(COLLECTOR_BLOCK_HOURS * 3600)
-                logger.warning(f"Сбор заблокирован. Пауза {COLLECTOR_BLOCK_HOURS} ч.")
-                await _notify_admins_collector_blocked()
-            else:
-                backoff = 60
-        except Exception as e:
-            logger.warning(f"Сборщик находок упал: {e}")
-            backoff = 120
 
 
 def _touch_collector(source: str = ''):
@@ -21995,30 +21369,22 @@ def _touch_collector(source: str = ''):
 
 
 def collector_status() -> Dict:
-    """Жив ли сборщик. Без него объявления не придут НИКОГДА, и человек
-    должен видеть это прямо в приложении, а не гадать."""
-    try:
-        cur = db.conn.cursor()
-        cur.execute("SELECT value FROM settings WHERE key='last_ingest_at'")
-        row = cur.fetchone()
-        cur.execute("SELECT value FROM settings WHERE key='last_ingest_source'")
-        src = cur.fetchone()
-    except Exception:
-        return {'alive': False, 'minutes': None, 'source': ''}
-    try:
-        last_value = row['value'] if row else ''
-        source_value = src['value'] if src else ''
-    except Exception:
-        return {'alive': False, 'minutes': None, 'source': ''}
-    if not last_value:
-        return {'alive': False, 'minutes': None, 'source': ''}
-    minutes = _minutes_since(last_value)
-    # Сборщик считается живым, если выходил на связь за последний час
-    return {'alive': minutes is not None and minutes <= 60,
-            'minutes': minutes,
-            'source': source_value or '',
-            # true — сбор идёт на сервере, человеку ничего запускать не нужно
-            'server_mode': COLLECTOR_ENABLED}
+    """Жив ли сбор находок. Теперь это avito_live: смотрим, когда последний
+    раз удалось прочитать выдачу. Находок может не быть часами — мониторинг
+    при этом работает, поэтому last_ingest_at тут не годится."""
+    runner = globals().get('_LIVE_RUNNER')
+    watcher = getattr(runner, 'watcher', None) if runner else None
+    if watcher is not None:
+        try:
+            last = float(watcher.last_ok_ts() or 0)
+        except Exception:
+            last = 0.0
+        if last:
+            minutes = max(0, int((time.time() - last) / 60))
+            return {'alive': minutes <= 10, 'minutes': minutes,
+                    'source': 'avito_live', 'server_mode': True}
+        return {'alive': False, 'minutes': None, 'source': '', 'server_mode': True}
+    return {'alive': False, 'minutes': None, 'source': '', 'server_mode': False}
 
 
 def _minutes_since(iso_value) -> Optional[int]:
@@ -24779,11 +24145,6 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                           '0 — отправлять как обычно'),
     'contest.enabled': ('int', 0, 1, 0, 'Конкурс приглашений включён'),
     'contest.deadline': ('str', 0, 0, '2026-11-30T23:00:00+03:00', 'Дата итогов конкурса (ISO, МСК)'),
-    'collector.targets': ('int', 1, 10, 4, 'Целей за проход сборщика'),
-    'collector.req_cap': ('int', 1, 200, 30,
-                          'Запросов к Авито в час (лимит площадки)'),
-    'collector.search_by_query': ('str', None, None, '0',
-                                 '1 — искать по тексту запроса (q=), 0 — обходить раздел'),
     'hunt.desc_wait_hours': ('int', 0, 48, 2,
                         'Через сколько часов отправлять находку без описания (0 — ждать), '),
     'contest.max_tickets': ('int', 1, 20, 5, 'Максимум билетов с человека'),
@@ -24927,10 +24288,6 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
                               'Текст, когда пробный период в последние 2 дня'),
     'pay.allow_test': ('str', None, None, '0',
                        '1 — начислять даже по тестовым счетам (только для проверки)'),
-    'collector.filters_words': ('str', None, None, '',
-                                'Узкие наборы по словам критерия, JSON: {"macbook": "&f=…"}'),
-    'collector.filters': ('str', None, None, '',
-                          'Наборы фильтров Авито по категориям, JSON: {"telefony": "&f=…"}'),
     'banner.text': ('str', None, None, '', 'Текст баннера'),
 }
 _SETTINGS_CACHE: Dict[str, Any] = {}
@@ -25410,7 +24767,7 @@ async def api_promo_redeem(request: aiohttp_web.Request) -> aiohttp_web.Response
 # сборщик выбирает раздел), ориентир цены и типовые требования. Смысл — чтобы
 # человек выбирал из списка, а не писал словами: «пуховик» вместо «зип 158»
 # находит в разы точнее, а для телефонов сразу включается проверка АКБ.
-# Ключи слов обязаны быть в словаре сборщика CATEGORY_BY_WORD, иначе раздел
+# Ключи слов обязаны быть в словаре разделов CATEGORY_BY_WORD, иначе раздел
 # не определится и цель не создастся.
 HUNT_TEMPLATES = [
     # телефоны: для них важна АКБ, поэтому требование ставим сразу
@@ -25508,11 +24865,11 @@ def _template_slug(title: str, index: int) -> str:
     return base[:60]
 
 
-# Категории Авито, с которыми работает сборщик (ключи словаря CATEGORY_BY_WORD).
+# Категории Авито (ключи словаря CATEGORY_BY_WORD).
 # Нужны, чтобы из ссылки понять, к какой категории относится набор фильтров:
 # адрес вида /izhevsk/odezhda_obuv_aksessuary/verhnyaya_odezhda-ASgB…
 # Слово из запроса → раздел Авито. Тот же словарь, что в сборщике
-# (CATEGORY_BY_WORD в collector/collect.py): по нему критерий и набор
+# (CATEGORY_BY_WORD ниже): по нему критерий и набор
 # фильтров находят свою категорию.
 CATEGORY_BY_WORD = {
     'айфон': 'telefony', 'iphone': 'telefony', 'самсунг': 'telefony', 'samsung': 'telefony',
@@ -25827,50 +25184,6 @@ def _link_check_min(user_id: int) -> int:
         return max(1, int(cfg_get('link.check_free_min') or 5))
     except Exception:
         return 30
-
-
-def collector_word_filters() -> Dict:
-    """Узкие наборы по словам критерия: «macbook» → Apple-фильтры, «rtx» → свои.
-
-    Зачем: набор привязан к категории, а внутри категории товары разные.
-    Apple-фильтр (M1, 13 дюймов) не найдёт игровой ноутбук RTX — поэтому
-    для конкретных слов можно задать свой набор, и он применяется только
-    там, где слово есть в запросе критерия.
-    """
-    raw = str(cfg_get('collector.filters_words') or '')
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-        return {str(k).lower(): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
-    except Exception:
-        return {}
-
-
-def word_filter_for(query: str) -> str:
-    """Набор, подходящий словам запроса (самое длинное совпадение)."""
-    words = collector_word_filters()
-    if not words:
-        return ''
-    low = str(query or '').lower()
-    best = ''
-    best_len = 0
-    for key, blob in words.items():
-        if key and key in low and len(key) > best_len:
-            best, best_len = blob, len(key)
-    return best
-
-
-def collector_filters() -> Dict:
-    """Наборы фильтров по категориям: настройка collector.filters (JSON строкой)."""
-    raw = str(cfg_get('collector.filters') or '')
-    if not raw:
-        return {}
-    try:
-        data = json.loads(raw)
-        return {str(k): str(v) for k, v in data.items()} if isinstance(data, dict) else {}
-    except Exception:
-        return {}
 
 
 def ensure_templates() -> None:
@@ -29059,268 +28372,6 @@ def mark_listing_state(source: str, external_id: str, state: str) -> Optional[Di
     return ad
 
 
-async def api_block_requests(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/ingest/block-requests — карточки, где надо узнать продавца.
-
-    Человек нажал «не показывать продавца», а ID в карточке не было: отдаём
-    сборщику 1–2 объявления, он откроет их на домашнем IP и пришлёт ID
-    продавца. Тогда блокировка сработает и на будущие лоты этого продавца.
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    try:
-        limit = max(1, min(5, int(request.query.get('limit') or 2)))
-    except Exception:
-        limit = 2
-    items: List[Dict] = []
-    try:
-        cur = db.conn.cursor()
-        cur.execute(
-            "SELECT r.id, r.user_id, r.ad_id, r.external_id, r.attempts, "
-            "       a.source_url AS url "
-            "FROM seller_block_requests r LEFT JOIN ads a ON a.id=r.ad_id "
-            "WHERE r.state IN ('pending','sent') AND COALESCE(r.attempts,0) < 4 "
-            "AND (r.state='pending' OR COALESCE(r.updated_at,'') < ?) "
-            "ORDER BY r.id LIMIT ?",
-            ((get_moscow_time() - timedelta(minutes=10)).isoformat(), limit))
-        for row in cur.fetchall():
-            url = str(row['url'] or '')
-            if not url.startswith('http'):
-                cur.execute("UPDATE seller_block_requests SET state='failed', "
-                            "attempts=COALESCE(attempts,0)+1, updated_at=? WHERE id=?",
-                            (get_moscow_time().isoformat(), int(row['id'])))
-                continue
-            items.append({'request_id': int(row['id']), 'ad_id': int(row['ad_id']),
-                          'external_id': str(row['external_id'] or ''),
-                          'url': url})
-            cur.execute("UPDATE seller_block_requests SET state='sent', "
-                        "attempts=COALESCE(attempts,0)+1, updated_at=? WHERE id=?",
-                        (get_moscow_time().isoformat(), int(row['id'])))
-        db.conn.commit()
-    except Exception as e:
-        logger.warning(f"block requests: {e}")
-        return _miniapp_json({'ok': False, 'error': str(e)[:120]}, status=500)
-    return _miniapp_json({'ok': True, 'items': items})
-
-
-async def api_ingest_details(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/ingest/details — сборщик принёс описания и данные продавца.
-
-    Тело: {"source": "avito", "items": [
-        {"external_id": "...", "description": "...", "seller_type": "private",
-         "seller_name": "Ирина", "seller_ads": 4, "state": "ok"|"failed"}]}
-
-    Для каждого объявления: сохраняем описание и продавца, помечаем
-    desc_state и пересчитываем решения (evaluate_ad уже с описанием).
-    Неудачу помечаем failed и повторяем не раньше чем через
-    HUNT_DESC_RETRY_MIN минут, максимум HUNT_DESC_MAX_TRIES раз.
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    try:
-        body = await request.json()
-    except Exception:
-        return _miniapp_err('bad_json', 400)
-    source = str((body or {}).get('source') or 'other').lower()
-    items = (body or {}).get('items') or []
-    if not isinstance(items, list):
-        return _miniapp_err('bad_items', 400)
-    cursor = db.conn.cursor()
-    now = get_moscow_time().isoformat()
-    updated, failed, touched = 0, 0, []
-    _block_ready: List[int] = []
-    for raw in items[:100]:
-        if not isinstance(raw, dict):
-            continue
-        ext = str(raw.get('external_id') or '').strip()
-        if not ext:
-            continue
-        state = str(raw.get('state') or 'ok').lower()
-        try:
-            cursor.execute("SELECT id FROM ads WHERE source=? AND external_id=? "
-                           "ORDER BY id DESC LIMIT 1", (source, ext))
-            row = cursor.fetchone()
-            if not row:
-                continue
-            ad_id = int(row['id'])
-            description = str(raw.get('description') or '').strip()[:2000]
-            if state == 'failed' or len(description) < 20:
-                cursor.execute("UPDATE ads SET desc_state='failed', "
-                               "desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
-                               "WHERE id=?", (now, ad_id))
-                try:
-                    cursor.execute("UPDATE hunt_matches SET desc_state='failed', updated_at=? "
-                                   "WHERE ad_id=? AND desc_state='pending'", (now, ad_id))
-                except Exception:
-                    pass
-                failed += 1
-                continue
-            # Характеристики из карточки (состояние, память, размер и т.п.)
-            # пишем в поле параметров — их видно в карточке товара и они
-            # участвуют в отборе по требованиям.
-            params = raw.get('params') or {}
-            params_json = ''
-            if isinstance(params, dict) and params:
-                try:
-                    params_json = json.dumps({str(k)[:40]: str(v)[:60]
-                                              for k, v in list(params.items())[:20]},
-                                             ensure_ascii=False)
-                except Exception:
-                    params_json = ''
-            _sid = str(raw.get('seller_id') or '').strip()[:40]
-            cursor.execute(
-                "UPDATE ads SET description=?, description_lower=?, seller_type=?, "
-                "seller_name=?, seller_ads=?, "
-                "seller_external_id=COALESCE(NULLIF(?, ''), seller_external_id), "
-                "params_json=COALESCE(NULLIF(?,''), params_json), "
-                "condition=COALESCE(NULLIF(?, ''), condition), "
-                "size=COALESCE(NULLIF(?, ''), size), "
-                "desc_state='ok', desc_attempts=COALESCE(desc_attempts,0)+1, desc_checked_at=? "
-                "WHERE id=?",
-                (description, description.lower(),
-                 str(raw.get('seller_type') or '')[:20],
-                 str(raw.get('seller_name') or '')[:60], int(raw.get('seller_ads') or 0),
-                 _sid,
-                 params_json,
-                 str((params or {}).get('Состояние') or (params or {}).get('состояние') or '')[:40],
-                 str((params or {}).get('Размер') or (params or {}).get('Размер одежды')
-                     or (params or {}).get('Размер обуви') or '')[:30],
-                 now, ad_id))
-            # Заявка «не показывать продавца»: ID теперь известен — скрываем
-            # продавца у всех, кто его просил, и пишем им подтверждение.
-            try:
-                _name = str(raw.get('seller_name') or '').strip()
-                _bkey = ('id:' + _sid) if _sid else (
-                    'name:' + re.sub(r'\s+', ' ', _name.lower())[:60] if _name else '')
-                if _bkey:
-                    cursor.execute("SELECT user_id FROM seller_block_requests "
-                                   "WHERE ad_id=? AND state IN ('pending','sent')", (ad_id,))
-                    _reqs = [int(r['user_id']) for r in cursor.fetchall()]
-                    for _u in _reqs:
-                        cursor.execute(
-                            "INSERT OR IGNORE INTO blocked_sellers "
-                            "(user_id, seller_key, seller_name, created_at) VALUES (?,?,?,?)",
-                            (_u, _bkey, _name[:60], now))
-                    if _reqs:
-                        cursor.execute("DELETE FROM seller_block_requests WHERE ad_id=?",
-                                       (ad_id,))
-                        _block_ready.extend(_reqs)
-            except Exception as _be:
-                logger.warning(f"block resolve: {_be}")
-            updated += 1
-            touched.append(ad_id)
-        except Exception as e:
-            logger.warning(f"ingest details: {e}")
-    try:
-        db.conn.commit()
-    except Exception:
-        pass
-    _touch_collector(source)
-    ready_ids: List[int] = []
-    if touched:
-        try:
-            # K4: медианы — в фон с дебаунсом, решения — сразу
-            schedule_medians(categories=[a.get('category') for a in
-                                         [db.get_ad(i) for i in touched[:20]] if a],
-                             criteria=True)
-            hunt_matches_recompute(ad_ids=touched)
-            # Готовые к отправке по этим объявлениям — тем же путём, что и
-            # обычная рассылка: одно сообщение на находку
-            cur2 = db.conn.cursor()
-            marks = ','.join('?' for _ in touched)
-            cur2.execute(f"SELECT ad_id FROM hunt_matches WHERE ad_id IN ({marks}) "
-                         f"AND status='ready' ORDER BY discount DESC LIMIT 30", touched)
-            ready_ids = [int(r['ad_id']) for r in cur2.fetchall()]
-        except Exception as e:
-            logger.warning(f"details recompute: {e}")
-    if ready_ids:
-        hunt_wake()
-    if _block_ready:
-        try:
-            _app = _get_bot_app()
-            if _app:
-                for _u in sorted(set(_block_ready))[:20]:
-                    await _send_html_safe(
-                        _app.bot.send_message, chat_id=int(_u),
-                        text=("🚫 <b>Продавец скрыт</b>\n\n"
-                              "Больше не присылаю объявления этого продавца. "
-                              "Если передумаете — напишите в поддержку @suppolka."))
-        except Exception as _e:
-            logger.warning(f"block ready notify: {_e}")
-    logger.info(f"ingest details {source}: описаний {updated}, неудач {failed}")
-    return _miniapp_json({'ok': True, 'updated': updated, 'failed': failed,
-                          'need_details': hunt_need_details()})
-
-
-async def api_ingest_need_details(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/ingest/need-details — что сборщику открыть ради описания.
-
-    Отдельный режим для домашнего IP: телефон тянет ровно те карточки, где
-    описание влияет на отбор (АКБ, состояние, вскрытие), и не дублирует сбор
-    выдачи, который идёт из облака. Раньше очередь отдавалась только в ответ
-    на приём находок, поэтому «только описания» запустить было нечем.
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    try:
-        limit = min(max(int(request.query.get('limit', 0) or 0), 1), 200)
-    except (TypeError, ValueError):
-        limit = 0
-    items = await asyncio.to_thread(_db_read, hunt_need_details, None, limit)
-    return _miniapp_json({'items': items, 'count': len(items)})
-
-
-async def api_ingest_status(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/ingest/status — сборщик сообщает судьбу лотов.
-
-    Тело: {"source": "avito", "items": [{"external_id": "...", "state": "gone"}]}
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    try:
-        body = await request.json()
-    except Exception:
-        return _miniapp_err('bad_json', 400)
-    source = str((body or {}).get('source') or 'other').lower()
-    items = (body or {}).get('items') or []
-    updated = gone = 0
-    for item in (items if isinstance(items, list) else []):
-        if not isinstance(item, dict):
-            continue
-        ext = str(item.get('external_id') or '').strip()
-        state = str(item.get('state') or 'active')
-        if not ext or state not in ('active', 'gone', 'sold'):
-            continue
-        try:
-            result = mark_listing_state(source, ext, state)
-        except Exception as e:
-            logger.warning(f"listing state {ext}: {e}")
-            continue
-        if result:
-            updated += 1
-            if state != 'active':
-                gone += 1
-    _touch_collector(source)
-    logger.info(f"ingest status {source}: обновлено {updated}, исчезло {gone}")
-    return _miniapp_json({'ok': True, 'updated': updated, 'gone': gone})
-
-
 # ── API критериев перекупа ───────────────────────────────────────────────────
 def _criterion_public(crit: Dict) -> Dict:
     return {
@@ -30112,124 +29163,6 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
 
     # Сборщику нужен список ВСЕХ активных критериев, чтобы обойти нужные
     # страницы — он авторизуется токеном, а не initData
-    if method == 'GET' and request.query.get('for_collector'):
-        expected = os.environ.get('INGEST_TOKEN', '')
-        got = request.headers.get('X-Ingest-Token', '')
-        if not expected or not hmac.compare_digest(str(got), str(expected)):
-            return _miniapp_err('forbidden', 403)
-        cursor = db.conn.cursor()
-        # Отдаём сборщику цену и свежесть: без них он не может попросить
-        # Авито отфильтровать выдачу, и качает всё подряд.
-        cursor.execute("SELECT id, user_id, query, category, city, """
-                       "COALESCE(min_price,0) AS min_price, "
-                       "COALESCE(max_price,0) AS max_price, "
-                       "COALESCE(max_hours,0) AS max_hours, "
-                       "COALESCE(requirements_json,'') AS requirements_json, "
-                       "COALESCE(filter_blob,'') AS filter_blob, "
-                       "COALESCE(filter_url,'') AS filter_url, "
-                       "COALESCE(from_link,0) AS from_link, "
-                       "COALESCE(search_path,'') AS search_path, "
-                       "COALESCE(search_q,'') AS search_q, "
-                       "COALESCE(search_filters,'') AS search_filters, "
-                       "COALESCE(search_user,'') AS search_user, "
-                       "created_at, "
-                       "(SELECT COUNT(*) FROM hunt_matches hm "
-                       " WHERE hm.crit_id=hunt_criteria.id) AS match_n, "
-                       "(SELECT COUNT(*) FROM hunt_matches hm "
-                       " WHERE hm.crit_id=hunt_criteria.id AND hm.status='sent') AS sent_n "
-                       "FROM hunt_criteria WHERE active=1")
-        rows = [dict(r) for r in cursor.fetchall()]
-        # Приоритет для сборщика: 3 — свежий поиск без находок (проверить
-        # первым), 2 — поиск без находок, 1 — создан меньше суток назад,
-        # 0 — обычный. Раньше очередь была чисто круговой, и новый человек
-        # ждал своей проверки часами.
-        _now = get_moscow_time()
-        for row in rows:
-            try:
-                _created = _safe_isoparse(str(row.get('created_at') or ''))
-            except Exception:
-                _created = None
-            _age_h = ((_now - _created).total_seconds() / 3600.0
-                      if _created else 999.0)
-            if int(row.get('from_link') or 0):
-                # Ссылочные поиски — платная функция: проверяем их в первую
-                # очередь, чтобы новые лоты приходили быстро.
-                _prio = 5
-                # Скорость — то, за что платят: бесплатно 5 минут,
-                # на платном — 1. Сборщик пропустит ссылку, если проверял её
-                # слишком недавно.
-                try:
-                    row['check_interval_min'] = _link_check_min(row['user_id'])
-                except Exception:
-                    row['check_interval_min'] = 0
-            elif int(row.get('sent_n') or 0) == 0 and _age_h <= 6:
-                _prio = 3
-            elif int(row.get('match_n') or 0) == 0:
-                _prio = 2
-            elif _age_h <= 24:
-                _prio = 1
-            else:
-                _prio = 0
-            row['priority'] = _prio
-        rows.sort(key=lambda r: (-int(r.get('priority') or 0),
-                                 str(r.get('created_at') or '')))
-        # Продавец зависит от КРИТЕРИЯ, а не принудительно «частные»:
-        #   private_only=true  → user=1 (только частные)
-        #   private_only=false → без user (все)
-        # Раньше сборщик ставил user=1 всем критериям, даже тем, где человек
-        # продавца не указывал — и это путало ожидания.
-        for row in rows:
-            try:
-                _req = json.loads(row.get('requirements_json') or '{}')
-            except Exception:
-                _req = {}
-            row['user'] = '1' if _req.get('private_only') else ''
-            # Ссылочный поиск без сохранённого адреса (критерий создан до
-            # фикса): собираем адрес из пути ЦЕЛИКОМ, не обрезая до раздела.
-            # Модель и фильтры закодированы в самом пути ссылки Авито, так
-            # что браузер откроет ту же выдачу. f= сюда НЕ подставляем:
-            # search_filters — это хвост вида «&radius=0», а не набор f=.
-            try:
-                if int(row.get('from_link') or 0) and not str(row.get('filter_url') or ''):
-                    _p = str(row.get('search_path') or '').strip('/')
-                    if _p and re.match(r'^[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+){1,8}$', _p):
-                        _qs = ['s=104']
-                        _extra = str(row.get('search_filters') or '').strip().lstrip('&')
-                        if _extra:
-                            _qs.append(_extra)
-                        if str(row.get('search_user') or '') == '1':
-                            _qs.append('user=1')
-                        row['filter_url'] = ('https://www.avito.ru/' + _p
-                                             + '?' + '&'.join(_qs))
-            except Exception as _e:
-                logger.warning(f"link url synth: {_e}")
-            # Фильтры из ссылки человека отдаём сборщику под именем, которое
-            # он уже понимает: он подставит их в адрес Авито как есть.
-            row['filters'] = str(row.get('filter_blob') or '')
-            # Исходный адрес человека: сборщик откроет именно его, а не
-            # соберёт поиск из слов заново.
-            row['filter_url'] = str(row.get('filter_url') or '')
-        # Наборы фильтров Авито по категориям (частные, состояние, АКБ, слова
-        # в описании) отдаём вместе с критерием: так их применяет сам Авито,
-        # а сборщику не нужно ни файлов, ни переменных окружения.
-        flt = collector_filters()
-        word_flt = collector_word_filters()
-        if flt or word_flt:
-            for row in rows:
-                key = ''
-                for word in str(row.get('query') or '').lower().split():
-                    if word.strip('.,!?()\"\'') in CATEGORY_BY_WORD:
-                        key = CATEGORY_BY_WORD[word.strip('.,!?()\"\'')]
-                        break
-                if is_accessory_query(row.get('query')):
-                    continue
-                got = word_filter_for(row.get('query')) if word_flt else ''
-                if not got:
-                    got = flt.get(key or '') or flt.get(str(row.get('category') or '')) or ''
-                if got:
-                    row['filters'] = got
-        return _miniapp_json({'items': rows})
-
     if not viewer_id:
         return _miniapp_err('unauthorized', 401)
 
@@ -30616,8 +29549,8 @@ async def _hunt_feedback_loop():
                     matches = 0
                 col = collector_status()
                 if not col.get('alive'):
-                    why = ("Сборщик объявлений сейчас не на связи — искать некому.\n"
-                           "Напишите мне, если это длится долго.")
+                    why = ("Мониторинг ссылок сейчас не отвечает — Авито ограничивает "
+                           "запросы.\nПробую снова; находки придут, как только проверка пройдёт.")
                 elif matches:
                     why = (f"Похожих объявлений в базе: <b>{matches}</b>, но все старше "
                            f"{HUNT_FRESH_HOURS} ч или выше вашего потолка цены.")
@@ -30651,11 +29584,15 @@ def hunt_report(user_id: int) -> str:
         mins = col.get('minutes') or 0
         lines.append(f"Проверял Авито {mins} мин назад")
     elif col.get('minutes') is None:
-        lines.append(" Сборщик ещё не выходил на связь.")
-        lines.append("   Запустите его на компьютере: <code>./start-local.sh</code>")
+        lines.append(" Мониторинг ещё не сделал ни одной проверки.")
+        lines.append("   Поиски по ссылке проверятся автоматически.")
     else:
-        hrs = int((col.get('minutes') or 0) // 60)
-        lines.append(f" Сборщик молчит {hrs} ч — проверьте, идёт ли он у вас.")
+        mins = int(col.get('minutes') or 0)
+        if mins < 60:
+            lines.append(f" Последняя проверка Авито: {mins} мин назад")
+        else:
+            lines.append(f" Последняя проверка Авито: {mins // 60} ч назад — "
+                         "Авито ограничивает запросы, пробую снова.")
 
     cur = db.conn.cursor()
     try:
@@ -30985,134 +29922,23 @@ async def hunt_stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 async def hunt_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """ /hunt iphone 13 — критерий ловли. Без аргументов — список.
+    """ /hunt — состояние поисков. Сами поиски создаются по ссылке.
 
-    Можно уточнить: /hunt iphone 13 | Ижевск | 45000
+    Текстовые поиски умерли вместе со старым сборщиком: искать можно только
+    по готовой ссылке Авито — её отбор делает площадка.
     """
     user = update.effective_user
     args = ' '.join(context.args or []).strip()
-
     if not args:
         await update.message.reply_text(hunt_report(user.id), parse_mode=ParseMode.HTML)
         return
-        crits = get_user_criteria(user.id)
-        col = collector_status()
-        if not crits:
-            await update.message.reply_text(
-                " <b>Ловля находок</b>\n\n"
-                "Напишите, что искать: <code>/hunt iphone 13</code>\n"
-                "Бот будет присылать свежие объявления дешевле рынка.\n\n"
-                "Можно уточнить город и потолок цены:\n"
-                "<code>/hunt iphone 13 | Ижевск | 45000</code>",
-                parse_mode=ParseMode.HTML)
-            return
-        lines = [" <b>Ваши критерии</b>\n"]
-        if not col.get('alive'):
-            lines.append(" <b>Сборщик не на связи.</b> Он работает на вашем "
-                         "компьютере — пока он не запущен, объявления не придут.\n")
-        for c in crits:
-            city = f" · {c['city']}" if c.get('city') else ""
-            cap = f" · до {_money(c['max_price'])} ₽" if c.get('max_price') else ""
-            lines.append(f"• <b>{c['query']}</b>{city}{cap}")
-            if c.get('median_price'):
-                speed = _criterion_sell_speed(c)
-                lines.append(f"   обычная цена {_money(c['median_price'])} ₽ "
-                             f"(по {c.get('sample_size') or 0} шт)")
-                # Показываем заработок на примере текущей обычной цены,
-                # чтобы было видно, ради чего критерий вообще нужен
-                example = hunt_profit(int(c['median_price'] * 0.8), c['median_price'])
-                if example.get('ok'):
-                    lines.append(f"   при цене на 20% ниже: навар ~{_money(example['profit'])} ₽")
-                if speed:
-                    lines.append(f"   похожие уходили за ~{speed} ч")
-            else:
-                lines.append(f"   собираем статистику: {c.get('sample_size') or 0} из "
-                             f"{HUNT_MIN_SAMPLE} — присылаю любые подходящие")
-            lines.append(f"   убрать: <code>/hunt -{c['id']}</code>")
-        await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
-        return
-
-    if args.startswith('-'):
-        digits = re.sub(r'[^0-9]', '', args[1:])
-        removed = remove_criterion(user.id, int(digits)) if digits else False
-        await update.message.reply_text("Критерий убран." if removed else "Такого критерия нет.")
-        return
-
-    parts = [p.strip() for p in args.split('|')]
-    query = parts[0][:100]
-    city = parts[1][:100] if len(parts) > 1 else ''
-    max_price = 0
-    if len(parts) > 2:
-        digits = re.sub(r'[^0-9]', '', parts[2])
-        max_price = int(digits) if digits else 0
-
-    crit_id = add_criterion(user.id, query, city=city, max_price=max_price)
-    if crit_id == -1:
-        await update.message.reply_text(
-            "Достигнут лимит критериев бесплатного плана — замените существующий "
-            "или откройте ещё слоты в «Плюсе».", parse_mode=ParseMode.HTML)
-        return
-    if not crit_id:
-        await update.message.reply_text(
-            "Такой критерий уже есть — или запрос слишком короткий.")
-        return
-    crit = next((c for c in get_user_criteria(user.id) if c['id'] == crit_id), None) or {}
-    head = f" Ловлю <b>{query}</b>" + (f" · {city}" if city else "") + "\n\n"
-    if crit.get('median_price'):
-        med = f"{crit['median_price']:,} ₽".replace(',', ' ')
-        await update.message.reply_text(
-            head + f"Медиана по этому запросу сейчас: <b>{med}</b>\n"
-                   f"Посчитана по {crit.get('sample_size')} объявлениям.\n\n"
-                   f"Пришлю, как только появится дешевле на {crit.get('min_discount') or 15}%.",
-            parse_mode=ParseMode.HTML)
-    elif (crit.get('mode') or 'any') == 'any':
-        await update.message.reply_text(
-            head + "Буду присылать всё подходящее сразу — статистику ждать не нужно.\n\n"
-                   "Как наберётся достаточно объявлений, начну отсеивать дорогое "
-                   "и показывать, сколько на этом заработать.",
-            parse_mode=ParseMode.HTML)
-    else:
-        await update.message.reply_text(
-            head + f"Копим статистику: нужно минимум {HUNT_MIN_SAMPLE} объявлений "
-                   f"по этому запросу, чтобы медиана была честной.\n\n"
-                   f"Пока их нет, присылать нечего — иначе скидка была бы выдуманной.",
-            parse_mode=ParseMode.HTML)
-
-
-async def api_ingest_checklist(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """GET /api/ingest/checklist — что перепроверить на «продано».
-
-    Авито не отдаёт статус в выдаче, поэтому сборщик периодически
-    переоткрывает страницы лотов. Здесь он получает список: ссылку и id.
-    """
-    expected = os.environ.get('INGEST_TOKEN', '')
-    if not expected:
-        return _miniapp_err('ingest_disabled', 503)
-    got = _ingest_token_ok(request)
-    if not hmac.compare_digest(str(got), str(expected)):
-        return _miniapp_err('forbidden', 403)
-    source = str(request.query.get('source') or 'avito')
-    try:
-        limit = min(max(int(request.query.get('limit', 30) or 30), 1), 100)
-    except ValueError:
-        limit = 30
-    # Берём то, что недавно нашли и ещё считаем живым: старое проверять
-    # бессмысленно — оно и так осядет по сроку
-    cursor = db.conn.cursor()
-    try:
-        cursor.execute('''
-            SELECT external_id, source_url, title, price, parsed_at
-            FROM ads
-            WHERE source=? AND external_id IS NOT NULL AND source_url IS NOT NULL
-              AND COALESCE(listing_state,'active')='active'
-              AND parsed_at IS NOT NULL
-            ORDER BY parsed_at DESC LIMIT ?
-        ''', (source, limit))
-        items = [dict(r) for r in cursor.fetchall()]
-    except Exception as e:
-        logger.error(f"checklist: {e}")
-        return _miniapp_err('load_failed', 500)
-    return _miniapp_json({'source': source, 'items': items})
+    await update.message.reply_text(
+        "<b>Поиски теперь по ссылке</b>\n\n"
+        "Откройте Авито, выставьте фильтры (город, цена, состояние) и вставьте "
+        "адрес из строки браузера в «Новый поиск» приложения «Полка» — "
+        "находки придут в чат и в ленту.\n\n"
+        "Быстрый мониторинг без приложения: <code>/watch ссылка</code>",
+        parse_mode=ParseMode.HTML)
 
 
 def get_user_chats(user_id: int, limit: int = 20) -> List[Dict]:
@@ -32490,7 +31316,7 @@ async def send_daily_digest(bot, limit: int = 5, force: bool = False) -> int:
                 await bot.send_message(
                     chat_id=aid,
                     text="🔥 Находок для поста за сутки нет: либо критерии узкие, "
-                         "либо сбор молчит. Проверьте сборщик.")
+                         "либо мониторинг ссылок ограничивает Авито.")
             except Exception:
                 pass
         return 0
@@ -34538,113 +33364,6 @@ async def api_admin_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json(res, status=200 if res.get('ok') else 400)
 
 
-async def api_admin_collector_filter(request: aiohttp_web.Request) -> aiohttp_web.Response:
-    """POST /api/admin/collector-filter {url} — добавить набор фильтров Авито.
-
-    Владелец копирует ссылку из браузера с нужными фильтрами — сервер сам
-    достаёт из неё категорию и набор, и складывает в настройку
-    collector.filters. Дальше сборщик получает набор вместе с критерием.
-    """
-    # Доступ: администратор из Mini App ИЛИ токен сборщика — чтобы владелец
-    # мог добавить набор одной командой curl, без входа в приложение.
-    admin_id = 0
-    expected = os.environ.get('INGEST_TOKEN', '')
-    got = _ingest_token_ok(request)
-    if not (expected and hmac.compare_digest(str(got), str(expected))):
-        admin_id, err = await _admin_guard(request)
-        if err:
-            return err
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    # Принимаем и одну ссылку, и пачку: {"urls": ["…", "…"]} или {"url": "…"}
-    # Убрать набор: {"remove": ["noutbuki"]} или {"remove": "noutbuki"}
-    drop = (body or {}).get('remove')
-    if drop:
-        if isinstance(drop, str):
-            drop = [drop]
-        current_now = collector_filters()
-        words_now = collector_word_filters()
-        removed = []
-        for key in drop:
-            key = str(key).strip()
-            if key in current_now:
-                current_now.pop(key)
-                removed.append(key)
-            if key.lower() in words_now:
-                words_now.pop(key.lower())
-                removed.append(key.lower())
-        if removed:
-            cfg_set('collector.filters', json.dumps(current_now, ensure_ascii=False),
-                    by=admin_id, reason=f"убраны наборы: {', '.join(removed)}")
-            cfg_set('collector.filters_words', json.dumps(words_now, ensure_ascii=False),
-                    by=admin_id, reason='обновление наборов по словам')
-        return _miniapp_json({'ok': True, 'removed': removed,
-                              'left': sorted(current_now.keys()),
-                              'words_left': sorted(words_now.keys())})
-
-    # Принимаем: {"urls": ["…"]}, {"url": "…"} и пары «слово = ссылка»
-    # (слово — узкий набор: "macbook = https://…", "rtx = https://…").
-    raw = (body or {}).get('urls')
-    if isinstance(raw, str):
-        raw = [raw]
-    if not raw:
-        raw = [(body or {}).get('url') or '']
-    current = collector_filters()
-    words_map = collector_word_filters()
-    added, failed, with_price, words_added = [], [], [], []
-    for one in raw:
-        for piece in str(one).replace('\r', '').split('\n'):
-            piece = piece.strip()
-            if not piece:
-                continue
-            # «слово = ссылка» → узкий набор по слову
-            word_label = ''
-            if '=' in piece and not piece.startswith('http'):
-                word_label, piece = [x.strip() for x in piece.split('=', 1)]
-                word_label = word_label.lower()
-            if not piece.startswith('http') and '=' in piece:
-                head, tail = piece.split('=', 1)
-                if tail.strip().startswith('http'):
-                    word_label, piece = head.strip().lower(), tail.strip()
-            parsed = parse_avito_filter_url(piece)
-            if not parsed.get('ok'):
-                failed.append({'url': piece[:80], 'why': parsed.get('error')})
-                continue
-            if not parsed.get('slug'):
-                failed.append({'url': piece[:80], 'why': 'unknown_category'})
-                continue
-            if word_label:
-                words_map[word_label] = parsed['filters']
-                words_added.append(word_label)
-            else:
-                current[parsed['slug']] = parsed['filters']
-                added.append(parsed['slug'])
-            if parsed.get('has_price'):
-                with_price.append(parsed['slug'])
-    if not added and not words_added:
-        return _miniapp_json({'ok': False, 'error': 'nothing_added',
-                              'failed': failed[:6],
-                              'detail': 'Ни одну ссылку не разобрал — нужны ссылки разделов Авито '
-                                        'с включёнными фильтрами (f=…)'}, status=400)
-    res = cfg_set('collector.filters', json.dumps(current, ensure_ascii=False),
-                  by=admin_id, reason=f"наборы: {', '.join(added[:5])}")
-    if not res.get('ok'):
-        return _miniapp_json(res, status=400)
-    if words_added:
-        res2 = cfg_set('collector.filters_words', json.dumps(words_map, ensure_ascii=False),
-                       by=admin_id, reason=f"наборы по словам: {', '.join(words_added[:5])}")
-        if not res2.get('ok'):
-            return _miniapp_json(res2, status=400)
-    return _miniapp_json({'ok': True, 'added': added, 'words': words_added, 'failed': failed[:6],
-                          'total': len(current),
-                          'with_price': with_price,
-                          'detail': ('Готово. В ссылке была цена — она перебьёт цены критериев, '
-                                     'лучше прислать такую же без цены'
-                                     if with_price else 'Готово: наборы сохранены')})
-
-
 async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/admin/metrics — воронка, деньги, задержки (J4, H8)."""
     admin_id, err = await _admin_guard(request)
@@ -35650,104 +34369,65 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         return _miniapp_json({'ok': True, 'key': key, 'value': value})
 
     if action == 'link_test':
-        # Проверка модели «как у Avito Hunter»: открываем ссылку поиска так
-        # же, как сборщик, парсим карточки и говорим, сколько из них новые.
+        # Проверка ссылки тем же парсером, что и мониторинг: сколько карточек
+        # видит avito_live и сколько из них новые для базы.
         url = str((body or {}).get('url') or '')
-        parsed = parse_avito_search_link(url)
-        if not parsed.get('ok'):
-            return _miniapp_json({'ok': False, 'error': parsed.get('error')}, status=400)
-
-        def _probe_link() -> Dict:
-            import sys as _sys
-            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if _p not in _sys.path:
-                _sys.path.insert(0, _p)
-            import collect as _collector
-            crit = {'filter_url': str(parsed.get('filter_url') or url),
-                    'search_path': str(parsed.get('path') or ''),
-                    'search_q': str(parsed.get('q') or ''),
-                    'filters': str(parsed.get('filters') or ''),
-                    'min_price': int(parsed.get('min_price') or 0),
-                    'max_price': int(parsed.get('max_price') or 0),
-                    'user': str(parsed.get('user') or '')}
-            built = _collector.link_search_url(crit, {'search_by_query': '1'})
-            out = {'built_url': built, 'parsed': {k: parsed.get(k) for k in
-                   ('path', 'q', 'min_price', 'max_price', 'user', 'region')}}
-            if not built:
-                out['error'] = 'ссылка не собирается в безопасный вид'
-                return out
-            try:
-                html = _collector.fetch(built, timeout=30, prefer_scraper=True)
-            except Exception as e:
-                out['error'] = f'{type(e).__name__}: {e}'[:160]
-                return out
-            items = []
-            try:
-                items = _collector.parse_page(html) or []
-            except Exception as e:
-                out['parse_error'] = str(e)[:120]
-            ext = [str(i.get('external_id') or '') for i in items if i.get('external_id')]
-            known = 0
-            try:
-                cur = db.conn.cursor()
-                for chunk_start in range(0, len(ext), 200):
-                    chunk = ext[chunk_start:chunk_start + 200]
-                    marks = ','.join('?' for _ in chunk)
-                    cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE external_id IN ({marks})",
-                                tuple(chunk))
-                    known += int((cur.fetchone() or {'n': 0})['n'] or 0)
-            except Exception as e:
-                out['db_error'] = str(e)[:120]
-            out.update({'ok': True, 'items': len(items), 'known': known,
-                        'new': max(0, len(items) - known), 'html_len': len(html)})
-            return out
-
+        import avito_live as _al
+        target = _al.normalize_url(url)
+        if not target:
+            return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
         try:
-            res = await asyncio.wait_for(asyncio.to_thread(_probe_link), timeout=180)
-        except asyncio.TimeoutError:
-            res = {'ok': False, 'error': 'timeout'}
-        return _miniapp_json({'ok': True, 'probe': res})
+            parsed = parse_avito_search_link(url)
+        except Exception:
+            parsed = {}
+        fetcher = _al.Fetcher()
+        try:
+            html = await asyncio.wait_for(fetcher.get(target), timeout=300)
+        except Exception as e:
+            return _miniapp_json({'ok': True, 'probe': {
+                'ok': False, 'error': f'{type(e).__name__}: {e}'[:160]}})
+        page = _al.parse_page(html)
+        exts = [str(i.id) for i in page.items]
+        known = 0
+        try:
+            cur = db.conn.cursor()
+            for start in range(0, len(exts), 200):
+                chunk = exts[start:start + 200]
+                marks = ','.join('?' for _ in chunk)
+                cur.execute(f"SELECT COUNT(*) AS n FROM ads WHERE external_id IN ({marks})",
+                            tuple(chunk))
+                known += int((cur.fetchone() or {'n': 0})['n'] or 0)
+        except Exception as e:
+            logger.warning(f"link_test db: {e}")
+        return _miniapp_json({'ok': True, 'probe': {
+            'ok': True, 'url': target[:300],
+            'items': len(page.items), 'known': known,
+            'new': max(0, len(page.items) - known),
+            'parsed': {k: parsed.get(k) for k in
+                       ('path', 'q', 'min_price', 'max_price', 'user', 'region')}
+            if parsed.get('ok') else {}}})
 
     if action == 'fetch_test':
-        # Проверка ссылки Авито С СЕРВЕРА тем же способом, каким её берёт
-        # сборщик (пул отпечатков curl_cffi). Обычный urllib Авито режет по
-        # 439 даже на разделе — им проверять бессмысленно. Всё в потоке,
-        # чтобы не блокировать цикл событий, и с жёстким таймаутом.
+        # Проверка «пускает ли Авито ссылку» с сервера, тем же путём,
+        # которым её берёт мониторинг (прокси, отпечаток, повторы).
         url = str((body or {}).get('url') or '')
-        if not url.startswith('https://www.avito.ru/'):
+        import avito_live as _al
+        target = _al.normalize_url(url)
+        if not target:
             return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
-
-        def _probe() -> Dict:
-            import time as _t
-            import sys as _sys
-            _p = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if _p not in _sys.path:
-                _sys.path.insert(0, _p)
-            import collect as _collector
-            t0 = _t.time()
-            out = {'url': url, 'cffi': _collector._cffi is not None,
-                   'proxy': bool(getattr(_collector, 'PROXY', ''))}
-            try:
-                html = _collector.fetch(url, timeout=25)
-                items = []
-                try:
-                    items = _collector.parse_page(html) or []
-                except Exception:
-                    pass
-                out.update({'ok': True, 'len': len(html), 'items': len(items),
-                            'sec': round(_t.time() - t0, 1),
-                            'first': [str(i.get('title', ''))[:40] for i in items[:3]]})
-            except Exception as e:
-                out.update({'ok': False, 'blocked': True,
-                            'error': f'{type(e).__name__}: {e}'[:160],
-                            'sec': round(_t.time() - t0, 1)})
-            return out
-
+        fetcher = _al.Fetcher()
+        t0 = time.time()
         try:
-            res = await asyncio.wait_for(asyncio.to_thread(_probe), timeout=120)
-        except asyncio.TimeoutError:
-            res = {'ok': False, 'timeout': True, 'url': url}
-        return _miniapp_json({'ok': True, 'probe': res})
+            html = await asyncio.wait_for(fetcher.get(target), timeout=240)
+            page = _al.parse_page(html)
+            return _miniapp_json({'ok': True, 'probe': {
+                'ok': True, 'url': target[:300], 'len': len(html),
+                'items': len(page.items), 'sec': round(time.time() - t0, 1),
+                'first': [i.title[:40] for i in page.items[:3]]}})
+        except Exception as e:
+            return _miniapp_json({'ok': True, 'probe': {
+                'ok': False, 'error': f'{type(e).__name__}: {e}'[:160],
+                'sec': round(time.time() - t0, 1)}})
 
     if action == 'plans_debug':
         # Что реально отдаётся в витрину тарифов: видно цены и продукты.
@@ -36255,194 +34935,6 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
                     fixed += 1
             db.conn.commit()
             return _miniapp_json({'ok': True, 'checked': len(rows), 'fixed': fixed})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
-
-    if action in ('proxy_api_set', 'proxy_rotate', 'proxy_check'):
-        # API прокси-провайдера: ключ, смена IP, проверка текущего адреса
-        try:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if path not in sys.path:
-                sys.path.insert(0, path)
-            import collect as collector
-            _pv = str(_setting_get('collector.proxy', '') or '')
-            if _pv:
-                collector.PROXY = _pv
-            _key = str(_setting_get('proxy.api_key', '') or '')
-            if _key:
-                collector.PROXY_API_KEY = _key
-
-            if action == 'proxy_api_set':
-                key = str((body or {}).get('key') or '').strip()
-                if not key:
-                    return _miniapp_json({'ok': False, 'error': 'empty_key'})
-                _setting_set('proxy.api_key', key)
-                collector.PROXY_API_KEY = key
-                return _miniapp_json({'ok': True, 'saved': True, 'has_proxy': bool(_pv)})
-
-            if action == 'proxy_rotate':
-                before = await asyncio.to_thread(collector.proxy_exit_ip)
-                changed = await asyncio.to_thread(collector.apply_rotation)
-                after = await asyncio.to_thread(collector.proxy_exit_ip)
-                return _miniapp_json({'ok': True, 'changed': bool(changed),
-                                      'ip_before': before, 'ip_after': after,
-                                      'has_api_key': bool(collector.PROXY_API_KEY),
-                                      'api_error': str((getattr(collector, 'PROXY_API_ERROR', ['']) or [''])[0])[:200]})
-
-            ip = await asyncio.to_thread(collector.proxy_exit_ip)
-            return _miniapp_json({'ok': True, 'ip': ip, 'has_proxy': bool(_pv),
-                                  'has_api_key': bool(collector.PROXY_API_KEY),
-                                  'error': str((getattr(collector, 'PROXY_API_ERROR', ['']) or [''])[0])[:180]})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:180]})
-
-    if action in ('proxy_set', 'proxy_off'):
-        # Прокси для сборщика. Хранится в настройках, чтобы переживать
-        # перезапуск, и не попадает в репозиторий.
-        try:
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if path not in sys.path:
-                sys.path.insert(0, path)
-            import collect as collector
-            if action == 'proxy_off':
-                _setting_set('collector.proxy', '')
-                collector.PROXY = ''
-                return _miniapp_json({'ok': True, 'proxy': 'off'})
-            url = str((body or {}).get('url') or '').strip()
-            if not url.startswith(('socks5://', 'socks5h://', 'socks4://', 'http://', 'https://')):
-                return _miniapp_json({'ok': False, 'error': 'bad_scheme'})
-            _setting_set('collector.proxy', url)
-            collector.PROXY = url
-
-            def _test():
-                check = ('https://www.avito.ru/all/odezhda_obuv_aksessuary'
-                         '?q=%D0%BA%D1%83%D1%80%D1%82%D0%BA%D0%B0+nike&s=104&pmax=5000')
-                html = collector.fetch(check, timeout=60)
-                items = collector.parse_page(html)
-                return {'html_len': len(html), 'items': len(items),
-                        'sample': [str(i.get('title'))[:40] for i in items[:2]]}
-
-            res = await asyncio.to_thread(_test)
-            return _miniapp_json({'ok': True, 'proxy': 'on', 'test': res})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
-
-    if action == 'collector_cooldown':
-        # Осознанная пауза сбора: дать IP «остыть» после серии блокировок
-        try:
-            minutes = int((body or {}).get('minutes') or 120)
-            minutes = max(5, min(24 * 60, minutes))
-            _setting_set('collector.blocked_until_ts', str(int(_time.time() + minutes * 60)))
-            _setting_set('collector.interval_s', '1800' if minutes >= 60 else '900')
-            _setting_set('collector.blocks_streak', '2')
-            return _miniapp_json({'ok': True, 'pause_minutes': minutes})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
-
-    if action == 'collector_tune':
-        # Ручная настройка ритма сбора без перезапуска контейнера.
-        try:
-            b2 = body or {}
-            if b2.get('interval_s') is not None:
-                val = max(300, min(7200, int(b2['interval_s'])))
-                _setting_set('collector.interval_s', str(val))
-            if b2.get('targets') is not None:
-                _setting_set('collector.targets', str(max(1, min(5, int(b2['targets'])))))
-            return _miniapp_json({'ok': True,
-                                  'interval_s': int(cfg_get('collector.interval_s') or 0),
-                                  'targets': int(cfg_get('collector.targets') or 1)})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:160]})
-
-    if action == 'collector_now':
-        # Ручной проход в ФОНЕ: сбор двух страниц идёт дольше, чем живёт
-        # HTTP-ответ за прокси Amvera, поэтому сразу отвечаем, а результат
-        # кладём в настройку — его видно следующим запросом.
-        try:
-            token = os.environ.get('INGEST_TOKEN', '')
-            if not token:
-                return _miniapp_json({'ok': False, 'error': 'no_ingest_token'})
-            _setting_set('collector.blocked_until_ts', '0')
-            _setting_set('collector.manual_result', 'запущен ' + get_moscow_time().isoformat())
-
-            async def _manual_pass():
-                path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-                if path not in sys.path:
-                    sys.path.insert(0, path)
-                try:
-                    import collect as collector
-                    try:
-                        _pv = str(_setting_get('collector.proxy', '') or '')
-                        if _pv:
-                            collector.PROXY = _pv
-                    except Exception:
-                        pass
-                    cfg = {'server': f"http://127.0.0.1:{WEBAPP_PORT}", 'token': token}
-                    crit = await asyncio.to_thread(
-                        collector.targets_from_criteria, cfg['server'], cfg['token'])
-                    cfg['targets'] = crit[:2]
-                    try:
-                        sent = await asyncio.to_thread(collector.run_once, cfg)
-                        _setting_set('collector.manual_result',
-                                     f"готово: отправлено {sent}, целей {len(cfg['targets'])}")
-                    except SystemExit as exc:
-                        _setting_set('collector.manual_result',
-                                     f"блок Авито (код {exc.code})")
-                except Exception as exc:
-                    _setting_set('collector.manual_result', f"ошибка: {str(exc)[:120]}")
-
-            asyncio.create_task(_manual_pass())
-            return _miniapp_json({'ok': True, 'started': True,
-                                  'hint': 'результат в settings: collector.manual_result'})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
-
-    if action == 'collector_probe':
-        # Проба одной страницы Авито: сколько карточек разобрал парсер
-        try:
-            url = str((body or {}).get('url') or '')
-            if not url:
-                return _miniapp_json({'ok': False, 'error': 'url_required'})
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if path not in sys.path:
-                sys.path.insert(0, path)
-            import collect as collector
-
-            def _probe():
-                try:
-                    html = collector.fetch(url)
-                except Exception as exc:
-                    return {'error': str(exc)[:180]}
-                items = []
-                try:
-                    items = collector.parse_page(html) or []
-                except Exception as exc:
-                    return {'error': f'parse: {exc}'[:180], 'html_len': len(html or '')}
-                return {'html_len': len(html or ''), 'items': len(items),
-                        'sample': [str(i.get('title'))[:40] for i in items[:3]]}
-
-            res = await asyncio.to_thread(_probe)
-            return _miniapp_json({'ok': True, 'url': url, 'result': res})
-        except Exception as e:
-            return _miniapp_json({'ok': False, 'error': str(e)[:200]})
-
-    if action == 'collector_targets':
-        # Диагностика: какие страницы Авито сборщик собрал бы прямо сейчас
-        try:
-            token = os.environ.get('INGEST_TOKEN', '')
-            if not token:
-                return _miniapp_json({'ok': False, 'error': 'no_ingest_token'})
-            path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'collector')
-            if path not in sys.path:
-                sys.path.insert(0, path)
-            import collect as collector
-            crit = await asyncio.to_thread(
-                collector.targets_from_criteria, f"http://127.0.0.1:{WEBAPP_PORT}", token)
-            base = collector.default_targets()[:2]
-            return _miniapp_json({'ok': True, 'criteria_targets': len(crit),
-                                  'sample': [c.get('url') for c in crit[:5]],
-                                  'base': [b.get('url') for b in base],
-                                  'token_len': len(token)})
         except Exception as e:
             return _miniapp_json({'ok': False, 'error': str(e)[:200]})
 
@@ -39287,12 +37779,6 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/chat/{session_id}/send', api_send_message)
     app.router.add_post('/api/chat/{session_id}/media', api_chat_media_upload)
     # ── Агрегатор находок ────────────────────────────────────────────────────
-    app.router.add_post('/api/ingest', api_ingest_findings)
-    app.router.add_post('/api/ingest/details', api_ingest_details)
-    app.router.add_get('/api/ingest/block-requests', api_block_requests)
-    app.router.add_get('/api/ingest/need-details', api_ingest_need_details)
-    app.router.add_post('/api/ingest/status', api_ingest_status)
-    app.router.add_get('/api/ingest/checklist', api_ingest_checklist)
     async def api_hunt_parse_link(request: aiohttp_web.Request) -> aiohttp_web.Response:
         """POST /api/hunt/parse-link — что поняли из ссылки, ничего не сохраняя.
 
@@ -39409,7 +37895,6 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings', api_admin_settings)
     app.router.add_post('/api/admin/settings/rollback', api_admin_rollback)
-    app.router.add_post('/api/admin/collector-filter', api_admin_collector_filter)
     app.router.add_get('/api/legal', api_legal)
     app.router.add_post('/api/legal/consent', api_legal_consent)
     app.router.add_get('/api/admin/history', api_admin_history)
@@ -39620,6 +38105,20 @@ def main():
 
     # ─── Команды ────────────────────────────────────────────────────────────────
     application.add_handler(CommandHandler("start",   start))
+
+    # Быстрый мониторинг Авито по ссылке (avito_live): /watch, /watches, /unwatch.
+    # Без прокси не запускаем: с IP сервера Авито сразу блокирует, а блокировка
+    # прилетает на адрес Amvera и может задеть весь сервис.
+    if not os.environ.get('AVITO_PROXIES', '').strip():
+        logger.warning("avito_live: AVITO_PROXIES не задан — мониторинг ссылок выключен")
+    else:
+        try:
+            import avito_live
+            globals()['_LIVE_RUNNER'] = avito_live.install(
+                application, admin_ids=ADMIN_USER_IDS,
+                item_filter=_live_item_filter, item_sink=_live_ingest_sink)
+        except Exception as _live_err:
+            logger.exception(f"avito_live не подключён: {_live_err}")
     application.add_handler(CommandHandler("emoji", emoji_cmd))
     application.add_handler(CommandHandler("hunt",    hunt_command))
     application.add_handler(CommandHandler("hunt_debug", hunt_debug_command))
@@ -40111,11 +38610,11 @@ def main():
             site = aiohttp_web.TCPSite(runner, '0.0.0.0', WEBAPP_PORT)
             await site.start()
             print(f"{EM_OK} API-сервер запущен на порту {WEBAPP_PORT}")
-            asyncio.ensure_future(_collector_loop())
-            globals()['_COLLECTOR_TASK'] = asyncio.ensure_future(_collector_inline_loop())
-            asyncio.ensure_future(_collector_watchdog())
             globals()['_HUNT_WAKE'] = asyncio.Event()
             asyncio.ensure_future(_hunt_delivery_loop())
+            if globals().get('_LIVE_RUNNER'):
+                asyncio.ensure_future(globals()['_LIVE_RUNNER'].start())
+                asyncio.ensure_future(_live_link_sync_loop())
             asyncio.ensure_future(_hunt_catchup_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())

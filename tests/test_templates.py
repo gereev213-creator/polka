@@ -3,8 +3,7 @@
 Проверяем:
  1. Наполнение идемпотентно, шаблоны видны приложению.
  2. У каждого шаблона есть категория объявления (по ней идёт отбор).
- 3. Слова каждого шаблона узнаются сборщиком — иначе критерий не искался бы
-    вовсе (для этого и держим словарь CATEGORY_BY_WORD в collect.py).
+ 3. У шаблона определена категория объявления (по ней идёт отбор).
 
 Запуск: python3 tests/test_templates.py
 """
@@ -18,7 +17,6 @@ from typing import Any, Dict, List, Optional
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BOT = os.path.join(HERE, '..', 'polka_bot-9-3.py')
-COLLECT = os.path.join(HERE, '..', 'collector', 'collect.py')
 SRC = open(BOT, encoding='utf-8').read()
 
 TOKENS = ('_TRANSLIT_RU_EN', 'HUNT_TEMPLATES', 'HUNT_TEMPLATE_GROUPS',
@@ -85,20 +83,6 @@ no_cat = [t['title'] for t in templates
           if not ns['_crit_category_for_template'](t['group'])]
 assert not no_cat, f'без категории объявления: {no_cat}'
 print('3) у каждого шаблона есть категория объявления (по ней идёт отбор)')
-
-spec = importlib.util.spec_from_file_location('collect', COLLECT)
-collector = importlib.util.module_from_spec(spec)
-sys.argv = ['collect.py', '--selftest']
-spec.loader.exec_module(collector)
-
-bad = []
-for t in templates:
-    words = [w for w in re.split(r'[^\w]+', t['query'].lower()) if w]
-    if not any(w in collector.CATEGORY_BY_WORD for w in words):
-        bad.append(t['title'])
-assert not bad, f'сборщик не определит раздел: {bad}'
-print(f'4) все шаблоны попадают в раздел Авито (словарь сборщика: '
-      f'{len(collector.CATEGORY_BY_WORD)} слов)')
 
 with_req = [t for t in templates if t['requirements_json']]
 phones = [t for t in templates if t['group'] == 'telefony']

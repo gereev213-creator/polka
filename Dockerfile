@@ -24,6 +24,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Bot files (без MAX-бота: только TG-бот + max_compat нужен импортом)
 COPY polka_bot-9-3.py ./
 COPY max_compat.py ./
+COPY avito_live.py ./
 
 # Static assets (email banner, etc.)
 COPY assets/ ./assets/
@@ -31,9 +32,6 @@ COPY assets/ ./assets/
 # ВАЖНО: кладём в assets, а не в ./data/ — каталог /app/data в образе
 # переключал путь к БД с персистентного /data на эфемерный файл в контейнере.
 COPY data/ru_en_aliases.json ./assets/ru_en_aliases.json
-# Сборщик находок: запускается на сервере как дочерний процесс,
-# чтобы не требовать компьютера пользователя
-COPY collector/ ./collector/
 
 # Собранный Mini App frontend (API + SPA из одного процесса/БД)
 # Проверку импорта на этапе сборки убрали: на некоторых площадках импорт

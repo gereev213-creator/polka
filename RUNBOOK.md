@@ -14,7 +14,6 @@ pkill -f polka-loop; pkill -f "collect.py"
 ## Где смотреть
 | Что | Файл |
 |---|---|
-| Выдача (проходы) | `/tmp/polka-collector.log` |
 | Характеристики | `/tmp/polka-details.log` |
 | Ошибки запуска | `/tmp/polka-loop.err` |
 

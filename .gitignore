@@ -22,23 +22,11 @@ __pycache__/
 *.db-wal
 *.db-journal
 
-# Конфиг сборщика содержит токен приёма находок
-collector/config.json
-# Архив для телефона кладёт свой config.json рядом со сборщиком — там тот же
-# боевой токен, и он уже один раз попал в публичный репозиторий
-collector/polka-collector/config.json
-
-# состояние ротации целей — создаётся сборщиком при работе
-collector/targets_state.json
-
-# cookies сборщика — локальные сессии, не для репозитория
-collector/cookies.json
 # Готовый фронтенд лежит в репозитории: BOTHOST собирает без Node,
 # поэтому dist нужен в git (в .dockerignore он тоже разрешён).
 !polka-final/frontend/dist/
 !polka-final/frontend/dist/**
 
-# Локальные настройки сборщика: пути, браузерный профиль, прокси
-collector/browser.env
-collector/*.env
-collector/profile/
+
+# отладочные файлы экспериментального PoW-клиента (там cookies)
+tools/avito_api/firewall-debug*

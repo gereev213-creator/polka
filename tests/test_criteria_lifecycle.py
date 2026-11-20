@@ -1,4 +1,4 @@
-"""Пауза и удаление поиска: сборщик не должен по нему ходить.
+"""Пауза и удаление поиска: мониторинг не должен его опрашивать.
 
 Проверяем то, что человек ожидает по кнопкам:
 - «пауза» → критерий не попадает сборщику (сервер отдаёт только active=1);
@@ -13,7 +13,6 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = open(os.path.join(HERE, '..', 'polka_bot-9-3.py'), encoding='utf-8').read()
-COL = open(os.path.join(HERE, '..', 'collector', 'collect.py'), encoding='utf-8').read()
 UI = open(os.path.join(HERE, '..', 'polka-final/frontend/src/App.jsx'), encoding='utf-8').read()
 
 ok = 0
@@ -30,11 +29,9 @@ def check(name, cond, extra=''):
         print(f'FAIL {name} {extra}')
 
 
-# 1) сборщику уходят только активные критерии
-i = SRC.index("if method == 'GET' and request.query.get('for_collector')")
-j = SRC.index('return _miniapp_json', i)
-for_collector = SRC[i:j]
-check('сборщику отдаются только active=1', 'WHERE active=1' in for_collector)
+# 1) в мониторинг уходят только активные критерии
+check('в слежение отдаются только active=1',
+      "WHERE COALESCE(hc.active,1)=1" in SRC)
 
 # 2) пауза ставит active=0
 check('пауза выключает критерий', 'UPDATE hunt_criteria SET active=?' in SRC)
@@ -47,11 +44,11 @@ check('удаление критерия', 'DELETE FROM hunt_criteria' in body)
 check('история находок при удалении не стирается', 'DELETE FROM hunt_matches' not in body)
 check('чужой критерий не удаляется', 'AND user_id=?' in body)
 
-# 4) без активных критериев сборщик не ходит на Авито
-check('сборщик пропускает проход без критериев',
-      'Активных критериев нет — искать нечего' in COL)
-check('встроенный список только по флагу',
-      "POLKA_USE_STATIC_TARGETS" in COL)
+# 4) старый сборщик не участвует: работают только ссылочные поиски
+check('текстовые поиски не опрашиваются',
+      'этим занимался старый сборщик' in SRC)
+check('мост выключает лишние слежения',
+      'runner.store.sync_criteria' in SRC)
 
 # 5) админка показывает статистику поисков
 check('метрики отдают список поисков', "out['criteria_list']" in SRC)

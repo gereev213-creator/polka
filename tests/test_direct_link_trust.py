@@ -14,7 +14,6 @@ import os, sys
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 SRC = open(os.path.join(ROOT, 'polka_bot-9-3.py'), encoding='utf-8').read()
-COL = open(os.path.join(ROOT, 'collector', 'collect.py'), encoding='utf-8').read()
 
 i = SRC.index('def evaluate_ad(')
 j = SRC.index('\ndef ', i + 10)
@@ -29,16 +28,12 @@ checks = [
      "no('warmup')" not in body),
     ("город не проверяется отдельной веткой для ссылки",
      "if (not _from_link) and _want_city" not in SRC),
-    ("партия ссылки уходит со списком критериев",
-     "payload['crit_ids'] = crit_ids" in COL),
     ("сервер примеряет партию только к её критериям",
      "hunt_matches_recompute(ad_ids=_all, crit_id=int(_cid))" in SRC),
     ("без партии ссылочные критерии не трогаются",
      "crits = [c for c in crits if not int(c.get('from_link') or 0)]" in SRC),
     ("новый ссылочный поиск не пересчитывает старую базу",
      'ссылочный — находки придёт сборщик' in SRC),
-    ("сборщик открывает точный адрес, а не собранный из слов",
-     '_browser_link_url' in COL),
 ]
 ok = True
 for name, res in checks:
