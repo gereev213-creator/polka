@@ -250,21 +250,15 @@
     if (saveEl) {
       var save = savingsFor(STATE.current);
       if (save > 0) {
-        var month = matrixFind(STATE.current.links, 30);
-        var money = month ? Math.max(0, Number(month.amount) * 3 - base) : 0;
         saveEl.style.display = 'inline-flex';
-        saveEl.textContent = '\u2212' + save + '%'
-          + (money ? (' \u00B7 \u044D\u043A\u043E\u043D\u043E\u043C\u0438\u044F ' + rub2(money)) : '')
-          + ' \u043A \u0442\u0440\u0451\u043C \u043C\u0435\u0441\u044F\u0446\u0430\u043C \u043F\u043E 30 \u0434\u043D\u0435\u0439';
+        saveEl.textContent = '\u2212' + save + '%';
       } else {
         saveEl.style.display = 'none';
       }
     }
     if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub2(price);
     if (noteEl) {
-      noteEl.textContent = pct
-        ? ('Скидка ' + pct + '% \u00B7 вместо ' + rub2(base) + ' \u00B7 без автосписаний')
-        : 'Проверка каждую минуту \u00B7 находки в Telegram \u00B7 без автосписаний';
+      noteEl.textContent = 'Без автосписаний';
     }
   }
 

@@ -808,7 +808,55 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 .tutorialBtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border:1.5px solid var(--pale);background:#fff;color:var(--deep);border-radius:14px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
 .tutorialBtn .tbPlay{width:22px;height:22px;border-radius:50%;background:var(--pale);display:grid;place-items:center;font-size:9px;padding-left:2px}
 .tutorialBtn:disabled{opacity:.6}
-</style></head><body>
+</style><style id="plan-card-unslop">
+/* unslop-ui --surface: нейтральная поверхность, без градиента, стекла и декоративного бейджа. */
+#s-tariffs .plan-card.plan-plus{
+  background:#fff; color:var(--ink);
+  border:1px solid rgba(31,42,55,.08); border-radius:20px;
+  padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.05);
+  margin-top:16px; min-height:0; height:auto;
+}
+#s-tariffs .plan-plus .plan-name{color:var(--ink); font-size:15px; font-weight:600; margin-bottom:0}
+#s-tariffs .plan-plus #planChipsBox{margin-top:16px}
+#s-tariffs .plan-plus .cfield{margin:0 0 12px}
+#s-tariffs .plan-plus .cfield:last-of-type{margin-bottom:0}
+#s-tariffs .plan-plus .clabel{
+  font-size:11px; font-weight:600; color:var(--mut);
+  letter-spacing:0; text-transform:none; margin:0 2px 8px;
+}
+#s-tariffs .plan-plus .cchip{
+  background:var(--pale); border:1.5px solid transparent; color:var(--ink);
+  font-weight:600;
+}
+#s-tariffs .plan-plus .cchip small{color:var(--mut); font-weight:600}
+#s-tariffs .plan-plus .cchip.on{
+  background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:none;
+}
+#s-tariffs .plan-plus .cchip.on small{color:rgba(255,255,255,.85)}
+#s-tariffs .plan-plus .cprice .sum{color:var(--ink); font-weight:600}
+#s-tariffs .plan-plus .cprice .per{color:var(--mut); font-weight:500}
+#s-tariffs .plan-plus .cprice .pp-old{color:var(--mut); font-weight:500}
+#s-tariffs .plan-plus .csave{background:var(--pale); color:var(--deep); font-weight:600; margin:12px 0}
+#s-tariffs .plan-plus .plan-note{color:var(--mut); font-weight:500; text-align:left; margin-top:12px}
+#s-tariffs .plan-plus .payrow{
+  display:flex; justify-content:flex-end; margin-top:16px; position:static;
+}
+#s-tariffs .plan-plus .pay{
+  width:auto; min-width:0; white-space:nowrap; flex:0 0 auto;
+  height:46px; padding:0 20px; border-radius:999px;
+  border:0; background:var(--blue); color:#fff;
+  font-size:15px; font-weight:600; letter-spacing:0; text-transform:none;
+  box-shadow:none; cursor:pointer;
+  -webkit-backdrop-filter:none; backdrop-filter:none;
+}
+#s-tariffs .plan-plus .pay:hover{background:var(--deep)}
+#s-tariffs .plan-plus .pay:active{transform:scale(.98)}
+#s-tariffs .plan-plus .pay:disabled{opacity:.6; cursor:default}
+@media (max-width:380px){
+  #s-tariffs .plan-plus .pay{width:100%; padding:0 16px}
+}
+</style>
+</head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-r" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -1018,15 +1066,17 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 
 <!-- tariffs -->
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
-<div class="card trial"><b id="trialTitle">Бесплатно — 1 ссылка</b><span class="actv" id="trialBadge">24 часа</span></div>
-<div class="newHint" id="planHint">Пробные 24 часа — одна ссылка: проверка каждые 5–10 секунд. Дальше — мониторинг от 169 ₽ за 7 дней.</div>
-<div class="card plan-card" id="planCard">
+<div class="card trial"><b id="trialTitle">Пробный период — 1 ссылка</b><span class="actv" id="trialBadge">24 часа</span></div>
+<div class="newHint" id="planHint">Проверка каждые 5–10 секунд. Дальше — от 169 ₽ за 7 дней.</div>
+<div class="card plan-card plan-plus" id="planCard">
   <div class="plan-name" id="planName">Мониторинг ссылок с Авито</div>
   <div id="planChipsBox"></div>
   <div class="cprice"><div class="sum" id="planPrice">459 ₽</div><div class="per" id="planPeriod">30 дней · ≈459 ₽/мес</div></div>
   <div class="csave" id="planSave"></div>
-  <button class="pay primary" id="payBtn" onclick="activatePlus()">Оплатить 459 ₽</button>
-  <div class="plan-note" id="planNote">Проверка каждые 5–10 секунд · находки в Telegram · без автосписаний</div>
+  <div class="plan-note" id="planNote">Без автосписаний</div>
+  <div class="payrow">
+    <button type="button" class="pay" id="payBtn" onclick="activatePlus()">Оплатить 459 ₽</button>
+  </div>
 </div>
 <div class="card benefits"><h3 class="bTitle">Что входит в мониторинг</h3><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-search"/></svg></span><span class="btext"><b>Проверка каждые 5–10 секунд.</b><i>Одинаково в пробные 24 часа и на тарифе. При большой базе ссылок интервал может быть больше — приложение покажет реальный.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-bolt"/></svg></span><span class="btext"><b>Находки приходят сразу</b><i>Новый лот по твоей ссылке — сообщением в Telegram.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-chart"/></svg></span><span class="btext"><b>Без лимита находок</b><i>Сколько поймали — столько и прислали.</i></span></div><div class="row"><span class="bic"><svg width="15" height="15"><use href="#i-plane"/></svg></span><span class="btext"><b>Ссылку можно поменять</b><i>Фильтры и город задаются на Авито — в самой ссылке.</i></span></div></div>
 <button class="card acc" id="promoBtn"><b>Введи промокод</b><span class="chev"><svg width="15" height="15"><use href="#i-d"/></svg></span></button>
