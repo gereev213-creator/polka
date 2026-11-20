@@ -24143,7 +24143,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'plus.price_rub': ('int', 0, 100000, PLAN_PLUS_PRICE, 'Цена «Плюса», ₽ в месяц'),
     'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
     'live.worker_fast_sec': ('int', 1, 60, 2, 'Воркер: интервал «Плюса», сек'),
-    'live.worker_trial_sec': ('int', 1, 600, 5, 'Воркер: интервал пробного, сек'),
+    'live.worker_trial_sec': ('int', 1, 600, 2, 'Воркер: интервал пробного, сек'),
     'live.worker_free_sec': ('int', 1, 3600, 60, 'Воркер: интервал без плана, сек'),
     'live.worker_capacity_per_min': ('int', 1, 300, 30, 'Воркер: запросов в минуту'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
@@ -37853,7 +37853,7 @@ def _live_worker_groups() -> List[Dict]:
             if plan == 'plus':
                 tier = min(tier, int(cfg_get('live.worker_fast_sec') or 2))
             elif plan == 'trial':
-                tier = min(tier, int(cfg_get('live.worker_trial_sec') or 5))
+                tier = min(tier, int(cfg_get('live.worker_trial_sec') or 2))
             else:
                 tier = min(tier, int(cfg_get('live.worker_free_sec') or 60))
         g['interval'] = max(base, tier)
