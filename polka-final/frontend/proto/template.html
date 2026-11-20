@@ -808,48 +808,56 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 .tutorialBtn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border:1.5px solid var(--pale);background:#fff;color:var(--deep);border-radius:14px;font:inherit;font-size:12.5px;font-weight:800;cursor:pointer}
 .tutorialBtn .tbPlay{width:22px;height:22px;border-radius:50%;background:var(--pale);display:grid;place-items:center;font-size:9px;padding-left:2px}
 .tutorialBtn:disabled{opacity:.6}
-</style><style id="plan-card-unslop">
-/* unslop-ui --surface: нейтральная поверхность, без градиента, стекла и декоративного бейджа. */
+</style><style id="plan-card-glass">
+/* unslop-ui: одна фирменная поверхность без градиента; стеклянные контролы —
+   брендовый акцент, как в остальном приложении (taste: Keep). */
 #s-tariffs .plan-card.plan-plus{
-  background:#fff; color:var(--ink);
-  border:1px solid rgba(31,42,55,.08); border-radius:20px;
+  background:var(--deep); color:#fff;
+  border:1px solid rgba(255,255,255,.12); border-radius:20px;
   padding:16px; box-shadow:0 1px 2px rgba(0,0,0,.05);
   margin-top:16px; min-height:0; height:auto;
 }
-#s-tariffs .plan-plus .plan-name{color:var(--ink); font-size:15px; font-weight:600; margin-bottom:0}
+#s-tariffs .plan-plus .plan-name{color:#fff; font-size:15px; font-weight:600; margin-bottom:0}
 #s-tariffs .plan-plus #planChipsBox{margin-top:16px}
 #s-tariffs .plan-plus .cfield{margin:0 0 12px}
 #s-tariffs .plan-plus .cfield:last-of-type{margin-bottom:0}
 #s-tariffs .plan-plus .clabel{
-  font-size:11px; font-weight:600; color:var(--mut);
+  font-size:11px; font-weight:600; color:#fff;
   letter-spacing:0; text-transform:none; margin:0 2px 8px;
 }
 #s-tariffs .plan-plus .cchip{
-  background:var(--pale); border:1.5px solid transparent; color:var(--ink);
+  background:rgba(255,255,255,.82); border:2px solid transparent; color:var(--deep);
   font-weight:600;
 }
-#s-tariffs .plan-plus .cchip small{color:var(--mut); font-weight:600}
+#s-tariffs .plan-plus .cchip small{color:var(--deep); font-weight:600}
 #s-tariffs .plan-plus .cchip.on{
-  background:var(--blue); border-color:var(--blue); color:#fff; box-shadow:none;
+  background:#fff; border-color:var(--blue); color:var(--blue); box-shadow:none;
 }
-#s-tariffs .plan-plus .cchip.on small{color:rgba(255,255,255,.85)}
-#s-tariffs .plan-plus .cprice .sum{color:var(--ink); font-weight:600}
-#s-tariffs .plan-plus .cprice .per{color:var(--mut); font-weight:500}
-#s-tariffs .plan-plus .cprice .pp-old{color:var(--mut); font-weight:500}
-#s-tariffs .plan-plus .csave{background:var(--pale); color:var(--deep); font-weight:600; margin:12px 0}
-#s-tariffs .plan-plus .plan-note{color:var(--mut); font-weight:500; text-align:left; margin-top:12px}
+#s-tariffs .plan-plus .cchip.on small{color:var(--blue)}
+#s-tariffs .plan-plus .cprice .sum{color:#fff; font-weight:600}
+#s-tariffs .plan-plus .cprice .per{color:rgba(255,255,255,.86); font-weight:500}
+#s-tariffs .plan-plus .cprice .pp-old{color:rgba(255,255,255,.8); font-weight:500}
+#s-tariffs .plan-plus .csave{
+  background:rgba(255,255,255,.82); color:var(--deep); font-weight:600; margin:12px 0;
+}
+#s-tariffs .plan-plus .plan-note{
+  color:rgba(255,255,255,.86); font-weight:500; text-align:left; margin-top:12px;
+}
 #s-tariffs .plan-plus .payrow{
   display:flex; justify-content:flex-end; margin-top:16px; position:static;
 }
 #s-tariffs .plan-plus .pay{
   width:auto; min-width:0; white-space:nowrap; flex:0 0 auto;
   height:46px; padding:0 20px; border-radius:999px;
-  border:0; background:var(--blue); color:#fff;
+  border:1px solid rgba(255,255,255,.65);
+  background:rgba(255,255,255,.82); color:var(--deep);
+  -webkit-backdrop-filter:blur(12px) saturate(160%);
+  backdrop-filter:blur(12px) saturate(160%);
+  box-shadow:inset 0 1px 0 #fff, 0 1px 2px rgba(0,0,0,.08);
   font-size:15px; font-weight:600; letter-spacing:0; text-transform:none;
-  box-shadow:none; cursor:pointer;
-  -webkit-backdrop-filter:none; backdrop-filter:none;
+  cursor:pointer;
 }
-#s-tariffs .plan-plus .pay:hover{background:var(--deep)}
+#s-tariffs .plan-plus .pay:hover{background:#fff}
 #s-tariffs .plan-plus .pay:active{transform:scale(.98)}
 #s-tariffs .plan-plus .pay:disabled{opacity:.6; cursor:default}
 @media (max-width:380px){
