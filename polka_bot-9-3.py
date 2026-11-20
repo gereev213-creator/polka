@@ -19452,6 +19452,12 @@ async def api_diag(request: aiohttp_web.Request) -> aiohttp_web.Response:
     except Exception as _e:
         out['avito_live'] = {'error': str(_e)[:80]}
     out['collector'] = collector_status()
+    try:
+        out['live_worker'] = {'alive': live_worker_alive(),
+                              'heartbeat': str(_setting_get('live.worker_heartbeat', '') or ''),
+                              'links': len(_live_worker_groups())}
+    except Exception as _e:
+        out['live_worker'] = {'error': str(_e)[:80]}
     out['settings'] = {
         'collector_crashed': _setting_get('collector_crashed') or 'нет',
         'last_ingest_at': _setting_get('last_ingest_at') or 'нет',
@@ -21337,6 +21343,8 @@ async def _live_link_sync_loop() -> None:
             runner = globals().get('_LIVE_RUNNER')
             if runner is not None:
                 desired, limits = _live_collect_desired()
+                if live_worker_alive():
+                    desired = {}
                 _LIVE_CRIT_LIMITS.clear()
                 _LIVE_CRIT_LIMITS.update(limits)
                 added, removed = await asyncio.to_thread(runner.store.sync_criteria, desired)
@@ -21372,6 +21380,15 @@ def collector_status() -> Dict:
     """Жив ли сбор находок. Теперь это avito_live: смотрим, когда последний
     раз удалось прочитать выдачу. Находок может не быть часами — мониторинг
     при этом работает, поэтому last_ingest_at тут не годится."""
+    try:
+        hb = str(_setting_get('live.worker_heartbeat', '') or '')
+        if hb:
+            mins = _minutes_since(hb)
+            if mins is not None and mins <= 2:
+                return {'alive': True, 'minutes': mins,
+                        'source': 'worker', 'server_mode': True}
+    except Exception:
+        pass
     runner = globals().get('_LIVE_RUNNER')
     watcher = getattr(runner, 'watcher', None) if runner else None
     if watcher is not None:
@@ -24120,6 +24137,10 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     # ключ: (тип, минимум, максимум, значение по умолчанию, подпись)
     'plus.price_rub': ('int', 0, 100000, PLAN_PLUS_PRICE, 'Цена «Плюса», ₽ в месяц'),
     'plus.price_display_old': ('int', 0, 100000, PLAN_PLUS_SHOW_PRICE, 'Зачёркнутая цена, ₽'),
+    'live.worker_fast_sec': ('int', 1, 60, 2, 'Воркер: интервал «Плюса», сек'),
+    'live.worker_trial_sec': ('int', 1, 600, 5, 'Воркер: интервал пробного, сек'),
+    'live.worker_free_sec': ('int', 1, 3600, 60, 'Воркер: интервал без плана, сек'),
+    'live.worker_capacity_per_min': ('int', 1, 300, 30, 'Воркер: запросов в минуту'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
     'trial.max_extensions': ('int', 0, 10, 0,
@@ -37752,6 +37773,132 @@ async def api_miniapp_photo(request: aiohttp_web.Request) -> aiohttp_web.Respons
                                          'Cache-Control': 'public, max-age=86400'})
 
 
+# ── Воркер быстрого мониторинга (браузер на своём компьютере) ────────────────
+# Сервер отдаёт воркеру активные ссылки и принимает находки. Воркер живёт на
+# машине с видимым Chromium: Авито пускает его, а прямые запросы режет.
+# Пока воркер шлёт heartbeat, серверный avito_live ссылочные поиски не трогает
+# (иначе двойная нагрузка); замолчал — сервер подхватывает на прокси.
+
+
+def live_worker_alive(max_minutes: int = 2) -> bool:
+    """Был ли воркер на связи последние N минут."""
+    try:
+        hb = str(_setting_get('live.worker_heartbeat', '') or '')
+        if not hb:
+            return False
+        minutes = _minutes_since(hb)
+        return minutes is not None and minutes <= int(max_minutes)
+    except Exception:
+        return False
+
+
+def _live_token_ok(request) -> bool:
+    expected = os.environ.get('LIVE_WORKER_TOKEN', '')
+    if not expected:
+        return False
+    got = str(request.headers.get('X-Live-Token', '') or '')
+    try:
+        return hmac.compare_digest(got, expected)
+    except Exception:
+        return False
+
+
+def _live_worker_groups() -> List[Dict]:
+    """Активные ссылочные поиски, сгруппированные по URL для воркера."""
+    desired, limits = _live_collect_desired()
+    groups: Dict[str, Dict] = {}
+    for (uid, url), (cid, interval) in desired.items():
+        g = groups.setdefault(url, {'url': url, 'interval': int(interval),
+                                    'crit_ids': [], 'users': []})
+        if cid not in g['crit_ids']:
+            g['crit_ids'].append(cid)
+        if uid not in g['users']:
+            g['users'].append(uid)
+        g['interval'] = min(g['interval'], int(interval))
+    # Интервал для воркера: тарифный минимум, но не чаще, чем тянет один
+    # браузер. 30 запросов в минуту — замеренный потолок одного Chromium.
+    try:
+        capacity = max(1, int(cfg_get('live.worker_capacity_per_min') or 30))
+    except Exception:
+        capacity = 30
+    base = max(2, (len(groups) * 60 + capacity - 1) // capacity)
+    for g in groups.values():
+        pmin = pmax = 0
+        for cid in g['crit_ids']:
+            _pmin, _pmax = limits.get(cid, (0, 0))
+            if _pmin and (not pmin or _pmin < pmin):
+                pmin = _pmin
+            if _pmax and (not pmax or _pmax > pmax):
+                pmax = _pmax
+        g['min_price'], g['max_price'] = pmin, pmax
+        tier = 60
+        for uid in g['users']:
+            try:
+                plan = str(_user_plan(int(uid)).get('name') or 'free')
+            except Exception:
+                plan = 'free'
+            if plan == 'plus':
+                tier = min(tier, int(cfg_get('live.worker_fast_sec') or 2))
+            elif plan == 'trial':
+                tier = min(tier, int(cfg_get('live.worker_trial_sec') or 5))
+            else:
+                tier = min(tier, int(cfg_get('live.worker_free_sec') or 60))
+        g['interval'] = max(base, tier)
+    return sorted(groups.values(), key=lambda x: x['interval'])
+
+
+async def api_live_watches(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    if not _live_token_ok(request):
+        return _miniapp_err('forbidden', 403)
+    try:
+        groups = await asyncio.to_thread(_db_read, _live_worker_groups)
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'error': str(e)[:160]}, status=500)
+    return _miniapp_json({'ok': True, 'groups': groups,
+                          'server_time': get_moscow_time().isoformat()})
+
+
+async def api_live_findings(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    if not _live_token_ok(request):
+        return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        return _miniapp_err('bad_json', 400)
+    items = (body or {}).get('items') or []
+    if not isinstance(items, list):
+        return _miniapp_err('bad_items', 400)
+    crit_ids: List[int] = []
+    for c in ((body or {}).get('crit_ids') or [])[:20]:
+        try:
+            c = int(c)
+        except (TypeError, ValueError):
+            continue
+        if c > 0 and c not in crit_ids:
+            crit_ids.append(c)
+    if not crit_ids:
+        return _miniapp_err('no_crit_ids', 400)
+    stats = await asyncio.to_thread(_db_locked, ingest_findings, items, 'avito', crit_ids)
+    _setting_set('live.worker_heartbeat', get_moscow_time().isoformat())
+    if stats.get('accepted') or stats.get('all_ids'):
+        try:
+            hunt_wake()
+        except Exception:
+            pass
+    return _miniapp_json({'ok': True,
+                          'accepted': int(stats.get('accepted') or 0),
+                          'duplicate': int(stats.get('duplicate') or 0),
+                          'skipped': int(stats.get('skipped') or 0)})
+
+
+async def api_live_heartbeat(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    if not _live_token_ok(request):
+        return _miniapp_err('forbidden', 403)
+    now = get_moscow_time().isoformat()
+    _setting_set('live.worker_heartbeat', now)
+    return _miniapp_json({'ok': True, 'server_time': now})
+
+
 def create_api_app() -> aiohttp_web.Application:
     # client_max_size: у aiohttp по умолчанию 1 МБ на ТЕЛО запроса, и это
     # молча ломало загрузку фото — любой снимок с телефона больше мегабайта
@@ -37764,6 +37911,9 @@ def create_api_app() -> aiohttp_web.Application:
     )
     app.router.add_get('/', api_root)
     app.router.add_get('/health', api_health)
+    app.router.add_get('/api/live/watches', api_live_watches)
+    app.router.add_post('/api/live/findings', api_live_findings)
+    app.router.add_post('/api/live/heartbeat', api_live_heartbeat)
     app.router.add_get('/api/diag', api_diag)
     app.router.add_get('/api/banner/{key}', api_banner_image)
     app.router.add_post('/api/admin/sql', api_admin_sql)

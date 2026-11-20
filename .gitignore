@@ -30,3 +30,9 @@ __pycache__/
 
 # отладочные файлы экспериментального PoW-клиента (там cookies)
 tools/avito_api/firewall-debug*
+
+# воркер быстрого мониторинга: личные данные и профиль
+worker/worker.log
+worker/worker_state.json
+worker/*.tmp
+worker/profile/

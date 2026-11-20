@@ -56,10 +56,10 @@
 `/health` показывает блок `avito_live`: `links`, `proxies`, `blocked_links`.
 
 ## Перед деплоем
-1. `python3 check_avito_proxy.py "<ваша ссылка Авито>"` с `AVITO_PROXIES` и
+1. `python3 tools/check_avito_proxy.py "<ваша ссылка Авито>"` с `AVITO_PROXIES` и
    `AVITO_PROXY_ROTATE_URL`.
-2. `python3 test_avito_live.py` — 18 проверок.
-3. `python3 live_smoke.py "<ваша ссылка>"` — полный цикл на живой странице.
+2. `python3 tests/test_avito_live.py` — 18 проверок.
+3. `python3 tools/live_smoke.py "<ваша ссылка>"` — полный цикл на живой странице.
 4. Деплой как обычно: `git add -A && git commit && git push amvera master`.
 
 ## Куда уходят находки
@@ -67,3 +67,31 @@
 отправляется напрямую: `hunt_matches` → сообщение в Telegram и лента
 «Находки» в Mini App. Тот же путь, которым раньше шли находки старого
 сборщика. Ручные `/watch` (без критерия бота) отправляются напрямую.
+
+
+## Быстрый режим: воркер на своём компьютере (worker/)
+
+Сервер с мобильным прокси даёт 1–2 страницы в минуту. Чтобы получить
+**секунды**, на компьютере с видимым Chromium запускается воркер (`worker/`):
+Авито пускает такой браузер, а прямые запросы режет.
+
+- Воркер раз в N секунд читает выдачу из контекста браузера и шлёт новые
+  карточки на `POST /api/live/findings`. Дальше — общий `ingest_findings`
+  (чат и лента).
+- Пока воркер шлёт heartbeat (`POST /api/live/heartbeat` раз в 30 с), сервер
+  **не** опрашивает ссылочные поиски через прокси. Замолчал 2 минуты —
+  сервер подхватывает их и работает медленно, но находки не теряются.
+- Один браузер ≈ 30 запросов/мин. Сервер сам считает интервал:
+  `60 × ссылок / 30`, но не меньше тарифного.
+- Установка на Windows: `worker/README.md`, `worker/install-windows.bat`,
+  `worker/start-worker.bat`.
+
+Новая переменная:
+
+| Переменная | Значение |
+|---|---|
+| `LIVE_WORKER_TOKEN` | длинная случайная строка; тот же токен в `start-worker.bat` |
+
+Настройки в админке (или переменными): `live.worker_fast_sec` (2),
+`live.worker_trial_sec` (5), `live.worker_free_sec` (60),
+`live.worker_capacity_per_min` (30).
