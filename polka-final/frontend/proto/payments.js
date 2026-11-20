@@ -234,18 +234,11 @@
     var noteEl = document.getElementById('planNote');
     var btn = document.getElementById('payBtn');
     var days = Number(STATE.current.days) || 0;
-    var perMonth = Number(STATE.current.per_month) || (days ? Math.round(base * 30 / days) : 0);
     if (priceEl) {
-      priceEl.textContent = price.toLocaleString('ru-RU') + ' \u20BD';
-      // Промокод — на самой цене, чтобы скидка была видна в момент выбора.
-      if (pct) {
-        priceEl.innerHTML = price.toLocaleString('ru-RU') + ' \u20BD'
-          + ' <span class="pp-old">' + rub2(base) + '</span>';
-      }
+      priceEl.textContent = price.toLocaleString('ru-RU');
     }
     if (periodEl) {
-      periodEl.textContent = daysWord(days)
-        + (perMonth ? ' \u00B7 \u2248' + perMonth.toLocaleString('ru-RU') + ' \u20BD/мес' : '');
+      periodEl.textContent = days === 30 ? 'руб/мес' : ('руб / ' + daysWord(days));
     }
     if (saveEl) {
       var save = savingsFor(STATE.current);
@@ -256,7 +249,7 @@
         saveEl.style.display = 'none';
       }
     }
-    if (btn && !STATE.paid) btn.textContent = 'Оплатить ' + rub2(price);
+    if (btn && !STATE.paid) btn.textContent = 'ОПЛАТИТЬ';
     if (noteEl) {
       noteEl.textContent = 'Без автосписаний';
     }
