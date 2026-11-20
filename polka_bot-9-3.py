@@ -24106,7 +24106,7 @@ HUNT_AI_VERDICT_PER_PASS = int(os.environ.get('HUNT_AI_VERDICT_PER_PASS', '0'))
 # ── ЭТАП H: монетизация (значения в переменных окружения, не в коде) ──────────
 # Два поиска бесплатно: с одним человек чаще всего не успевает увидеть
 # находку и уходит. Пауза и удаление поисков — всегда бесплатны.
-PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '1'))
+PLAN_FREE_MAX_CRITERIA = int(os.environ.get('FREE_MAX_CRITERIA', '0'))
 # Бесплатный (он же пробный) поиск живёт сутки, потом встаёт на паузу:
 # снять её можно только в «Плюсе». Это и есть точка монетизации.
 FREE_CRITERION_TTL_HOURS = int(os.environ.get('FREE_CRITERION_TTL_HOURS', '24'))
@@ -27098,6 +27098,14 @@ def _user_plan(user_id: int) -> Dict:
         trial_started = (user.get('trial_started_at') or user.get('registration_date')
                          or now.isoformat())
     trial_days = int(cfg_get('trial.days'))
+    if plan == 'free' and user.get('trial_started_at'):
+        # Регистрация пишет plan='free'; без этого пробный не включался вовсе.
+        try:
+            hours0 = _hours_since(user.get('trial_started_at'))
+            if hours0 is not None and hours0 < trial_days * 24:
+                plan = 'trial'
+        except Exception:
+            pass
     if plan == 'trial':
         hours = int(_hours_since(trial_started) or 0)
         trial_hours = trial_days * 24
