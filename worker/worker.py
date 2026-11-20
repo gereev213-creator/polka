@@ -1,41 +1,51 @@
-"""Воркер быстрого мониторинга Авито.
+"""Воркер быстрого мониторинга Авито — два канала.
 
-Запускается на компьютере с видимым Chromium и постоянным профилем: Авито
-пускает такой браузер, а прямые HTTP-запросы режет. Воркер получает ссылки
-с сервера Полки, раз в N секунд читает выдачу из контекста браузера и шлёт
-новые объявления на сервер. Дальше сервер сам кладёт их в чат и ленту.
+Канал — это отдельный Chromium со своим профилем и IP:
+  • домашний  — без прокси;
+  • прокси    — через локальный мост HTTP→SOCKS5 (Chromium не умеет
+                SOCKS5 с логином/паролем).
 
-Настройки — переменными окружения (см. start-worker.bat):
-  POLKA_SERVER        https://...            адрес сервера Полки
-  LIVE_WORKER_TOKEN   ...                    токен воркера (задаётся в Amvera)
-  AVITO_PROFILE       C:\\Polka\\profile      папка профиля Chromium
-  WORKER_HEADLESS     0                      1 — без окна (Авито часто режет)
-  WORKER_POLL_MIN     2                      минимальный интервал, секунды
-  WORKER_STATE        worker_state.json      файл «уже видели»
+Каждый канал держит 6 параллельных запросов. Сервер Полки отдаёт ссылки и
+принимает находки; пока воркер жив, серверные ссылочные поиски на прокси не
+опрашиваются.
+
+Настройки (start-worker.bat):
+  POLKA_SERVER          https://...
+  LIVE_WORKER_TOKEN     токен из Amvera
+  WORKER_PROFILE_HOME   папка профиля для домашнего канала
+  WORKER_PROFILE_PROXY  папка профиля для прокси-канала
+  WORKER_PROXY          socks5h://логин:пароль@хост:порт
+  WORKER_PARALLEL       6 (запросов одновременно на канал)
+  WORKER_HEADLESS       0 (1 — без окна, Авито часто режет)
 
 Запуск:  python worker.py            (цикл)
          python worker.py --once     (одна проверка, для теста)
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
 import sys
 import time
-import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SERVER = (os.environ.get("POLKA_SERVER") or "").rstrip("/")
 TOKEN = os.environ.get("LIVE_WORKER_TOKEN") or ""
-PROFILE = os.environ.get("AVITO_PROFILE") or os.path.join(HERE, "profile")
+PROFILE_HOME = (os.environ.get("WORKER_PROFILE_HOME")
+                or os.environ.get("AVITO_PROFILE")
+                or os.path.join(HERE, "profile-home"))
+PROFILE_PROXY = os.environ.get("WORKER_PROFILE_PROXY") or os.path.join(HERE, "profile-proxy")
+PROXY = (os.environ.get("WORKER_PROXY") or "").strip()
 HEADLESS = str(os.environ.get("WORKER_HEADLESS", "0")) == "1"
+PARALLEL = max(1, int(os.environ.get("WORKER_PARALLEL", "6")))
 POLL_MIN = max(1, int(os.environ.get("WORKER_POLL_MIN", "2")))
 STATE_FILE = os.environ.get("WORKER_STATE") or os.path.join(HERE, "worker_state.json")
 LOG_FILE = os.path.join(HERE, "worker.log")
@@ -54,9 +64,9 @@ def log(msg: str) -> None:
         pass
 
 
-# ── HTTP к серверу Полки ────────────────────────────────────────────────────
+# ── Сервер Полки ────────────────────────────────────────────────────────────
 
-def server_call(path: str, payload=None, method: str = "GET"):
+def _server_call(path: str, payload=None, method: str = "GET"):
     if not SERVER:
         raise RuntimeError("POLKA_SERVER не задан")
     data = None
@@ -69,18 +79,128 @@ def server_call(path: str, payload=None, method: str = "GET"):
         return json.loads(resp.read().decode("utf-8", "ignore"))
 
 
-def fetch_groups():
-    data = server_call("/api/live/watches")
+async def server_call(path: str, payload=None, method: str = "GET"):
+    return await asyncio.to_thread(_server_call, path, payload, method)
+
+
+async def fetch_groups():
+    data = await server_call("/api/live/watches")
     return data.get("groups") or []
 
 
-def send_findings(items, crit_ids):
-    return server_call("/api/live/findings",
-                       {"items": items, "crit_ids": crit_ids}, "POST")
+async def heartbeat(lanes: int):
+    return await server_call("/api/live/heartbeat", {"lanes": lanes}, "POST")
 
 
-def heartbeat():
-    return server_call("/api/live/heartbeat", {}, "POST")
+async def send_findings(items, crit_ids):
+    return await server_call("/api/live/findings", {"items": items, "crit_ids": crit_ids}, "POST")
+
+
+# ── Мост HTTP → SOCKS5 (для прокси-канала) ─────────────────────────────────
+
+class SocksBridge:
+    """Локальный HTTP CONNECT-прокси, который ходит в SOCKS5 с авторизацией."""
+
+    def __init__(self, proxy_url: str):
+        u = urlparse(proxy_url if "://" in proxy_url else "socks5h://" + proxy_url)
+        self.host = u.hostname or ""
+        self.port = int(u.port or 1080)
+        self.user = unquote(u.username or "")
+        self.password = unquote(u.password or "")
+        self.server = None
+        self.listen_port = 0
+
+    async def start(self) -> int:
+        self.server = await asyncio.start_server(self._handle, "127.0.0.1", 0)
+        self.listen_port = self.server.sockets[0].getsockname()[1]
+        log(f"мост HTTP→SOCKS5: 127.0.0.1:{self.listen_port} → {self.host}:{self.port}")
+        return self.listen_port
+
+    async def stop(self):
+        if self.server:
+            self.server.close()
+            try:
+                await self.server.wait_closed()
+            except Exception:
+                pass
+
+    async def _pipe(self, src, dst):
+        try:
+            while True:
+                data = await src.read(65536)
+                if not data:
+                    break
+                dst.write(data)
+                await dst.drain()
+        except Exception:
+            pass
+        finally:
+            try:
+                dst.close()
+            except Exception:
+                pass
+
+    async def _handle(self, reader, writer):
+        upstream = None
+        try:
+            header = await asyncio.wait_for(reader.readuntil(b"\r\n\r\n"), timeout=15)
+            first = header.decode("latin1").split("\r\n", 1)[0]
+            method, target, _ = first.split()
+            if method.upper() != "CONNECT":
+                writer.write(b"HTTP/1.1 405 Method Not Allowed\r\n\r\n")
+                await writer.drain()
+                writer.close()
+                return
+            host, port = target.rsplit(":", 1)
+            r, w = await asyncio.open_connection(self.host, self.port)
+            upstream = (r, w)
+            w.write(b"\x05\x02\x00\x02" if self.user else b"\x05\x01\x00")
+            await w.drain()
+            resp = await r.readexactly(2)
+            if resp[1] == 2:
+                u = self.user.encode()
+                p = self.password.encode()
+                w.write(b"\x01" + bytes([len(u)]) + u + bytes([len(p)]) + p)
+                await w.drain()
+                auth = await r.readexactly(2)
+                if auth[1] != 0:
+                    raise RuntimeError("socks auth failed")
+            elif resp[1] != 0:
+                raise RuntimeError(f"socks method {resp[1]}")
+            hb = host.encode()
+            w.write(b"\x05\x01\x00\x03" + bytes([len(hb)]) + hb + int(port).to_bytes(2, "big"))
+            await w.drain()
+            rep = await r.readexactly(4)
+            if rep[1] != 0:
+                raise RuntimeError(f"socks connect {rep[1]}")
+            atyp = rep[3]
+            if atyp == 1:
+                await r.readexactly(4)
+            elif atyp == 3:
+                n = (await r.readexactly(1))[0]
+                await r.readexactly(n)
+            elif atyp == 4:
+                await r.readexactly(16)
+            await r.readexactly(2)
+            writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
+            await writer.drain()
+            await asyncio.gather(self._pipe(reader, w), self._pipe(r, writer))
+        except Exception:
+            try:
+                writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+                await writer.drain()
+            except Exception:
+                pass
+        finally:
+            try:
+                writer.close()
+            except Exception:
+                pass
+            if upstream:
+                try:
+                    upstream[1].close()
+                except Exception:
+                    pass
 
 
 # ── Разбор выдачи ───────────────────────────────────────────────────────────
@@ -188,7 +308,7 @@ def parse_items(html: str, group: dict):
     return out
 
 
-# ── Состояние «уже видели» ──────────────────────────────────────────────────
+# ── Состояние ───────────────────────────────────────────────────────────────
 
 def load_state() -> dict:
     try:
@@ -209,12 +329,11 @@ def save_state(state: dict) -> None:
         log(f"state save: {type(e).__name__}: {e}")
 
 
-# ── Браузер ─────────────────────────────────────────────────────────────────
+# ── Каналы ──────────────────────────────────────────────────────────────────
 
-def launch(playwright):
-    os.makedirs(PROFILE, exist_ok=True)
-    ctx = playwright.chromium.launch_persistent_context(
-        PROFILE,
+async def launch_lane(pw, name: str, profile: str, proxy_url: Optional[str]):
+    os.makedirs(profile, exist_ok=True)
+    kwargs = dict(
         headless=HEADLESS,
         args=[
             "--disable-blink-features=AutomationControlled",
@@ -226,56 +345,46 @@ def launch(playwright):
         viewport={"width": 1440, "height": 900},
         extra_http_headers={"Accept-Language": "ru-RU,ru;q=0.9"},
     )
-    ctx.add_init_script(
+    if proxy_url:
+        kwargs["proxy"] = {"server": proxy_url}
+    ctx = await pw.chromium.launch_persistent_context(profile, **kwargs)
+    await ctx.add_init_script(
         "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
         "Object.defineProperty(navigator,'languages',{get:()=>['ru-RU','ru']});"
         "window.chrome = window.chrome || {runtime:{}};"
     )
-    page = ctx.pages[0] if ctx.pages else ctx.new_page()
-    return ctx, page
+    log(f"канал {name}: профиль {profile}"
+        + (f", прокси {proxy_url}" if proxy_url else ", без прокси"))
+    return ctx
 
 
-def navigate(page, url: str) -> bool:
-    try:
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        time.sleep(1.5)
-        return True
-    except Exception as e:
-        log(f"навигация {url[:70]}: {type(e).__name__}: {str(e)[:80]}")
-        return False
-
-
-def poll_once(ctx, page, group: dict, state: dict) -> None:
+async def poll_group(lane: dict, group: dict, state: dict):
     url = group["url"]
     crit_ids = [int(c) for c in (group.get("crit_ids") or [])]
     if not crit_ids:
         return
-    if url not in state:
-        state[url] = {"seen": [], "baseline": False, "navigated": False}
-    st = state[url]
-    if not st.get("navigated"):
-        if not navigate(page, url):
-            return
-        st["navigated"] = True
-        save_state(state)
     try:
-        resp = ctx.request.get(url, timeout=45000,
-                               headers={"Referer": url, "Accept-Language": "ru-RU,ru;q=0.9"})
-        html = resp.body().decode("utf-8", "ignore")
+        resp = await lane["ctx"].request.get(
+            url, timeout=45000,
+            headers={"Referer": url, "Accept-Language": "ru-RU,ru;q=0.9"})
         status = resp.status
+        body = (await resp.body()).decode("utf-8", "ignore")
     except Exception as e:
-        log(f"запрос {url[:70]}: {type(e).__name__}: {str(e)[:80]}")
-        st["navigated"] = False
+        lane["fails"] = lane.get("fails", 0) + 1
+        log(f"{lane['name']}: {type(e).__name__}: {str(e)[:90]} · {url[:60]}")
         return
     if status != 200:
-        log(f"HTTP {status} {url[:70]} — обновляю страницу")
-        st["navigated"] = False
+        lane["fails"] = lane.get("fails", 0) + 1
+        log(f"{lane['name']}: HTTP {status} · {url[:60]}")
         return
-    items = parse_items(html, group)
+    lane["fails"] = 0
+    items = parse_items(body, group)
     if items is None:
-        log(f"нет data-mfe-state {url[:70]} — обновляю страницу")
-        st["navigated"] = False
+        log(f"{lane['name']}: нет data-mfe-state · {url[:60]}")
         return
+    if url not in state:
+        state[url] = {"seen": [], "baseline": False}
+    st = state[url]
     ids = [it["external_id"] for it in items if it["external_id"]]
     seen = set(st.get("seen") or [])
     if not st.get("baseline"):
@@ -288,7 +397,7 @@ def poll_once(ctx, page, group: dict, state: dict) -> None:
     if not new:
         return
     try:
-        res = send_findings(new, crit_ids)
+        res = await send_findings(new, crit_ids)
         log(f"новых {len(new)} → принято {res.get('accepted')}, "
             f"дублей {res.get('duplicate')} · {url[:70]}")
         seen.update(it["external_id"] for it in new)
@@ -298,74 +407,161 @@ def poll_once(ctx, page, group: dict, state: dict) -> None:
         log(f"отправка {len(new)}: {type(e).__name__}: {str(e)[:100]}")
 
 
-def run_once() -> int:
-    groups = fetch_groups()
+async def poll_batch(lane: dict, batch, state):
+    tasks = [poll_group(lane, g, state) for g in batch]
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+# ── Основной цикл ───────────────────────────────────────────────────────────
+
+async def maybe_rotate():
+    """Сменить IP прокси перед стартом (если задана ссылка провайдера)."""
+    url = (os.environ.get("WORKER_ROTATE_URL") or "").strip()
+    if not url:
+        return
+    try:
+        def _get():
+            with urllib.request.urlopen(url, timeout=40) as r:
+                return json.loads(r.read().decode("utf-8", "ignore"))
+        data = await asyncio.to_thread(_get)
+        rt = float(data.get("rt") or 12)
+        log(f"смена IP прокси: новый {data.get('new_ip')}, жду {rt + 4:.0f} с")
+        await asyncio.sleep(rt + 4)
+    except Exception as e:
+        log(f"смена IP: {type(e).__name__}: {str(e)[:80]}")
+
+
+async def run_once() -> int:
+    if PROXY:
+        await maybe_rotate()
+    groups = await fetch_groups()
     if not groups:
         log("нет активных ссылок")
         return 1
     state = load_state()
-    with sync_playwright() as pw:
-        ctx, page = launch(pw)
-        for g in groups:
-            poll_once(ctx, page, g, state)
-        ctx.close()
+    bridge = None
+    lanes = []
+    async with async_playwright() as pw:
+        if PROXY:
+            bridge = SocksBridge(PROXY)
+            port = await bridge.start()
+        else:
+            port = None
+        lanes.append({"name": "home", "ctx": await launch_lane(pw, "home", PROFILE_HOME, None),
+                      "fails": 0})
+        if port and os.path.isdir(PROFILE_PROXY):
+            lanes.append({"name": "proxy",
+                          "ctx": await launch_lane(pw, "proxy", PROFILE_PROXY,
+                                                   f"http://127.0.0.1:{port}"),
+                          "fails": 0})
+        else:
+            log("прокси-канал не включён (нет WORKER_PROXY или папки профиля)")
+        for i in range(0, len(groups), PARALLEL):
+            batch = groups[i:i + PARALLEL]
+            lane = lanes[(i // PARALLEL) % len(lanes)]
+            await poll_batch(lane, batch, state)
+        for lane in lanes:
+            await lane["ctx"].close()
+        if bridge:
+            await bridge.stop()
     return 0
 
 
-def main() -> int:
+async def main() -> int:
     if not SERVER or not TOKEN:
         log("не заданы POLKA_SERVER / LIVE_WORKER_TOKEN")
         return 2
-    log(f"воркер запущен: сервер {SERVER}, профиль {PROFILE}, headless={HEADLESS}")
+    if PROXY:
+        await maybe_rotate()
+    lanes = [{"name": "home", "profile": PROFILE_HOME, "proxy": None}]
+    bridge = None
+    proxy_port = None
+    if PROXY and os.path.isdir(PROFILE_PROXY):
+        try:
+            bridge = SocksBridge(PROXY)
+            proxy_port = await bridge.start()
+            lanes.append({"name": "proxy", "profile": PROFILE_PROXY,
+                          "proxy": f"http://127.0.0.1:{proxy_port}"})
+        except Exception as e:
+            log(f"мост не поднялся: {type(e).__name__}: {str(e)[:100]}")
+            bridge = None
+    else:
+        log("второй канал не включён: нет WORKER_PROXY или папки профиля прокси")
+    log(f"воркер запущен: сервер {SERVER}, каналов {len(lanes)}, "
+        f"параллельно {PARALLEL} на канал, headless={HEADLESS}")
+
     state = load_state()
     groups = []
     last_groups = 0.0
     last_hb = 0.0
     next_at = {}
-    with sync_playwright() as pw:
-        ctx, page = launch(pw)
+    async with async_playwright() as pw:
+        active = []
+        for spec in lanes:
+            try:
+                ctx = await launch_lane(pw, spec["name"], spec["profile"], spec["proxy"])
+                active.append({"name": spec["name"], "ctx": ctx, "fails": 0})
+            except Exception as e:
+                log(f"канал {spec['name']} не поднялся: {type(e).__name__}: {str(e)[:100]}")
         while True:
             try:
                 now = time.time()
                 if now - last_groups > GROUPS_EVERY or not groups:
                     try:
-                        groups = fetch_groups()
+                        groups = await fetch_groups()
                         last_groups = now
                         log(f"ссылок в работе: {len(groups)}")
                     except Exception as e:
                         log(f"список ссылок: {type(e).__name__}: {str(e)[:100]}")
+                if not active:
+                    log("нет живых каналов — останавливаюсь, сервер подхватит на прокси")
+                    return 3
                 if now - last_hb > HEARTBEAT_EVERY:
                     try:
-                        heartbeat()
+                        await heartbeat(len(active))
                         last_hb = now
                     except Exception as e:
                         log(f"heartbeat: {type(e).__name__}: {str(e)[:100]}")
-                due = [g for g in groups if next_at.get(g["url"], 0) <= now]
-                if not due:
-                    time.sleep(0.5)
+                due = sorted([g for g in groups if next_at.get(g["url"], 0) <= now],
+                             key=lambda x: next_at.get(x["url"], 0))
+                if not due or not active:
+                    await asyncio.sleep(0.3)
                     continue
-                g = min(due, key=lambda x: next_at.get(x["url"], 0))
-                poll_once(ctx, page, g, state)
-                interval = max(POLL_MIN, int(g.get("interval") or 60))
-                next_at[g["url"]] = time.time() + interval
+                # Раздаём должников по каналам порциями до PARALLEL
+                batches = []
+                rest = due
+                for lane in active:
+                    if not rest:
+                        break
+                    batch = rest[:PARALLEL]
+                    rest = rest[PARALLEL:]
+                    batches.append((lane, batch))
+                tasks = []
+                for lane, batch in batches:
+                    for g in batch:
+                        next_at[g["url"]] = now + max(POLL_MIN, int(g.get("interval") or 60))
+                    tasks.append(poll_batch(lane, batch, state))
+                await asyncio.gather(*tasks, return_exceptions=True)
+                # канал, который стабильно бьётся, выключаем — второй возьмёт всё
+                for lane in list(active):
+                    if lane.get("fails", 0) >= 8:
+                        log(f"канал {lane['name']} отключён после 8 ошибок")
+                        try:
+                            await lane["ctx"].close()
+                        except Exception:
+                            pass
+                        active.remove(lane)
             except KeyboardInterrupt:
                 log("остановлен")
                 return 0
             except Exception as e:
                 log(f"цикл: {type(e).__name__}: {str(e)[:120]}")
-                try:
-                    ctx.close()
-                except Exception:
-                    pass
-                time.sleep(3)
-                try:
-                    ctx, page = launch(pw)
-                except Exception as e2:
-                    log(f"браузер не поднялся: {type(e2).__name__}: {str(e2)[:100]}")
-                    time.sleep(10)
+                await asyncio.sleep(5)
+    if bridge:
+        await bridge.stop()
 
 
 if __name__ == "__main__":
     if "--once" in sys.argv:
-        sys.exit(run_once())
-    sys.exit(main())
+        sys.exit(asyncio.run(run_once()))
+    sys.exit(asyncio.run(main()))

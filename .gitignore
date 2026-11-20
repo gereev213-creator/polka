@@ -36,3 +36,5 @@ worker/worker.log
 worker/worker_state.json
 worker/*.tmp
 worker/profile/
+worker/profile-home/
+worker/profile-proxy/

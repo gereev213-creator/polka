@@ -24145,7 +24145,7 @@ SETTINGS_SCHEMA: Dict[str, tuple] = {
     'live.worker_fast_sec': ('int', 1, 60, 2, 'Воркер: интервал «Плюса», сек'),
     'live.worker_trial_sec': ('int', 1, 600, 2, 'Воркер: интервал пробного, сек'),
     'live.worker_free_sec': ('int', 1, 3600, 60, 'Воркер: интервал без плана, сек'),
-    'live.worker_capacity_per_min': ('int', 1, 300, 30, 'Воркер: запросов в минуту'),
+    'live.worker_capacity_per_min': ('int', 1, 300, 240, 'Воркер: запросов в минуту на канал'),
     'plus.stars': ('int', 1, 100000, PLUS_STARS, 'Цена «Плюса» в звёздах'),
     'trial.days': ('int', 0, 365, PLAN_TRIAL_DAYS, 'Дней пробного периода'),
     'trial.max_extensions': ('int', 0, 10, 0,
@@ -37831,9 +37831,13 @@ def _live_worker_groups() -> List[Dict]:
     # Интервал для воркера: тарифный минимум, но не чаще, чем тянет один
     # браузер. 30 запросов в минуту — замеренный потолок одного Chromium.
     try:
-        capacity = max(1, int(cfg_get('live.worker_capacity_per_min') or 30))
+        lanes = max(1, int(_setting_get('live.worker_lanes', '1') or 1))
     except Exception:
-        capacity = 30
+        lanes = 1
+    try:
+        capacity = max(1, int(cfg_get('live.worker_capacity_per_min') or 240)) * lanes
+    except Exception:
+        capacity = 240 * lanes
     base = max(2, (len(groups) * 60 + capacity - 1) // capacity)
     for g in groups.values():
         pmin = pmax = 0
@@ -37907,9 +37911,19 @@ async def api_live_findings(request: aiohttp_web.Request) -> aiohttp_web.Respons
 async def api_live_heartbeat(request: aiohttp_web.Request) -> aiohttp_web.Response:
     if not _live_token_ok(request):
         return _miniapp_err('forbidden', 403)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        lanes = int((body or {}).get('lanes') or 1)
+    except (TypeError, ValueError):
+        lanes = 1
+    lanes = max(1, min(9, lanes))
     now = get_moscow_time().isoformat()
     _setting_set('live.worker_heartbeat', now)
-    return _miniapp_json({'ok': True, 'server_time': now})
+    _setting_set('live.worker_lanes', str(lanes))
+    return _miniapp_json({'ok': True, 'server_time': now, 'lanes': lanes})
 
 
 def create_api_app() -> aiohttp_web.Application:
