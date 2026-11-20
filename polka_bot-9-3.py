@@ -21328,6 +21328,11 @@ def _live_collect_desired():
         uid = int(r['user_id'])
         if uid not in minutes:
             try:
+                # Бесплатный план больше не получает поисков: 0 в лимите
+                # значит, что критерий не должен попадать ни в воркер, ни
+                # в серверный опрос. Купленные слоты дают лимит > 0.
+                if int(_user_plan(uid).get('criteria_limit') or 0) <= 0:
+                    continue
                 minutes[uid] = max(1, int(_link_check_min(uid)))
             except Exception:
                 minutes[uid] = 5
