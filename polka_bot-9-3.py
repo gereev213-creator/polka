@@ -21341,6 +21341,55 @@ def _live_collect_desired():
     return desired, limits
 
 
+async def _live_worker_alert() -> None:
+    """Сообщает админам, если воркер быстрого мониторинга пропал.
+
+    Воркер — ускоритель, а не зависимость: сервер продолжает работать на
+    прокси. Но человек должен узнать, что проверки замедлились, а не гадать.
+    """
+    try:
+        hb = str(_setting_get('live.worker_heartbeat', '') or '')
+        if not hb:
+            return
+        mins = _minutes_since(hb)
+        if mins is None:
+            return
+        down = str(_setting_get('live.worker_down', '0') or '0') == '1'
+        app = _get_bot_app()
+        if mins > 5:
+            last = str(_setting_get('live.worker_alert_at', '') or '')
+            if last and (_minutes_since(last) or 999) < 60:
+                return
+            if app:
+                for aid in ADMIN_USER_IDS:
+                    try:
+                        await app.bot.send_message(
+                            aid,
+                            "⚠️ <b>Воркер мониторинга не на связи</b>\n\n"
+                            "Проверьте окно Chromium на ноуте: если висит проверка "
+                            "Авито — пройдите её. Пока сервер продолжает на прокси "
+                            "и присылает находки медленнее.",
+                            parse_mode='HTML')
+                    except Exception:
+                        pass
+            _setting_set('live.worker_alert_at', get_moscow_time().isoformat())
+            _setting_set('live.worker_down', '1')
+        elif down:
+            if app:
+                for aid in ADMIN_USER_IDS:
+                    try:
+                        await app.bot.send_message(
+                            aid,
+                            "✅ <b>Воркер мониторинга снова на связи</b>\n\n"
+                            "Скорость проверок восстановлена.",
+                            parse_mode='HTML')
+                    except Exception:
+                        pass
+            _setting_set('live.worker_down', '0')
+    except Exception as e:
+        logger.warning(f"live worker alert: {e}")
+
+
 async def _live_link_sync_loop() -> None:
     await asyncio.sleep(15)
     while True:
@@ -21356,6 +21405,7 @@ async def _live_link_sync_loop() -> None:
                 if added or removed:
                     logger.info(f"avito_live: поиски синхронизированы, +{added} −{removed}, "
                                 f"активных ссылок: {len(desired)}")
+            await _live_worker_alert()
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -38791,7 +38841,9 @@ def main():
             asyncio.ensure_future(_hunt_delivery_loop())
             if globals().get('_LIVE_RUNNER'):
                 asyncio.ensure_future(globals()['_LIVE_RUNNER'].start())
-                asyncio.ensure_future(_live_link_sync_loop())
+            # Цикл нужен и без серверного раннера: он следит за heartbeat
+            # воркера и предупреждает админа, если тот пропал.
+            asyncio.ensure_future(_live_link_sync_loop())
             asyncio.ensure_future(_hunt_catchup_loop())
             asyncio.ensure_future(_hunt_feedback_loop())
             asyncio.ensure_future(_findings_cleanup_loop())

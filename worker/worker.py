@@ -414,11 +414,18 @@ async def poll_batch(lane: dict, batch, state):
 
 # ── Основной цикл ───────────────────────────────────────────────────────────
 
+_LAST_ROT = 0.0
+
+
 async def maybe_rotate():
-    """Сменить IP прокси перед стартом (если задана ссылка провайдера)."""
+    """Сменить IP прокси (не чаще раза в 60 секунд)."""
+    global _LAST_ROT
     url = (os.environ.get("WORKER_ROTATE_URL") or "").strip()
     if not url:
         return
+    if time.time() - _LAST_ROT < 60:
+        return
+    _LAST_ROT = time.time()
     try:
         def _get():
             with urllib.request.urlopen(url, timeout=40) as r:
@@ -542,15 +549,33 @@ async def main() -> int:
                         next_at[g["url"]] = now + max(POLL_MIN, int(g.get("interval") or 60))
                     tasks.append(poll_batch(lane, batch, state))
                 await asyncio.gather(*tasks, return_exceptions=True)
-                # канал, который стабильно бьётся, выключаем — второй возьмёт всё
+                # канал, который стабильно бьётся: прокси — меняем IP и
+                # перезапускаем, домашний — выключаем, второй возьмёт всё.
                 for lane in list(active):
-                    if lane.get("fails", 0) >= 8:
-                        log(f"канал {lane['name']} отключён после 8 ошибок")
+                    if lane.get("fails", 0) < 8:
+                        continue
+                    if lane["name"] == "proxy" and os.environ.get("WORKER_ROTATE_URL"):
+                        log("прокси-канал: меняю IP после проверок Авито")
+                        await maybe_rotate()
                         try:
                             await lane["ctx"].close()
                         except Exception:
                             pass
-                        active.remove(lane)
+                        try:
+                            lane["ctx"] = await launch_lane(
+                                pw, "proxy", PROFILE_PROXY,
+                                f"http://127.0.0.1:{proxy_port}")
+                            lane["fails"] = 0
+                            log("прокси-канал перезапущен на новом IP")
+                            continue
+                        except Exception as e:
+                            log(f"прокси-канал не поднялся: {type(e).__name__}: {str(e)[:100]}")
+                    log(f"канал {lane['name']} отключён после 8 ошибок")
+                    try:
+                        await lane["ctx"].close()
+                    except Exception:
+                        pass
+                    active.remove(lane)
             except KeyboardInterrupt:
                 log("остановлен")
                 return 0
