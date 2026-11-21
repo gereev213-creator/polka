@@ -1054,7 +1054,7 @@ def install(application: Any, *, db_path: Optional[str] = None, proxies: Optiona
 
     watcher = LiveWatcher(
         store, fetcher or Fetcher(proxies), route_sink,
-        interval=float(os.environ.get("AVITO_POLL_SEC", "120")),
+        interval=float(os.environ.get("AVITO_POLL_SEC", "60")),
         concurrency=int(os.environ.get("AVITO_CONCURRENCY", "1")),
         on_health=health, item_filter=item_filter)
     runner = LiveRunner(store, watcher, tg_sink, limit)
