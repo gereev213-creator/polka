@@ -213,10 +213,8 @@
       renderPlanChips();
       paintPlans();
       showBalanceButton();
-    }, function (val) {
-      var combo = comboFor(STATE.links, val);
-      var save = savingsFor(combo);
-      return save > 0 ? ('\u2212' + save + '%') : '';
+    }, function () {
+      return '';   // скидки % не показываем — выглядят неубедительно
     }, null, function (val) {
       return String(val) + ' дн';
     });
@@ -242,12 +240,7 @@
     }
     if (saveEl) {
       var save = savingsFor(STATE.current);
-      if (save > 0) {
-        saveEl.style.display = 'inline-flex';
-        saveEl.textContent = '\u2212' + save + '%';
-      } else {
-        saveEl.style.display = 'none';
-      }
+      saveEl.style.display = 'none';   // без «−N%»
     }
     if (btn && !STATE.paid) btn.textContent = 'ОПЛАТИТЬ';
     if (noteEl) {
