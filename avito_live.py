@@ -627,6 +627,10 @@ class Store:
 # Скачивание страниц
 # --------------------------------------------------------------------------
 
+_SPFA_CACHE: Dict[str, Any] = {}
+_SPFA_CACHE_TS: float = 0.0
+
+
 class Fetcher:
     """Качает выдачу через curl_cffi с отпечатком браузера; ротация прокси и повторы."""
 
@@ -727,8 +731,9 @@ class Fetcher:
         return (data or {}).get("api_url") or url
 
     async def _spfa_cookies(self) -> dict:
-        if self._spfa and time.time() - self._spfa_ts < 11 * 3600:
-            return self._spfa
+        global _SPFA_CACHE, _SPFA_CACHE_TS
+        if _SPFA_CACHE and time.time() - _SPFA_CACHE_TS < 11 * 3600:
+            return _SPFA_CACHE
         from curl_cffi.requests import AsyncSession
         async with AsyncSession() as s:
             r = await s.post(self.spfa_base + "/api/cookies/mobile/",
@@ -737,7 +742,7 @@ class Fetcher:
         data = (r.json() or {}).get("results") or {}
         if not data.get("cookies"):
             raise FetchError("spfa: нет cookies")
-        self._spfa, self._spfa_ts = data, time.time()
+        _SPFA_CACHE, _SPFA_CACHE_TS = data, time.time()
         return data
 
     async def _spfa_get(self, url: str) -> str:
