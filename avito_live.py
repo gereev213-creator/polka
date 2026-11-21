@@ -143,6 +143,18 @@ def _walk(o: Any, out: List[dict], depth: int = 0) -> None:
             _walk(v, out, depth + 1)
 
 
+_JUNK_WORDS = (
+    "дисплей", "экран", "аккумулятор", "стекло", "чехол", "кабель", "зарядк",
+    "корпус", "шлейф", "камер", "кнопк", "рамк", "запчаст", "крышк", "держател",
+    "адаптер", "переходник", "наушник", "плёнк", "пленк", "бампер", "стилус",
+)
+
+
+def _is_junk_title(title: str) -> bool:
+    low = (title or "").lower()
+    return any(w in low for w in _JUNK_WORDS)
+
+
 def _price(d: dict) -> int:
     pd = d.get("priceDetailed")
     if isinstance(pd, dict) and isinstance(pd.get("value"), (int, float)):
@@ -383,6 +395,9 @@ def _listings_from_nodes(found: List[dict]) -> List[Listing]:
         if not isinstance(path, str) or not path:
             continue
         seen.add(iid)
+        title0 = str(d.get("title") or "").strip()
+        if _is_junk_title(title0):
+            continue
         ts = d.get("sortTimeStamp")
         items.append(Listing(
             id=iid,
