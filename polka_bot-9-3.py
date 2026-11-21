@@ -19018,7 +19018,7 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         'plus_stars': PLUS_STARS,
         'free_max_criteria': PLAN_FREE_MAX_CRITERIA,
         # лимит «Плюса» — для таблицы сравнения на экране тарифов
-        'plus_max_criteria': int(cfg_get('plus.max_criteria') or 10),
+        'plus_max_criteria': min(int(cfg_get('plus.max.criteria') or 5), 5),
         'free_delay_min': PLAN_FREE_DELAY_MIN,
         # до какого числа действует «Плюс» — для плашки статуса на экране тарифов
         'plus_until': _plus_until(viewer_id),
@@ -21365,10 +21365,9 @@ async def _live_worker_alert() -> None:
                     try:
                         await app.bot.send_message(
                             aid,
-                            "⚠️ <b>Воркер мониторинга не на связи</b>\n\n"
-                            "Проверьте окно Chromium на ноуте: если висит проверка "
-                            "Авито — пройдите её. Пока сервер продолжает на прокси "
-                            "и присылает находки медленнее.",
+                            "⚠️ <b>Быстрый воркер не на связи</b>\n\n"
+                            "Сервер проверяет через прокси — находки будут медленнее. "
+                            "Это не требует действий: ноут и Chromium не нужны.",
                             parse_mode='HTML')
                     except Exception:
                         pass
@@ -27192,7 +27191,7 @@ def _user_plan(user_id: int) -> Dict:
                     'show_price': int(cfg_get('plus.price_display_old'))}
     if plan == 'plus':
         return {'name': 'plus', 'trial_days_left': 0,
-                'criteria_limit': int(cfg_get('plus.max_criteria')), 'delay_min': 0,
+                'criteria_limit': min(int(cfg_get('plus.max.criteria') or 5), 5), 'delay_min': 0,
                 'deep_check': True, 'price': int(cfg_get('plus.price_rub')),
                 'show_price': int(cfg_get('plus.price_display_old'))}
     # Пакеты поисков дают не только слоты, но и скорость: находки без
