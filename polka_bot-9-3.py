@@ -17929,17 +17929,17 @@ async def api_diag_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     if not target:
         return _miniapp_json({'ok': False, 'error': 'только ссылка avito.ru'})
     fetcher = _al.Fetcher()
-    t0 = time.time()
+    t0 = _time.time()
     try:
         html = await asyncio.wait_for(fetcher.get(target), timeout=300)
     except Exception as e:
         return _miniapp_json({'ok': False, 'url': target,
                               'error': f'{type(e).__name__}: {e}'[:200],
-                              'sec': round(time.time() - t0, 1)})
+                              'sec': round(_time.time() - t0, 1)})
     page = _al.parse_page(html)
     return _miniapp_json({
         'ok': True, 'url': target, 'bytes': len(html), 'cards': len(page.items),
-        'sec': round(time.time() - t0, 1),
+        'sec': round(_time.time() - t0, 1),
         'profile': os.environ.get('AVITO_IMPERSONATE', 'edge101'),
         'proxies': len([p for p in os.environ.get('AVITO_PROXIES', '').split(',') if p.strip()]),
         'sample': [{'id': i.id, 'title': i.title[:50], 'price': i.price,
@@ -21452,7 +21452,7 @@ def collector_status() -> Dict:
         except Exception:
             last = 0.0
         if last:
-            minutes = max(0, int((time.time() - last) / 60))
+            minutes = max(0, int((_time.time() - last) / 60))
             return {'alive': minutes <= 10, 'minutes': minutes,
                     'source': 'avito_live', 'server_mode': True}
         return {'alive': False, 'minutes': None, 'source': '', 'server_mode': True}
@@ -34500,18 +34500,18 @@ async def api_admin_maintenance(request: aiohttp_web.Request) -> aiohttp_web.Res
         if not target:
             return _miniapp_json({'ok': False, 'error': 'bad_url'}, status=400)
         fetcher = _al.Fetcher()
-        t0 = time.time()
+        t0 = _time.time()
         try:
             html = await asyncio.wait_for(fetcher.get(target), timeout=240)
             page = _al.parse_page(html)
             return _miniapp_json({'ok': True, 'probe': {
                 'ok': True, 'url': target[:300], 'len': len(html),
-                'items': len(page.items), 'sec': round(time.time() - t0, 1),
+                'items': len(page.items), 'sec': round(_time.time() - t0, 1),
                 'first': [i.title[:40] for i in page.items[:3]]}})
         except Exception as e:
             return _miniapp_json({'ok': True, 'probe': {
                 'ok': False, 'error': f'{type(e).__name__}: {e}'[:160],
-                'sec': round(time.time() - t0, 1)}})
+                'sec': round(_time.time() - t0, 1)}})
 
     if action == 'plans_debug':
         # Что реально отдаётся в витрину тарифов: видно цены и продукты.
