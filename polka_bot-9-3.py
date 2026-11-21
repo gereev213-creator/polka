@@ -27176,15 +27176,9 @@ def _user_plan(user_id: int) -> Dict:
         trial_hours = trial_days * 24
         # Компенсация: не пришло ни одной находки — продлеваем на сутки,
         # но не больше contest/плана-лимита раз, чтобы не было вечного теста.
-        if hours >= trial_hours:
-            try:
-                _max_ext = int(cfg_get('trial.max_extensions'))
-            except Exception:
-                _max_ext = 3
-            _ext = globals().get('_extend_trial_compensation')
-            if _ext and _ext(int(user_id), trial_started, _max_ext):
-                hours = 0
-                trial_hours = 24
+        # Автопродление только что вредило: у человека не было находок,
+        # поэтому он получал ещё сутки, и так до 3 раз. Теперь пробный
+        # ровно 24 часа; продлевает только админ вручную.
         if hours >= trial_hours:
             # Пробный период закончился: переводим на free и приостанавливаем лишнее
             plan = 'free'
