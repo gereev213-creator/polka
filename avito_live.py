@@ -398,7 +398,7 @@ def _listings_from_nodes(found: List[dict]) -> List[Listing]:
         title0 = str(d.get("title") or "").strip()
         if _is_junk_title(title0):
             continue
-        ts = d.get("sortTimeStamp")
+        ts = d.get("sortTimeStamp") or d.get("time") or d.get("publishedAt") or d.get("date")
         items.append(Listing(
             id=iid,
             title=str(d.get("title") or "").strip(),
@@ -848,6 +848,7 @@ class LiveWatcher:
             fresh = [it for it in fresh if it.age() is None or it.age() <= MAX_AGE_SEC]
             if self.item_filter:
                 fresh = [it for it in fresh if self._pass(w, it)]
+            # Сначала самые новые: по времени публикации; без времени — по id.
             fresh.sort(key=lambda it: (it.ts or 0, it.id))
             if len(fresh) > MAX_BURST:
                 fresh = fresh[-MAX_BURST:]
