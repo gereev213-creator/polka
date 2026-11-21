@@ -398,8 +398,26 @@ def _listings_from_nodes(found: List[dict]) -> List[Listing]:
 
 
 def parse_page(page_html: str) -> Page:
-    """Разбирает выдачу: состояние страницы, __initialData__ или микроразметку."""
+    """Разбирает выдачу: состояние страницы, __initialData__, JSON API или микроразметку."""
     text = page_html or ""
+    # 0. JSON API (spfa/web items): items лежат в items/result.items/catalog.
+    if text.lstrip().startswith("{"):
+        try:
+            data = json.loads(text)
+        except (ValueError, TypeError):
+            data = None
+        if isinstance(data, dict):
+            found: List[dict] = []
+            if _main_catalog(data, found) and found:
+                items = _listings_from_nodes(found)
+                if items:
+                    return Page(items, True)
+            found = []
+            _walk(data, found)
+            if found:
+                items = _listings_from_nodes(found)
+                if items:
+                    return Page(items, True)
     # 1. Текущий формат: JSON в data-mfe-state. catalog.items — только
     #    основная выдача, «похожие» в extraBlockItems и сюда не попадают.
     nodes = _mfe_catalog_items(text)
@@ -622,6 +640,12 @@ class Fetcher:
         self._rr = 0
         self._rot_lock = asyncio.Lock()
         self._last_rot = 0.0
+        # spfa.pro: cookies под наш HTTP-прокси + JSON API выдачи.
+        self.spfa_key = os.environ.get("SPFA_API_KEY", "").strip()
+        self.spfa_proxy = os.environ.get("SPFA_PROXY", "").strip()
+        self.spfa_base = os.environ.get("SPFA_URL", "https://spfa.pro").rstrip("/")
+        self._spfa = None
+        self._spfa_ts = 0.0
 
     def _kw(self, proxy: Optional[str]) -> Dict[str, Any]:
         kw: Dict[str, Any] = {"impersonate": self.impersonate}
@@ -685,7 +709,52 @@ class Fetcher:
                 return await s.get(url, timeout=self.timeout, allow_redirects=True, headers=hdr)
         return await self._session(proxy).get(url, timeout=self.timeout, allow_redirects=True, headers=hdr)
 
+    async def _spfa_api_url(self, url: str) -> str:
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession() as s:
+            r = await s.post(self.spfa_base + "/api/avito-url/", json={"url": url}, timeout=40)
+        data = r.json() if r is not None else {}
+        return (data or {}).get("api_url") or url
+
+    async def _spfa_cookies(self) -> dict:
+        if self._spfa and time.time() - self._spfa_ts < 11 * 3600:
+            return self._spfa
+        from curl_cffi.requests import AsyncSession
+        async with AsyncSession() as s:
+            r = await s.post(self.spfa_base + "/api/cookies/mobile/",
+                             json={"api_key": self.spfa_key, "proxy": self.spfa_proxy},
+                             timeout=90)
+        data = (r.json() or {}).get("results") or {}
+        if not data.get("cookies"):
+            raise FetchError("spfa: нет cookies")
+        self._spfa, self._spfa_ts = data, time.time()
+        return data
+
+    async def _spfa_get(self, url: str) -> str:
+        from curl_cffi.requests import AsyncSession
+        api_url = await self._spfa_api_url(url)
+        data = await self._spfa_cookies()
+        cookies = data.get("cookies") or {}
+        fp = data.get("fingerprint") or {}
+        headers = dict(fp.get("headers") or {})
+        if data.get("user_agent"):
+            headers.setdefault("user-agent", data["user_agent"])
+        imp = fp.get("impersonate") or "chrome131_android"
+        proxy = self.spfa_proxy if "://" in self.spfa_proxy else "http://" + self.spfa_proxy
+        kw = {"impersonate": imp, "headers": headers, "cookies": cookies,
+              "proxies": {"http": proxy, "https": proxy},
+              "timeout": max(self.timeout, 45)}
+        async with AsyncSession(**kw) as s:
+            r = await s.get(api_url, allow_redirects=True)
+        if r.status_code in BLOCK_CODES:
+            raise Blocked(f"HTTP {r.status_code}")
+        if r.status_code >= 400:
+            raise FetchError(f"HTTP {r.status_code}")
+        return r.text
+
     async def get(self, url: str) -> str:
+        if self.spfa_key and self.spfa_proxy:
+            return await self._spfa_get(url)
         proxy = self._pick()
         for attempt in range(1, self.tries + 1):
             try:
