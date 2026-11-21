@@ -28222,6 +28222,12 @@ async def _hunt_send_match(app, user_id: int, ad: Dict, crit: Dict, discount: in
         ], [
             InlineKeyboardButton(EM_ARROW_R + " Открыть на сайте", url=str(ad['source_url']))
         ], [
+            # Следить за ценой: при снижении продавцом пришлём «было/стало».
+            InlineKeyboardButton(
+                ("Не следить за ценой" if db.is_watching_price(int(crit['user_id']), int(ad['id']))
+                 else "📉 Следить за ценой"),
+                callback_data=f"watch_price:{ad['id']}")
+        ], [
             # Убрать лот: человек посмотрел и понял — не то.
             # Больше не придёт ни в чат, ни в ленту приложения.
             InlineKeyboardButton("Убрать", callback_data=f"hunt_hide:{ad['id']}")
