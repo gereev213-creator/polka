@@ -27142,7 +27142,9 @@ def _user_plan(user_id: int) -> Dict:
     # Купленная подписка: кончилась — снимаем «Плюс» и приостанавливаем лишнее
     if plan == 'plus':
         active = _plus_subscription(int(user_id))
-        if active is False:
+        # False — подписка истекла, None — подписки нет вовсе.
+        # Раньше сбрасывалось только при False, и «плюс» без подписки жил вечно.
+        if active is not True:
             plan = 'free'
             try:
                 db.update_user(int(user_id), plan='free')
