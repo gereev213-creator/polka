@@ -376,6 +376,8 @@ async def poll_group(lane: dict, group: dict, state: dict):
         return
     if status != 200:
         lane["fails"] = lane.get("fails", 0) + 1
+        if lane["name"] == "proxy" and status in (403, 429):
+            lane["rotate"] = True
         log(f"{lane['name']}: HTTP {status} · {url[:60]}")
         return
     lane["fails"] = 0
@@ -419,13 +421,15 @@ _LAST_ROT = 0.0
 
 
 async def maybe_rotate():
-    """Сменить IP прокси (не чаще раза в 60 секунд)."""
+    """Сменить IP прокси. Провайдер даёт новый IP не чаще раза в 30 секунд."""
     global _LAST_ROT
     url = (os.environ.get("WORKER_ROTATE_URL") or "").strip()
     if not url:
         return
-    if time.time() - _LAST_ROT < 60:
-        return
+    wait = 30 - (time.time() - _LAST_ROT)
+    if wait > 0:
+        log(f"ротация IP: пауза {wait:.0f} с (лимит провайдера)")
+        await asyncio.sleep(wait)
     _LAST_ROT = time.time()
     try:
         def _get():
@@ -553,6 +557,23 @@ async def main() -> int:
                 # канал, который стабильно бьётся: прокси — меняем IP и
                 # перезапускаем, домашний — выключаем, второй возьмёт всё.
                 for lane in list(active):
+                    if lane.get("rotate") and lane["name"] == "proxy" and os.environ.get("WORKER_ROTATE_URL"):
+                        lane["rotate"] = False
+                        log("прокси 403/429 — меняю IP")
+                        await maybe_rotate()
+                        try:
+                            await lane["ctx"].close()
+                        except Exception:
+                            pass
+                        try:
+                            lane["ctx"] = await launch_lane(
+                                pw, "proxy", PROFILE_PROXY,
+                                f"http://127.0.0.1:{proxy_port}")
+                            lane["fails"] = 0
+                            log("прокси-канал перезапущен на новом IP")
+                            continue
+                        except Exception as e:
+                            log(f"прокси-канал не поднялся: {type(e).__name__}: {str(e)[:100]}")
                     if lane.get("fails", 0) < 8:
                         continue
                     if lane["name"] == "proxy" and os.environ.get("WORKER_ROTATE_URL"):
