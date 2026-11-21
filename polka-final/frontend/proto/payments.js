@@ -199,6 +199,7 @@
       STATE.current = combo;
       STATE.days = Number(combo.days);
       renderPlanChips();
+      renderPlanCards();
       paintPlans();
       showBalanceButton();
     }, function (val) {
@@ -211,6 +212,7 @@
       if (!STATE.current) return;
       STATE.days = Number(STATE.current.days);
       renderPlanChips();
+      renderPlanCards();
       paintPlans();
       showBalanceButton();
     }, function (val) {
@@ -220,6 +222,53 @@
     }, null, function (val) {
       return String(val) + ' дн';
     });
+  }
+
+  function renderPlanCards() {
+    var host = document.getElementById('planCards');
+    var terms = document.getElementById('planTerms');
+    if (!host) return;
+    var days = Number(STATE.days) || 30;
+    var counts = availableLinks();
+    host.innerHTML = '';
+    counts.forEach(function (links) {
+      var combo = comboFor(Number(links), days) || comboFor(Number(links), (availableDays(links)[0] || 30));
+      if (!combo) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pcard' + (Number(links) === Number(STATE.links) ? ' on' : '');
+      b.innerHTML = '<span class="pc-brand">ПОЛКА</span>'
+        + '<span class="pc-name">' + links + (Number(links) === 1 ? ' ссылка' : ' ссылки') + '</span>'
+        + '<span class="pc-freq">2–5 секунд</span>'
+        + '<span class="pc-price">' + Number(combo.amount).toLocaleString('ru-RU') + ' ₽ <small>за ' + daysWord(combo.days) + '</small></span>';
+      b.addEventListener('click', function (e) {
+        if (e) { e.preventDefault(); e.stopPropagation(); }
+        STATE.links = Number(links);
+        STATE.current = comboFor(STATE.links, STATE.days) || combo;
+        STATE.days = Number(STATE.current.days);
+        renderPlanCards();
+        paintPlans();
+      });
+      host.appendChild(b);
+    });
+    if (terms) {
+      terms.innerHTML = '';
+      (availableDays(STATE.links) || []).forEach(function (d) {
+        var t = document.createElement('button');
+        t.type = 'button';
+        t.className = (Number(d) === Number(STATE.days) ? 'on' : '');
+        t.textContent = d + ' дн';
+        t.addEventListener('click', function (e) {
+          if (e) { e.preventDefault(); e.stopPropagation(); }
+          STATE.days = Number(d);
+          STATE.current = comboFor(STATE.links, STATE.days);
+          if (!STATE.current) return;
+          renderPlanCards();
+          paintPlans();
+        });
+        terms.appendChild(t);
+      });
+    }
   }
 
   function paintPlans() {
@@ -292,6 +341,7 @@
         STATE.days = Number(STATE.current.days);
       }
       renderPlanChips();
+      renderPlanCards();
       paintPlans();
       showBalanceButton();
       if (STATE.plan && STATE.plan !== 'trial' && STATE.plan !== 'free') {
