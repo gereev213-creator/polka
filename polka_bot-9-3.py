@@ -24067,9 +24067,6 @@ def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
     честно пишем «не проверено», а не делаем вид, что проверили (этап A7).
     """
     lines = [
-        ("🔥 <b>Нашёл дешевле обычного</b>" if diff
-         else "🔎 <b>Подходит под ваш запрос</b>"),
-        "",
         f"<b>{_hunt_escape(str(ad.get('title'))[:70])}</b>",
         "",
         ("<b>Резюме · цена не указана</b>" if int(ad.get('price') or 0) <= 0
@@ -24080,11 +24077,22 @@ def _hunt_match_text(ad: Dict, fresh: str, median: int = 0, diff: int = 0,
         lines.append("")
         lines.append(f"💰 <b>Цена снижена</b>: было {_money(ad.get('prev_price') or 0)} ₽, "
                      f"стало {_money(ad.get('price') or 0)} ₽")
-    if diff and median:
-        lines.append(f"Обычно такие стоят {_money(median)} ₽")
-        lines.append(f"Экономия <b>{_money(diff)} ₽</b> — это {int(round(diff * 100.0 / median))}%")
     lines.append("")
     lines.append(f"{_hunt_escape(ad.get('city') or '')} · опубликовано {fresh}")
+    # Характеристики как у Scanurik: рейтинг, отзывы, завершённые объявления
+    rating = ad.get('seller_rating') or ad.get('rating')
+    reviews = ad.get('seller_reviews') or ad.get('reviews')
+    ads_done = ad.get('seller_ads') or ad.get('ads_completed') or ad.get('completed_ads')
+    if rating or reviews or ads_done:
+        parts = []
+        if rating: parts.append(f"⭐ {rating}")
+        if reviews: parts.append(f"{_money(int(reviews))} отзывов")
+        if ads_done: parts.append(f"{_money(int(ads_done))} объявлений")
+        lines.append(" · ".join(parts))
+    desc = str(ad.get('description') or '').strip()
+    if desc:
+        lines.append("")
+        lines.append(_hunt_escape(desc[:400] + ("…" if len(desc) > 400 else "")))
     if desc_checked is False:
         lines.append("")
         lines.append("⚠️ описание не проверено — смотрите фото и карточку")
