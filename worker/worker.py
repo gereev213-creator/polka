@@ -433,7 +433,8 @@ async def maybe_rotate():
     _LAST_ROT = time.time()
     try:
         def _get():
-            with urllib.request.urlopen(url, timeout=40) as r:
+            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"})
+            with urllib.request.urlopen(req, timeout=40) as r:
                 return json.loads(r.read().decode("utf-8", "ignore"))
         data = await asyncio.to_thread(_get)
         rt = float(data.get("rt") or 12)
