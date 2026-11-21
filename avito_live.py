@@ -896,6 +896,9 @@ class LiveWatcher:
                 log.exception("poll failed %s", url[:80])
 
     async def _health(self, msg: str, n: int) -> None:
+        # 429 — это rate limit, а не бан; не спамим админа этим алертом.
+        if "429" in str(msg):
+            return
         if not self.on_health or n < 3 or time.time() - self._last_health < 3600:
             return
         self._last_health = time.time()
@@ -1054,7 +1057,7 @@ def install(application: Any, *, db_path: Optional[str] = None, proxies: Optiona
 
     watcher = LiveWatcher(
         store, fetcher or Fetcher(proxies), route_sink,
-        interval=float(os.environ.get("AVITO_POLL_SEC", "60")),
+        interval=float(os.environ.get("AVITO_POLL_SEC", "90")),
         concurrency=int(os.environ.get("AVITO_CONCURRENCY", "1")),
         on_health=health, item_filter=item_filter)
     runner = LiveRunner(store, watcher, tg_sink, limit)
