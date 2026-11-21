@@ -412,12 +412,7 @@ def parse_page(page_html: str) -> Page:
                 items = _listings_from_nodes(found)
                 if items:
                     return Page(items, True)
-            found = []
-            _walk(data, found)
-            if found:
-                items = _listings_from_nodes(found)
-                if items:
-                    return Page(items, True)
+            # Никакого _walk: иначе в выдачу попадают «похожие» и мусор.
     # 1. Текущий формат: JSON в data-mfe-state. catalog.items — только
     #    основная выдача, «похожие» в extraBlockItems и сюда не попадают.
     nodes = _mfe_catalog_items(text)
