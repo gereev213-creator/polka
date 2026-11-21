@@ -22,7 +22,6 @@ function paintEmpty(count) {
 
   const TG = window.Telegram && window.Telegram.WebApp;
   if (TG && TG.ready) TG.ready();
-  if (TG && TG.expand) TG.expand();
 
   function initData() {
     return (TG && TG.initData) || '';
