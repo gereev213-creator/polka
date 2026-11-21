@@ -907,20 +907,7 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 #s-tariffs #promoform,
 #s-tariffs #pmsg{display:none}
 </style>
-<style id="plan-cards-css">
-.plan-cards{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 12px;margin-top:10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.plan-cards::-webkit-scrollbar{display:none}
-.pcard{flex:0 0 82%;scroll-snap-align:center;border:1.5px solid #E3EDFD;border-radius:22px;background:#fff;padding:16px;text-align:left;box-shadow:0 10px 26px rgba(31,72,140,.08);font:inherit}
-.pcard.on{border-color:#3373FA;box-shadow:0 10px 26px rgba(51,115,250,.18);background:linear-gradient(160deg,#F2F7FF,#EAF2FF)}
-.pc-brand{display:block;font-size:10px;font-weight:900;letter-spacing:.14em;color:#3373FA}
-.pc-name{display:block;font-size:20px;font-weight:900;color:#0F1B2D;margin:10px 0 4px}
-.pc-freq{display:inline-flex;padding:5px 9px;border-radius:999px;background:#EAF2FF;color:#2C6CDF;font-size:11px;font-weight:800}
-.pc-price{display:block;font-size:22px;font-weight:900;color:#0F1B2D;margin-top:12px}
-.pc-price small{font-size:11px;font-weight:600;color:#5C6E86}
-.plan-terms{display:flex;gap:6px;margin:2px 0 10px}
-.plan-terms button{flex:1;height:38px;border-radius:999px;border:1.5px solid #E3EDFD;background:#fff;color:#4A5A71;font-size:12px;font-weight:800}
-.plan-terms button.on{background:#3373FA;border-color:#3373FA;color:#fff}
-</style></head><body>
+</head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-r" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -1125,8 +1112,6 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 <section class="screen" id="s-tariffs"><div class="subhead"><button class="back" onclick="back()"><svg width="15" height="15"><use href="#i-back"/></svg></button><span class="ptag">Тарифы</span></div><div class="scroll">
 <div class="card trial"><b id="trialTitle">Пробный период — 1 ссылка</b><span class="actv" id="trialBadge">24 часа</span></div>
 
-<div class="plan-cards" id="planCards"></div>
-<div class="plan-terms" id="planTerms"></div>
 <div class="card plan-card plan-plus" id="planCard">
   <div class="plan-head">
     <div class="plan-name" id="planName">ПЛЮС</div>
