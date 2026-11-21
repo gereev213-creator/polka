@@ -742,7 +742,9 @@ class Fetcher:
 
     async def _spfa_get(self, url: str) -> str:
         from curl_cffi.requests import AsyncSession
-        api_url = await self._spfa_api_url(url)
+        # Берём саму страницу по исходной ссылке, а не JSON API: так выдача
+        # ровно та, что на Авито, без «похожих» и запчастей.
+        api_url = url
         data = await self._spfa_cookies()
         cookies = data.get("cookies") or {}
         fp = data.get("fingerprint") or {}
