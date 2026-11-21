@@ -994,12 +994,8 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
               <input id="linkPriceFrom" class="lpin" inputmode="numeric" placeholder="Цена от, ₽" autocomplete="off">
               <input id="linkPriceTo" class="lpin" inputmode="numeric" placeholder="Цена до, ₽" autocomplete="off">
             </div>
-            <div class="newHint">Бесплатно — одна ссылка на 24 часа. Следим за вашей выдачей и присылаем только новые объявления.</div>
-            <div class="steps" id="linkSteps">
-              <div class="step"><span class="sN">1</span><span>Откройте Авито и выставьте фильтры: город, цена, состояние, дата публикации.</span></div>
-              <div class="step"><span class="sN">2</span><span>Скопируйте адрес из строки браузера.</span></div>
-              <div class="step"><span class="sN">3</span><span>Вставьте его сюда и нажмите «Запустить поиск».</span></div>
-            </div>
+            <div class="newHint">Пробный период: 24 часа — 1 ссылка</div>
+            
             <button type="button" class="tutorialBtn" id="linkTutorialBtn">
               <span class="tbPlay">▶</span> Как получить ссылку — видео 1 мин
             </button>
@@ -1008,13 +1004,13 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
             <label>Что ищем</label>
             <input id="q" placeholder="Например: куртка зимняя мужская 152">
           </div>
-          <div class="sampleBox" id="sampleBox"></div>
-          <div class="field">
+          <div class="sampleBox" id="sampleBox" style="display:none"></div>
+          <div class="field" style="display:none">
             <label>Цена до, ₽</label>
             <input id="maxprice" placeholder="Например: 5000" inputmode="numeric">
           </div>
           
-          <div class="field">
+          <div class="field" style="display:none">
             <label>Город</label>
             <input id="city" placeholder="Любой" autocomplete="off">
           </div>
@@ -1062,7 +1058,7 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
               <button type="button" class="chip" id="photoChip" data-photo="1">Только с фото</button>
             </div>
           </div>
-          <div class="forecast">Пришлём, когда продавец разместит подходящее объявление.<br><b>На бесплатном — 1 активный поиск.</b> Новый можно создать, заменив старый.</div>
+          
         </form></div><div class="bottomCta"><button class="bigbtn" form="searchForm">Запустить поиск</button></div></section>
 
 <!-- history -->
