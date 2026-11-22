@@ -19037,6 +19037,25 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
     })
 
 
+async def api_debug_proxy(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/debug-proxy?proxy=user:pass@host:port — тест HTTP-прокси с сервера."""
+    if request.query.get('token') != os.environ.get('LIVE_WORKER_TOKEN', ''):
+        return _miniapp_err('unauthorized', 401)
+    target = (request.query.get('proxy') or os.environ.get('SPFA_PROXY') or '').strip()
+    if not target:
+        return _miniapp_json({'ok': False, 'error': 'no proxy'})
+    url = request.query.get('url') or 'https://api.ipify.org/'
+    try:
+        from curl_cffi.requests import AsyncSession
+        proxy = target if '://' in target else 'http://' + target
+        async with AsyncSession(impersonate='chrome131_android',
+                                proxies={'http': proxy, 'https': proxy}) as s:
+            r = await s.get(url, timeout=25)
+        return _miniapp_json({'ok': r.status_code == 200, 'status': r.status_code,
+                              'body': (r.text or '')[:200]})
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'error': f'{type(e).__name__}: {str(e)[:200]}'})
+
 async def api_coins_spend(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """POST /api/coins/spend {kind, ad_id?} — ОТКЛЮЧЕНО (B0).
 
@@ -38110,6 +38129,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_get('/api/plan', api_plan)
+    app.router.add_get('/api/debug-proxy', api_debug_proxy)
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)
     app.router.add_get('/api/chats/unread', api_chats_unread)
