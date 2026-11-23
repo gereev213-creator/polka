@@ -629,10 +629,48 @@ class Store:
 
 _SPFA_CACHE: Dict[str, Any] = {}
 _SPFA_CACHE_TS: float = 0.0
+_SPFA_TTL = 11 * 3600
+
+
+class SpfaUnavailable(FetchError):
+    """spfa не выписал cookies: сам сервис лежит или не достаёт до нашего HTTP-прокси."""
+
+
+def to_fetch_proxy(p: str) -> str:
+    """Приводит адрес прокси к виду для curl_cffi.
+
+    host:port -> http://host:port; socks5:// -> socks5h:// (имя avito.ru
+    резолвит сам прокси: с нашей стороны DNS-запросы режутся/светятся).
+    """
+    p = (p or "").strip()
+    if not p:
+        return ""
+    if "://" not in p:
+        return "http://" + p
+    if p.lower().startswith("socks5://"):
+        return "socks5h://" + p[len("socks5://"):]
+    return p
+
+
+def _retry_after(r: Any) -> Optional[float]:
+    """Retry-After в секундах (если это число), не больше 2 минут."""
+    try:
+        v = r.headers.get("Retry-After")
+        return min(max(float(v), 0.0), 120.0) if v is not None else None
+    except Exception:
+        return None
 
 
 class Fetcher:
-    """Качает выдачу через curl_cffi с отпечатком браузера; ротация прокси и повторы."""
+    """Качает выдачу через curl_cffi с отпечатком браузера; ротация прокси и повторы.
+
+    Два пути:
+      * spfa (SPFA_API_KEY + SPFA_PROXY): cookies выписывает spfa.pro, страницу берём сами.
+        ВАЖНО: адрес из SPFA_PROXY (HTTP) видит только сервер spfa — он нужен, чтобы
+        cookies легли под IP прокси. Сами мы на Авито ходим через SPFA_FETCH_PROXY
+        (socks5h://…) — это тот же выходной IP, но порт, который доступен с нашей сети.
+      * прямой (AVITO_PROXIES): edge101 + смена IP; он же — запасной, если spfa недоступен.
+    """
 
     def __init__(self, proxies: Optional[List[str]] = None, timeout: float = 30.0,
                  impersonate: Optional[str] = None):
@@ -648,23 +686,33 @@ class Fetcher:
         # Авито пускает вероятностно: один и тот же IP то отдаёт выдачу, то 403/429/439.
         # Поэтому несколько попыток со сменой IP, а не одна.
         self.tries = max(1, int(os.environ.get("AVITO_TRIES", "3")))
+        # Минимальная пауза между запросами через один прокси: 429 — это в первую очередь
+        # частота, а не «плохой» клиент.
+        self.min_gap = float(os.environ.get("AVITO_MIN_GAP_SEC", "4"))
         self._sessions: Dict[Optional[str], Any] = {}
         self._cool: Dict[Optional[str], float] = {}
         self._fails: Dict[Optional[str], int] = {}
         self._rr = 0
         self._rot_lock = asyncio.Lock()
         self._last_rot = 0.0
-        # spfa.pro: cookies под наш HTTP-прокси + JSON API выдачи.
+        self._pace_locks: Dict[str, asyncio.Lock] = {}
+        self._last_req: Dict[str, float] = {}
+        # spfa.pro: cookies под IP прокси.
         self.spfa_key = os.environ.get("SPFA_API_KEY", "").strip()
-        self.spfa_proxy = os.environ.get("SPFA_PROXY", "").strip()
+        self.spfa_proxy = os.environ.get("SPFA_PROXY", "").strip()        # HTTP: его видит spfa
         self.spfa_base = os.environ.get("SPFA_URL", "https://spfa.pro").rstrip("/")
-        self._spfa = None
-        self._spfa_ts = 0.0
+        # Наш путь до Авито в spfa-режиме: явный SPFA_FETCH_PROXY, иначе первый из
+        # AVITO_PROXIES (там SOCKS5), иначе (как раньше) тот же SPFA_PROXY.
+        fp = os.environ.get("SPFA_FETCH_PROXY", "").strip() or next((p for p in self.proxies if p), "") or ""
+        self.spfa_fetch_proxy = to_fetch_proxy(fp or self.spfa_proxy)
+        self.spfa_refresh_min = float(os.environ.get("SPFA_REFRESH_MIN_SEC", "60"))
+        self._spfa_off_until = 0.0
 
     def _kw(self, proxy: Optional[str]) -> Dict[str, Any]:
         kw: Dict[str, Any] = {"impersonate": self.impersonate}
         if proxy:
-            kw["proxies"] = {"http": proxy, "https": proxy}
+            px = to_fetch_proxy(proxy)
+            kw["proxies"] = {"http": px, "https": px}
         return kw
 
     def _session(self, proxy: Optional[str]):
@@ -687,6 +735,21 @@ class Fetcher:
         n = self._fails.get(proxy, 0) + 1
         self._fails[proxy] = n
         self._cool[proxy] = time.monotonic() + min(900.0, base * (2 ** (n - 1)))
+
+    def _has_real_proxy(self) -> bool:
+        return any(self.proxies)
+
+    async def _pace(self, key: Optional[str]) -> None:
+        """Не чаще одного запроса в min_gap секунд (с разбросом) через один прокси."""
+        if self.min_gap <= 0:
+            return
+        k = key or "-"
+        lock = self._pace_locks.setdefault(k, asyncio.Lock())
+        async with lock:
+            wait = self._last_req.get(k, 0.0) + self.min_gap * random.uniform(1.0, 1.5) - time.monotonic()
+            if wait > 0:
+                await asyncio.sleep(wait)
+            self._last_req[k] = time.monotonic()
 
     async def _rotate_ip(self) -> bool:
         """Просит провайдера сменить IP мобильного прокси (не чаще раза в 8 с)."""
@@ -717,6 +780,7 @@ class Fetcher:
 
     async def _request(self, proxy: Optional[str], url: str):
         hdr = {"Accept-Language": "ru-RU,ru;q=0.9"}
+        await self._pace(proxy)
         if self.fresh:
             from curl_cffi.requests import AsyncSession
             async with AsyncSession(**self._kw(proxy)) as s:
@@ -730,48 +794,98 @@ class Fetcher:
         data = r.json() if r is not None else {}
         return (data or {}).get("api_url") or url
 
-    async def _spfa_cookies(self) -> dict:
+    async def _spfa_cookies(self, force_after: Optional[float] = None) -> dict:
+        """Cookies от spfa (кэш 11 ч).
+
+        force_after — перевыписать, если кэшу не меньше стольких секунд
+        (0 — немедленно, например после смены IP; None — не перевыписывать).
+        Если перевыписать не вышло, а старые cookies ещё живы — отдаём старые.
+        """
         global _SPFA_CACHE, _SPFA_CACHE_TS
-        if _SPFA_CACHE and time.time() - _SPFA_CACHE_TS < 11 * 3600:
+        age = time.time() - _SPFA_CACHE_TS
+        if _SPFA_CACHE and age < _SPFA_TTL and not (force_after is not None and age >= force_after):
             return _SPFA_CACHE
         from curl_cffi.requests import AsyncSession
-        async with AsyncSession() as s:
-            r = await s.post(self.spfa_base + "/api/cookies/mobile/",
-                             json={"api_key": self.spfa_key, "proxy": self.spfa_proxy},
-                             timeout=90)
-        data = (r.json() or {}).get("results") or {}
-        if not data.get("cookies"):
-            raise FetchError("spfa: нет cookies")
+        try:
+            async with AsyncSession() as s:
+                r = await s.post(self.spfa_base + "/api/cookies/mobile/",
+                                 json={"api_key": self.spfa_key, "proxy": self.spfa_proxy},
+                                 timeout=90)
+            body = r.json()
+            body = body if isinstance(body, dict) else {}
+            data = body.get("results") or {}
+            if not data.get("cookies"):
+                why = str(body.get("error") or body.get("detail") or f"HTTP {r.status_code}")[:120]
+                raise SpfaUnavailable(f"spfa: нет cookies ({why})")
+        except SpfaUnavailable as e:
+            if _SPFA_CACHE and age < _SPFA_TTL:
+                log.warning("avito_live: %s — оставляю прежние cookies", e)
+                return _SPFA_CACHE
+            raise
+        except Exception as e:
+            if _SPFA_CACHE and age < _SPFA_TTL:
+                log.warning("avito_live: spfa не ответил (%s) — оставляю прежние cookies", e)
+                return _SPFA_CACHE
+            raise SpfaUnavailable(f"spfa: {type(e).__name__}: {e}") from e
         _SPFA_CACHE, _SPFA_CACHE_TS = data, time.time()
         return data
 
     async def _spfa_get(self, url: str) -> str:
         from curl_cffi.requests import AsyncSession
-        # Берём саму страницу по исходной ссылке, а не JSON API: так выдача
-        # ровно та, что на Авито, без «похожих» и запчастей.
-        api_url = url
-        data = await self._spfa_cookies()
-        cookies = data.get("cookies") or {}
-        fp = data.get("fingerprint") or {}
-        headers = dict(fp.get("headers") or {})
-        if data.get("user_agent"):
-            headers.setdefault("user-agent", data["user_agent"])
-        imp = fp.get("impersonate") or "chrome131_android"
-        proxy = self.spfa_proxy if "://" in self.spfa_proxy else "http://" + self.spfa_proxy
-        kw = {"impersonate": imp, "headers": headers, "cookies": cookies,
-              "proxies": {"http": proxy, "https": proxy},
-              "timeout": max(self.timeout, 45)}
-        async with AsyncSession(**kw) as s:
-            r = await s.get(api_url, allow_redirects=True)
-        if r.status_code in BLOCK_CODES:
-            raise Blocked(f"HTTP {r.status_code}")
-        if r.status_code >= 400:
-            raise FetchError(f"HTTP {r.status_code}")
-        return r.text
+        # Страница берётся по исходной ссылке, а не JSON API: выдача ровно как на Авито,
+        # без «похожих» и запчастей. Идём через spfa_fetch_proxy (SOCKS5), а не через
+        # HTTP-порт из SPFA_PROXY — он с нашей сети недоступен.
+        refresh: Optional[float] = None
+        for attempt in range(1, self.tries + 1):
+            data = await self._spfa_cookies(refresh)
+            cookies = data.get("cookies") or {}
+            fp = data.get("fingerprint") or {}
+            headers = dict(fp.get("headers") or {})
+            if data.get("user_agent"):
+                headers.setdefault("user-agent", data["user_agent"])
+            kw: Dict[str, Any] = {
+                "impersonate": fp.get("impersonate") or "chrome131_android",
+                "headers": headers, "cookies": cookies,
+                "timeout": max(self.timeout, 45)}
+            if self.spfa_fetch_proxy:
+                kw["proxies"] = {"http": self.spfa_fetch_proxy, "https": self.spfa_fetch_proxy}
+            await self._pace(self.spfa_fetch_proxy)
+            try:
+                async with AsyncSession(**kw) as s:
+                    r = await s.get(url, allow_redirects=True)
+            except Exception as e:
+                hint = ""
+                if self.spfa_fetch_proxy.startswith("http://"):
+                    hint = " (HTTP-порт прокси может быть закрыт: задайте SPFA_FETCH_PROXY=socks5h://…)"
+                raise FetchError(f"{type(e).__name__}: {e}{hint}") from e
+            code = r.status_code
+            if code in BLOCK_CODES:
+                if attempt >= self.tries:
+                    raise Blocked(f"HTTP {code}")
+                rotated = await self._rotate_ip()
+                # cookies привязаны к IP: после смены IP — выписать заново сразу;
+                # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
+                if rotated:
+                    refresh = 0.0
+                elif code != 429 or attempt >= 2:
+                    refresh = self.spfa_refresh_min
+                else:
+                    refresh = None
+                if not rotated:
+                    pause = _retry_after(r)
+                    if pause is None:
+                        pause = min(60.0, 6.0 * 2 ** (attempt - 1))
+                    pause *= random.uniform(1.0, 1.4)
+                    log.info("avito_live: HTTP %s (spfa-путь), пауза %.0fс, попытка %s из %s",
+                             code, pause, attempt + 1, self.tries)
+                    await asyncio.sleep(pause)
+                continue
+            if code >= 400:
+                raise FetchError(f"HTTP {code}")
+            return r.text
+        raise Blocked("попытки закончились")
 
-    async def get(self, url: str) -> str:
-        if self.spfa_key and self.spfa_proxy:
-            return await self._spfa_get(url)
+    async def _plain_get(self, url: str) -> str:
         proxy = self._pick()
         for attempt in range(1, self.tries + 1):
             try:
@@ -781,10 +895,15 @@ class Fetcher:
                 raise FetchError(f"{type(e).__name__}: {e}") from e
             if r.status_code in BLOCK_CODES:
                 # Авито пускает не каждый запрос: меняем IP и пробуем ещё раз.
-                if attempt < self.tries and await self._rotate_ip():
-                    log.info("avito_live: HTTP %s — сменил IP, попытка %s из %s",
-                             r.status_code, attempt + 1, self.tries)
-                    continue
+                if attempt < self.tries:
+                    if await self._rotate_ip():
+                        log.info("avito_live: HTTP %s — сменил IP, попытка %s из %s",
+                                 r.status_code, attempt + 1, self.tries)
+                        continue
+                    ra = _retry_after(r)
+                    if ra is not None and r.status_code == 429:
+                        await asyncio.sleep(ra * random.uniform(1.0, 1.4))
+                        continue
                 self._penalize(proxy, 45)
                 raise Blocked(f"HTTP {r.status_code}")
             if r.status_code >= 400:
@@ -793,6 +912,22 @@ class Fetcher:
             self._fails[proxy] = 0
             return r.text
         raise Blocked("попытки закончились")
+
+    async def get(self, url: str) -> str:
+        if self.spfa_key and self.spfa_proxy:
+            if time.monotonic() >= self._spfa_off_until:
+                try:
+                    return await self._spfa_get(url)
+                except SpfaUnavailable as e:
+                    # spfa не выписал cookies — это не блокировка Авито. Если есть свой
+                    # прокси, не стоим: 5 минут берём выдачу напрямую (edge101 + смена IP).
+                    if not self._has_real_proxy():
+                        raise
+                    self._spfa_off_until = time.monotonic() + 300
+                    log.warning("avito_live: %s — 5 минут беру выдачу напрямую через прокси", e)
+            elif not self._has_real_proxy():
+                raise SpfaUnavailable("spfa на паузе, прямого прокси нет")
+        return await self._plain_get(url)
 
 
 # --------------------------------------------------------------------------
