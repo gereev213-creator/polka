@@ -32369,13 +32369,20 @@ async def _service_alerts_pass(bot) -> None:
     except Exception as e:
         logger.warning(f"service alerts proxy: {e}")
 
-    # spfa: баланс меньше 30 ₽
+    # spfa: баланс кончается — сервис отвечает 403 «Недостаточно средств»
     try:
-        sp = _get('https://spfa.pro/api/me',
-                  {'Authorization': 'Bearer ' + os.environ.get('SPFA_API_KEY', '')})
-        bal = (sp.get('results') or sp).get('balance')
-        if bal is not None and float(bal) < 30:
-            alerts.append(f"spfa: баланс {bal} ₽ — пополнить")
+        import json as _json2
+        body = _json2.dumps({"api_key": os.environ.get('SPFA_API_KEY', ''),
+                             "proxy": os.environ.get('SPFA_PROXY', '')}).encode()
+        req = _ur.Request('https://spfa.pro/api/cookies/mobile/', data=body,
+                          headers={'Content-Type': 'application/json'}, method='POST')
+        try:
+            with _ur.urlopen(req, timeout=30) as r:
+                pass
+        except Exception as _e:
+            msg = str(getattr(_e, 'read', lambda: b'')().decode(errors='ignore'))
+            if 'Недостаточно средств' in msg or 'Insufficient' in msg:
+                alerts.append("spfa: баланс кончается — пополнить")
     except Exception as e:
         logger.warning(f"service alerts spfa: {e}")
 
