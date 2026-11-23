@@ -32325,6 +32325,80 @@ async def _ttl_pause_loop(bot) -> None:
         await asyncio.sleep(300)
 
 
+async def _service_alerts_pass(bot) -> None:
+    """Раз в 6 часов: предупреждаем админа о скором окончании оплаченных сервисов."""
+    import json as _json
+    import urllib.request as _ur
+    alerts = []
+
+    def _get(url, headers=None):
+        req = _ur.Request(url, headers=headers or {})
+        with _ur.urlopen(req, timeout=25) as r:
+            return _json.loads(r.read().decode())
+
+    # VPS OneDash: срок за 3 дня
+    try:
+        od = _get('https://api.rdp-onedash.ru/api/vps',
+                  {'Authorization': 'Bearer ' + os.environ.get('ONEDASH_API_KEY', '6f36de868e322ed243e466badf8e180af569d69f'),
+                   'Accept': 'application/json'})
+        for v in (od.get('data') or {}).get('items') or []:
+            exp = int(v.get('expires_at') or 0)
+            if not exp:
+                continue
+            days = (exp - int(_time.time())) // 86400
+            if days <= 3:
+                alerts.append(f"VPS #{v.get('order_id') or v.get('id')} истекает через {max(days, 0)} дн. ({v.get('connection', {}).get('host')})")
+    except Exception as e:
+        logger.warning(f"service alerts vps: {e}")
+
+    # Мобильный прокси: срок за 3 дня
+    try:
+        mp = _get('https://mpsapi.com/api.html?command=get_my_proxy&proxy_id=588958',
+                  {'Authorization': 'Bearer ' + os.environ.get('MOBILEPROXY_API_KEY', 'd3eac2a30b7e21caccbc4d9d702fa6fd')})
+        row = mp[0] if isinstance(mp, list) and mp else {}
+        for k in ('proxy_expires', 'proxy_date_end', 'date_end'):
+            if row.get(k):
+                try:
+                    end = int(row[k])
+                    days = (end - int(_time.time())) // 86400
+                    if days <= 3:
+                        alerts.append(f"Мобильный прокси {row.get('proxy_id')} истекает через {max(days, 0)} дн.")
+                except Exception:
+                    pass
+                break
+    except Exception as e:
+        logger.warning(f"service alerts proxy: {e}")
+
+    # spfa: баланс меньше 30 ₽
+    try:
+        sp = _get('https://spfa.pro/api/me',
+                  {'Authorization': 'Bearer ' + os.environ.get('SPFA_API_KEY', '')})
+        bal = (sp.get('results') or sp).get('balance')
+        if bal is not None and float(bal) < 30:
+            alerts.append(f"spfa: баланс {bal} ₽ — пополнить")
+    except Exception as e:
+        logger.warning(f"service alerts spfa: {e}")
+
+    if not alerts:
+        return
+    text = "⚠️ <b>Сервисы на исходе</b>\n\n" + "\n".join("• " + a for a in alerts)
+    for uid in ADMIN_USER_IDS:
+        try:
+            await bot.send_message(chat_id=uid, text=text, parse_mode='HTML')
+        except Exception as e:
+            logger.warning(f"service alerts send {uid}: {e}")
+
+
+async def _service_alert_loop(bot) -> None:
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await _service_alerts_pass(bot)
+        except Exception as e:
+            logger.warning(f"service alert loop: {e}")
+        await asyncio.sleep(6 * 3600)
+
+
 async def _admin_digest_loop(bot) -> None:
     """Находка дня админу: свой цикл, раз в сутки в 10:00 МСК."""
     await asyncio.sleep(120)
@@ -32405,6 +32479,12 @@ async def post_init(application: Application):
         logger.info("daily digest: фоновый цикл запущен")
     except Exception as _de:
         logger.warning(f"daily digest task: {_de}")
+    try:
+        asyncio.create_task(_service_alert_loop(application.bot))
+        _ASYNC_LOOPS.append('service_alert_loop')
+        logger.info("service alerts: фоновый цикл запущен")
+    except Exception as _sa:
+        logger.warning(f"service alerts task: {_sa}")
     init_fts5()
     # Сбрасываем старые команды принудительно
     try:
