@@ -1277,6 +1277,42 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
   if (back) back.addEventListener('click', function(){ setOpen(false); });
   if (close) close.addEventListener('click', function(){ setOpen(false); });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setOpen(false); });
+
+  // «Продлить» из бота открывает ?screen=tariffs&sheet=1 — показываем
+  // шторку выбора сразу, без дополнительного тапа по шеврону.
+  function maybeOpenFromUrl(){
+    try {
+      var p = new URLSearchParams(location.search);
+      var sp = p.get('sheet');
+      var sc = p.get('screen') || p.get('tab') || '';
+      if ((sp === '1' || sp === 'tariffs') && (!sc || sc === 'tariffs')) setOpen(true);
+    } catch (e) { }
+  }
+  setTimeout(maybeOpenFromUrl, 700);
+  setTimeout(maybeOpenFromUrl, 1500);
+
+  // Ушли с тарифов — шторка не должна висеть поверх других экранов.
+  (function closeOnLeave(){
+    if (typeof window.go !== 'function' || window.go.__sheetWrapped) return;
+    var orig = window.go;
+    var wrapped = function(name){
+      if (name !== 'tariffs') setOpen(false);
+      return orig.apply(this, arguments);
+    };
+    wrapped.__sheetWrapped = true;
+    window.go = wrapped;
+  })();
+  setInterval(function(){
+    if (typeof window.go === 'function' && !window.go.__sheetWrapped) {
+      var orig = window.go;
+      var wrapped = function(name){
+        if (name !== 'tariffs') setOpen(false);
+        return orig.apply(this, arguments);
+      };
+      wrapped.__sheetWrapped = true;
+      window.go = wrapped;
+    }
+  }, 1000);
 })();
 </script>
 </body></html>

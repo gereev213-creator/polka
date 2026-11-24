@@ -31988,10 +31988,14 @@ def _notified_or_mark(key: str, dry_run: bool) -> bool:
 
 
 async def _send_plan_notice(bot, user_id: int, text: str, screen: str = 'tariffs',
-                             label: str = 'Открыть ПОЛКУ') -> bool:
+                             label: str = 'Открыть ПОЛКУ', sheet: bool = False) -> bool:
     """Сообщение в личку с кнопкой открытия нужного раздела приложения."""
     try:
         url = f"{_miniapp_url()}/?screen={screen}"
+        if sheet:
+            # «Продлить» должно открывать тарифы сразу с открытой шторкой
+            # выбора ссылок и срока — человеку не нужно ещё раз тыкать.
+            url += "&sheet=1"
         keyboard = InlineKeyboardMarkup([[
             _InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
         await bot.send_message(chat_id=int(user_id), text=text, parse_mode='HTML',
@@ -32032,7 +32036,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
                             '⌛ <b>Пробный период закончился</b>\n\n'
                             'Находки и поиски на паузе. Плюс возвращает доступ: '
                             '5 ссылок и проверка каждые 2–5 секунд.',
-                            label='Продлить')
+                            label='Продлить', sheet=True)
             elif trial_hours - hours <= 6:
                 key = f'notify:trial6:{uid}'
                 if _notified_or_mark(key, dry_run):
@@ -32043,7 +32047,7 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
                             '⏳ <b>Пробный период заканчивается</b>\n\n'
                             f'Осталось {trial_hours - hours} ч. После него поиски встанут '
                             'на паузу. Плюс сохраняет доступ и скорость.',
-                            label='Продлить')
+                            label='Продлить', sheet=True)
     except Exception as e:
         logger.warning(f"trial notice: {e}")
 
