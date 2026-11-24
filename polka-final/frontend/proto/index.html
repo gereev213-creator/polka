@@ -931,7 +931,23 @@ body.sheet-open #stage{overflow:hidden}
 #s-tariffs #promoform,
 #s-tariffs #pmsg{display:none}
 </style>
-</head><body>
+<style id="mobile-responsive-fix">
+/* Узкие экраны: подписи статистики не переносим и не раздуваем */
+.stats small{white-space:nowrap;font-size:clamp(8px,2.3vw,10px);letter-spacing:-.2px;line-height:1.15}
+@media (max-width:380px){.stats small{font-size:8px}}
+.stats{padding:12px 6px}
+/* Плашка пробного: текст не обрезаем многоточием */
+#s-tariffs .trial{gap:8px}
+#s-tariffs .trial b{white-space:normal!important;overflow:visible!important;
+  text-overflow:clip!important;line-height:1.25;font-size:clamp(13px,3.6vw,16px)}
+#s-tariffs .trial .actv{font-size:10px;padding:6px 10px;flex-shrink:0}
+/* Карточка «Плюс» не раздувается на маленьких экранах */
+#s-tariffs .plan-card.plan-plus{min-height:clamp(170px,46vw,230px)!important;
+  padding:clamp(16px,4.2vw,20px)!important}
+#s-tariffs .plan-plus .pay{height:clamp(42px,12vw,48px)}
+/* Профиль: нижнее меню не перекрывает последний пункт */
+#s-profile>.scroll{padding-bottom:150px!important}
+</style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
 <symbol id="i-r" viewBox="0 0 24 24"><path d="M9.5 5.5 16 12l-6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -1105,7 +1121,7 @@ body.sheet-open #stage{overflow:hidden}
 <!-- profile -->
 <section class="screen" id="s-profile"><div class="ahead"><div class="logo"></div><span class="stag">Профиль</span></div><div class="scroll">
 <div class="profileTop"><div class="avatar" id="avatarCircle"><span class="avbadge" id="avbadge" style="display:none"><svg width="13" height="13"><use href="#i-spark"/></svg></span></div><div class="handle"><span id="handleText">@</span><div id="tgUserId" style="display:none;font-size:10px;color:#7A8CA3;margin-top:4px"></div> <span class="pluspill" id="pluspill" style="display:none">ПЛЮС</span></div></div>
-<div class="stats"><div><small>Объявления</small><b>0</b></div><div><small>Модерация</small><b>0</b></div><div><small>В избранном</small><b id="favCount">0</b></div></div>
+<div class="stats"><div><small>Объявления</small><b>0</b></div><div><small>Модерация</small><b>0</b></div><div><small>Избранное</small><b id="favCount">0</b></div></div>
 <div class="card menu">
 <button class="mrow" onclick="go('myads')"><span class="grow">Мои объявления</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
 <button class="mrow" onclick="go('favorites')"><span class="grow">Избранное</span><span class="chev"><svg width="14" height="14"><use href="#i-r"/></svg></span></button>
