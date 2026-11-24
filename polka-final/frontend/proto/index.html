@@ -865,9 +865,13 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 }
 #s-tariffs .plan-plus .plan-price .per{font-size:13px; font-weight:500; color:#fff}
 @media (max-width:380px){
-  #s-tariffs .plan-plus .plan-bottom{flex-direction:column; align-items:stretch}
-  #s-tariffs .plan-plus .pay{width:100%}
-  #s-tariffs .plan-plus .plan-price{justify-content:flex-end}
+  /* На узких экранах меняем местами: цена сверху, кнопка внизу.
+     display:contents делает цену и кнопку прямыми детьми карточки,
+     поэтому margin-top:auto прижимает кнопку к низу. */
+  #s-tariffs .plan-plus{justify-content:flex-start; gap:12px}
+  #s-tariffs .plan-plus .plan-bottom{display:contents}
+  #s-tariffs .plan-plus .plan-price{order:2; justify-content:flex-start; margin-top:6px}
+  #s-tariffs .plan-plus .pay{order:3; width:100%; margin-top:auto}
 }
 /* Шторка с выбором ссылок и срока */
 .plan-sheet-back{
