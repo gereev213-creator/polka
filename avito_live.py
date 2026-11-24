@@ -721,8 +721,8 @@ _SPFA_HARD_MIN = float(os.environ.get("SPFA_HARD_MIN_SEC", "3600"))
 # Бюджет на выписку cookies: 3 ₽ за штуку. Без лимита при постоянных
 # блокировках баланс сгорает за часы. По умолчанию — не чаще раза в
 # 15 минут и не больше 20 выписок в сутки (60 ₽).
-_SPFA_COOKIE_MIN_SEC = float(os.environ.get("SPFA_COOKIE_MIN_SEC", "900"))
-_SPFA_COOKIE_DAILY_MAX = int(os.environ.get("SPFA_COOKIE_DAILY_MAX", "20"))
+_SPFA_COOKIE_MIN_SEC = float(os.environ.get("SPFA_COOKIE_MIN_SEC", "3600"))
+_SPFA_COOKIE_DAILY_MAX = int(os.environ.get("SPFA_COOKIE_DAILY_MAX", "3"))
 _SPFA_SPEND_FILE = os.environ.get("SPFA_SPEND_FILE", "/data/spfa_spend.json")
 
 
