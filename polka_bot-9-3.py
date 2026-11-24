@@ -31970,12 +31970,13 @@ def _notified_or_mark(key: str, dry_run: bool) -> bool:
         return False
 
 
-async def _send_plan_notice(bot, user_id: int, text: str, screen: str = 'tariffs') -> bool:
+async def _send_plan_notice(bot, user_id: int, text: str, screen: str = 'tariffs',
+                             label: str = 'Открыть ПОЛКУ') -> bool:
     """Сообщение в личку с кнопкой открытия нужного раздела приложения."""
     try:
         url = f"{_miniapp_url()}/?screen={screen}"
         keyboard = InlineKeyboardMarkup([[
-            _InlineKeyboardButton('Открыть ПОЛКУ', web_app=WebAppInfo(url=url))]])
+            _InlineKeyboardButton(label, web_app=WebAppInfo(url=url))]])
         await bot.send_message(chat_id=int(user_id), text=text, parse_mode='HTML',
                                reply_markup=keyboard, disable_web_page_preview=True)
         return True
@@ -32013,7 +32014,8 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
                             bot, uid,
                             '⌛ <b>Пробный период закончился</b>\n\n'
                             'Находки и поиски на паузе. Плюс возвращает доступ: '
-                            '5 ссылок и проверка каждые 2–5 секунд.')
+                            '5 ссылок и проверка каждые 2–5 секунд.',
+                            label='Продлить')
             elif trial_hours - hours <= 6:
                 key = f'notify:trial6:{uid}'
                 if _notified_or_mark(key, dry_run):
@@ -32023,7 +32025,8 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
                             bot, uid,
                             '⏳ <b>Пробный период заканчивается</b>\n\n'
                             f'Осталось {trial_hours - hours} ч. После него поиски встанут '
-                            'на паузу. Плюс сохраняет доступ и скорость.')
+                            'на паузу. Плюс сохраняет доступ и скорость.',
+                            label='Продлить')
     except Exception as e:
         logger.warning(f"trial notice: {e}")
 
