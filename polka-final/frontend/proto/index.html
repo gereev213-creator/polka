@@ -1296,7 +1296,13 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
     if (typeof window.go !== 'function' || window.go.__sheetWrapped) return;
     var orig = window.go;
     var wrapped = function(name){
-      if (name !== 'tariffs') setOpen(false);
+      if (name === 'tariffs') {
+        // Тарифы открываем сразу шторкой: человек видит ссылки и сроки,
+        // а не только синюю карточку «Плюс» и шеврон.
+        setTimeout(function(){ setOpen(true); }, 260);
+      } else {
+        setOpen(false);
+      }
       return orig.apply(this, arguments);
     };
     wrapped.__sheetWrapped = true;
@@ -1306,7 +1312,11 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
     if (typeof window.go === 'function' && !window.go.__sheetWrapped) {
       var orig = window.go;
       var wrapped = function(name){
-        if (name !== 'tariffs') setOpen(false);
+        if (name === 'tariffs') {
+          setTimeout(function(){ setOpen(true); }, 260);
+        } else {
+          setOpen(false);
+        }
         return orig.apply(this, arguments);
       };
       wrapped.__sheetWrapped = true;
