@@ -121,6 +121,23 @@ class Page:
 
 
 _INIT_RE = re.compile(r'window\.__initialData__\s*=\s*"((?:[^"\\]|\\.)*)"')
+# Новый формат (ноябрь 2026): window.__INITIALDATA__ = {...} — обычный JSON,
+# не строка. Старый regex его не видел, и страница считалась нераспознанной.
+_INIT_OBJ_RE = re.compile(r'window\.__initialdata__\s*=\s*', re.I)
+
+
+def _initialdata_obj(text: str):
+    m = _INIT_OBJ_RE.search(text or "")
+    if not m:
+        return None
+    rest = (text or "")[m.end():].lstrip()
+    if rest.startswith('"'):
+        return None  # старый строковый формат обрабатывается _INIT_RE
+    try:
+        obj, _ = json.JSONDecoder().raw_decode(rest)
+        return obj
+    except (ValueError, TypeError):
+        return None
 
 
 def _looks_like_item(d: dict) -> bool:
@@ -446,6 +463,16 @@ def parse_page(page_html: str) -> Page:
                 items = _listings_from_nodes(found)
                 if items:
                     return Page(items, True)
+    # 2b. Новый формат: window.__INITIALDATA__ = {...}.
+    data = _initialdata_obj(text)
+    if isinstance(data, dict):
+        found = []
+        hit = _main_catalog(data, found)
+        items = _listings_from_nodes(found) if found else []
+        if items:
+            return Page(items, True)
+        if hit:
+            return Page([], True)     # catalog.items есть, но пустой
     # 3. Запасной путь: микроразметка, но без блока «похожих».
     items = parse_microdata(_cut_extra(text))
     if items:
