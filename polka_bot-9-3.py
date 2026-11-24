@@ -13235,7 +13235,7 @@ async def _db_guard_loop(bot) -> None:
                     logger.warning("db guard: повреждение, недавно уже восстанавливали — жду")
         except Exception as e:
             logger.warning(f"db guard: {e}")
-        await asyncio.sleep(6 * 3600)
+        await asyncio.sleep(600)
 
 
 async def _grant_limits_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -32510,7 +32510,7 @@ async def _service_alerts_pass(bot) -> None:
             if days <= 3:
                 alerts.append(f"VPS #{v.get('order_id') or v.get('id')} истекает через {max(days, 0)} дн. ({v.get('connection', {}).get('host')})")
     except Exception as e:
-        logger.warning(f"service alerts vps: {e}")
+        logger.info(f"service alerts vps: {e}")
 
     # Мобильный прокси: срок за 3 дня
     try:
@@ -32528,7 +32528,7 @@ async def _service_alerts_pass(bot) -> None:
                     pass
                 break
     except Exception as e:
-        logger.warning(f"service alerts proxy: {e}")
+        logger.info(f"service alerts proxy: {e}")
 
     # Баланс spfa отдельно НЕ проверяем: единственный доступный способ
     # проверки — создать cookie за 3 ₽. Это дороже, чем польза от
