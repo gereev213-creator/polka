@@ -1349,7 +1349,7 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
     document.body.classList.toggle('sheet-open', !!open);
     if (more) more.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  if (more) more.addEventListener('click', function(){ setOpen(sheet.hidden); });
+  if (more) more.addEventListener('click', function(){ setOpen(!sheet.classList.contains('show')); });
   if (back) back.addEventListener('click', function(){ setOpen(false); });
   if (close) close.addEventListener('click', function(){ setOpen(false); });
   document.addEventListener('keydown', function(e){ if (e.key === 'Escape') setOpen(false); });
