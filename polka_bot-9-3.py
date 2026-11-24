@@ -32586,7 +32586,24 @@ async def _finding_of_day_loop(bot):
             logger.warning(f"fod loop: {e}")
         await asyncio.sleep(900)
 
+def _asyncio_exc_handler(loop, context):
+    """Пишем полную причину фоновых ошибок, а не сухое «Future exception»."""
+    try:
+        msg = context.get("message") or "unhandled asyncio error"
+        exc = context.get("exception")
+        if exc is not None:
+            logger.error(f"asyncio: {msg}", exc_info=exc)
+        else:
+            logger.error(f"asyncio: {msg}")
+    except Exception:
+        pass
+
+
 async def post_init(application: Application):
+    try:
+        asyncio.get_running_loop().set_exception_handler(_asyncio_exc_handler)
+    except Exception:
+        pass
     # Инициализируем новые таблицы и индексы
     try:
         globals()['_APP'] = application
