@@ -482,6 +482,30 @@ def _listings_from_nodes(found: List[dict]) -> List[Listing]:
     return items
 
 
+def _relative_ts(display: str) -> Optional[float]:
+    """«5 минут назад», «2 часа назад», «вчера» -> unix-время."""
+    low = (display or "").lower().strip()
+    if not low:
+        return None
+    now = time.time()
+    if "только что" in low or "сейчас" in low:
+        return now
+    m = re.search(r"(\d+)\s*мин", low)
+    if m:
+        return now - int(m.group(1)) * 60
+    m = re.search(r"(\d+)\s*(?:час|ч\b)", low)
+    if m:
+        return now - int(m.group(1)) * 3600
+    m = re.search(r"(\d+)\s*дн", low)
+    if m:
+        return now - int(m.group(1)) * 86400
+    if "вчера" in low:
+        return now - 86400
+    if "сегодня" in low:
+        return now
+    return None
+
+
 def _screen_feed_listings(data: Any) -> List[Listing]:
     """Мобильная выдача: search.screenFeed.items[].itemSnippet.
 
@@ -538,6 +562,7 @@ def _screen_feed_listings(data: Any) -> List[Listing]:
             url=f"https://www.avito.ru/{iid}",
             image=image,
             description=str(it.get("description") or "").strip(),
+            ts=_relative_ts(str((sn.get("sortTime") or {}).get("display") or "")),
         ))
     return out
 
@@ -1133,7 +1158,7 @@ class Fetcher:
                 # На 429 хватает одной смены IP на опрос: иначе парсер
                 # крутит changeip каждые 20–30 секунд и сам держит пул
                 # IP «горячим». Второй 429 — уходим в паузу ссылки.
-                if _rotated_once and code == 429:
+                if _rotated_once and code in (429, 439, 403):
                     raise Blocked(f"HTTP {code}")
                 rotated = await self._rotate_ip()
                 if rotated:
