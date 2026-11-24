@@ -130,21 +130,57 @@ _INIT_SCRIPT_RE = re.compile(
     r'<script[^>]*id=["\']__INITIALDATA__["\'][^>]*>(.*?)</script>', re.I | re.S)
 
 
+_INIT_JSON_BLOCK_RE = re.compile(
+    r'<script[^>]*(?:id|data-name)=["\']__INITIALDATA__["\'][^>]*>(.*?)</script>',
+    re.I | re.S)
+_INIT_PARSE_RE = re.compile(
+    r'window\.__initialdata__\s*=\s*JSON\.parse\(\s*"((?:[^"\\]|\\.)*)"\s*\)',
+    re.I | re.S)
+_INIT_STR_RE = re.compile(
+    r'window\.__initialdata__\s*=\s*"((?:[^"\\]|\\.)*)"', re.I | re.S)
+
+
 def _initialdata_obj(text: str):
-    # Вариант 1: <script id="__INITIALDATA__" type="application/json">{...}</script>
-    m = _INIT_SCRIPT_RE.search(text or "")
+    t = text or ""
+    # 1) <script id="__INITIALDATA__" type="application/json">{...}</script>
+    m = _INIT_JSON_BLOCK_RE.search(t)
     if m:
         raw = _html.unescape(m.group(1)).strip()
         try:
             return json.loads(raw)
         except (ValueError, TypeError):
             return None
-    m = _INIT_OBJ_RE.search(text or "")
+    # 2) window.__INITIALDATA__ = JSON.parse("…")
+    m = _INIT_PARSE_RE.search(t)
+    if m:
+        try:
+            inner = json.loads('"' + m.group(1) + '"')
+            for cand in (inner, unquote(inner)):
+                try:
+                    return json.loads(cand)
+                except (ValueError, TypeError):
+                    continue
+        except (ValueError, TypeError):
+            pass
+    # 3) window.__INITIALDATA__ = "…" (строка, возможно URL-энкод)
+    m = _INIT_STR_RE.search(t)
+    if m:
+        try:
+            inner = json.loads('"' + m.group(1) + '"')
+            for cand in (inner, unquote(inner)):
+                try:
+                    return json.loads(cand)
+                except (ValueError, TypeError):
+                    continue
+        except (ValueError, TypeError):
+            pass
+    # 4) window.__INITIALDATA__ = {…}
+    m = _INIT_OBJ_RE.search(t)
     if not m:
         return None
-    rest = (text or "")[m.end():].lstrip()
+    rest = t[m.end():].lstrip()
     if rest.startswith('"'):
-        return None  # старый строковый формат обрабатывается _INIT_RE
+        return None
     try:
         obj, _ = json.JSONDecoder().raw_decode(rest)
         return obj
