@@ -3379,6 +3379,12 @@ class Database:
         # описания — каждая доступна БЕСПЛАТНО один раз (навсегда, не по дням),
         # чтобы показать пользователю ценность ПОЛКА ПЛЮС перед покупкой.
         # Сколько раз тест продлевали компенсацией (находок не было).
+        if 'trial_activated_at' not in user_cols:
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN trial_activated_at TEXT DEFAULT NULL")
+                user_cols.append('trial_activated_at')
+            except Exception:
+                pass
         if 'trial_extended' not in user_cols:
             try:
                 cursor.execute("ALTER TABLE users ADD COLUMN trial_extended INTEGER DEFAULT 0")
@@ -8023,64 +8029,33 @@ async def survey_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def start_trial_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Кнопка «Активировать бесплатный период» в приветствии.
+    """Кнопка «Активировать бонус» в приветствии.
 
-    Не просим подписку и не просим карту: включаем пробный план и сразу
-    показываем кнопку, которая открывает приложение.
+    В боте НЕ активируем: таймер стартует в приложении, в «Поиске лотов»,
+    чтобы человек видел счётчик и условия. Иначе 24 часа сгорали, пока он
+    читал сообщение.
     """
     query = update.callback_query
     user = update.effective_user
     try:
-        await query.answer("Бесплатный период активирован")
+        await query.answer()
     except Exception:
         pass
-    # Уже оплаченный Плюс не понижаем: старая кнопка «Активировать бонус»
-    # остаётся в истории чата, и раньше её нажатие переводило человека с
-    # «Плюса» на пробный план (владелец как раз на это наткнулся).
-    try:
-        has_plus = bool(_plus_subscription(int(user.id)))
-    except Exception:
-        has_plus = False
     try:
         u = db.get_user(user.id) or {}
     except Exception:
         u = {}
-    if has_plus or str(u.get('plan') or '') == 'plus':
-        try:
-            await query.answer("У вас уже активен «Плюс»")
-        except Exception:
-            pass
-        text = ("<b>У вас уже активен «Плюс»</b> 👍\n\n"
-                "Поиски работают без суточного ограничения — искать можно "
-                "прямо в приложении.")
-        kbd = InlineKeyboardMarkup([
-            [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
-                                  web_app=WebAppInfo(url=_miniapp_url()))],
-        ])
-        try:
-            await query.edit_message_text(text, reply_markup=kbd,
-                                          parse_mode=ParseMode.HTML,
-                                          disable_web_page_preview=True)
-        except Exception:
-            pass
-        return
-    try:
-        patch = {'plan': 'free', 'subscribed': 1}
-        if not u.get('trial_started_at'):
-            patch['trial_started_at'] = get_moscow_time().isoformat()
-        db.update_user(user.id, **patch)
-    except Exception as e:
-        logger.warning(f"start_trial: {e}")
-    text = (
-        "<b>Бонус активирован</b> 🎁\n\n"
-        "Откройте приложение и создайте первый поиск лота: укажите, что "
-        "ищете, — бот пришлёт подходящие объявления с Авито.\n\n"
-        "Кнопка ниже сразу открывает ПОЛКУ."
-    )
-    kbd = InlineKeyboardMarkup([
-        [InlineKeyboardButton(EM_ARROW_R + " Открыть ПОЛКУ",
-                              web_app=WebAppInfo(url=_miniapp_url()))],
-    ])
+    if str(u.get('trial_activated_at') or '') or str(u.get('plan') or '') == 'plus':
+        text = ("<b>Пробный уже активирован</b> 👍\n\n"
+                "Откройте раздел «Поиск лотов» — там счётчик и ваша ссылка.")
+    else:
+        text = ("<b>🎁 Ваш пробный период</b>\n\n"
+                "24 часа, 1 ссылка.\n\n"
+                "Откройте «Поиск лотов» и нажмите <b>«Активировать пробный»</b> — "
+                "счётчик стартует сразу после нажатия.")
+    kbd = InlineKeyboardMarkup([[
+        InlineKeyboardButton("Открыть поиск лотов",
+                             web_app=WebAppInfo(url=f"{_miniapp_url()}/?tab=searches"))]])
     try:
         await query.edit_message_text(text, reply_markup=kbd,
                                       parse_mode=ParseMode.HTML,
@@ -18983,6 +18958,45 @@ async def api_hunt_dialog(request: aiohttp_web.Request) -> aiohttp_web.Response:
 
 
 # ── Этап H: эндпоинты плана, монет и оплаты Stars ─────────────────────────────
+async def api_trial_activate(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/trial/activate — явная активация пробного: 24 часа, 1 ссылка."""
+    viewer_id = _miniapp_viewer(request)
+    if not viewer_id:
+        return _miniapp_err('unauthorized', 401)
+    user = db.get_user(int(viewer_id)) or {}
+    if str(user.get('trial_activated_at') or ''):
+        return _miniapp_json({'ok': False, 'error': 'trial_used'}, status=409)
+    if _plus_subscription(int(viewer_id)) is True:
+        return _miniapp_json({'ok': False, 'error': 'already_plus'}, status=409)
+    now = get_moscow_time()
+    db.update_user(int(viewer_id), plan='trial',
+                   trial_activated_at=now.isoformat(),
+                   trial_started_at=now.isoformat())
+    # Пробный — ровно одна ссылка: лишние критерии уходят в паузу.
+    try:
+        _pause_extra_criteria(int(viewer_id), 1)
+    except Exception as e:
+        logger.warning(f"trial pause extra {viewer_id}: {e}")
+    try:
+        bot = globals().get('_BOT_INSTANCE')
+        if bot:
+            await bot.send_message(
+                chat_id=int(viewer_id),
+                text=("🎁 <b>Пробный период активирован</b>\n\n"
+                      "24 часа, 1 ссылка. Находки придут сюда и в приложение."),
+                parse_mode='HTML',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton(
+                        "Открыть поиск лотов",
+                        web_app=WebAppInfo(url=f"{_miniapp_url()}/?tab=searches"))
+                ]]))
+    except Exception as e:
+        logger.warning(f"trial notify {viewer_id}: {e}")
+    return _miniapp_json({'ok': True, 'plan': 'trial', 'hours_left': 24,
+                          'criteria_limit': 1,
+                          'trial_until': (now + timedelta(hours=24)).isoformat()})
+
+
 async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/plan — план, пробный период, лимит критериев, баланс монет."""
     viewer_id = _miniapp_viewer(request)
@@ -19006,10 +19020,16 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
         is_admin_flag = False
     if not is_admin_flag and int(viewer_id) in ADMIN_TELEGRAM_IDS:
         is_admin_flag = True
+    _u = db.get_user(int(viewer_id)) or {}
+    _trial_available = (not str(_u.get('trial_activated_at') or '')
+                        and str(plan.get('name')) == 'free')
     return _miniapp_json({
         'plan': plan['name'],
         'is_admin': is_admin_flag,
+        'trial_available': bool(_trial_available),
+        'trial_activated_at': str(_u.get('trial_activated_at') or ''),
         'trial_days_left': plan['trial_days_left'],
+        'trial_hours_left': plan.get('trial_hours_left', 0),
         'criteria_used': used,
         'criteria_limit': limit,
         # баланс монет отдаём только при включённом флаге (B0)
@@ -27170,27 +27190,26 @@ def _user_plan(user_id: int) -> Dict:
             except Exception:
                 pass
             _pause_extra_criteria(int(user_id), int(cfg_get('free.max_criteria')))
+    # Пробный период активируется ЯВНО кнопкой «Активировать пробный»,
+    # а не с первого входа: иначе человек получал 24 часа молча, ещё не
+    # понимая, что это подарок, и это выглядело как «халява».
     if plan not in ('trial', 'plus', 'free'):
-        plan = 'trial'  # пробный период с первого входа
-        trial_started = (user.get('trial_started_at') or user.get('registration_date')
-                         or now.isoformat())
+        plan = 'free'
         try:
-            db.update_user(int(user_id), plan='trial', trial_started_at=trial_started)
+            db.update_user(int(user_id), plan='free')
         except Exception:
             pass
-    else:
-        trial_started = (user.get('trial_started_at') or user.get('registration_date')
-                         or now.isoformat())
+    trial_activated = str(user.get('trial_activated_at') or '')
+    if plan == 'trial' and not trial_activated:
+        # Старый trial без отметки активации — не продлеваем автоматически.
+        plan = 'free'
+        try:
+            db.update_user(int(user_id), plan='free')
+        except Exception:
+            pass
     trial_days = int(cfg_get('trial.days'))
-    if plan == 'free' and user.get('trial_started_at'):
-        # Регистрация пишет plan='free'; без этого пробный не включался вовсе.
-        try:
-            hours0 = _hours_since(user.get('trial_started_at'))
-            if hours0 is not None and hours0 < trial_days * 24:
-                plan = 'trial'
-        except Exception:
-            pass
     if plan == 'trial':
+        trial_started = trial_activated or str(user.get('trial_started_at') or '') or now.isoformat()
         hours = int(_hours_since(trial_started) or 0)
         trial_hours = trial_days * 24
         # Компенсация: не пришло ни одной находки — продлеваем на сутки,
@@ -27209,8 +27228,8 @@ def _user_plan(user_id: int) -> Dict:
         else:
             hours_left = trial_hours - hours
             return {'name': 'trial', 'trial_days_left': max(1, (hours_left + 23) // 24),
-                    'trial_hours_left': hours_left,
-                    'criteria_limit': int(cfg_get('trial.max_criteria')), 'delay_min': 0,
+                    'trial_hours_left': hours_left, 'trial_used': True,
+                    'criteria_limit': 1, 'delay_min': 0,
                     'deep_check': True, 'price': 0,
                     'show_price': int(cfg_get('plus.price_display_old'))}
     if plan == 'plus':
@@ -31974,26 +31993,37 @@ async def plan_notifications_pass(bot, dry_run: bool = False) -> Dict:
     now = get_moscow_time()
     cur = db.conn.cursor()
 
-    # Пробный период: напоминаем за 2 дня и в день окончания
+    # Пробный период: 24 часа. За 6 часов предупреждаем, после конца — предлагаем Плюс.
     try:
-        cur.execute("SELECT user_id, trial_started_at FROM users WHERE plan='trial'")
+        cur.execute("SELECT user_id, trial_started_at, trial_activated_at "
+                    "FROM users WHERE plan='trial'")
         for row in cur.fetchall():
             uid = int(row['user_id'])
-            started = str(row['trial_started_at'] or '')
+            started = str(row['trial_activated_at'] or row['trial_started_at'] or '')
             if not started:
                 continue
-            days = int(_hours_since(started) or 0) // 24
-            left = int(cfg_get('trial.days')) - days
-            if left == 2:
-                key = f'notify:trial2:{uid}'
+            hours = int(_hours_since(started) or 0)
+            trial_hours = max(1, int(cfg_get('trial.days'))) * 24
+            if hours >= trial_hours:
+                key = f'notify:trialend:{uid}'
+                if _notified_or_mark(key, dry_run):
+                    out['trial_ended'].append(uid)
+                    if not dry_run:
+                        await _send_plan_notice(
+                            bot, uid,
+                            '⌛ <b>Пробный период закончился</b>\n\n'
+                            'Находки и поиски на паузе. Плюс возвращает доступ: '
+                            '5 ссылок и проверка каждые 2–5 секунд.')
+            elif trial_hours - hours <= 6:
+                key = f'notify:trial6:{uid}'
                 if _notified_or_mark(key, dry_run):
                     out['trial_soon'].append(uid)
                     if not dry_run:
                         await _send_plan_notice(
                             bot, uid,
-                            '⏳ <b>Пробный период заканчивается через 2 дня</b>\n\n'
-                            'После него останется базовый доступ: меньше поисков и задержка '
-                            'в находках. Плюс сохраняет всё как сейчас.')
+                            '⏳ <b>Пробный период заканчивается</b>\n\n'
+                            f'Осталось {trial_hours - hours} ч. После него поиски встанут '
+                            'на паузу. Плюс сохраняет доступ и скорость.')
     except Exception as e:
         logger.warning(f"trial notice: {e}")
 
@@ -38220,6 +38250,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/hunt/ai', api_hunt_ai)
     app.router.add_post('/api/hunt/dialog', api_hunt_dialog)
     app.router.add_get('/api/plan', api_plan)
+    app.router.add_post('/api/trial/activate', api_trial_activate)
     app.router.add_get('/api/debug-proxy', api_debug_proxy)
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)

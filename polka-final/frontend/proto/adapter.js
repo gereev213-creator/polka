@@ -3562,3 +3562,112 @@ function paintEmpty(count) {
     };
   } catch (e) { }
 })();
+
+/* ── Пробный период: активация из «Поиска лотов» и счётчик 24 часа ───────
+   Раньше trial включался молча при первом входе, и 24 часа сгорали, пока
+   человек читал сообщение. Теперь: карточка в «Поиске лотов», кнопка
+   «Активировать пробный», после нажатия — обратный отсчёт. */
+(function () {
+  try {
+    var state = { plan: '', available: false, hoursLeft: 0, activated: '' };
+    var timer = null;
+
+    function fmtLeft(sec) {
+      sec = Math.max(0, Math.floor(sec));
+      var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60);
+      return (h > 0 ? h + ' ч ' : '') + m + ' мин';
+    }
+
+    function ensureCard() {
+      var host = document.getElementById('s-searches');
+      if (!host || document.getElementById('trialCard')) return;
+      var card = document.createElement('div');
+      card.id = 'trialCard';
+      card.className = 'card';
+      card.style.cssText = 'margin:12px 0 4px;padding:16px;display:none;border-radius:20px;background:linear-gradient(160deg,#F2F7FF,#EAF2FF);border:1.5px solid #D8E6FF';
+      card.innerHTML = '<div id="trialTitle" style="font-size:15px;font-weight:900;color:#0F1B2D"></div>'
+        + '<div id="trialText" style="font-size:12.5px;line-height:1.45;color:#4A5A71;margin:6px 0 12px"></div>'
+        + '<button id="trialBtn" class="bigbtn" type="button" style="height:44px;border-radius:14px"></button>';
+      var scroll = host.querySelector('.scroll');
+      if (scroll) host.insertBefore(card, scroll); else host.appendChild(card);
+    }
+
+    function paint() {
+      ensureCard();
+      var card = document.getElementById('trialCard');
+      if (!card) return;
+      var title = document.getElementById('trialTitle');
+      var text = document.getElementById('trialText');
+      var btn = document.getElementById('trialBtn');
+      if (state.plan === 'trial') {
+        card.style.display = 'block';
+        title.textContent = '🎁 Пробный период активен';
+        text.textContent = 'Осталось ' + fmtLeft(state.hoursLeft * 3600) + '. Доступна 1 ссылка — находки приходят в чат и приложение.';
+        btn.textContent = 'К тарифам';
+        btn.onclick = function () { if (typeof window.go === 'function') window.go('tariffs'); };
+        if (!timer) timer = setInterval(tick, 30000);
+      } else if (state.available) {
+        card.style.display = 'block';
+        title.textContent = '🎁 Пробный период — 24 часа';
+        text.textContent = 'Бесплатно 1 ссылка. Активируйте — и счётчик запустится сразу.';
+        btn.textContent = 'Активировать пробный';
+        btn.onclick = onActivate;
+        if (timer) { clearInterval(timer); timer = null; }
+      } else if (state.activated) {
+        card.style.display = 'block';
+        title.textContent = 'Пробный период закончился';
+        text.textContent = 'Поиски на паузе. Плюс возвращает доступ: 5 ссылок и проверка каждые 2–5 секунд.';
+        btn.textContent = 'Продлить';
+        btn.onclick = function () { if (typeof window.go === 'function') window.go('tariffs'); };
+        if (timer) { clearInterval(timer); timer = null; }
+      } else {
+        card.style.display = 'none';
+      }
+    }
+
+    function tick() {
+      if (state.plan !== 'trial') return;
+      state.hoursLeft = Math.max(0, state.hoursLeft - 30 / 3600);
+      if (state.hoursLeft <= 0) { load(); return; }
+      paint();
+    }
+
+    async function load() {
+      try {
+        var d = await window.PolkaAPI.api('/api/plan');
+        state.plan = String(d.plan || '');
+        state.available = !!d.trial_available;
+        state.activated = String(d.trial_activated_at || '');
+        state.hoursLeft = Number(d.trial_hours_left || 0);
+        paint();
+      } catch (e) { }
+    }
+
+    async function onActivate() {
+      var btn = document.getElementById('trialBtn');
+      if (btn) { btn.disabled = true; btn.textContent = 'Активирую…'; }
+      try {
+        await window.PolkaAPI.api('/api/trial/activate', { method: 'POST', body: '{}' });
+      } catch (e) { }
+      try {
+        var TG = window.Telegram && window.Telegram.WebApp;
+        if (TG && TG.HapticFeedback) TG.HapticFeedback.notificationOccurred('success');
+      } catch (e) { }
+      await load();
+    }
+
+    function wrapGo() {
+      if (typeof window.go !== 'function' || window.go.__trialwrapped) return;
+      var orig = window.go;
+      var w = function (name) {
+        var r = orig.apply(this, arguments);
+        if (name === 'searches') setTimeout(load, 250);
+        return r;
+      };
+      w.__trialwrapped = true;
+      window.go = w;
+    }
+    setInterval(wrapGo, 1000);
+    setTimeout(load, 1700);
+  } catch (e) { }
+})();
