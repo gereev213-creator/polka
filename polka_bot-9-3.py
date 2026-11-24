@@ -33618,6 +33618,100 @@ async def api_admin_promo(request: aiohttp_web.Request) -> aiohttp_web.Response:
     return _miniapp_json(res, status=200 if res.get('ok') else 400)
 
 
+def _admin_user_card(uid: int) -> Dict[str, Any]:
+    """Компактная карточка пользователя для админки в приложении."""
+    u = db.get_user(int(uid)) or {}
+    plan = _user_plan(int(uid))
+    cur = db.conn.cursor()
+    active = total = 0
+    try:
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=? AND active=1", (int(uid),))
+        active = int((cur.fetchone() or {})['n'] or 0)
+        cur.execute("SELECT COUNT(*) AS n FROM hunt_criteria WHERE user_id=?", (int(uid),))
+        total = int((cur.fetchone() or {})['n'] or 0)
+    except Exception:
+        pass
+    return {
+        'id': int(uid),
+        'username': str(u.get('username') or ''),
+        'first_name': str(u.get('first_name') or ''),
+        'plan': str(plan.get('name') or 'free'),
+        'plus_until': _plus_until(int(uid)),
+        'trial_activated_at': str(u.get('trial_activated_at') or ''),
+        'trial_hours_left': int(plan.get('trial_hours_left') or 0),
+        'criteria_active': active,
+        'criteria_total': total,
+        'coins': coins_balance(int(uid)),
+        'created_at': str(u.get('created_at') or u.get('registration_date') or ''),
+    }
+
+
+async def api_admin_user(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/admin/user?q=@user|id — карточка для админки."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    raw = str(request.query.get('q') or '').strip()
+    if not raw:
+        return _miniapp_json({'ok': False, 'error': 'bad_query'}, status=400)
+    target = await _admin_find_user(raw)
+    if not target:
+        return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+    return _miniapp_json({'ok': True, 'user': _admin_user_card(int(target))})
+
+
+async def api_admin_grant(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """POST /api/admin/grant {user, kind, amount} — то же, что /grant в боте."""
+    admin_id, err = await _admin_guard(request)
+    if err:
+        return err
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    raw = str((body or {}).get('user') or '').strip()
+    kind = str((body or {}).get('kind') or '').strip()
+    try:
+        amount = int((body or {}).get('amount') or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    target = await _admin_find_user(raw)
+    if not target:
+        return _miniapp_json({'ok': False, 'error': 'not_found'}, status=404)
+    target = int(target)
+    now = get_moscow_time()
+    if kind == 'plus_days':
+        expires = _grant_plus_days(target, amount)
+        text = f"«Плюс» на {amount} дн. до {expires[:10]}"
+    elif kind == 'trial_days':
+        trial_hours = max(1, int(cfg_get('trial.days'))) * 24
+        start = (now - timedelta(hours=trial_hours - amount * 24)).isoformat()
+        db.update_user(target, plan='trial', trial_activated_at=start, trial_started_at=start)
+        text = f"пробный период {amount} дн."
+    elif kind == 'coins':
+        text = f"монет начислено: {amount}, баланс {coins_add(target, amount, 'admin_app')}"
+    elif kind == 'plan_free':
+        now_iso = now.isoformat()
+        try:
+            db.conn.execute("UPDATE subscriptions SET expires_at=? "
+                            "WHERE user_id=? AND expires_at>?",
+                            (now_iso, target, now_iso))
+            db.conn.commit()
+        except Exception:
+            pass
+        db.update_user(target, plan='free')
+        try:
+            _pause_extra_criteria(target, int(cfg_get('free.max.criteria')))
+        except Exception:
+            pass
+        text = "план сброшен на бесплатный, подписка закрыта"
+    else:
+        return _miniapp_json({'ok': False, 'error': 'bad_kind'}, status=400)
+    _plan_event(int(admin_id), 'admin_grant',
+                {'target': target, 'kind': kind, 'amount': amount})
+    return _miniapp_json({'ok': True, 'text': text, 'user': _admin_user_card(target)})
+
+
 async def api_admin_metrics(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/admin/metrics — воронка, деньги, задержки (J4, H8)."""
     admin_id, err = await _admin_guard(request)
@@ -38317,6 +38411,8 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/admin/promo', api_admin_promo)
     app.router.add_post('/api/admin/promo', api_admin_promo)
     app.router.add_get('/api/admin/metrics', api_admin_metrics)
+    app.router.add_get('/api/admin/user', api_admin_user)
+    app.router.add_post('/api/admin/grant', api_admin_grant)
     app.router.add_get('/api/admin/purchases', api_admin_purchases)
     app.router.add_post('/api/coins/spend', api_coins_spend)
     app.router.add_post('/api/pay/invoice', api_pay_invoice)

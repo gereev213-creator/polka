@@ -29,7 +29,7 @@
       <span style="font-size:12px;font-weight:870;color:#3373FA">${value}</span></div>`;
   }
 
-  const state = { metrics: null, promo: [] };
+  const state = { metrics: null, promo: [], adminUser: null, adminQuery: '' };
 
   async function loadMetrics() {
     try {
@@ -78,8 +78,31 @@
         }).join('')
       : '<div style="font-size:11px;color:#7A8CA3">Промокодов нет</div>';
 
+    const planRu = { plus: 'Плюс', trial: 'Пробный', free: 'Бесплатный' };
+    const u = state.adminUser;
+    const userCardHtml = u
+      ? `<div style="font-size:13px;font-weight:870;color:#1F2A37">@${u.username || u.id}</div>
+         <div style="font-size:11px;color:#7A8CA3;margin:2px 0 8px">ID ${u.id} · план: ${planRu[u.plan] || u.plan}${u.plus_until ? ' · Плюс до ' + u.plus_until : ''}${u.trial_hours_left ? ' · пробный: ' + Math.ceil(u.trial_hours_left) + ' ч' : ''}</div>
+         <div style="font-size:11px;color:#5C6E86;margin-bottom:10px">Поиски: ${u.criteria_active} активных / ${u.criteria_total}; монет: ${u.coins}</div>
+         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+           <button class="bigbtn" style="height:42px;font-size:11px;padding:0 6px" onclick="PolkaAdmin.grant('plus_days',30)">+30 дней Плюс</button>
+           <button class="mailbtn" style="height:42px;font-size:11px;padding:0 6px" onclick="PolkaAdmin.grant('trial_days',1)">Пробный +1 день</button>
+           <button class="mailbtn" style="height:42px;font-size:11px;padding:0 6px" onclick="PolkaAdmin.grant('coins',100)">Монеты +100</button>
+           <button class="mailbtn" style="height:42px;font-size:11px;padding:0 6px;color:#C0392B" onclick="PolkaAdmin.grant('plan_free',0)">Сбросить план</button>
+         </div>`
+      : '<div style="font-size:11px;color:#7A8CA3">Найдите пользователя по @username или ID — появятся кнопки выдачи.</div>';
+
     box.innerHTML =
       card('Статистика', statsHtml) +
+      card('Пользователь', `
+        <div style="display:flex;gap:8px">
+          <input id="adminUserQ" placeholder="@username или ID" value="${state.adminQuery || ''}"
+                 style="flex:1;height:40px;border-radius:14px;border:none;background:#E7EFF6;
+                        padding:0 12px;font-size:12px;font-weight:700">
+          <button class="bigbtn" style="height:40px;padding:0 14px;font-size:11px"
+                  onclick="PolkaAdmin.findUser()">Найти</button>
+        </div>
+        <div id="adminUserCard" style="margin-top:10px">${userCardHtml}</div>`) +
       card('Быстрые действия', `
         <div style="display:flex;flex-direction:column;gap:8px">
           <button class="bigbtn" style="height:44px;font-size:12px" onclick="go('moderation')">Модерация объявлений</button>
@@ -93,6 +116,37 @@
                  border:none;background:#E7EFF6;padding:0 12px;font-size:12px;font-weight:700">
           <button class="bigbtn" style="height:40px;width:44px;font-size:18px;padding:0" onclick="PolkaAdmin.addPromo()">+</button>
         </div>`);
+  }
+
+  async function findUser() {
+    const inp = document.getElementById('adminUserQ');
+    const q = (inp && inp.value || '').trim();
+    if (!q) { say('Введите @username или ID'); return; }
+    state.adminQuery = q;
+    try {
+      const res = await api('/api/admin/user?q=' + encodeURIComponent(q));
+      state.adminUser = res.user || null;
+      render();
+    } catch (e) {
+      state.adminUser = null;
+      render();
+      say('Не найден: ' + (e && e.detail || e && e.error || 'ошибка'));
+    }
+  }
+
+  async function grant(kind, amount) {
+    if (!state.adminUser) return;
+    try {
+      const res = await api('/api/admin/grant', {
+        method: 'POST',
+        body: JSON.stringify({ user: state.adminUser.id, kind: kind, amount: amount }),
+      });
+      state.adminUser = res.user || state.adminUser;
+      render();
+      say(res.text || 'Готово');
+    } catch (e) {
+      say('Ошибка: ' + (e && e.detail || e && e.error || 'не вышло'));
+    }
   }
 
   async function reload() {
@@ -153,5 +207,5 @@
 
   document.addEventListener('DOMContentLoaded', wire);
   setTimeout(wire, 800);
-  window.PolkaAdmin = { reload: reload, addPromo: addPromo, togglePromo: togglePromo };
+  window.PolkaAdmin = { reload, togglePromo, addPromo, findUser, grant };
 })(window, document);
