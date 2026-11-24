@@ -482,6 +482,66 @@ def _listings_from_nodes(found: List[dict]) -> List[Listing]:
     return items
 
 
+def _screen_feed_listings(data: Any) -> List[Listing]:
+    """Мобильная выдача: search.screenFeed.items[].itemSnippet.
+
+    Короткая ссылка https://www.avito.ru/<id> редиректит на карточку.
+    """
+    if not isinstance(data, dict):
+        return []
+    search = data.get("search")
+    if not isinstance(search, dict):
+        return []
+    feed = search.get("screenFeed")
+    if not isinstance(feed, dict):
+        return []
+    raw = feed.get("items")
+    if not isinstance(raw, list):
+        return []
+    out: List[Listing] = []
+    seen = set()
+    for el in raw:
+        if not isinstance(el, dict):
+            continue
+        sn = el.get("itemSnippet")
+        if not isinstance(sn, dict):
+            continue
+        it = sn.get("item") or {}
+        iid = it.get("itemId") or (sn.get("analytics") or {}).get("itemId")
+        try:
+            iid = int(iid)
+        except (TypeError, ValueError):
+            continue
+        if iid in seen:
+            continue
+        title = str(it.get("title") or "").strip()
+        if not title or _is_junk_title(title):
+            continue
+        seen.add(iid)
+        price = 0
+        price_text = str(((sn.get("price") or {}).get("value") or {}).get("text") or "")
+        digits = re.sub(r"\D", "", price_text)
+        if digits:
+            price = int(digits)
+        image = None
+        gallery = (sn.get("gallery") or {}).get("elements") or []
+        if gallery and isinstance(gallery[0], dict):
+            images = gallery[0].get("image") or {}
+            for key in ("140x140", "640x480", "x2"):
+                if images.get(key):
+                    image = images[key]
+                    break
+        out.append(Listing(
+            id=iid,
+            title=title[:200],
+            price=price,
+            url=f"https://www.avito.ru/{iid}",
+            image=image,
+            description=str(it.get("description") or "").strip(),
+        ))
+    return out
+
+
 def parse_page(page_html: str) -> Page:
     """Разбирает выдачу: состояние страницы, __initialData__, JSON API или микроразметку."""
     text = page_html or ""
@@ -524,6 +584,9 @@ def parse_page(page_html: str) -> Page:
         items = _listings_from_nodes(found) if found else []
         if items:
             return Page(items, True)
+        feed_items = _screen_feed_listings(data)
+        if feed_items:
+            return Page(feed_items, True)
         if hit:
             return Page([], True)     # catalog.items есть, но пустой
     # 3. Запасной путь: микроразметка, но без блока «похожих».
@@ -1024,6 +1087,13 @@ class Fetcher:
             headers = dict(fp.get("headers") or {})
             if data.get("user_agent"):
                 headers.setdefault("user-agent", data["user_agent"])
+            # Без этих заголовков Авито отдаёт «оболочку» без выдачи.
+            headers.setdefault(
+                "accept",
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,*/*;q=0.8")
+            headers.setdefault("accept-language", "ru-RU,ru;q=0.9,en;q=0.8")
+            headers.setdefault("upgrade-insecure-requests", "1")
             kw: Dict[str, Any] = {
                 "impersonate": fp.get("impersonate") or "chrome131_android",
                 "headers": headers, "cookies": cookies,
