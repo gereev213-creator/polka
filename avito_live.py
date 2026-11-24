@@ -957,6 +957,7 @@ class Fetcher:
         # без «похожих» и запчастей. Идём через spfa_fetch_proxy (SOCKS5), а не через
         # HTTP-порт из SPFA_PROXY — он с нашей сети недоступен.
         refresh: Optional[float] = None
+        _rotated_once = False
         for attempt in range(1, self.tries + 1):
             data = await self._spfa_cookies(refresh)
             cookies = data.get("cookies") or {}
@@ -983,7 +984,14 @@ class Fetcher:
             if code in BLOCK_CODES:
                 if attempt >= self.tries:
                     raise Blocked(f"HTTP {code}")
+                # На 429 хватает одной смены IP на опрос: иначе парсер
+                # крутит changeip каждые 20–30 секунд и сам держит пул
+                # IP «горячим». Второй 429 — уходим в паузу ссылки.
+                if _rotated_once and code == 429:
+                    raise Blocked(f"HTTP {code}")
                 rotated = await self._rotate_ip()
+                if rotated:
+                    _rotated_once = True
                 # cookies привязаны к IP: после смены IP — выписать заново сразу;
                 # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
                 # Любой блок (403/439/429) — это IP или частота, а НЕ
@@ -1173,7 +1181,9 @@ class LiveWatcher:
             except Blocked as e:
                 n = self._blocks.get(url, 0) + 1
                 self._blocks[url] = n
-                delay = min(900.0, 30.0 * 2 ** (n - 1))
+                # 30с было слишком мало: IP не успевал остыть, и следующий
+                # опрос снова получал 429. Начинаем с 2 минут.
+                delay = min(1800.0, 120.0 * 2 ** (n - 1))
                 self._next[url] = now + delay
                 log.warning("blocked %s (%s), пауза %.0fс", url[:80], e, delay)
                 await self._health(f"Авито блокирует запросы ({e}); подряд: {n}", n)
