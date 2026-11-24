@@ -705,7 +705,7 @@ class Fetcher:
         # AVITO_PROXIES (там SOCKS5), иначе (как раньше) тот же SPFA_PROXY.
         fp = os.environ.get("SPFA_FETCH_PROXY", "").strip() or next((p for p in self.proxies if p), "") or ""
         self.spfa_fetch_proxy = to_fetch_proxy(fp or self.spfa_proxy)
-        self.spfa_refresh_min = float(os.environ.get("SPFA_REFRESH_MIN_SEC", "60"))
+        self.spfa_refresh_min = float(os.environ.get("SPFA_REFRESH_MIN_SEC", "900"))
         self._spfa_off_until = 0.0
 
     def _kw(self, proxy: Optional[str]) -> Dict[str, Any]:
