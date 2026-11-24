@@ -19131,6 +19131,23 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
     })
 
 
+async def api_debug_spfa_reset(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/debug-spfa-reset?token=… — сбросить кэш cookies после смены IP."""
+    if request.query.get('token') != os.environ.get('LIVE_WORKER_TOKEN', ''):
+        return _miniapp_err('unauthorized', 401)
+    try:
+        import avito_live as _al
+        _al._SPFA_CACHE = {}
+        _al._SPFA_CACHE_TS = 0.0
+        try:
+            os.remove(_al._SPFA_CACHE_FILE)
+        except Exception:
+            pass
+        return _miniapp_json({'ok': True, 'reset': True})
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'error': type(e).__name__, 'detail': str(e)[:200]})
+
+
 async def api_debug_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/debug-avito?token=…&url=… — что реально отдаёт Авито парсеру."""
     if request.query.get('token') != os.environ.get('LIVE_WORKER_TOKEN', ''):
@@ -38505,6 +38522,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_post('/api/trial/activate', api_trial_activate)
     app.router.add_get('/api/debug-proxy', api_debug_proxy)
     app.router.add_get('/api/debug-avito', api_debug_avito)
+    app.router.add_get('/api/debug-spfa-reset', api_debug_spfa_reset)
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)
     app.router.add_get('/api/chats/unread', api_chats_unread)
