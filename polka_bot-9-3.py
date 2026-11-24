@@ -2840,6 +2840,9 @@ class Database:
             # Сколько часов бесплатный поиск уже продлевали компенсацией:
             # находок нет → сутки добавляются (до trial.max_extensions).
             "ALTER TABLE hunt_criteria ADD COLUMN free_extended_hours INTEGER DEFAULT 0",
+            # Отображаемое имя поиска: человек переименовывает карточку
+            # для удобства, но сам запрос/фильтры не меняются.
+            "ALTER TABLE hunt_criteria ADD COLUMN display_name TEXT DEFAULT ''",
         ]:
             try:
                 cursor.execute(_col_sql)
@@ -29072,6 +29075,20 @@ async def api_hunt_criteria(request: aiohttp_web.Request) -> aiohttp_web.Respons
             crit_id = 0
         if not crit_id:
             return _miniapp_err('not_found', 404)
+        _new_name = str((body or {}).get('name') or '').strip()[:60]
+        if _new_name:
+            try:
+                cur = db.conn.cursor()
+                cur.execute("UPDATE hunt_criteria SET display_name=? "
+                            "WHERE id=? AND user_id=?",
+                            (_new_name, crit_id, int(viewer_id)))
+                db.conn.commit()
+                if not cur.rowcount:
+                    return _miniapp_err('not_found', 404)
+            except Exception as e:
+                logger.warning(f"criteria rename: {e}")
+                return _miniapp_err('save_failed', 500)
+            return _miniapp_json({'ok': True, 'id': crit_id, 'name': _new_name})
         active = 1 if int((body or {}).get('active') or 0) else 0
         if active:
             # Возобновление — платное действие, если бесплатный лимит исчерпан

@@ -389,8 +389,13 @@ function paintEmpty(count) {
       when = 'находки есть';
     }
     return `<article class="card scard" data-crit="${c.id}" data-go="history">
-      <div class="top"><h3>${(c.query || 'поиск').slice(0, 30)}</h3>
+      <div class="top"><h3>${((c.display_name || c.query) || 'поиск').slice(0, 30)}</h3>
       <span class="scacts">
+        <button class="pause" data-rename="${c.id}" aria-label="Переименовать поиск">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#2C6CDF"
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+        </button>
         <button class="pause${paused ? ' is-paused' : ''}" data-toggle="${c.id}"
                 aria-label="${paused ? 'Возобновить' : 'Пауза'}">
           <svg width="15" height="15"><use href="#i-${paused ? 'play' : 'pause'}"/></svg>
@@ -459,6 +464,53 @@ function paintEmpty(count) {
             await window.PolkaAPI.api('/api/hunt?id=' + id, { method: 'DELETE' });
             await loadSearches();
             if (window.PolkaLoadPlan) window.PolkaLoadPlan();
+          } catch (err) { }
+        });
+      });
+
+      box.querySelectorAll('[data-rename]').forEach((btn) => {
+        btn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          const id = btn.getAttribute('data-rename');
+          const crit = items.find((x) => String(x.id) === String(id));
+          const cur = crit ? String(crit.display_name || crit.query || '') : '';
+          const val = await new Promise((resolve) => {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'position:fixed;inset:0;z-index:10000;display:grid;'
+              + 'place-items:center;background:rgba(20,40,70,.45);padding:24px';
+            wrap.innerHTML = '<div style="background:#fff;border-radius:22px;padding:18px;'
+              + 'max-width:320px;width:100%;font:15px system-ui;color:#1F2A37">'
+              + '<div style="font-weight:800;margin-bottom:6px">Название поиска</div>'
+              + '<div style="font-size:12px;color:#5C6E86;margin-bottom:10px">'
+              + 'Только для удобства — сам поиск и фильтры не меняются.</div>'
+              + '<input id="rnInp" maxlength="60" style="width:100%;height:44px;'
+              + 'border:1.5px solid #D8E6FF;border-radius:12px;padding:0 12px;'
+              + 'font:14px system-ui;color:#0F1B2D;box-sizing:border-box" />'
+              + '<div style="display:flex;gap:8px;margin-top:12px">'
+              + '<button id="rnNo" style="flex:1;height:44px;border:0;border-radius:14px;'
+              + 'background:#E7EFF6;color:#2C6CDF;font-weight:800">Отмена</button>'
+              + '<button id="rnYes" style="flex:1;height:44px;border:0;border-radius:14px;'
+              + 'background:#3373FA;color:#fff;font-weight:800">Сохранить</button></div></div>';
+            document.body.appendChild(wrap);
+            const inp = wrap.querySelector('#rnInp');
+            inp.value = cur;
+            setTimeout(() => { try { inp.focus(); inp.select(); } catch (e2) { } }, 50);
+            const done = (v) => { wrap.remove(); resolve(v); };
+            wrap.addEventListener('click', (ev) => { if (ev.target === wrap) done(null); });
+            wrap.querySelector('#rnNo').addEventListener('click', () => done(null));
+            wrap.querySelector('#rnYes').addEventListener('click',
+              () => done(inp.value.trim() || ''));
+            inp.addEventListener('keydown', (ev) => {
+              if (ev.key === 'Enter') done(inp.value.trim() || '');
+            });
+          });
+          if (val === null) return;
+          try {
+            await window.PolkaAPI.api('/api/hunt?id=' + id, {
+              method: 'PATCH', body: JSON.stringify({ name: val }),
+            });
+            await loadSearches();
           } catch (err) { }
         });
       });

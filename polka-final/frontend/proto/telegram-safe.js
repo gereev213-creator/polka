@@ -28,7 +28,9 @@
         }
       } catch (e) { /* остаёмся на запасе */ }
     }
-    if (tg && top < 96) top = 96;   // панель Telegram ниже 90 px не бывает
+    var _fs = false;
+    try { _fs = !!(tg && tg.isFullscreen); } catch (e) { }
+    if (tg && _fs && top < 96) top = 96;   // только в настоящем fullscreen
     document.documentElement.style.setProperty('--tg-top', top + 'px');
   }
 
@@ -36,9 +38,9 @@
     var tg = window.Telegram && window.Telegram.WebApp;
     if (tg) {
       try {
-        if (tg.isVersionAtLeast && tg.isVersionAtLeast('8.0')) {
-          tg.requestFullscreen && tg.requestFullscreen();
-        }
+        // Fullscreen больше НЕ запрашиваем: на ПК и в десктопном Telegram
+        // приложение разворачивалось на всё окно, хотя человек открыл его
+        // как обычное мини-приложение. Пусть Telegram сам решает размер.
         tg.onEvent && tg.onEvent('viewportChanged', apply);
         tg.onEvent && tg.onEvent('safeAreaChanged', apply);
         tg.onEvent && tg.onEvent('contentSafeAreaChanged', apply);
