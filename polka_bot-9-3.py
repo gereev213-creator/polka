@@ -13180,6 +13180,64 @@ async def recover_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         except Exception:
             pass
 
+def _db_quick_check() -> bool:
+    """PRAGMA quick_check: True, если база цела (или проверить не удалось)."""
+    import sqlite3 as _sq
+    path = os.environ.get("DB_PATH", "/data/polka.db")
+    try:
+        conn = _sq.connect(path, timeout=15)
+        try:
+            rows = conn.execute("PRAGMA quick_check").fetchall()
+        finally:
+            conn.close()
+        return len(rows) == 1 and str(rows[0][0]).lower() == "ok"
+    except Exception as e:
+        logger.warning(f"db quick_check: {e}")
+        return True   # блокировка/недоступность не повод пересобирать базу
+
+
+async def _db_guard_loop(bot) -> None:
+    """Автопроверка базы: повреждение -> автовосстановление и перезапуск.
+
+    Раньше это делалось руками через /recover, и находки стояли, пока
+    владелец не заметит. Теперь раз в 6 часов и сразу после старта.
+    """
+    await asyncio.sleep(60)
+    marker = "/data/db_recovery_attempt"
+    while True:
+        try:
+            ok = await asyncio.to_thread(_db_quick_check)
+            if not ok:
+                now = time.time()
+                try:
+                    last = os.path.getmtime(marker)
+                except Exception:
+                    last = 0
+                if now - last > 3600:
+                    try:
+                        with open(marker, "w", encoding="utf-8") as fh:
+                            fh.write(get_moscow_time().isoformat())
+                    except Exception:
+                        pass
+                    for uid in ADMIN_USER_IDS:
+                        try:
+                            await bot.send_message(
+                                chat_id=uid,
+                                text=("⚠️ <b>База повреждена</b>\n\nЗапускаю "
+                                      "автовосстановление. Бот перезапустится "
+                                      "на 1–2 минуты."),
+                                parse_mode="HTML")
+                        except Exception:
+                            pass
+                    logger.warning("db guard: база повреждена — автовосстановление")
+                    await _recover_database(notify=None)
+                else:
+                    logger.warning("db guard: повреждение, недавно уже восстанавливали — жду")
+        except Exception as e:
+            logger.warning(f"db guard: {e}")
+        await asyncio.sleep(6 * 3600)
+
+
 async def _grant_limits_legacy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Прежняя выдача лимитов (/grant user_id service amount): фото, объявления, ИИ."""
     user = update.effective_user
@@ -32582,6 +32640,12 @@ async def post_init(application: Application):
         logger.info("service alerts: фоновый цикл запущен")
     except Exception as _sa:
         logger.warning(f"service alerts task: {_sa}")
+    try:
+        asyncio.create_task(_db_guard_loop(application.bot))
+        _ASYNC_LOOPS.append('db_guard_loop')
+        logger.info("db guard: автопроверка базы запущена")
+    except Exception as _dg:
+        logger.warning(f"db guard task: {_dg}")
     init_fts5()
     # Сбрасываем старые команды принудительно
     try:
