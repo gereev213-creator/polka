@@ -7692,14 +7692,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Первый вход: коротко про бонус и кнопка активации ПОД текстом.
             try:
                 await update.message.reply_text(
-                    "<b>🎁 Приветственный бонус</b>\n\n"
-                    "Бесплатно — <b>одна ссылка с Авито на 24 часа</b>.\n\n"
-                    "Скопируйте в браузере адрес своей выдачи (с фильтрами "
-                    "и городом) и вставьте в приложении в «Новый поиск» — "
-                    "бот будет следить именно за ней и присылать новые лоты "
-                    "с ценой, ссылкой и выгодой к рынку.",
+                    "<b>🎁 Вам подарок — пробный период</b>\n\n"
+                    "<b>24 часа, 1 ссылка.</b> Нажмите «Активировать пробный» — "
+                    "приложение откроет «Поиск лотов», и счётчик стартует сразу "
+                    "после нажатия.\n\n"
+                    "Вставьте адрес выдачи Авито (с фильтрами и городом) — "
+                    "бот пришлёт новые лоты с ценой и ссылкой.",
                     reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("🎁 Активировать бонус",
+                        [InlineKeyboardButton("🎁 Активировать пробный",
                                               callback_data="start_trial")],
                     ]),
                     parse_mode=ParseMode.HTML,
@@ -33886,12 +33886,14 @@ async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         _setting_set(f'criterion_day:{target}', exp)
         text = f"доп. критерий на {amount} дн."
     elif kind == 'trial_days':
-        user = db.get_user(target) or {}
+        # Пробный активируется явно (trial_activated_at). Админ задаёт
+        # остаток: сдвигаем старт так, чтобы до конца было ровно N дней.
         now = get_moscow_time()
-        hours = int(_hours_since(user.get('trial_started_at') or now.isoformat()) or 0)
+        trial_hours = max(1, int(cfg_get('trial.days'))) * 24
+        start = (now - timedelta(hours=trial_hours - amount * 24)).isoformat()
         db.update_user(target, plan='trial',
-                       trial_started_at=(now - timedelta(hours=max(0, hours - amount * 24))).isoformat())
-        text = f"пробный период +{amount} дн."
+                       trial_activated_at=start, trial_started_at=start)
+        text = f"пробный период {amount} дн."
     elif kind == 'plan_free':
         db.update_user(target, plan='free')
         text = "план сброшен на бесплатный"
