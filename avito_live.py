@@ -708,7 +708,7 @@ class Fetcher:
         # AVITO_PROXIES (там SOCKS5), иначе (как раньше) тот же SPFA_PROXY.
         fp = os.environ.get("SPFA_FETCH_PROXY", "").strip() or next((p for p in self.proxies if p), "") or ""
         self.spfa_fetch_proxy = to_fetch_proxy(fp or self.spfa_proxy)
-        self.spfa_refresh_min = float(os.environ.get("SPFA_REFRESH_MIN_SEC", "900"))
+        self.spfa_refresh_min = float(os.environ.get("SPFA_REFRESH_MIN_SEC", "3600"))
         self._spfa_off_until = 0.0
 
     def _kw(self, proxy: Optional[str]) -> Dict[str, Any]:
@@ -922,7 +922,7 @@ class Fetcher:
     async def get(self, url: str) -> str:
         # Кэш выдачи: 20 человек с одинаковым поиском не должны 20 раз
         # выписывать cookies у spfa. TTL короткий, чтобы находки не старели.
-        _ttl = float(os.environ.get("AVITO_GET_CACHE_SEC", "45"))
+        _ttl = float(os.environ.get("AVITO_GET_CACHE_SEC", "120"))
         _hit = _GET_CACHE.get(url)
         if _hit and (time.monotonic() - _hit[0]) < _ttl:
             _METRICS["hits"] = _METRICS.get("hits", 0) + 1
