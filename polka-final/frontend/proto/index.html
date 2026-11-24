@@ -872,16 +872,22 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 /* Шторка с выбором ссылок и срока */
 .plan-sheet-back{
   position:fixed; inset:0; z-index:70; width:100%; height:100%;
-  border:0; padding:0; background:rgba(15,23,42,.35);
-  -webkit-backdrop-filter:blur(2px); backdrop-filter:blur(2px);
+  border:0; padding:0; background:rgba(15,23,42,.45);
+  /* backdrop-filter в Telegram WebView после перерисовки чипов иногда
+     отваливался — экран выглядел то размытым, то резким. Плотная
+     подложка работает стабильно и не даёт «мигать». */
 }
 .plan-sheet{
   position:fixed; left:0; right:0; bottom:0; z-index:80;
   background:#fff; color:var(--ink);
   border-radius:24px 24px 0 0; padding:20px;
-  max-height:80vh; overflow:auto;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom, 0px));
+  max-height:86dvh; overflow-y:auto; overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
   box-shadow:0 -8px 30px rgba(0,0,0,.16);
 }
+body.sheet-open{overflow:hidden; touch-action:none}
+body.sheet-open #stage{overflow:hidden}
 .plan-sheet[hidden], .plan-sheet-back[hidden]{display:none}
 .plan-sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
 .plan-sheet-head b{font-size:16px; font-weight:600}
@@ -1271,6 +1277,9 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
     if (!sheet || !back) return;
     sheet.hidden = !open;
     back.hidden = !open;
+    // Пока шторка открыта, страница под ней не скроллится — иначе
+    // WebView «срезал» верх экрана при переключении чипов.
+    document.body.classList.toggle('sheet-open', !!open);
     if (more) more.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
   if (more) more.addEventListener('click', function(){ setOpen(sheet.hidden); });
