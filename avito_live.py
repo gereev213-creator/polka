@@ -1135,8 +1135,11 @@ class LiveWatcher:
         page = parse_page(page_html)
         if not page.recognized:
             low = page_html.lower()
-            if any(m in low for m in BLOCK_MARKERS):
-                raise Blocked("страница блокировки")
+            # Капча — это блокировка, а не «сломалась вёрстка». Иначе
+            # FetchError ретраится каждые 15 секунд и сам держит IP горячим.
+            if (any(m in low for m in BLOCK_MARKERS)
+                    or "captcha" in low or "не робот" in low):
+                raise Blocked("страница блокировки/капча")
             raise FetchError("страница не распознана (изменилась вёрстка?)")
         sent = 0
         for w in watches:
