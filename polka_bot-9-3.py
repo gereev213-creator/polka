@@ -2524,6 +2524,11 @@ CATEGORY_DESC_HINTS = {
 # База данных с путем /data
 class Database:
     def __init__(self, db_path: str = None, shared_conn=None):
+        # Отдельное соединение на поток: одно и то же sqlite3.Connection
+        # из разных потоков (asyncio.to_thread) даёт "error return without
+        # exception set", "commit NULL" и порчу базы.
+        self._local = threading.local()
+        self._shared_conn = shared_conn
         # shared_conn позволяет TG- и MAX-боту работать через ОДНО физическое
         # подключение к SQLite вместо двух отдельных. Два отдельных connect()
         # к одному файлу на смонтированном томе /data (Amvera) провоцируют то
@@ -2559,16 +2564,39 @@ class Database:
                 os.makedirs(directory, exist_ok=True)
 
             self.db_path = db_path
-            self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
-            # /data в Amvera — сетевое хранилище. WAL на нём + жёсткие
-            # перезапуски контейнера давали «database disk image is malformed».
-            # Rollback-journal с FULL медленнее, но переживает обрывы.
-            self.conn.execute("PRAGMA journal_mode=DELETE")
-            self.conn.execute("PRAGMA synchronous=FULL")
-            self.conn.execute("PRAGMA busy_timeout=30000")
+            self.conn = self._new_conn(db_path)
         self.conn.row_factory = sqlite3.Row
         self.create_tables()
         logger.info(f"База данных инициализирована (shared_conn={shared_conn is not None})")
+
+    def _new_conn(self, db_path: str):
+        conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
+        # /data — сетевое хранилище: rollback-journal надёжнее WAL.
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.execute("PRAGMA synchronous=FULL")
+        conn.execute("PRAGMA busy_timeout=30000")
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    @property
+    def conn(self):
+        shared = getattr(self, '_shared_conn', None)
+        if shared is not None:
+            return shared
+        local = getattr(self, '_local', None)
+        if local is None:
+            self._local = local = threading.local()
+        c = getattr(local, 'conn', None)
+        if c is None:
+            c = self._new_conn(self.db_path)
+            local.conn = c
+        return c
+
+    @conn.setter
+    def conn(self, value):
+        if not hasattr(self, '_local') or self._local is None:
+            self._local = threading.local()
+        self._local.conn = value
     
     def create_tables(self):
         cursor = self.conn.cursor()
@@ -23645,7 +23673,7 @@ def hunt_claim_batch(limit: int = 0, statuses: tuple = ('ready',)) -> List[Dict]
         marks_st = ','.join('?' for _ in status_list)
         # Не отправляем старые находки из очереди: лучше пропустить,
         # чем показать отставание парсера.
-        _max_age_h = float(os.environ.get("HUNT_MAX_QUEUE_AGE_H", "3"))
+        _max_age_h = float(os.environ.get("HUNT_MAX_QUEUE_AGE_H", "2"))
         cutoff = (get_moscow_time() - timedelta(hours=_max_age_h)).isoformat()
         cursor.execute(
             f"SELECT id FROM hunt_matches WHERE status IN ({marks_st}) "
