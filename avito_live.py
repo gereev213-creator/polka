@@ -632,6 +632,38 @@ _GET_INFLIGHT: Dict[str, Any] = {}
 _METRICS: Dict[str, int] = {}
 _SPFA_CACHE: Dict[str, Any] = {}
 _SPFA_CACHE_TS: float = 0.0
+# Кэш cookies общий для всех процессов/инстансов: Amvera может держать
+# несколько реплик, и у каждой был свой кэш в памяти — из-за этого cookies
+# выписывались каждые пару минут и жгли по 3 ₽.
+_SPFA_CACHE_FILE = os.environ.get("SPFA_CACHE_FILE", "/data/spfa_cache.json")
+# Жёсткий минимум между выписками, что бы ни просил код выше.
+_SPFA_HARD_MIN = float(os.environ.get("SPFA_HARD_MIN_SEC", "1800"))
+
+
+def _load_spfa_cache_file() -> None:
+    global _SPFA_CACHE, _SPFA_CACHE_TS
+    if _SPFA_CACHE:
+        return
+    try:
+        with open(_SPFA_CACHE_FILE, "r", encoding="utf-8") as fh:
+            obj = json.load(fh) or {}
+        data = obj.get("data") or {}
+        ts = float(obj.get("ts") or 0)
+        if data.get("cookies") and ts and (time.time() - ts) < _SPFA_TTL:
+            _SPFA_CACHE, _SPFA_CACHE_TS = data, ts
+    except Exception:
+        pass
+
+
+def _save_spfa_cache_file(data: Dict[str, Any], ts: float) -> None:
+    try:
+        tmp = _SPFA_CACHE_FILE + ".tmp"
+        os.makedirs(os.path.dirname(_SPFA_CACHE_FILE), exist_ok=True)
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump({"ts": ts, "data": data}, fh)
+        os.replace(tmp, _SPFA_CACHE_FILE)
+    except Exception as e:
+        log.warning("avito_live: не сохранил кэш spfa: %s", e)
 _SPFA_TTL = 11 * 3600
 
 
@@ -805,7 +837,13 @@ class Fetcher:
         Если перевыписать не вышло, а старые cookies ещё живы — отдаём старые.
         """
         global _SPFA_CACHE, _SPFA_CACHE_TS
+        if not _SPFA_CACHE:
+            _load_spfa_cache_file()
         age = time.time() - _SPFA_CACHE_TS
+        # Жёсткий минимум: даже если вызывающий просит refresh=0, чаще
+        # чем раз в 30 минут cookies не выписываем — это деньги.
+        if _SPFA_CACHE and age < _SPFA_HARD_MIN:
+            return _SPFA_CACHE
         if _SPFA_CACHE and age < _SPFA_TTL and not (force_after is not None and age >= force_after):
             return _SPFA_CACHE
         from curl_cffi.requests import AsyncSession
