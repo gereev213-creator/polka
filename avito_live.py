@@ -718,6 +718,50 @@ _SPFA_CACHE_TS: float = 0.0
 _SPFA_CACHE_FILE = os.environ.get("SPFA_CACHE_FILE", "/data/spfa_cache.json")
 # Жёсткий минимум между выписками, что бы ни просил код выше.
 _SPFA_HARD_MIN = float(os.environ.get("SPFA_HARD_MIN_SEC", "3600"))
+# Бюджет на выписку cookies: 3 ₽ за штуку. Без лимита при постоянных
+# блокировках баланс сгорает за часы. По умолчанию — не чаще раза в
+# 15 минут и не больше 20 выписок в сутки (60 ₽).
+_SPFA_COOKIE_MIN_SEC = float(os.environ.get("SPFA_COOKIE_MIN_SEC", "900"))
+_SPFA_COOKIE_DAILY_MAX = int(os.environ.get("SPFA_COOKIE_DAILY_MAX", "20"))
+_SPFA_SPEND_FILE = os.environ.get("SPFA_SPEND_FILE", "/data/spfa_spend.json")
+
+
+def _spfa_spend_load() -> dict:
+    try:
+        with open(_SPFA_SPEND_FILE, "r", encoding="utf-8") as fh:
+            obj = json.load(fh) or {}
+        return obj if isinstance(obj, dict) else {}
+    except Exception:
+        return {}
+
+
+def _spfa_spend_save(obj: dict) -> None:
+    try:
+        tmp = _SPFA_SPEND_FILE + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(obj, fh)
+        os.replace(tmp, _SPFA_SPEND_FILE)
+    except Exception:
+        pass
+
+
+def _spfa_spend_can_pay() -> bool:
+    """True, если можно выписать новые cookies, не превысив бюджет."""
+    now = time.time()
+    st = _spfa_spend_load()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    count = int(st.get("count") or 0) if st.get("day") == day else 0
+    last = float(st.get("last") or 0)
+    return (now - last) >= _SPFA_COOKIE_MIN_SEC and count < _SPFA_COOKIE_DAILY_MAX
+
+
+def _spfa_spend_mark() -> None:
+    now = time.time()
+    day = time.strftime("%Y-%m-%d", time.gmtime(now))
+    st = _spfa_spend_load()
+    count = int(st.get("count") or 0) + 1 if st.get("day") == day else 1
+    _spfa_spend_save({"day": day, "count": count, "last": now})
+
 
 
 def _load_spfa_cache_file() -> None:
@@ -923,7 +967,9 @@ class Fetcher:
         age = time.time() - _SPFA_CACHE_TS
         # Жёсткий минимум: даже если вызывающий просит refresh=0, чаще
         # чем раз в 30 минут cookies не выписываем — это деньги.
-        if _SPFA_CACHE and age < _SPFA_HARD_MIN and not allow_force:
+        if _SPFA_CACHE and age < _SPFA_HARD_MIN:
+            return _SPFA_CACHE
+        if _SPFA_CACHE and not _spfa_spend_can_pay():
             return _SPFA_CACHE
         if _SPFA_CACHE and age < _SPFA_TTL and not (force_after is not None and age >= force_after):
             return _SPFA_CACHE
@@ -950,6 +996,7 @@ class Fetcher:
                 return _SPFA_CACHE
             raise SpfaUnavailable(f"spfa: {type(e).__name__}: {e}") from e
         _SPFA_CACHE, _SPFA_CACHE_TS = data, time.time()
+        _spfa_spend_mark()
         return data
 
     async def _spfa_get(self, url: str) -> str:
