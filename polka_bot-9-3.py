@@ -28512,6 +28512,9 @@ def _criterion_public(crit: Dict) -> Dict:
     return {
         'id': crit.get('id'),
         'query': crit.get('query') or '',
+        # Имя, которое человек задал карандашом. Без этого поля фронтенд
+        # не видел переименование и показывал старый query.
+        'display_name': crit.get('display_name') or '',
         'category': crit.get('category') or '',
         'city': crit.get('city') or '',
         'max_price': crit.get('max_price') or 0,
