@@ -971,6 +971,13 @@ body.sheet-open #stage{overflow:hidden}
   bottom:calc(clamp(8px,2.4vw,15px) + env(safe-area-inset-bottom,0px))}
 /* Ничего не теряем по горизонтали: длинные слова переносим. */
 .screen,.scroll,.card{overflow-wrap:anywhere}
+/* Нижнее меню резиновое: на 360px «+» больше не вылезает за край. */
+#nav{gap:clamp(6px,2vw,10px)}
+#nav .navmain{width:auto!important;flex:1 1 auto!important;min-width:0}
+#nav .navmain button{width:auto!important;flex:1 1 0!important;min-width:0}
+#nav .plusbtn{flex:0 0 clamp(52px,15vw,60px);width:clamp(52px,15vw,60px);
+  height:clamp(52px,15vw,60px)}
+#navglass{width:clamp(52px,15vw,65px)}
 </style></head><body>
 <svg width="0" height="0" style="position:absolute"><defs>
 <symbol id="i-back" viewBox="0 0 24 24"><path d="M14.5 5.5 8 12l6.5 6.5" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
@@ -1275,7 +1282,7 @@ const NAVSHOW={loading:'home',empty:'home',home:'home',market:'market',favorites
 let cur='loading',stack=[],currentLot=1,photoN=1,subscribed=false;
 const $=id=>document.getElementById(id), fmt=n=>n.toLocaleString('ru-RU')+' ₽';
 function go(id,replace=false){if(id===cur)return;if(!replace&&cur!=='loading')stack.push(cur);show(id)}
-function show(id){cur=id;document.querySelectorAll('.screen').forEach(s=>{const on=s.id==='s-'+id;s.classList.toggle('active',on);s.classList.toggle('hasnav',!!NAVSHOW[id])});const nav=$('nav');nav.classList.toggle('show',id!=='loading'&&!!NAVSHOW[id]);$('fade').classList.toggle('show',['home','market','favorites','profile','searches','history','myads','newsearch','post'].includes(id));document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===NAVSHOW[id]));const GL={home:5,market:81,favorites:155,profile:229};if(NAVSHOW[id])$('navglass').style.left=GL[NAVSHOW[id]]+'px';$('jump').value=id;const sc=document.querySelector('#s-'+id+' .scroll');if(sc)sc.scrollTop=0}
+function show(id){cur=id;document.querySelectorAll('.screen').forEach(s=>{const on=s.id==='s-'+id;s.classList.toggle('active',on);s.classList.toggle('hasnav',!!NAVSHOW[id])});const nav=$('nav');nav.classList.toggle('show',id!=='loading'&&!!NAVSHOW[id]);$('fade').classList.toggle('show',['home','market','favorites','profile','searches','history','myads','newsearch','post'].includes(id));document.querySelectorAll('[data-nav]').forEach(b=>b.classList.toggle('on',b.dataset.nav===NAVSHOW[id]));const GL={home:5,market:81,favorites:155,profile:229};if(NAVSHOW[id]){var _nb=document.querySelector('#nav [data-nav="'+NAVSHOW[id]+'"]');var _ng=$('navglass');if(_nb&&_ng){_ng.style.left=_nb.offsetLeft+'px';_ng.style.width=_nb.offsetWidth+'px';}}$('jump').value=id;const sc=document.querySelector('#s-'+id+' .scroll');if(sc)sc.scrollTop=0}
 function back(){show(stack.pop()||'home')}
 let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),1800)}
 function heartBtn(l){return `<button class="heart ${l.fav?'on':''} ${l.img?'onpic':''}" data-fav="${l.id}" aria-label="В избранное"><svg width="14" height="14"><use href="#i-heart"/></svg></button>`}
