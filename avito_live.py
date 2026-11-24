@@ -637,7 +637,7 @@ _SPFA_CACHE_TS: float = 0.0
 # выписывались каждые пару минут и жгли по 3 ₽.
 _SPFA_CACHE_FILE = os.environ.get("SPFA_CACHE_FILE", "/data/spfa_cache.json")
 # Жёсткий минимум между выписками, что бы ни просил код выше.
-_SPFA_HARD_MIN = float(os.environ.get("SPFA_HARD_MIN_SEC", "1800"))
+_SPFA_HARD_MIN = float(os.environ.get("SPFA_HARD_MIN_SEC", "3600"))
 
 
 def _load_spfa_cache_file() -> None:
@@ -906,12 +906,11 @@ class Fetcher:
                 rotated = await self._rotate_ip()
                 # cookies привязаны к IP: после смены IP — выписать заново сразу;
                 # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
-                if rotated:
-                    # IP сменился, но cookies привязаны к IP лишь косвенно:
-                    # перевыписывать их на каждую попытку — это 3 ₽ за раз.
-                    # Держим тот же лимит, что и без ротации.
-                    refresh = self.spfa_refresh_min
-                elif code != 429 or attempt >= 2:
+                # 403/439 — это бан IP, а не протухшие cookies: лечим сменой
+                # IP, НЕ выписывая новые cookies за 3 ₽. Cookies обновятся
+                # сами, когда истечёт их 11-часовой TTL.
+                # 429 — частота: на второй попытке обновляем и cookies.
+                if code == 429 and attempt >= 2:
                     refresh = self.spfa_refresh_min
                 else:
                     refresh = None
