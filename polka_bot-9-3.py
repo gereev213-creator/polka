@@ -32558,11 +32558,14 @@ async def post_init(application: Application):
     ]
     await application.bot.set_my_commands(commands)
 
-    # Кнопка  меню рядом с полем ввода
+    # Кнопка меню рядом с полем ввода: брендированная «ПОЛКА», открывает
+    # мини-апп. Раньше здесь ставился MenuButtonCommands — «три полоски»,
+    # и после каждой пересборки кнопка Полки пропадала.
     try:
-        from telegram import MenuButtonCommands as _MBC
-        await application.bot.set_chat_menu_button(menu_button=_MBC())
-        logger.info("Кнопка меню  установлена")
+        from telegram import MenuButtonWebApp as _MBW
+        await application.bot.set_chat_menu_button(
+            menu_button=_MBW(text="ПОЛКА", web_app=WebAppInfo(url=_miniapp_url())))
+        logger.info("Кнопка меню ПОЛКА установлена")
     except Exception as _e:
         logger.warning(f"set_chat_menu_button error: {_e}")
     await setup_scheduler(application)
