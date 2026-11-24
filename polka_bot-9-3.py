@@ -31526,6 +31526,10 @@ async def setup_scheduler(application: Application):
     
     async def subscription_reminders(context: ContextTypes.DEFAULT_TYPE):
         """Напоминает об истекающих подписках и сбрасывает просроченные."""
+        # LEGACY: старый тариф "Premium" (149/49 ₽). Новый Plus живёт в
+        # _plan_reminder_loop и subscriptions. Этот цикл отключён, чтобы
+        # оплатившим Plus не приходили старые тексты.
+        return
         from datetime import timedelta as _td
         moscow_now = get_moscow_time()
         cursor = db.conn.cursor()
