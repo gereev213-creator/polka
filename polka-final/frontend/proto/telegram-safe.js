@@ -31,6 +31,9 @@
     var _fs = false;
     try { _fs = !!(tg && tg.isFullscreen); } catch (e) { }
     if (tg && _fs && top < 96) top = 96;   // только в настоящем fullscreen
+    // На телефоне в fullscreen верхняя панель Telegram занимает ~96 px,
+    // и логотип не должен под неё заезжать.
+    if (tg && !_fs && top < 8) top = 8;
     document.documentElement.style.setProperty('--tg-top', top + 'px');
   }
 
@@ -38,9 +41,16 @@
     var tg = window.Telegram && window.Telegram.WebApp;
     if (tg) {
       try {
-        // Fullscreen больше НЕ запрашиваем: на ПК и в десктопном Telegram
-        // приложение разворачивалось на всё окно, хотя человек открыл его
-        // как обычное мини-приложение. Пусть Telegram сам решает размер.
+        // Fullscreen нужен ТОЛЬКО на телефоне: там без него мини-апп
+        // открывается нижней шторкой, контент обрезается снизу и выглядит
+        // плохо. На ПК (tdesktop/macos/web) не разворачиваем — там это
+        // открывало приложение на всё окно.
+        var _platform = '';
+        try { _platform = String(tg.platform || '').toLowerCase(); } catch (e) { }
+        var _desktop = /tdesktop|macos|web|linux|windows/.test(_platform);
+        if (!_desktop && tg.isVersionAtLeast && tg.isVersionAtLeast('8.0')) {
+          try { tg.requestFullscreen && tg.requestFullscreen(); } catch (e) { }
+        }
         tg.onEvent && tg.onEvent('viewportChanged', apply);
         tg.onEvent && tg.onEvent('safeAreaChanged', apply);
         tg.onEvent && tg.onEvent('contentSafeAreaChanged', apply);
