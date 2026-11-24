@@ -627,6 +627,9 @@ class Store:
 # Скачивание страниц
 # --------------------------------------------------------------------------
 
+_GET_CACHE: Dict[str, Any] = {}
+_GET_INFLIGHT: Dict[str, Any] = {}
+_METRICS: Dict[str, int] = {}
 _SPFA_CACHE: Dict[str, Any] = {}
 _SPFA_CACHE_TS: float = 0.0
 _SPFA_TTL = 11 * 3600
@@ -914,6 +917,35 @@ class Fetcher:
         raise Blocked("попытки закончились")
 
     async def get(self, url: str) -> str:
+        # Кэш выдачи: 20 человек с одинаковым поиском не должны 20 раз
+        # выписывать cookies у spfa. TTL короткий, чтобы находки не старели.
+        _ttl = float(os.environ.get("AVITO_GET_CACHE_SEC", "45"))
+        _hit = _GET_CACHE.get(url)
+        if _hit and (time.monotonic() - _hit[0]) < _ttl:
+            _METRICS["hits"] = _METRICS.get("hits", 0) + 1
+            return _hit[1]
+        _fut = _GET_INFLIGHT.get(url)
+        if _fut is not None:
+            _METRICS["dedup"] = _METRICS.get("dedup", 0) + 1
+            return await _fut
+        _loop = asyncio.get_running_loop()
+        _fut = _loop.create_future()
+        _GET_INFLIGHT[url] = _fut
+        _METRICS["calls"] = _METRICS.get("calls", 0) + 1
+        try:
+            _text = await self._get_uncached(url)
+            _GET_CACHE[url] = (time.monotonic(), _text)
+            if not _fut.done():
+                _fut.set_result(_text)
+            return _text
+        except Exception as _e:
+            if not _fut.done():
+                _fut.set_exception(_e)
+            raise
+        finally:
+            _GET_INFLIGHT.pop(url, None)
+
+    async def _get_uncached(self, url: str) -> str:
         if self.spfa_key and self.spfa_proxy:
             if time.monotonic() >= self._spfa_off_until:
                 try:
