@@ -869,7 +869,10 @@ class Fetcher:
                 # cookies привязаны к IP: после смены IP — выписать заново сразу;
                 # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
                 if rotated:
-                    refresh = 0.0
+                    # IP сменился, но cookies привязаны к IP лишь косвенно:
+                    # перевыписывать их на каждую попытку — это 3 ₽ за раз.
+                    # Держим тот же лимит, что и без ротации.
+                    refresh = self.spfa_refresh_min
                 elif code != 429 or attempt >= 2:
                     refresh = self.spfa_refresh_min
                 else:
