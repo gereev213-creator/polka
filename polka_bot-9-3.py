@@ -13055,7 +13055,12 @@ async def _recover_database(notify=None):
     """Восстановление повреждённой SQLite: копирует данные в новый файл,
     заменяет старый, удаляет WAL/SHM, завершает процесс для перезапуска."""
     if notify:
-        await notify("Восстанавливаю базу данных...")
+        # Уведомление не должно ломать восстановление: Telegram отвечает
+        # «Message is not modified», если текст совпал с текущим.
+        try:
+            await notify("Восстанавливаю базу данных...")
+        except Exception:
+            pass
     loop = asyncio.get_running_loop()
     try:
         result = await loop.run_in_executor(None, _recover_db_sync)
@@ -13069,10 +13074,16 @@ async def _recover_database(notify=None):
         return
     if not result["ok"]:
         if notify:
-            await notify(f"Восстановление не удалось.\nСкопировано таблиц: {', '.join(result['tables'])}")
+            try:
+                await notify(f"Восстановление не удалось.\nСкопировано таблиц: {', '.join(result['tables'])}")
+            except Exception:
+                pass
         return
     if notify:
-        await notify(f"База восстановлена ✓\nСтарый файл: {result['backup']}\nСкопировано: {', '.join(result['tables'])}\n\nПерезапускаю бота...")
+        try:
+            await notify(f"База восстановлена ✓\nСтарый файл: {result['backup']}\nСкопировано: {', '.join(result['tables'])}\n\nПерезапускаю бота...")
+        except Exception:
+            pass
     logger.info(f"Recovery OK — перезапуск процесса, таблицы: {result['tables']}")
     os._exit(0)
 
@@ -13159,7 +13170,7 @@ async def recover_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user = update.effective_user
     if not await is_admin(user.id):
         return
-    msg = await update.message.reply_text("Восстанавливаю базу данных...")
+    msg = await update.message.reply_text("Запускаю восстановление базы…")
     try:
         await _recover_database(notify=lambda t: context.bot.edit_message_text(chat_id=msg.chat.id, message_id=msg.message_id, text=t))
     except Exception as e:
