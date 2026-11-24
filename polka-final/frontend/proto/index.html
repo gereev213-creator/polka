@@ -872,11 +872,18 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
 /* Шторка с выбором ссылок и срока */
 .plan-sheet-back{
   position:fixed; inset:0; z-index:70; width:100%; height:100%;
-  border:0; padding:0; background:rgba(15,23,42,.45);
-  /* backdrop-filter в Telegram WebView после перерисовки чипов иногда
-     отваливался — экран выглядел то размытым, то резким. Плотная
-     подложка работает стабильно и не даёт «мигать». */
+  border:0; padding:0; background:rgba(15,23,42,.36);
+  /* Блюр возвращаем, но слой держим постоянным: display:none +
+     повторный показ — известный триггер, из-за которого WebView терял
+     backdrop-filter. Теперь видимость через opacity/visibility. */
+  -webkit-backdrop-filter:blur(3px) saturate(140%);
+  backdrop-filter:blur(3px) saturate(140%);
+  transform:translateZ(0);
+  will-change:backdrop-filter, opacity;
+  opacity:0; visibility:hidden;
+  transition:opacity .18s ease;
 }
+.plan-sheet-back.show{opacity:1; visibility:visible}
 .plan-sheet{
   position:fixed; left:0; right:0; bottom:0; z-index:80;
   background:#fff; color:var(--ink);
@@ -885,10 +892,21 @@ body.nav-off #s-tariffs .scroll{padding-bottom:40px!important}
   max-height:86dvh; overflow-y:auto; overscroll-behavior:contain;
   -webkit-overflow-scrolling:touch;
   box-shadow:0 -8px 30px rgba(0,0,0,.16);
+  border:0;
+  transform:translateY(105%); visibility:hidden;
+  transition:transform .22s ease, visibility .22s ease;
 }
+.plan-sheet.show{transform:translateY(0); visibility:visible}
 body.sheet-open{overflow:hidden}
 body.sheet-open #stage{overflow:hidden}
-.plan-sheet[hidden], .plan-sheet-back[hidden]{display:none}
+/* После тапа по чипу Chrome оставлял рамку фокуса — убираем. */
+.plan-sheet .cchip:focus,
+.plan-sheet .cchip:focus-visible,
+.plan-sheet button:focus,
+.plan-sheet button:focus-visible,
+#s-tariffs .plan-more:focus,
+#s-tariffs .pay:focus{outline:0 !important; box-shadow:none}
+.plan-sheet .cchip:focus-visible{box-shadow:0 0 0 2px rgba(51,115,250,.35)}
 .plan-sheet-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
 .plan-sheet-head b{font-size:16px; font-weight:600}
 .plan-sheet-close{
@@ -1130,8 +1148,8 @@ body.sheet-open #stage{overflow:hidden}
     <div class="plan-price"><span class="sum" id="planPrice">459</span><span class="per" id="planPeriod">руб/мес</span></div>
   </div>
 </div>
-<button type="button" class="plan-sheet-back" id="planSheetBack" aria-label="Закрыть" hidden></button>
-<div class="plan-sheet" id="planSheet" role="dialog" aria-label="Тариф" hidden>
+<button type="button" class="plan-sheet-back" id="planSheetBack" aria-label="Закрыть"></button>
+<div class="plan-sheet" id="planSheet" role="dialog" aria-label="Тариф">
   <div class="plan-sheet-head">
     <b>Тариф</b>
     <button type="button" class="plan-sheet-close" id="planSheetClose" aria-label="Закрыть">×</button>
@@ -1275,8 +1293,10 @@ window.setLots=function(arr){if(!Array.isArray(arr)||!arr.length)return;LOTS=arr
   var close = document.getElementById('planSheetClose');
   function setOpen(open){
     if (!sheet || !back) return;
-    sheet.hidden = !open;
-    back.hidden = !open;
+    sheet.hidden = false;
+    back.hidden = false;
+    sheet.classList.toggle('show', !!open);
+    back.classList.toggle('show', !!open);
     // Пока шторка открыта, страница под ней не скроллится — иначе
     // WebView «срезал» верх экрана при переключении чипов.
     document.body.classList.toggle('sheet-open', !!open);
