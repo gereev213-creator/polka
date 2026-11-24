@@ -2559,11 +2559,13 @@ class Database:
                 os.makedirs(directory, exist_ok=True)
 
             self.db_path = db_path
-            self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=10)
-            self.conn.execute("PRAGMA journal_mode=WAL")
-            self.conn.execute("PRAGMA synchronous=NORMAL")
-            self.conn.execute("PRAGMA busy_timeout=10000")
-            self.conn.execute("PRAGMA wal_autocheckpoint=1000")
+            self.conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
+            # /data в Amvera — сетевое хранилище. WAL на нём + жёсткие
+            # перезапуски контейнера давали «database disk image is malformed».
+            # Rollback-journal с FULL медленнее, но переживает обрывы.
+            self.conn.execute("PRAGMA journal_mode=DELETE")
+            self.conn.execute("PRAGMA synchronous=FULL")
+            self.conn.execute("PRAGMA busy_timeout=30000")
         self.conn.row_factory = sqlite3.Row
         self.create_tables()
         logger.info(f"База данных инициализирована (shared_conn={shared_conn is not None})")
