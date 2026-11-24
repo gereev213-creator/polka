@@ -909,7 +909,8 @@ class Fetcher:
         data = r.json() if r is not None else {}
         return (data or {}).get("api_url") or url
 
-    async def _spfa_cookies(self, force_after: Optional[float] = None) -> dict:
+    async def _spfa_cookies(self, force_after: Optional[float] = None,
+                           allow_force: bool = False) -> dict:
         """Cookies от spfa (кэш 11 ч).
 
         force_after — перевыписать, если кэшу не меньше стольких секунд
@@ -922,7 +923,7 @@ class Fetcher:
         age = time.time() - _SPFA_CACHE_TS
         # Жёсткий минимум: даже если вызывающий просит refresh=0, чаще
         # чем раз в 30 минут cookies не выписываем — это деньги.
-        if _SPFA_CACHE and age < _SPFA_HARD_MIN:
+        if _SPFA_CACHE and age < _SPFA_HARD_MIN and not allow_force:
             return _SPFA_CACHE
         if _SPFA_CACHE and age < _SPFA_TTL and not (force_after is not None and age >= force_after):
             return _SPFA_CACHE
@@ -957,9 +958,11 @@ class Fetcher:
         # без «похожих» и запчастей. Идём через spfa_fetch_proxy (SOCKS5), а не через
         # HTTP-порт из SPFA_PROXY — он с нашей сети недоступен.
         refresh: Optional[float] = None
+        force_refresh = False
         _rotated_once = False
         for attempt in range(1, self.tries + 1):
-            data = await self._spfa_cookies(refresh)
+            data = await self._spfa_cookies(refresh, allow_force=force_refresh)
+            force_refresh = False
             cookies = data.get("cookies") or {}
             fp = data.get("fingerprint") or {}
             headers = dict(fp.get("headers") or {})
@@ -981,6 +984,21 @@ class Fetcher:
                     hint = " (HTTP-порт прокси может быть закрыт: задайте SPFA_FETCH_PROXY=socks5h://…)"
                 raise FetchError(f"{type(e).__name__}: {e}{hint}") from e
             code = r.status_code
+            if code == 200:
+                _low = (r.text or "")[:200000].lower()
+                if "captcha" in _low or "не робот" in _low:
+                    # 200-капча: это блокировка. Меняем IP и сразу
+                    # перевыписываем cookies под новый IP.
+                    if _rotated_once:
+                        raise Blocked("капча")
+                    rotated = await self._rotate_ip()
+                    if rotated:
+                        _rotated_once = True
+                        refresh = 0
+                        force_refresh = True
+                        await asyncio.sleep(3)
+                        continue
+                    raise Blocked("капча")
             if code in BLOCK_CODES:
                 if attempt >= self.tries:
                     raise Blocked(f"HTTP {code}")
@@ -992,13 +1010,14 @@ class Fetcher:
                 rotated = await self._rotate_ip()
                 if rotated:
                     _rotated_once = True
-                # cookies привязаны к IP: после смены IP — выписать заново сразу;
-                # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
-                # Любой блок (403/439/429) — это IP или частота, а НЕ
-                # протухшие cookies. Новые cookies за 3 ₽ не выписываем:
-                # они обновятся сами по 11-часовому TTL. Иначе при 50
-                # ссылках и постоянных 429 баланс сгорал бы за день.
-                refresh = None
+                # Cookies привязаны к IP. После успешной смены IP сразу
+                # выписываем новые (3 ₽), иначе Авито видит cookies от
+                # старого IP и отдаёт капчу. Без смены IP не тратим.
+                if rotated:
+                    refresh = 0
+                    force_refresh = True
+                else:
+                    refresh = None
                 if not rotated:
                     pause = _retry_after(r)
                     if pause is None:
