@@ -33895,8 +33895,22 @@ async def grant_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                        trial_activated_at=start, trial_started_at=start)
         text = f"пробный период {amount} дн."
     elif kind == 'plan_free':
+        # Одного plan='free' мало: активная строка subscriptions снова
+        # поднимала «Плюс» при следующем _user_plan. Закрываем и её.
+        now_iso = get_moscow_time().isoformat()
+        try:
+            db.conn.execute("UPDATE subscriptions SET expires_at=? "
+                            "WHERE user_id=? AND expires_at>?",
+                            (now_iso, target, now_iso))
+            db.conn.commit()
+        except Exception as e:
+            logger.warning(f"plan_free subscriptions {target}: {e}")
         db.update_user(target, plan='free')
-        text = "план сброшен на бесплатный"
+        try:
+            _pause_extra_criteria(target, int(cfg_get('free.max.criteria')))
+        except Exception:
+            pass
+        text = "план сброшен на бесплатный, подписка закрыта"
     else:
         # Не наш тип — отдаём прежней команде (фото, объявления, ИИ)
         await _grant_limits_legacy(update, context)
