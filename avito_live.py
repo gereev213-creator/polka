@@ -126,7 +126,19 @@ _INIT_RE = re.compile(r'window\.__initialData__\s*=\s*"((?:[^"\\]|\\.)*)"')
 _INIT_OBJ_RE = re.compile(r'window\.__initialdata__\s*=\s*', re.I)
 
 
+_INIT_SCRIPT_RE = re.compile(
+    r'<script[^>]*id=["\']__INITIALDATA__["\'][^>]*>(.*?)</script>', re.I | re.S)
+
+
 def _initialdata_obj(text: str):
+    # Вариант 1: <script id="__INITIALDATA__" type="application/json">{...}</script>
+    m = _INIT_SCRIPT_RE.search(text or "")
+    if m:
+        raw = _html.unescape(m.group(1)).strip()
+        try:
+            return json.loads(raw)
+        except (ValueError, TypeError):
+            return None
     m = _INIT_OBJ_RE.search(text or "")
     if not m:
         return None

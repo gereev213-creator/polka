@@ -19076,12 +19076,15 @@ async def api_debug_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
             'data-mfe-state', 'mime/invalid', '__initialdata__', '__next_data__',
             'window.__initial', 'captcha', 'доступ ограничен', 'item-view',
             'ничего не найдено', 'iva-item')}
+        _idx = low.find('__initialdata__')
         return _miniapp_json({
             'ok': True, 'len': len(html),
             'title': (m.group(1).strip()[:140] if m else ''),
             'recognized': bool(page.recognized), 'items': len(page.items),
             'markers': markers,
             'head': html[:300].replace('\n', ' '),
+            'snippet': (html[max(0, _idx - 120):_idx + 700].replace('\n', ' ')
+                        if _idx >= 0 else ''),
         })
     except Exception as e:
         return _miniapp_json({'ok': False, 'error': type(e).__name__,
