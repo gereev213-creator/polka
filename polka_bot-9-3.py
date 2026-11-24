@@ -2571,10 +2571,14 @@ class Database:
 
     def _new_conn(self, db_path: str):
         conn = sqlite3.connect(db_path, check_same_thread=False, timeout=30)
-        # /data — сетевое хранилище: rollback-journal надёжнее WAL.
-        conn.execute("PRAGMA journal_mode=DELETE")
+        # Соединение на поток + WAL: читатели не блокируются писателем.
+        # DELETE-режим на многих потоках давал «database is locked» и
+        # 30-секундные блокировки event loop. synchronous=FULL — чтобы
+        # редкие обрывы контейнера не портили файл.
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=FULL")
         conn.execute("PRAGMA busy_timeout=30000")
+        conn.execute("PRAGMA wal_autocheckpoint=1000")
         conn.row_factory = sqlite3.Row
         return conn
 
