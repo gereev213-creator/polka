@@ -906,14 +906,11 @@ class Fetcher:
                 rotated = await self._rotate_ip()
                 # cookies привязаны к IP: после смены IP — выписать заново сразу;
                 # 403/439 — отпечаток/cookies забракованы; 429 — частота, тут сначала пауза.
-                # 403/439 — это бан IP, а не протухшие cookies: лечим сменой
-                # IP, НЕ выписывая новые cookies за 3 ₽. Cookies обновятся
-                # сами, когда истечёт их 11-часовой TTL.
-                # 429 — частота: на второй попытке обновляем и cookies.
-                if code == 429 and attempt >= 2:
-                    refresh = self.spfa_refresh_min
-                else:
-                    refresh = None
+                # Любой блок (403/439/429) — это IP или частота, а НЕ
+                # протухшие cookies. Новые cookies за 3 ₽ не выписываем:
+                # они обновятся сами по 11-часовому TTL. Иначе при 50
+                # ссылках и постоянных 429 баланс сгорал бы за день.
+                refresh = None
                 if not rotated:
                     pause = _retry_after(r)
                     if pause is None:
