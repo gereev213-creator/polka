@@ -23643,10 +23643,16 @@ def hunt_claim_batch(limit: int = 0, statuses: tuple = ('ready',)) -> List[Dict]
     try:
         status_list = tuple(statuses) or ('ready',)
         marks_st = ','.join('?' for _ in status_list)
+        # Не отправляем старые находки из очереди: лучше пропустить,
+        # чем показать отставание парсера.
+        _max_age_h = float(os.environ.get("HUNT_MAX_QUEUE_AGE_H", "3"))
+        cutoff = (get_moscow_time() - timedelta(hours=_max_age_h)).isoformat()
         cursor.execute(
             f"SELECT id FROM hunt_matches WHERE status IN ({marks_st}) "
             f"AND (deliver_after IS NULL OR deliver_after <= ?) "
-            f"ORDER BY discount DESC, id LIMIT ?", (*status_list, now, int(limit)))
+            f"AND (created_at IS NULL OR created_at >= ?) "
+            f"ORDER BY discount DESC, id LIMIT ?",
+            (*status_list, now, cutoff, int(limit)))
         ids = [int(r['id']) for r in cursor.fetchall()]
         if not ids:
             return []
