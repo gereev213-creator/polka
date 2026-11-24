@@ -19060,6 +19060,34 @@ async def api_plan(request: aiohttp_web.Request) -> aiohttp_web.Response:
     })
 
 
+async def api_debug_avito(request: aiohttp_web.Request) -> aiohttp_web.Response:
+    """GET /api/debug-avito?token=…&url=… — что реально отдаёт Авито парсеру."""
+    if request.query.get('token') != os.environ.get('LIVE_WORKER_TOKEN', ''):
+        return _miniapp_err('unauthorized', 401)
+    url = request.query.get('url') or 'https://www.avito.ru/moskva/telefony?q=iphone&s=104'
+    try:
+        import avito_live as _al
+        f = _al.Fetcher()
+        html = await f.get(url)
+        page = _al.parse_page(html)
+        m = re.search(r'<title[^>]*>(.*?)</title>', html, re.S | re.I)
+        low = html.lower()
+        markers = {k: low.count(k) for k in (
+            'data-mfe-state', 'mime/invalid', '__initialdata__', '__next_data__',
+            'window.__initial', 'captcha', 'доступ ограничен', 'item-view',
+            'ничего не найдено', 'iva-item')}
+        return _miniapp_json({
+            'ok': True, 'len': len(html),
+            'title': (m.group(1).strip()[:140] if m else ''),
+            'recognized': bool(page.recognized), 'items': len(page.items),
+            'markers': markers,
+            'head': html[:300].replace('\n', ' '),
+        })
+    except Exception as e:
+        return _miniapp_json({'ok': False, 'error': type(e).__name__,
+                              'detail': str(e)[:300]})
+
+
 async def api_debug_proxy(request: aiohttp_web.Request) -> aiohttp_web.Response:
     """GET /api/debug-proxy?proxy=user:pass@host:port — тест HTTP-прокси с сервера."""
     if request.query.get('token') != os.environ.get('LIVE_WORKER_TOKEN', ''):
@@ -38379,6 +38407,7 @@ def create_api_app() -> aiohttp_web.Application:
     app.router.add_get('/api/plan', api_plan)
     app.router.add_post('/api/trial/activate', api_trial_activate)
     app.router.add_get('/api/debug-proxy', api_debug_proxy)
+    app.router.add_get('/api/debug-avito', api_debug_avito)
     app.router.add_get('/api/pay/plans', api_pay_plans)
     app.router.add_post('/api/event', api_client_event)
     app.router.add_get('/api/chats/unread', api_chats_unread)
