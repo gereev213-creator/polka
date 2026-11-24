@@ -745,14 +745,18 @@ def _spfa_spend_save(obj: dict) -> None:
         pass
 
 
-def _spfa_spend_can_pay() -> bool:
-    """True, если можно выписать новые cookies, не превысив бюджет."""
+def _spfa_spend_can_pay(skip_interval: bool = False) -> bool:
+    """True, если можно выписать новые cookies, не превысив бюджет.
+
+    skip_interval — для капчи: час не ждём, но суточный лимит соблюдаем.
+    """
     now = time.time()
     st = _spfa_spend_load()
     day = time.strftime("%Y-%m-%d", time.gmtime(now))
     count = int(st.get("count") or 0) if st.get("day") == day else 0
     last = float(st.get("last") or 0)
-    return (now - last) >= _SPFA_COOKIE_MIN_SEC and count < _SPFA_COOKIE_DAILY_MAX
+    interval_ok = skip_interval or (now - last) >= _SPFA_COOKIE_MIN_SEC
+    return interval_ok and count < _SPFA_COOKIE_DAILY_MAX
 
 
 def _spfa_spend_mark() -> None:
@@ -954,7 +958,8 @@ class Fetcher:
         return (data or {}).get("api_url") or url
 
     async def _spfa_cookies(self, force_after: Optional[float] = None,
-                           allow_force: bool = False) -> dict:
+                           allow_force: bool = False,
+                           skip_interval: bool = False) -> dict:
         """Cookies от spfa (кэш 11 ч).
 
         force_after — перевыписать, если кэшу не меньше стольких секунд
@@ -969,7 +974,7 @@ class Fetcher:
         # чем раз в 30 минут cookies не выписываем — это деньги.
         if _SPFA_CACHE and age < _SPFA_HARD_MIN:
             return _SPFA_CACHE
-        if _SPFA_CACHE and not _spfa_spend_can_pay():
+        if _SPFA_CACHE and not _spfa_spend_can_pay(skip_interval):
             return _SPFA_CACHE
         if _SPFA_CACHE and age < _SPFA_TTL and not (force_after is not None and age >= force_after):
             return _SPFA_CACHE
@@ -1006,10 +1011,14 @@ class Fetcher:
         # HTTP-порт из SPFA_PROXY — он с нашей сети недоступен.
         refresh: Optional[float] = None
         force_refresh = False
+        skip_interval = False
+        _captcha_refreshed = False
         _rotated_once = False
         for attempt in range(1, self.tries + 1):
-            data = await self._spfa_cookies(refresh, allow_force=force_refresh)
+            data = await self._spfa_cookies(refresh, allow_force=force_refresh,
+                                            skip_interval=skip_interval)
             force_refresh = False
+            skip_interval = False
             cookies = data.get("cookies") or {}
             fp = data.get("fingerprint") or {}
             headers = dict(fp.get("headers") or {})
@@ -1034,18 +1043,20 @@ class Fetcher:
             if code == 200:
                 _low = (r.text or "")[:200000].lower()
                 if "captcha" in _low or "не робот" in _low:
-                    # 200-капча: это блокировка. Меняем IP и сразу
-                    # перевыписываем cookies под новый IP.
-                    if _rotated_once:
+                    # 200-капча: меняем IP и СРАЗУ перевыписываем cookies,
+                    # не ожидая часовой лимит. Одна такая попытка на запрос,
+                    # суточный бюджет при этом соблюдаем.
+                    if _captcha_refreshed:
                         raise Blocked("капча")
                     rotated = await self._rotate_ip()
                     if rotated:
                         _rotated_once = True
-                        refresh = 0
-                        force_refresh = True
-                        await asyncio.sleep(3)
-                        continue
-                    raise Blocked("капча")
+                    _captcha_refreshed = True
+                    refresh = 0
+                    force_refresh = True
+                    skip_interval = True
+                    await asyncio.sleep(2)
+                    continue
             if code in BLOCK_CODES:
                 if attempt >= self.tries:
                     raise Blocked(f"HTTP {code}")
