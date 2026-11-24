@@ -1066,6 +1066,13 @@ class Fetcher:
         except Exception as _e:
             if not _fut.done():
                 _fut.set_exception(_e)
+                # Одиночный запрос никто не ждёт через _fut, и asyncio
+                # писал «Future exception was never retrieved». Читаем
+                # исключение сами — ожидающие всё равно его получат.
+                try:
+                    _fut.exception()
+                except Exception:
+                    pass
             raise
         finally:
             _GET_INFLIGHT.pop(url, None)

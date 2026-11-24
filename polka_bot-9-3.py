@@ -31727,7 +31727,7 @@ async def setup_scheduler(application: Application):
             try:
                 new_ads = db.search_ads(query, limit=5)
                 fresh   = [a for a in new_ads
-                           if a.get('published_at', a.get('created_at','')) >= since
+                           if (a.get('published_at') or a.get('created_at') or '') >= since
                            and not db.is_search_notification_sent(uid, a['id'])]
                 if not fresh: continue
                 lines   = ["· <b>{}</b> — {} ₽".format(a['title'], f"{int(a['price']):,}".replace(',', ' '))
